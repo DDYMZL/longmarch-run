@@ -1,0 +1,10 @@
+# Python
+__pycache__/
+*.pyc
+.venv/
+*.db
+.env
+
+# 微信开发者工具
+node_modules/
+project.private.config.json
