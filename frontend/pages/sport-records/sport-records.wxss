@@ -1,0 +1,73 @@
+.records-page {
+  padding-bottom: 40rpx;
+}
+
+/* 汇总 */
+.summary-card {
+  background: linear-gradient(135deg, #A00D26, #C8102E);
+  color: #FFFFFF;
+  display: flex;
+  padding: 40rpx 60rpx;
+}
+
+.summary-item {
+  flex: 1;
+  text-align: center;
+}
+
+.summary-num {
+  font-size: 44rpx;
+  font-weight: 700;
+}
+
+.summary-label {
+  font-size: 24rpx;
+  color: #F5D9A0;
+  margin-top: 8rpx;
+}
+
+/* 列表 */
+.list-card {
+  margin-top: -20rpx;
+}
+
+.record-row {
+  display: flex;
+  align-items: center;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #F5F0E6;
+}
+
+.record-row:last-child {
+  border-bottom: none;
+}
+
+.record-date {
+  width: 110rpx;
+  font-size: 26rpx;
+  color: #666666;
+}
+
+.record-bar-wrap {
+  flex: 1;
+  height: 16rpx;
+  background: #F0E6D2;
+  border-radius: 8rpx;
+  overflow: hidden;
+  margin: 0 20rpx;
+}
+
+.record-bar {
+  height: 100%;
+  background: linear-gradient(90deg, #C8102E, #E05A6A);
+  border-radius: 8rpx;
+  min-width: 4rpx;
+}
+
+.record-steps {
+  width: 140rpx;
+  text-align: right;
+  font-size: 26rpx;
+  color: #333333;
+  font-weight: 600;
+}

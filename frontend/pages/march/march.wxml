@@ -1,0 +1,77 @@
+<view class="march-page">
+  <!-- 路线总览 -->
+  <view class="march-header">
+    <view class="march-header-title">长征路线</view>
+    <view class="march-header-sub">累计 {{currentSteps}} / {{totalSteps}} 步 · 已点亮 {{litCount}}/{{totalCount}}</view>
+    <view wx:if="{{finished}}" class="finish-banner">🎉 恭喜完成长征路线！</view>
+  </view>
+
+  <!-- 地图模式切换 -->
+  <view class="mode-switch">
+    <view
+      class="mode-btn {{mode === 'real' ? 'active' : ''}}"
+      data-mode="real"
+      bindtap="switchMode"
+    >实景地图</view>
+    <view
+      class="mode-btn {{mode === 'canvas' ? 'active' : ''}}"
+      data-mode="canvas"
+      bindtap="switchMode"
+    >插画地图</view>
+  </view>
+
+  <!-- 地图 -->
+  <view class="map-wrap">
+    <map
+      wx:if="{{mode === 'real'}}"
+      id="routeMapReal"
+      class="route-map-real"
+      latitude="{{mapLat}}"
+      longitude="{{mapLng}}"
+      scale="{{mapScale}}"
+      include-points="{{includePoints}}"
+      markers="{{markers}}"
+      polyline="{{polylines}}"
+      enable-scroll="{{true}}"
+      enable-zoom="{{true}}"
+      bindmarkertap="handleMarkerTap"
+      bindcallouttap="handleMarkerTap"
+    ></map>
+    <canvas
+      wx:else
+      type="2d"
+      id="routeMap"
+      class="route-map"
+      bindtap="handleMapTap"
+    ></canvas>
+    <view class="map-hint">点击地图上的节点查看历史详情</view>
+  </view>
+
+  <!-- 节点列表 -->
+  <view class="route-list">
+    <view
+      wx:for="{{nodes}}"
+      wx:key="id"
+      class="route-item anim-card"
+      style="animation-delay: {{index * 70}}ms"
+      data-node="{{item}}"
+      bindtap="handleNodeTap"
+    >
+      <view class="route-icon-wrap">
+        <view class="route-icon {{item.status}}">{{item.status === 'completed' ? '★' : item.icon}}</view>
+      </view>
+      <view class="route-meta">
+        <view class="route-name-row">
+          <text class="route-name {{item.status}}">{{item.name}}</text>
+          <text class="route-badge {{item.status}}">
+            {{item.status === 'completed' ? '已点亮' : (item.status === 'current' ? '进行中' : '未解锁')}}
+          </text>
+        </view>
+        <view class="route-target">目标 {{item.targetSteps}} 步</view>
+        <view wx:if="{{item.status === 'current'}}" class="route-remain">
+          当前进度 {{currentSteps}} / {{item.targetSteps}} 步 · 还需 {{item.remain}} 步
+        </view>
+      </view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,59 @@
+<view class="result-page" wx:if="{{record}}">
+  <!-- 满分彩带 -->
+  <view wx:if="{{confetti.length > 0}}" class="confetti-layer">
+    <view
+      wx:for="{{confetti}}"
+      wx:key="id"
+      class="confetti-piece"
+      style="left: {{item.left}}%; width: {{item.size}}rpx; height: {{item.size * 0.5}}rpx; background: {{item.color}}; animation-delay: {{item.delay}}s; animation-duration: {{item.duration}}s;"
+    ></view>
+  </view>
+
+  <!-- 得分 -->
+  <view class="result-hero">
+    <view class="result-title">今日答题完成</view>
+    <view class="result-score">{{displayScore}} 分</view>
+    <view class="result-stars">
+      <text wx:for="{{stars}}" wx:key="*this" class="star {{item ? 'on' : ''}}">★</text>
+    </view>
+  </view>
+
+  <!-- 统计 -->
+  <view class="card stats-card anim-card" style="animation-delay: 300ms">
+    <view class="stat-row">
+      <view class="stat-item">
+        <view class="stat-value">{{record.correctCount}} 题</view>
+        <view class="stat-label">答对</view>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-item">
+        <view class="stat-value">{{wrongCount}} 题</view>
+        <view class="stat-label">答错</view>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-item">
+        <view class="stat-value text-gold">{{record.points}}</view>
+        <view class="stat-label">获得积分</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 错题 -->
+  <view class="card anim-card" style="animation-delay: 420ms" wx:if="{{record.wrongList.length > 0}}">
+    <view class="card-title">错题回顾</view>
+    <view class="wrong-item" wx:for="{{record.wrongList}}" wx:key="question">
+      <view class="wrong-index">第 {{item.index}} 题</view>
+      <view class="wrong-question">{{item.question}}</view>
+      <view class="wrong-answer">正确答案：{{item.correctAnswer}}</view>
+      <view class="wrong-analysis">解析：{{item.analysis}}</view>
+    </view>
+  </view>
+  <view class="card anim-card" style="animation-delay: 420ms" wx:else>
+    <view class="perfect-tip">🎉 全部答对，太棒了！</view>
+  </view>
+
+  <!-- 操作 -->
+  <view class="result-actions anim-card" style="animation-delay: 540ms">
+    <button class="btn-primary" bindtap="handleBackHome">返回首页</button>
+  </view>
+</view>

@@ -1,0 +1,53 @@
+{
+  "pages": [
+    "pages/home/home",
+    "pages/march/march",
+    "pages/quiz/quiz",
+    "pages/mine/mine",
+    "pages/login/login",
+    "pages/node-detail/node-detail",
+    "pages/quiz-answer/quiz-answer",
+    "pages/quiz-result/quiz-result",
+    "pages/sport-records/sport-records",
+    "pages/quiz-records/quiz-records",
+    "pages/medals/medals",
+    "pages/org-select/org-select",
+    "pages/rank/rank"
+  ],
+  "window": {
+    "navigationBarBackgroundColor": "#C8102E",
+    "navigationBarTitleText": "长征运动",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#F7F1E5",
+    "backgroundTextStyle": "dark"
+  },
+  "tabBar": {
+    "color": "#999999",
+    "selectedColor": "#C8102E",
+    "backgroundColor": "#FFFFFF",
+    "borderStyle": "black",
+    "list": [
+      {
+        "pagePath": "pages/home/home",
+        "text": "首页"
+      },
+      {
+        "pagePath": "pages/march/march",
+        "text": "长征"
+      },
+      {
+        "pagePath": "pages/quiz/quiz",
+        "text": "答题"
+      },
+      {
+        "pagePath": "pages/rank/rank",
+        "text": "排名"
+      },
+      {
+        "pagePath": "pages/mine/mine",
+        "text": "我的"
+      }
+    ]
+  },
+  "sitemapLocation": "sitemap.json"
+}

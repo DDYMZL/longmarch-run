@@ -1,0 +1,41 @@
+<view class="org-page">
+  <!-- 面包屑：点击任意一级回跳 -->
+  <scroll-view class="crumb-bar" scroll-x="true">
+    <view class="crumb-inner">
+      <text class="crumb {{stack.length === 0 ? 'crumb-active' : ''}}" data-index="-1" bindtap="onTapCrumb">全部组织</text>
+      <block wx:for="{{stack}}" wx:key="id">
+        <text class="crumb-sep">›</text>
+        <text class="crumb {{index === stack.length - 1 ? 'crumb-active' : ''}}" data-index="{{index}}" bindtap="onTapCrumb">{{item.name}}</text>
+      </block>
+    </view>
+  </scroll-view>
+
+  <!-- 当前所处组织：一键选择本级 -->
+  <view class="current-bar" wx:if="{{currentId}}">
+    <view class="current-text">
+      <text class="current-label">当前层级</text>
+      <text class="current-name">{{currentFullName}}</text>
+    </view>
+    <view class="current-btn" bindtap="onSelectCurrent">选择该组织</view>
+  </view>
+
+  <!-- 组织列表 -->
+  <view class="org-list">
+    <view
+      class="org-item {{selectedId === item.id ? 'org-item-selected' : ''}}"
+      wx:for="{{list}}"
+      wx:key="id"
+    >
+      <view class="org-main" data-id="{{item.id}}" data-has="{{item.hasChildren}}" bindtap="onTapRow">
+        <text class="org-name">{{item.name}}</text>
+        <text class="org-hint" wx:if="{{item.hasChildren}}">{{item.childCount}} 个下级 ›</text>
+        <text class="org-hint org-hint-leaf" wx:else>末级组织</text>
+      </view>
+      <view class="org-select-btn" data-id="{{item.id}}" catchtap="onTapSelect">选定</view>
+    </view>
+
+    <view class="empty-tip" wx:if="{{list.length === 0}}">该组织暂无下级</view>
+  </view>
+
+  <view class="org-tip">提示：点击组织名进入下级，点击「选定」选择该级；每一级都可作为您的所属组织。</view>
+</view>

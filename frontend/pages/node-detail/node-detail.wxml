@@ -1,0 +1,44 @@
+<view wx:if="{{node}}" class="node-detail-page">
+  <!-- 头部插画 -->
+  <view class="hero">
+    <view class="hero-icon">{{node.icon}}</view>
+    <view class="hero-name">{{node.name}}</view>
+    <view class="hero-time">{{node.historicalTime}}</view>
+  </view>
+
+  <!-- 数据卡片 -->
+  <view class="card stats-card">
+    <view class="stat-row">
+      <view class="stat-item">
+        <view class="stat-value">{{targetText}}</view>
+        <view class="stat-label">目标步数</view>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-item">
+        <view class="stat-value">{{currentText}}</view>
+        <view class="stat-label">你的累计步数</view>
+      </view>
+      <view class="stat-divider"></view>
+      <view class="stat-item">
+        <view class="stat-value status-value {{node.status}}">{{statusText}}</view>
+        <view class="stat-label">状态</view>
+      </view>
+    </view>
+
+    <view wx:if="{{node.status !== 'completed'}}" class="remain-tip">
+      距离点亮还需 {{node.remain}} 步
+    </view>
+  </view>
+
+  <!-- 历史故事 -->
+  <view class="card">
+    <view class="card-title">历史故事</view>
+    <view class="story-text">{{node.description}}</view>
+  </view>
+
+  <view class="detail-actions">
+    <button class="btn-primary" bindtap="handleContinue">
+      {{node.status === 'completed' ? '继续运动' : '去运动点亮'}}
+    </button>
+  </view>
+</view>

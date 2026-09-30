@@ -1,0 +1,52 @@
+<view class="quiz-page">
+  <view wx:if="{{loading}}" class="empty-tip">加载中…</view>
+
+  <!-- 未完成：开始答题 -->
+  <block wx:elif="{{!completed}}">
+    <view class="quiz-hero">
+      <view class="quiz-hero-icon anim-float">📝</view>
+      <view class="quiz-hero-title">每日答题</view>
+      <view class="quiz-hero-sub">每天 5 题 · 每题 20 分 · 满分 100 分</view>
+    </view>
+
+    <view class="card rule-card anim-card" style="animation-delay: 120ms">
+      <view class="card-title">答题规则</view>
+      <view class="rule-line">· 每日随机 5 道红色文化/长征历史题目</view>
+      <view class="rule-line">· 每天只能完成一次正式答题</view>
+      <view class="rule-line">· 完成答题 +5 积分，满分额外 +10 积分</view>
+    </view>
+
+    <view wx:if="{{errorMsg}}" class="error-tip">{{errorMsg}}</view>
+
+    <view class="quiz-actions">
+      <button class="btn-primary start-btn" disabled="{{!!errorMsg}}" bindtap="handleStart">开始答题</button>
+    </view>
+  </block>
+
+  <!-- 已完成：展示结果 -->
+  <block wx:else>
+    <view class="quiz-hero">
+      <view class="quiz-hero-icon anim-pop">✅</view>
+      <view class="quiz-hero-title">今日答题已完成</view>
+      <view class="quiz-hero-sub">{{record.date}}</view>
+    </view>
+
+    <view class="card result-card anim-card" style="animation-delay: 120ms">
+      <view class="done-score">{{record.score}} 分</view>
+      <view class="done-stars">
+        <text wx:for="{{[1,2,3,4,5]}}" wx:key="*this" class="star {{record.score / 20 >= item ? 'on' : ''}}">★</text>
+      </view>
+      <view class="done-row">
+        <text>答对 {{record.correctCount}} 题</text>
+        <text>答错 {{record.totalCount - record.correctCount}} 题</text>
+        <text>获得积分 {{record.points}}</text>
+      </view>
+      <view class="done-tip">明天继续挑战</view>
+    </view>
+
+    <view class="quiz-actions">
+      <button class="btn-ghost" bindtap="handleTomorrow">明天再来</button>
+      <view class="dev-reset" bindtap="handleResetToday">开发调试：重置今日答题</view>
+    </view>
+  </block>
+</view>

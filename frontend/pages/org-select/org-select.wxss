@@ -1,0 +1,141 @@
+.org-page {
+  padding-bottom: 40rpx;
+}
+
+/* 面包屑 */
+.crumb-bar {
+  background: #FFFFFF;
+  white-space: nowrap;
+  padding: 22rpx 24rpx;
+  border-bottom: 1rpx solid #F0E6D2;
+}
+
+.crumb-inner {
+  display: inline-flex;
+  align-items: center;
+}
+
+.crumb {
+  font-size: 26rpx;
+  color: #888888;
+  padding: 6rpx 4rpx;
+}
+
+.crumb-active {
+  color: #C8102E;
+  font-weight: 600;
+}
+
+.crumb-sep {
+  color: #CCCCCC;
+  margin: 0 10rpx;
+  font-size: 26rpx;
+}
+
+/* 当前层级选择条 */
+.current-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #FFF6E5, #FDEBD0);
+  margin: 20rpx 30rpx;
+  padding: 22rpx 26rpx;
+  border-radius: 16rpx;
+  border: 1rpx solid #F0D9A8;
+}
+
+.current-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.current-label {
+  font-size: 22rpx;
+  color: #B8860B;
+}
+
+.current-name {
+  font-size: 26rpx;
+  color: #5A1A1A;
+  font-weight: 600;
+  margin-top: 4rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.current-btn {
+  flex-shrink: 0;
+  margin-left: 20rpx;
+  background: #C8102E;
+  color: #FFFFFF;
+  font-size: 26rpx;
+  padding: 14rpx 28rpx;
+  border-radius: 40rpx;
+}
+
+/* 组织列表 */
+.org-list {
+  margin: 0 30rpx;
+}
+
+.org-item {
+  display: flex;
+  align-items: center;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 8rpx 8rpx 8rpx 28rpx;
+  margin-bottom: 18rpx;
+  box-shadow: 0 4rpx 16rpx rgba(140, 30, 30, 0.06);
+  border: 2rpx solid transparent;
+}
+
+.org-item-selected {
+  border-color: #C8102E;
+  background: #FFF6F7;
+}
+
+.org-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  padding: 22rpx 0;
+  overflow: hidden;
+}
+
+.org-name {
+  font-size: 32rpx;
+  color: #333333;
+  font-weight: 600;
+}
+
+.org-hint {
+  font-size: 24rpx;
+  color: #C8102E;
+  margin-top: 8rpx;
+}
+
+.org-hint-leaf {
+  color: #AAAAAA;
+}
+
+.org-select-btn {
+  flex-shrink: 0;
+  margin-left: 20rpx;
+  background: #FFFFFF;
+  color: #C8102E;
+  border: 2rpx solid #C8102E;
+  font-size: 28rpx;
+  font-weight: 600;
+  padding: 16rpx 34rpx;
+  border-radius: 44rpx;
+}
+
+.org-tip {
+  margin: 10rpx 40rpx 0;
+  font-size: 24rpx;
+  color: #999999;
+  line-height: 1.6;
+}

@@ -1,0 +1,177 @@
+.mine-page {
+  padding-bottom: 60rpx;
+}
+
+/* 头部 */
+.mine-header {
+  background: linear-gradient(135deg, #A00D26, #C8102E);
+  color: #FFFFFF;
+  text-align: center;
+  padding: 50rpx 40rpx 70rpx;
+}
+
+.mine-avatar {
+  width: 130rpx;
+  height: 130rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  margin: 0 auto 20rpx;
+  background: rgba(255, 255, 255, 0.2);
+  border: 4rpx solid rgba(255, 255, 255, 0.5);
+}
+
+.mine-avatar image {
+  width: 100%;
+  height: 100%;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 72rpx;
+}
+
+.mine-name {
+  max-width: 480rpx;
+  margin: 0 auto;
+  font-size: 38rpx;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 昵称下方组织行（点击修改） */
+.mine-org {
+  max-width: 560rpx;
+  margin: 14rpx auto 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 30rpx;
+  padding: 8rpx 20rpx;
+}
+
+.mine-org-icon {
+  margin-right: 8rpx;
+  font-size: 24rpx;
+}
+
+.mine-org-text {
+  max-width: 420rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mine-org-edit {
+  margin-left: 10rpx;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* 昵称下方勋章行 */
+.mine-medals {
+  margin-top: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 10rpx;
+}
+
+.mine-medal-icon {
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  font-size: 30rpx;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2rpx solid rgba(255, 215, 102, 0.5);
+  border-radius: 50%;
+}
+
+.mine-medal-count {
+  font-size: 24rpx;
+  color: #FFE9A8;
+  margin-left: 4rpx;
+}
+
+.mine-medal-empty {
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+/* 统计 */
+.stats-card {
+  margin-top: -30rpx;
+}
+
+.stat-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.stat-cell {
+  width: 50%;
+  text-align: center;
+  padding: 20rpx 0;
+}
+
+.stat-num {
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #5A1A1A;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 6rpx;
+}
+
+/* 菜单 */
+.menu-card {
+  padding: 10rpx 30rpx;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30rpx 0;
+  font-size: 30rpx;
+  color: #333333;
+  border-bottom: 1rpx solid #F0E6D2;
+}
+
+.menu-item:last-child {
+  border-bottom: none;
+}
+
+.menu-arrow {
+  color: #CCCCCC;
+  font-size: 36rpx;
+}
+
+/* 退出 */
+.logout-wrap {
+  padding: 30rpx 60rpx;
+}
+
+.logout-btn {
+  background: #FFFFFF;
+  color: #C8102E;
+  border-radius: 48rpx;
+  font-size: 30rpx;
+  padding: 16rpx;
+}
+
+.logout-btn::after {
+  border: none;
+}

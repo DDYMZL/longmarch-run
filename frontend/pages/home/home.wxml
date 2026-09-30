@@ -1,0 +1,115 @@
+<view class="home-page">
+  <!-- 点亮节点庆祝弹层 -->
+  <view wx:if="{{litPopup}}" class="lit-overlay">
+    <view class="lit-card">
+      <view class="lit-star anim-pop">★</view>
+      <view class="lit-burst">
+        <view class="lit-particle p1"></view>
+        <view class="lit-particle p2"></view>
+        <view class="lit-particle p3"></view>
+        <view class="lit-particle p4"></view>
+        <view class="lit-particle p5"></view>
+        <view class="lit-particle p6"></view>
+        <view class="lit-particle p7"></view>
+        <view class="lit-particle p8"></view>
+      </view>
+      <view class="lit-title">点亮节点</view>
+      <view class="lit-name">{{litPopup.name}}</view>
+      <view class="lit-points">+10 积分</view>
+    </view>
+  </view>
+
+  <!-- 用户信息 -->
+  <view class="user-bar">
+    <view class="user-avatar">
+      <image wx:if="{{user.avatar}}" src="{{user.avatar}}" mode="aspectFill" />
+      <text wx:else class="avatar-placeholder">🏃</text>
+    </view>
+    <view class="user-meta">
+      <view class="user-name">{{user.nickname}}</view>
+      <view class="user-sub">行万里路 · 学长征历史</view>
+    </view>
+  </view>
+
+  <!-- 今日运动 -->
+  <view class="card sport-card anim-card" style="animation-delay: 60ms">
+    <view class="card-title">
+      <text>今日运动</text>
+      <text class="sport-date">{{todaySteps > 0 ? '已同步' : '未同步'}}</text>
+    </view>
+
+    <view class="step-num-row">
+      <text class="step-num">{{todaySteps}}</text>
+      <text class="step-unit">步</text>
+    </view>
+    <view class="step-target">今日目标：{{dailyTarget}} 步</view>
+
+    <view class="progress-bar">
+      <view class="progress-inner" style="width: {{stepPercent}}%">
+        <view class="progress-shine"></view>
+      </view>
+    </view>
+    <view class="progress-text">{{stepPercent}}%</view>
+
+    <view wx:if="{{syncError}}" class="error-tip">{{syncError}}</view>
+
+    <view class="sport-actions">
+      <button class="btn-primary sync-btn" loading="{{syncing}}" disabled="{{syncing}}" bindtap="handleSyncSteps">
+        {{todaySteps > 0 ? '重新同步' : '同步微信步数'}}
+      </button>
+      <button class="btn-ghost demo-btn" bindtap="handleAddSteps">演示 +2000步</button>
+    </view>
+  </view>
+
+  <!-- 长征进度 -->
+  <view class="card anim-card" style="animation-delay: 160ms">
+    <view class="card-title" bindtap="goMarch">
+      <text>长征进度</text>
+      <text class="link-more">查看路线 ›</text>
+    </view>
+
+    <view wx:if="{{routeLoading}}" class="empty-tip">路线加载中…</view>
+    <view wx:elif="{{routeError}}" class="empty-tip">{{routeError}}</view>
+    <block wx:else>
+      <view class="march-summary">
+        <view class="summary-main">已完成 {{litCount}} / {{totalCount}} 个节点</view>
+        <view class="summary-sub" wx:if="{{finished}}">🎉 恭喜完成长征路线！</view>
+        <view class="summary-sub" wx:elif="{{nextNode}}">
+          距下一站「{{nextNode.name}}」还需 {{nextNode.remain}} 步
+        </view>
+      </view>
+
+      <!-- 迷你路线图 -->
+      <view class="mini-route">
+        <block wx:for="{{routeNodesPreview}}" wx:key="id">
+          <view class="mini-node">
+            <view class="mini-dot {{item.status === 'completed' ? 'lit anim-glow' : ''}} {{item.status === 'current' ? 'current pulse-current' : ''}}">
+              {{item.status === 'completed' ? '★' : '●'}}
+            </view>
+            <view class="mini-line" wx:if="{{index < routeNodesPreview.length - 1}}"></view>
+            <view class="mini-name">{{item.name}}</view>
+          </view>
+        </block>
+      </view>
+    </block>
+  </view>
+
+  <!-- 今日答题 -->
+  <view class="card quiz-card anim-card" style="animation-delay: 260ms">
+    <view class="card-title">
+      <text>今日答题</text>
+      <text class="quiz-badge">{{quizCompleted ? '已完成' : quizRemain + ' 道题'}}</text>
+    </view>
+
+    <block wx:if="{{quizCompleted}}">
+      <view class="quiz-done">
+        <view class="quiz-done-score">今日得分：{{quizScore}} 分</view>
+        <view class="quiz-done-tip">明天继续挑战</view>
+      </view>
+    </block>
+    <block wx:else>
+      <view class="quiz-tip">今日还有 {{quizRemain}} 道题等待挑战</view>
+      <button class="btn-primary quiz-btn" bindtap="goQuiz">开始答题</button>
+    </block>
+  </view>
+</view>

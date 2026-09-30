@@ -1,0 +1,23 @@
+<view class="records-page">
+  <view class="card">
+    <view class="card-title">答题记录</view>
+    <block wx:if="{{records.length > 0}}">
+      <!-- 表头 -->
+      <view class="table-head">
+        <text class="col-date">日期</text>
+        <text class="col-num">答题</text>
+        <text class="col-num">正确</text>
+        <text class="col-num">得分</text>
+        <text class="col-num">积分</text>
+      </view>
+      <view class="table-row" wx:for="{{records}}" wx:key="date">
+        <text class="col-date">{{item.text}}</text>
+        <text class="col-num">{{item.totalCount}}题</text>
+        <text class="col-num">{{item.correctCount}}题</text>
+        <text class="col-num score {{item.score === 100 ? 'full' : ''}}">{{item.score}}分</text>
+        <text class="col-num gold">+{{item.points}}</text>
+      </view>
+    </block>
+    <view wx:else class="empty-tip">暂无答题记录，去完成今日答题吧</view>
+  </view>
+</view>

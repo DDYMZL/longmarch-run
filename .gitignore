@@ -2,9 +2,28 @@
 __pycache__/
 *.pyc
 .venv/
+venv/
 *.db
 .env
+.pytest_cache/
 
 # 微信开发者工具
 node_modules/
 project.private.config.json
+
+# 支付宝开发者工具（误用生成的配置）
+mini.project.json
+
+# 临时冒烟测试脚本
+_smoke_*.py
+
+# IDE / 编辑器
+.idea/
+.vscode/
+
+# 系统文件
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log

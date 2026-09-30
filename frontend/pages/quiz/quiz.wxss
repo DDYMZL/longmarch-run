@@ -1,0 +1,103 @@
+.quiz-page {
+  padding-bottom: 60rpx;
+}
+
+.quiz-hero {
+  background: linear-gradient(135deg, #A00D26, #C8102E);
+  color: #FFFFFF;
+  text-align: center;
+  padding: 60rpx 40rpx;
+}
+
+.quiz-hero-icon {
+  font-size: 80rpx;
+}
+
+.quiz-hero-title {
+  font-size: 42rpx;
+  font-weight: 700;
+  margin-top: 16rpx;
+  letter-spacing: 4rpx;
+}
+
+.quiz-hero-sub {
+  font-size: 26rpx;
+  color: #F5D9A0;
+  margin-top: 10rpx;
+}
+
+/* 规则卡片 */
+.rule-card {
+  margin-top: -20rpx;
+}
+
+.rule-line {
+  font-size: 28rpx;
+  color: #666666;
+  padding: 10rpx 0;
+}
+
+.error-tip {
+  text-align: center;
+  color: #C8102E;
+  font-size: 26rpx;
+  padding: 20rpx 60rpx;
+}
+
+.quiz-actions {
+  padding: 20rpx 60rpx;
+}
+
+.start-btn {
+  width: 100%;
+}
+
+/* 结果卡片 */
+.result-card {
+  margin-top: -20rpx;
+  text-align: center;
+}
+
+.done-score {
+  font-size: 96rpx;
+  font-weight: 700;
+  color: #C8102E;
+  line-height: 1.2;
+}
+
+.done-stars {
+  margin: 10rpx 0;
+}
+
+.star {
+  font-size: 48rpx;
+  color: #E5E5E5;
+  margin: 0 6rpx;
+}
+
+.star.on {
+  color: #D4A017;
+}
+
+.done-row {
+  display: flex;
+  justify-content: space-around;
+  font-size: 26rpx;
+  color: #666666;
+  margin-top: 20rpx;
+}
+
+.done-tip {
+  margin-top: 24rpx;
+  font-size: 26rpx;
+  color: #999999;
+}
+
+/* 开发调试：重置入口（低调样式） */
+.dev-reset {
+  margin-top: 30rpx;
+  text-align: center;
+  font-size: 22rpx;
+  color: #B8B0A0;
+  text-decoration: underline;
+}

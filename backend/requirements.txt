@@ -1,0 +1,9 @@
+# 长征运动挑战 —— FastAPI 后端依赖
+# 安装：pip install -r requirements.txt
+fastapi>=0.110.0
+uvicorn[standard]>=0.29.0
+sqlalchemy>=2.0.25
+pydantic>=2.6.0
+pydantic-settings>=2.2.0
+pyjwt>=2.8.0
+httpx>=0.27.0

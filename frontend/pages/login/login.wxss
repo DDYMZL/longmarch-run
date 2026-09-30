@@ -1,0 +1,132 @@
+.login-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #A00D26 0%, #C8102E 45%, #F7F1E5 45.1%, #F7F1E5 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+.login-hero {
+  padding-top: 108rpx;
+  text-align: center;
+  color: #FFFFFF;
+}
+
+.app-name {
+  font-size: 44rpx;
+  font-weight: 700;
+  letter-spacing: 6rpx;
+  color: #FFFFFF;
+  margin-bottom: 34rpx;
+  animation: fadeUp 0.7s ease 0.1s both;
+}
+
+/* 顶部旗帜 logo（纯展示） */
+.logo {
+  width: 160rpx;
+  height: 160rpx;
+  line-height: 160rpx;
+  margin: 0 auto 30rpx;
+  font-size: 96rpx;
+  background: rgba(255, 255, 255, 0.15);
+  border: 4rpx solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+  animation: logoBreath 2.8s ease-in-out infinite, popIn 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+@keyframes logoBreath {
+  0%, 100% {
+    box-shadow: 0 0 30rpx rgba(255, 215, 102, 0.25);
+    transform: scale(1);
+  }
+  50% {
+    box-shadow: 0 0 70rpx rgba(255, 215, 102, 0.55);
+    transform: scale(1.05);
+  }
+}
+
+/* 微信昵称填写输入框 */
+.nickname-input {
+  width: 380rpx;
+  margin: 0 auto;
+  padding: 10rpx 0 12rpx;
+  text-align: center;
+  font-size: 40rpx;
+  font-weight: 700;
+  letter-spacing: 4rpx;
+  color: #FFFFFF;
+  border-bottom: 2rpx solid rgba(255, 215, 102, 0.5);
+  animation: fadeUp 0.7s ease 0.25s both;
+}
+
+.nick-ph {
+  color: #F5D9A0;
+  opacity: 0.7;
+}
+
+.slogan {
+  margin-top: 16rpx;
+  font-size: 28rpx;
+  color: #F5D9A0;
+  letter-spacing: 4rpx;
+  animation: fadeUp 0.7s ease 0.45s both;
+}
+
+.flag-line {
+  margin-top: 40rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeUp 0.7s ease 0.6s both;
+}
+
+.flag-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #F5D9A0;
+  animation: dotBlink 1.8s ease-in-out infinite;
+}
+
+.flag-dot.gold {
+  background: #D4A017;
+  animation-delay: 0.6s;
+}
+
+.flag-dot:last-child {
+  animation-delay: 1.2s;
+}
+
+@keyframes dotBlink {
+  0%, 100% { opacity: 0.5; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.25); }
+}
+
+.flag-line-conn {
+  width: 60rpx;
+  height: 4rpx;
+  background: #F5D9A0;
+  opacity: 0.6;
+}
+
+.login-actions {
+  margin-top: auto;
+  padding: 0 80rpx 140rpx;
+  text-align: center;
+  animation: fadeUp 0.7s ease 0.8s both;
+}
+
+.error-tip {
+  color: #C8102E;
+  font-size: 26rpx;
+  margin-bottom: 20rpx;
+}
+
+.login-btn {
+  width: 100%;
+}
+
+.agreement {
+  margin-top: 24rpx;
+  font-size: 22rpx;
+  color: #999999;
+}

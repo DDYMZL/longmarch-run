@@ -1,0 +1,30 @@
+<view class="records-page">
+  <!-- 汇总 -->
+  <view class="summary-card">
+    <view class="summary-item">
+      <view class="summary-num">{{totalSteps}}</view>
+      <view class="summary-label">总累计步数</view>
+    </view>
+    <view class="summary-item">
+      <view class="summary-num">{{avgSteps}}</view>
+      <view class="summary-label">平均每日步数</view>
+    </view>
+  </view>
+
+  <!-- 列表 -->
+  <view class="card list-card">
+    <view class="card-title">最近 30 天</view>
+    <block wx:if="{{records.length > 0}}">
+      <view class="record-row" wx:for="{{records}}" wx:key="date">
+        <view class="record-date">
+          <view class="record-day">{{item.text}}</view>
+        </view>
+        <view class="record-bar-wrap">
+          <view class="record-bar" style="width: {{item.steps > 0 ? (item.steps / 12000) * 100 : 0}}%"></view>
+        </view>
+        <view class="record-steps">{{item.steps}} 步</view>
+      </view>
+    </block>
+    <view wx:else class="empty-tip">暂无运动记录，去首页同步步数吧</view>
+  </view>
+</view>

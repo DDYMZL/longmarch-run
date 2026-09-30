@@ -1,0 +1,20 @@
+<view class="medals-page">
+  <view class="medals-header">
+    <view class="medals-count">{{ownedCount}} / {{totalCount}}</view>
+    <view class="medals-sub">已获得勋章</view>
+  </view>
+
+  <view class="medal-grid">
+    <view
+      class="medal-card {{item.owned ? 'owned anim-glow' : 'anim-card'}}"
+      style="animation-delay: {{index * 90}}ms"
+      wx:for="{{medals}}"
+      wx:key="id"
+    >
+      <view class="medal-icon">{{item.icon}}</view>
+      <view class="medal-name">{{item.name}}</view>
+      <view class="medal-desc">{{item.desc}}</view>
+      <view class="medal-state">{{item.owned ? '已获得' : '未获得'}}</view>
+    </view>
+  </view>
+</view>

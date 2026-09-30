@@ -1,0 +1,356 @@
+.home-page {
+  padding-bottom: 40rpx;
+}
+
+/* Áî®Êà∑‰ø°ÊÅØÊ†è */
+.user-bar {
+  background: linear-gradient(135deg, #A00D26, #C8102E);
+  padding: 30rpx 40rpx 60rpx;
+  display: flex;
+  align-items: center;
+  color: #FFFFFF;
+}
+
+.user-avatar {
+  width: 100rpx;
+  height: 100rpx;
+  border-radius: 50%;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.2);
+  border: 3rpx solid rgba(255, 255, 255, 0.5);
+  margin-right: 24rpx;
+}
+
+.user-avatar image {
+  width: 100%;
+  height: 100%;
+}
+
+.avatar-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 56rpx;
+}
+
+.user-name {
+  font-size: 36rpx;
+  font-weight: 600;
+}
+
+.user-sub {
+  font-size: 24rpx;
+  color: #F5D9A0;
+  margin-top: 4rpx;
+}
+
+/* ‰ªäÊó•ËøêÂä®Âç°Áâá */
+.sport-card {
+  margin-top: -30rpx;
+  position: relative;
+}
+
+.sport-date {
+  font-size: 24rpx;
+  color: #999999;
+  font-weight: normal;
+}
+
+.step-num-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  margin: 10rpx 0;
+}
+
+.step-num {
+  font-size: 96rpx;
+  font-weight: 700;
+  color: #C8102E;
+  line-height: 1.1;
+}
+
+.step-unit {
+  font-size: 30rpx;
+  color: #999999;
+  margin-left: 12rpx;
+}
+
+.step-target {
+  text-align: center;
+  font-size: 26rpx;
+  color: #666666;
+  margin-bottom: 20rpx;
+}
+
+.progress-bar {
+  position: relative;
+  height: 20rpx;
+  background: #F0E6D2;
+  border-radius: 10rpx;
+  overflow: hidden;
+}
+
+.progress-inner {
+  height: 100%;
+  background: linear-gradient(90deg, #D4A017, #E8C76A);
+  border-radius: 10rpx;
+  transition: width 0.4s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ËøõÂ∫¶Êù°ÊµÅÂÖâ */
+.progress-shine {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  height: 100%;
+  background: linear-gradient(100deg, transparent, rgba(255, 255, 255, 0.75), transparent);
+  animation: shimmer 2.2s ease-in-out infinite;
+}
+
+.progress-text {
+  text-align: right;
+  font-size: 22rpx;
+  color: #999999;
+  margin-top: 8rpx;
+}
+
+.sport-actions {
+  display: flex;
+  margin-top: 24rpx;
+  gap: 20rpx;
+}
+
+.sync-btn {
+  flex: 1;
+}
+
+.demo-btn {
+  flex: 1;
+  font-size: 24rpx;
+  padding: 16rpx 20rpx;
+}
+
+.error-tip {
+  color: #C8102E;
+  font-size: 24rpx;
+  margin-top: 16rpx;
+  text-align: center;
+}
+
+/* ÈïøÂæÅËøõÂ∫¶ */
+.link-more {
+  font-size: 26rpx;
+  color: #C8102E;
+  font-weight: normal;
+}
+
+.march-summary {
+  text-align: center;
+}
+
+.summary-main {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #5A1A1A;
+}
+
+.summary-sub {
+  font-size: 26rpx;
+  color: #D4A017;
+  margin-top: 8rpx;
+}
+
+/* Ëø∑‰Ω†Ë∑ØÁ∫øÂõæ */
+.mini-route {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 30rpx;
+  padding: 10rpx 0;
+  overflow-x: auto;
+}
+
+.mini-node {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80rpx;
+  position: relative;
+}
+
+.mini-dot {
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: #E5E5E5;
+  color: #FFFFFF;
+  font-size: 22rpx;
+  z-index: 1;
+}
+
+.mini-dot.lit {
+  background: #D4A017;
+}
+
+.mini-dot.current {
+  background: #C8102E;
+  box-shadow: 0 0 0 8rpx rgba(200, 16, 46, 0.15);
+}
+
+.mini-line {
+  position: absolute;
+  top: 22rpx;
+  left: 50%;
+  width: 100%;
+  height: 4rpx;
+  background: #E5E5E5;
+}
+
+.mini-name {
+  margin-top: 10rpx;
+  font-size: 20rpx;
+  color: #666666;
+  white-space: nowrap;
+}
+
+/* ‰ªäÊó•Á≠îÈ¢ò */
+.quiz-badge {
+  font-size: 24rpx;
+  color: #D4A017;
+  font-weight: normal;
+}
+
+.quiz-tip {
+  text-align: center;
+  font-size: 28rpx;
+  color: #666666;
+  margin-bottom: 24rpx;
+}
+
+.quiz-btn {
+  width: 100%;
+}
+
+.quiz-done {
+  text-align: center;
+  padding: 20rpx 0;
+}
+
+.quiz-done-score {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #C8102E;
+}
+
+.quiz-done-tip {
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 8rpx;
+}
+
+/* ==================== µ„¡¡Ω⁄µ„«Ï◊£µØ≤„ ==================== */
+.lit-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(60, 10, 10, 0.45);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: fadeIn 0.25s ease both;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.lit-card {
+  position: relative;
+  width: 460rpx;
+  background: linear-gradient(160deg, #FFFDF6, #FBF3DC);
+  border-radius: 28rpx;
+  padding: 70rpx 40rpx 56rpx;
+  text-align: center;
+  animation: popIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  box-shadow: 0 20rpx 60rpx rgba(120, 40, 10, 0.35);
+}
+
+.lit-star {
+  font-size: 110rpx;
+  color: #D4A017;
+  line-height: 1;
+  text-shadow: 0 0 40rpx rgba(212, 160, 23, 0.8);
+  animation: spinIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+}
+
+/* Ω…´¡£◊”±¨∑¢ */
+.lit-burst {
+  position: absolute;
+  top: 90rpx;
+  left: 50%;
+  width: 0;
+  height: 0;
+}
+
+.lit-particle {
+  position: absolute;
+  width: 14rpx;
+  height: 14rpx;
+  border-radius: 50%;
+  background: radial-gradient(circle, #FFE9A8, #D4A017);
+  animation: burst 1.1s ease-out 0.25s both;
+}
+
+.lit-particle.p1 { --dx: -140rpx; --dy: -60rpx; }
+.lit-particle.p2 { --dx: -90rpx; --dy: -130rpx; }
+.lit-particle.p3 { --dx: 0rpx; --dy: -160rpx; }
+.lit-particle.p4 { --dx: 90rpx; --dy: -130rpx; }
+.lit-particle.p5 { --dx: 140rpx; --dy: -60rpx; }
+.lit-particle.p6 { --dx: -150rpx; --dy: 40rpx; }
+.lit-particle.p7 { --dx: 150rpx; --dy: 40rpx; }
+.lit-particle.p8 { --dx: 0rpx; --dy: -30rpx; }
+
+@keyframes burst {
+  0% { transform: translate(0, 0) scale(1); opacity: 1; }
+  100% { transform: translate(var(--dx), var(--dy)) scale(0.2); opacity: 0; }
+}
+
+.lit-title {
+  margin-top: 36rpx;
+  font-size: 26rpx;
+  color: #A08050;
+  letter-spacing: 4rpx;
+}
+
+.lit-name {
+  margin-top: 10rpx;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #5A1A1A;
+}
+
+.lit-points {
+  margin-top: 14rpx;
+  display: inline-block;
+  font-size: 26rpx;
+  color: #B8860B;
+  background: rgba(212, 160, 23, 0.12);
+  border-radius: 24rpx;
+  padding: 8rpx 28rpx;
+}
+
+/* µ±«∞Ω⁄µ„¬ˆ≥Â£®√‘ƒ„¬∑œﬂÕº£© */
+.pulse-current {
+  animation: pulseRed 1.6s ease-out infinite;
+}

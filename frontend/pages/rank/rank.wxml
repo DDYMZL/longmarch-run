@@ -1,0 +1,40 @@
+<view class="rank-page">
+  <!-- 我的成绩概览 -->
+  <view class="my-card">
+    <view class="my-rank">
+      <text class="my-rank-num">{{myRank || '-'}}</text>
+      <text class="my-rank-label">我的名次</text>
+    </view>
+    <view class="my-divider"></view>
+    <view class="my-steps">
+      <text class="my-steps-num">{{mySteps}}</text>
+      <text class="my-steps-label">累计步数</text>
+    </view>
+    <view class="my-divider"></view>
+    <view class="my-total">
+      <text class="my-total-num">{{total}}</text>
+      <text class="my-total-label">参与人数</text>
+    </view>
+  </view>
+
+  <view class="rank-title">全员工步数总榜 · 跨所有组织</view>
+
+  <!-- 榜单 -->
+  <view class="rank-list">
+    <view class="rank-item {{item.isMe ? 'rank-item-me' : ''}}" wx:for="{{list}}" wx:key="userId">
+      <view class="rank-badge rank-badge-{{item.rank <= 3 ? item.rank : 'n'}}">{{item.rank}}</view>
+      <view class="rank-avatar">
+        <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" />
+        <text wx:else class="rank-avatar-ph">🏃</text>
+      </view>
+      <view class="rank-info">
+        <view class="rank-name">
+          <text>{{item.nickname}}</text>
+          <text class="rank-me-tag" wx:if="{{item.isMe}}">我</text>
+        </view>
+        <view class="rank-org">{{item.orgName || '未选择组织'}}</view>
+      </view>
+      <view class="rank-steps">{{item.steps}}</view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,70 @@
+<view class="mine-page">
+  <!-- 用户信息 -->
+  <view class="mine-header">
+    <view class="mine-avatar anim-float">
+      <image wx:if="{{user.avatar}}" src="{{user.avatar}}" mode="aspectFill" />
+      <text wx:else class="avatar-placeholder">🏃</text>
+    </view>
+    <view class="mine-name">{{user.nickname}}</view>
+    <!-- 组织架构：显示在昵称下方，点击可修改 -->
+    <view class="mine-org" bindtap="goOrgSelect">
+      <text class="mine-org-icon">🏢</text>
+      <text class="mine-org-text">{{user.orgFullName || '点击选择组织架构'}}</text>
+      <text class="mine-org-edit">›</text>
+    </view>
+    <!-- 勋章：展示在组织下方，点击进入勋章墙 -->
+    <view class="mine-medals" bindtap="goMedals">
+      <block wx:if="{{medalIcons.length > 0}}">
+        <text class="mine-medal-icon" wx:for="{{medalIcons}}" wx:key="*this">{{item}}</text>
+        <text class="mine-medal-count">{{medalCount}}/{{medalTotal}} ›</text>
+      </block>
+      <text wx:else class="mine-medal-empty">🏅 暂无勋章，快去运动答题吧 ›</text>
+    </view>
+  </view>
+
+  <!-- 数据统计 -->
+  <view class="card stats-card anim-card" style="animation-delay: 80ms">
+    <view class="stat-grid">
+      <view class="stat-cell">
+        <view class="stat-num">{{totalSteps}}</view>
+        <view class="stat-label">累计运动(步)</view>
+      </view>
+      <view class="stat-cell">
+        <view class="stat-num">{{litCount}} / {{totalCount}}</view>
+        <view class="stat-label">已点亮节点</view>
+      </view>
+      <view class="stat-cell">
+        <view class="stat-num">{{quizCount}}</view>
+        <view class="stat-label">累计答题(次)</view>
+      </view>
+      <view class="stat-cell">
+        <view class="stat-num text-gold">{{points}}</view>
+        <view class="stat-label">答题积分</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 功能入口 -->
+  <view class="card menu-card anim-card" style="animation-delay: 280ms">
+    <view class="menu-item" bindtap="goOrgSelect">
+      <text>组织架构</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="goSportRecords">
+      <text>运动记录</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="goQuizRecords">
+      <text>答题记录</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="goMedals">
+      <text>我的勋章</text>
+      <text class="menu-arrow">›</text>
+    </view>
+  </view>
+
+  <view class="logout-wrap">
+    <button class="logout-btn" bindtap="handleLogout">退出登录</button>
+  </view>
+</view>

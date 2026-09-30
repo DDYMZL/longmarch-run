@@ -1,0 +1,148 @@
+.answer-page {
+  padding-bottom: 60rpx;
+}
+
+/* 顶部进度 */
+.progress-header {
+  background: #FFFFFF;
+  padding: 30rpx 40rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.progress-count {
+  font-size: 26rpx;
+  color: #C8102E;
+  font-weight: 600;
+  margin-bottom: 14rpx;
+}
+
+.progress-bar {
+  height: 14rpx;
+  background: #F0E6D2;
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.progress-inner {
+  height: 100%;
+  background: linear-gradient(90deg, #C8102E, #E05A6A);
+  border-radius: 8rpx;
+  transition: width 0.3s ease;
+}
+
+/* 题目卡片 */
+.question-card {
+  margin-top: 30rpx;
+}
+
+/* 题目切换滑入动画 */
+.q-slide-in {
+  animation: qSlideIn 0.38s cubic-bezier(0.25, 0.8, 0.35, 1) both;
+}
+
+@keyframes qSlideIn {
+  from {
+    opacity: 0;
+    transform: translateX(70rpx);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.question-type {
+  display: inline-block;
+  font-size: 22rpx;
+  color: #FFFFFF;
+  background: #C8102E;
+  border-radius: 8rpx;
+  padding: 4rpx 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.question-type.judge {
+  background: #D4A017;
+}
+
+.question-text {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #333333;
+  line-height: 1.7;
+}
+
+/* 选项 */
+.options {
+  padding: 10rpx 30rpx;
+}
+
+.option {
+  display: flex;
+  align-items: center;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 28rpx 30rpx;
+  margin-top: 20rpx;
+  border: 2rpx solid transparent;
+}
+
+.option.selected {
+  border-color: #C8102E;
+  background: #FFF6F7;
+  animation: pickPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes pickPop {
+  0% { transform: scale(1); }
+  45% { transform: scale(1.045); }
+  100% { transform: scale(1); }
+}
+
+.option-label {
+  width: 56rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  text-align: center;
+  border-radius: 50%;
+  background: #F0E6D2;
+  color: #8C6B1F;
+  font-weight: 600;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.option.selected .option-label {
+  background: #C8102E;
+  color: #FFFFFF;
+  animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.option-text {
+  flex: 1;
+  font-size: 30rpx;
+  color: #333333;
+}
+
+.option-radio {
+  width: 32rpx;
+  height: 32rpx;
+  border-radius: 50%;
+  border: 3rpx solid #DDDDDD;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.option-radio.on {
+  border: 10rpx solid #C8102E;
+  background: #FFFFFF;
+}
+
+/* 操作 */
+.answer-actions {
+  padding: 30rpx 60rpx;
+}
+
+.next-btn {
+  width: 100%;
+}

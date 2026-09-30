@@ -1,0 +1,6 @@
+{
+  "navigationBarTitleText": "步数排名",
+  "navigationBarBackgroundColor": "#C8102E",
+  "navigationBarTextStyle": "white",
+  "enablePullDownRefresh": true
+}

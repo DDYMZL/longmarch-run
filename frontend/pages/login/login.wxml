@@ -1,0 +1,40 @@
+<view class="login-page">
+  <view class="login-hero">
+    <view class="logo">🚩</view>
+    <view class="app-name">长征运动挑战</view>
+
+    <!-- 昵称：微信「头像昵称填写」能力，可一键同步微信昵称（可选） -->
+    <input
+      class="nickname-input"
+      type="nickname"
+      placeholder="长征小战士"
+      placeholder-class="nick-ph"
+      value="{{nickname}}"
+      bindinput="onNicknameInput"
+      bindchange="onNicknameInput"
+      bindblur="onNicknameInput"
+    />
+
+    <view class="slogan">行万里路 · 学长征历史</view>
+    <view class="flag-line">
+      <view class="flag-dot"></view>
+      <view class="flag-line-conn"></view>
+      <view class="flag-dot gold"></view>
+      <view class="flag-line-conn"></view>
+      <view class="flag-dot"></view>
+    </view>
+  </view>
+
+  <view class="login-actions">
+    <view wx:if="{{errorMsg}}" class="error-tip">{{errorMsg}}</view>
+    <!-- 微信授权登录：按钮本身即头像选择器，点击后先选微信头像（首项“用微信头像”）再完成登录 -->
+    <button
+      class="btn-primary login-btn"
+      open-type="chooseAvatar"
+      bindchooseavatar="onChooseAvatar"
+      loading="{{loading}}"
+      disabled="{{loading}}"
+    >微信授权登录</button>
+    <view class="agreement">点击后将选择微信头像并登录 · 同意相关用户协议</view>
+  </view>
+</view>

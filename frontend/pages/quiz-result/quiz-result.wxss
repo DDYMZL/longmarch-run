@@ -1,0 +1,148 @@
+.result-page {
+  padding-bottom: 60rpx;
+}
+
+/* 得分头部 */
+.result-hero {
+  background: linear-gradient(135deg, #A00D26, #C8102E);
+  color: #FFFFFF;
+  text-align: center;
+  padding: 60rpx 40rpx 70rpx;
+}
+
+.result-title {
+  font-size: 32rpx;
+  color: #F5D9A0;
+  animation: fadeUp 0.6s ease both;
+}
+
+.result-score {
+  font-size: 110rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  margin-top: 10rpx;
+  text-shadow: 0 6rpx 24rpx rgba(0, 0, 0, 0.25);
+}
+
+.result-stars {
+  margin-top: 10rpx;
+}
+
+.star {
+  display: inline-block;
+  font-size: 52rpx;
+  color: rgba(255, 255, 255, 0.25);
+  margin: 0 6rpx;
+}
+
+.star.on {
+  color: #FFD766;
+  animation: starPop 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  text-shadow: 0 0 24rpx rgba(255, 215, 102, 0.8);
+}
+
+/* 满分彩带 */
+.confetti-layer {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  z-index: 999;
+  overflow: hidden;
+}
+
+.confetti-piece {
+  position: absolute;
+  top: -60rpx;
+  border-radius: 4rpx;
+  animation-name: confettiFall;
+  animation-timing-function: ease-in;
+  animation-iteration-count: infinite;
+}
+
+/* 统计卡片 */
+.stats-card {
+  margin-top: -30rpx;
+}
+
+.stat-row {
+  display: flex;
+  align-items: center;
+}
+
+.stat-item {
+  flex: 1;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #5A1A1A;
+}
+
+.stat-label {
+  font-size: 24rpx;
+  color: #999999;
+  margin-top: 6rpx;
+}
+
+.stat-divider {
+  width: 1rpx;
+  height: 56rpx;
+  background: #F0E6D2;
+}
+
+/* 错题 */
+.wrong-item {
+  border-top: 1rpx solid #F0E6D2;
+  padding: 24rpx 0;
+}
+
+.wrong-item:first-child {
+  border-top: none;
+  padding-top: 0;
+}
+
+.wrong-index {
+  font-size: 24rpx;
+  color: #C8102E;
+  font-weight: 600;
+}
+
+.wrong-question {
+  font-size: 28rpx;
+  color: #333333;
+  margin-top: 8rpx;
+}
+
+.wrong-answer {
+  font-size: 26rpx;
+  color: #D4A017;
+  margin-top: 8rpx;
+}
+
+.wrong-analysis {
+  font-size: 24rpx;
+  color: #888888;
+  margin-top: 8rpx;
+  line-height: 1.7;
+}
+
+.perfect-tip {
+  text-align: center;
+  font-size: 30rpx;
+  color: #B8860B;
+  padding: 20rpx 0;
+}
+
+/* 操作 */
+.result-actions {
+  padding: 20rpx 60rpx;
+}
+
+.result-actions .btn-primary {
+  width: 100%;
+}

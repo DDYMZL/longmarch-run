@@ -1,0 +1,49 @@
+.records-page {
+  padding: 20rpx 0 40rpx;
+}
+
+.table-head,
+.table-row {
+  display: flex;
+  align-items: center;
+  padding: 22rpx 0;
+}
+
+.table-head {
+  font-size: 24rpx;
+  color: #999999;
+  border-bottom: 1rpx solid #F0E6D2;
+}
+
+.table-row {
+  font-size: 26rpx;
+  color: #333333;
+  border-bottom: 1rpx solid #F5F0E6;
+}
+
+.table-row:last-child {
+  border-bottom: none;
+}
+
+.col-date {
+  flex: 1.4;
+}
+
+.col-num {
+  flex: 1;
+  text-align: center;
+}
+
+.score {
+  color: #C8102E;
+  font-weight: 600;
+}
+
+.score.full {
+  color: #B8860B;
+}
+
+.gold {
+  color: #D4A017;
+  font-weight: 600;
+}
