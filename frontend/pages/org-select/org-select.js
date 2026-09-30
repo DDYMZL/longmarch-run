@@ -26,7 +26,26 @@ Page({
     const from = (options && options.from) || '';
     const user = app.globalData.user || {};
     this.setData({ from: from, selectedId: user.orgId || null });
+    // 登录后强制选组织：隐藏左上角「返回主页」按钮，选完才能离开
+    if (from === 'login') {
+      this.hideHomeButton();
+    }
     this.loadLevel(null);
+  },
+
+  onShow() {
+    if (this.data.from === 'login') {
+      this.hideHomeButton();
+    }
+  },
+
+  /** 隐藏主页按钮（低版本基础库无此 API 时静默跳过） */
+  hideHomeButton() {
+    try {
+      if (wx.hideHomeButton) wx.hideHomeButton();
+    } catch (e) {
+      // 忽略：部分环境不支持
+    }
   },
 
   /** 加载某层级列表；parentId 为 null 表示顶级 */

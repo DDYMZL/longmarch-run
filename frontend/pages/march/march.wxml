@@ -35,7 +35,7 @@
       enable-scroll="{{true}}"
       enable-zoom="{{true}}"
       bindmarkertap="handleMarkerTap"
-      bindcallouttap="handleMarkerTap"
+      bindcallouttap="handleCalloutTap"
     ></map>
     <canvas
       wx:else
@@ -44,7 +44,21 @@
       class="route-map"
       bindtap="handleMapTap"
     ></canvas>
-    <view class="map-hint">点击地图上的节点查看历史详情</view>
+    <view class="map-hint">{{mode === 'real' ? '点击地图节点查看信息，点气泡或「查看详情」看历史' : '点击地图上的节点查看历史详情'}}</view>
+
+    <!-- 选中节点信息卡（实景地图）：点 marker 后展示，替代原错位浮动标签 -->
+    <view class="node-card" wx:if="{{mode === 'real' && selectedNode}}">
+      <view class="node-card-icon {{selectedNode.status}}">{{selectedNode.status === 'completed' ? '★' : selectedNode.icon}}</view>
+      <view class="node-card-meta">
+        <view class="node-card-name-row">
+          <text class="node-card-name">{{selectedNode.name}}</text>
+          <text class="node-card-badge {{selectedNode.status}}">{{selectedNode.status === 'completed' ? '已点亮' : (selectedNode.status === 'current' ? '进行中' : '未解锁')}}</text>
+        </view>
+        <view class="node-card-sub" wx:if="{{selectedNode.status === 'current'}}">当前 {{currentSteps}} / {{selectedNode.targetSteps}} 步 · 还需 {{selectedNode.remain}} 步</view>
+        <view class="node-card-sub" wx:else>目标 {{selectedNode.targetSteps}} 步</view>
+      </view>
+      <view class="node-card-btn" bindtap="goSelectedDetail">查看详情 ›</view>
+    </view>
   </view>
 
   <!-- 节点列表 -->

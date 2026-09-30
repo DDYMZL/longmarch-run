@@ -42,10 +42,16 @@ Page({
    */
   doLogin(avatar) {
     if (this.data.loading) return;
+    // 昵称必填：点击输入框可一键使用微信昵称，首页/我的将展示该名称
+    const nickname = (this.data.nickname || '').trim();
+    if (!nickname) {
+      this.setData({ errorMsg: '请先填写昵称（点击输入框可一键使用微信昵称）' });
+      return;
+    }
     this.setData({ loading: true, errorMsg: '' });
 
     auth
-      .wxLogin({ nickname: this.data.nickname, avatar: avatar })
+      .wxLogin({ nickname: nickname, avatar: avatar })
       .then((user) => {
         app.setLoginUser(user);
         // 每日登录积分

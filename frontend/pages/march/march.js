@@ -94,7 +94,9 @@ Page({
     mapScale: 4,
     includePoints: [],
     markers: [],
-    polylines: []
+    polylines: [],
+    // 实景地图当前选中的节点（点 marker 后在底部信息卡展示）
+    selectedNode: null
   },
 
   onReady() {
@@ -107,6 +109,11 @@ Page({
   onShow() {
     if (!app.globalData.loggedIn) {
       wx.reLaunch({ url: '/pages/login/login' });
+      return;
+    }
+    // 已登录但未选组织 -> 强制先完成组织选择
+    if (!app.globalData.user.orgId) {
+      wx.redirectTo({ url: '/pages/org-select/org-select?from=login' });
       return;
     }
     this.refresh();
@@ -128,6 +135,12 @@ Page({
 
     if (this.data.mode === 'real') {
       const mapData = this.buildMapData(route);
+      // 默认选中「进行中」节点，其次首个未解锁，兜底第一个
+      const selectedNode =
+        route.nodes.find((n) => n.status === 'current') ||
+        route.nodes.find((n) => n.status !== 'completed') ||
+        route.nodes[0] ||
+        null;
       this.setData({
         nodes: route.nodes,
         currentSteps: route.currentSteps,
@@ -136,7 +149,8 @@ Page({
         totalCount: route.totalCount,
         finished: route.finished,
         markers: mapData.markers,
-        polylines: mapData.polylines
+        polylines: mapData.polylines,
+        selectedNode: selectedNode
       });
       this.playViewAnim();
     } else {
@@ -203,7 +217,7 @@ Page({
       }
     }
 
-    // 节点 marker（默认图标 + 状态 label）
+    // 节点 marker（默认图标；名称改为点击气泡展示，替代常驻 label，避免密集点位名称错位/重叠）
     const labelStyle = {
       completed: { color: '#B8860B', bgColor: '#FBF3DC' },
       current: { color: '#C8102E', bgColor: '#FFF1F3' },
@@ -217,15 +231,14 @@ Page({
         longitude: NODE_COORDS[i].longitude,
         width: 16,
         height: 16,
-        label: {
+        callout: {
           content: (node.status === 'completed' ? '★ ' : node.status === 'current' ? '◎ ' : '○ ') + node.name,
           color: style.color,
           bgColor: style.bgColor,
-          fontSize: 11,
+          fontSize: 12,
           borderRadius: 8,
-          padding: 4,
-          anchorX: 0,
-          anchorY: 26
+          padding: 6,
+          display: 'BYCLICK'
         }
       };
     });
@@ -295,12 +308,31 @@ Page({
   },
 
   /**
-   * 点击地图标记：任意状态（含未解锁）均可查看节点历史详情
+   * 点击地图标记：不再直接跳转，而是选中该节点，在地图底部信息卡展示
+   * （任意状态含未解锁均可选中查看）
    */
   handleMarkerTap(e) {
     const id = e.markerId || (e.detail && e.detail.markerId);
     if (!id || id === 999) return;
     const node = this.routeData.nodes.find((n) => n.id === id);
+    if (!node) return;
+    this.setData({ selectedNode: node });
+  },
+
+  /**
+   * 点击 marker 气泡 -> 直接进入节点历史详情
+   */
+  handleCalloutTap(e) {
+    const id = (e.detail && e.detail.markerId) || e.markerId;
+    if (!id || id === 999) return;
+    wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + id });
+  },
+
+  /**
+   * 信息卡「查看详情」
+   */
+  goSelectedDetail() {
+    const node = this.data.selectedNode;
     if (!node) return;
     wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + node.id });
   },

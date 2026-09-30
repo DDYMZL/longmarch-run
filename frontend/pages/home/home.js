@@ -41,6 +41,11 @@ Page({
       wx.reLaunch({ url: '/pages/login/login' });
       return;
     }
+    // 已登录但未选组织 -> 强制先完成组织选择
+    if (!app.globalData.user.orgId) {
+      wx.redirectTo({ url: '/pages/org-select/org-select?from=login' });
+      return;
+    }
     this.setData({ user: app.globalData.user });
     this.refreshAll();
   },
