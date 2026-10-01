@@ -63,6 +63,10 @@ def get_route(db: Session, user_id: int) -> Dict:
                 "target_steps": n.target_steps,
                 "status": status,
                 "remain": max(n.target_steps - current_steps, 0),
+                "historical_time": n.historical_time,
+                "description": n.description,
+                "latitude": n.latitude,
+                "longitude": n.longitude,
             }
         )
 
@@ -126,6 +130,10 @@ def light_up_nodes(db: Session, user_id: int) -> List[Dict]:
                     "target_steps": n.target_steps,
                     "status": "completed",
                     "remain": 0,
+                    "historical_time": n.historical_time,
+                    "description": n.description,
+                    "latitude": n.latitude,
+                    "longitude": n.longitude,
                 }
             )
 
