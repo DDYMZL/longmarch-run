@@ -43,7 +43,7 @@
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空插画），节点点击进详情、点亮进度 |
 | `pages/quiz/quiz` | tab | 答题入口：今日答题状态、开始答题 |
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（运动记录/答题记录） |
-| `pages/login/login` | 子页 | 微信登录：`chooseAvatar` 头像 + `nickname` 输入一键填入微信昵称，直接以微信名称登录，登录后发每日登录积分 |
+| `pages/login/login` | 子页 | 微信登录：`chooseAvatar` 头像（不展示昵称输入框，默认昵称「长征小战士」，可在「我的」页改一次），登录后发每日登录积分 |
 | `pages/node-detail/node-detail` | 子页 | 节点历史详情（任意状态可看，含未解锁） |
 | `pages/quiz-answer/quiz-answer` | 子页 | 答题过程（单选/判断、逐题作答） |
 | `pages/quiz-result/quiz-result` | 子页 | 答题结果（得分、错题解析） |
@@ -94,12 +94,11 @@
 
 ```
 login 页 → 点「微信授权登录」按钮(open-type="chooseAvatar")
-  → 微信弹头像选择（选完回调 bindchooseavatar）
-  → 昵称 <input type="nickname"> 点击一键填入微信昵称（登录直接使用微信名称，无需手动起名）
-  → auth.wxLogin({nickname, avatar})
+  → 微信弹头像选择（选完回调 bindchooseavatar）（页面不展示昵称输入框）
+  → auth.wxLogin({avatar})  // 不采集昵称，后端默认「长征小战士」，可在「我的」页修改一次
       ├─ wx.login() 拿 code
       ├─ persistAvatar：https:// 直返；http://tmp / wxfile://tmp_ 经 saveFile 转持久路径
-      └─ request.js POST /api/auth/login {code, nickname, avatar}
+      └─ request.js POST /api/auth/login {code, nickname: "", avatar}
          → 后端返回 {token, user}（昵称仅首次创建时写入，后续登录不覆盖）
   → setStorageSync('lm_auth_token', token)
   → store.migrateUserData(oldUserId, newUserId)  // 首次切后端，旧 Mock 数据迁移

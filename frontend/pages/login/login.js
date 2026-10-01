@@ -1,6 +1,7 @@
 /**
  * 登录页
  * 流程：点击「微信授权登录」-> chooseAvatar 选取微信头像 -> wx.login 换后端用户与 JWT。
+ * 登录页不展示昵称输入框：昵称默认「长征小战士」，登录后可在「我的」页修改一次。
  * 登录成功后头像被持久化保存，首页与「我的」均回显微信头像。
  */
 const auth = require('../../services/auth');
@@ -9,9 +10,7 @@ const app = getApp();
 Page({
   data: {
     loading: false,
-    errorMsg: '',
-    // 微信「昵称填写」能力采集的昵称（可选，留空默认“长征小战士”）
-    nickname: ''
+    errorMsg: ''
   },
 
   onLoad() {
@@ -19,11 +18,6 @@ Page({
     if (app.globalData.loggedIn) {
       wx.switchTab({ url: '/pages/home/home' });
     }
-  },
-
-  /** 填写昵称（可一键同步微信昵称） */
-  onNicknameInput(e) {
-    this.setData({ nickname: e.detail.value });
   },
 
   /**
@@ -36,22 +30,16 @@ Page({
   },
 
   /**
-   * 执行登录：直接使用微信名称（昵称输入框一键填入的微信昵称）登录。
-   * 登录后可在「我的」页修改昵称，每人仅一次。
+   * 执行登录：不采集昵称，后端默认昵称「长征小战士」；
+   * 首次登录（无组织）跳组织选择，否则直达首页。
    * @param {string} avatar chooseAvatar 选取的头像临时路径
    */
   doLogin(avatar) {
     if (this.data.loading) return;
-    // 微信昵称：点击输入框可一键填入，登录直接使用该名称
-    const nickname = (this.data.nickname || '').trim();
-    if (!nickname) {
-      this.setData({ errorMsg: '请先点击上方输入框填入微信昵称' });
-      return;
-    }
     this.setData({ loading: true, errorMsg: '' });
 
     auth
-      .wxLogin({ nickname: nickname, avatar: avatar })
+      .wxLogin({ avatar: avatar })
       .then((user) => {
         app.setLoginUser(user);
 

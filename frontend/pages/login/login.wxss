@@ -44,25 +44,7 @@
   }
 }
 
-/* 微信昵称填写输入框 */
-.nickname-input {
-  width: 380rpx;
-  margin: 0 auto;
-  padding: 10rpx 0 12rpx;
-  text-align: center;
-  font-size: 40rpx;
-  font-weight: 700;
-  letter-spacing: 4rpx;
-  color: #FFFFFF;
-  border-bottom: 2rpx solid rgba(255, 215, 102, 0.5);
-  animation: fadeUp 0.7s ease 0.25s both;
-}
-
-.nick-ph {
-  color: #F5D9A0;
-  opacity: 0.7;
-}
-
+/* 无昵称输入框：登录后昵称默认「长征小战士」，可在「我的」页修改一次 */
 .slogan {
   margin-top: 16rpx;
   font-size: 28rpx;

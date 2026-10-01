@@ -1,6 +1,6 @@
 /**
  * 昵称功能小程序自动化测试（微信开发者工具 automator）
- * 覆盖：微信名称直接登录 -> mine 页修改昵称（成功一次） -> 二次修改拦截 -> 退出重登昵称不被微信名覆盖 -> 已改名隐藏修改按钮
+ * 覆盖：登录页无昵称输入框 -> 微信授权登录（默认昵称） -> mine 页修改昵称（成功一次） -> 二次修改拦截 -> 退出重登昵称不被覆盖 -> 已改名隐藏修改按钮
  * 前置：后端 http://127.0.0.1:8010 已运行；开发者工具已开自动化端口 9420。
  * 用法：node nickname-test.cjs
  * 结果：stdout PASS/FAIL + results-nickname.json
@@ -16,7 +16,7 @@ process.on('unhandledRejection', (e) => {
 const WS_ENDPOINT = 'ws://127.0.0.1:9420';
 const ORG_PAGE = 'pages/org-select/org-select';
 const CMD_TIMEOUT = 20000;
-const WECHAT_NAME = '微信昵称甲';
+const DEFAULT_NAME = '长征小战士';
 const NEW_NAME = '新昵称乙';
 const RESULTS_FILE = path.join(__dirname, 'results-nickname.json');
 
@@ -183,10 +183,13 @@ async function main() {
   const tokenBefore = await cmd(() => mini.callWxMethod('getStorageSync', 'lm_auth_token'), 'token before');
   record('M01', '冷启动进入登录页', tokenBefore === '', 'token=' + JSON.stringify(tokenBefore));
 
-  await cmd(() => loginPage.setData({ nickname: WECHAT_NAME }), 'setData nickname');
+  const nickInputs = await getEls(loginPage, '.nickname-input');
+  record('M01b', '登录页不展示昵称输入框', !nickInputs || nickInputs.length === 0,
+    'count=' + (nickInputs ? nickInputs.length : 'none'));
+
   await cmd(() => loginPage.callMethod('doLogin', ''), 'callMethod doLogin');
   const orgPage = await waitPage(ORG_PAGE);
-  record('M02', '微信名称登录成功并跳转组织选择', true, 'path=' + orgPage.path);
+  record('M02', '微信授权登录成功并跳转组织选择', true, 'path=' + orgPage.path);
 
   await sleep(600);
   if (!(await selectOrg(orgPage, 1))) throw new Error('未选中总部组织');
@@ -197,7 +200,7 @@ async function main() {
   await cmd(() => mini.switchTab('/pages/mine/mine'), 'switchTab mine');
   const minePage = await waitPage('pages/mine/mine');
   const mUser = await data(minePage, 'user');
-  record('M03', 'mine 页展示微信名称且未改名', mUser && mUser.nickname === WECHAT_NAME && !mUser.nicknameChangedAt,
+  record('M03', 'mine 页展示默认昵称且未改名', mUser && mUser.nickname === DEFAULT_NAME && !mUser.nicknameChangedAt,
     'nickname=' + (mUser && mUser.nickname) + ' changedAt=' + (mUser && mUser.nicknameChangedAt));
 
   const editEls = await getEls(minePage, '.mine-name-edit');
@@ -227,7 +230,6 @@ async function main() {
   await waitPage('pages/login/login', 15000);
   await cmd(() => mini.mockWxMethod('login', { code: loginCode }), 'mockWxMethod login relogin', 1).catch(() => {});
   const loginPage2 = await waitPage('pages/login/login');
-  await cmd(() => loginPage2.setData({ nickname: WECHAT_NAME }), 'setData nickname relogin');
   await cmd(() => loginPage2.callMethod('doLogin', ''), 'callMethod doLogin relogin');
   await waitPage('pages/home/home');
   await sleep(800);

@@ -3,18 +3,7 @@
     <view class="logo">🚩</view>
     <view class="app-name">长征运动挑战</view>
 
-    <!-- 昵称：微信「头像昵称填写」能力，点击输入框可一键填入微信昵称，登录后仅可修改一次 -->
-    <input
-      class="nickname-input"
-      type="nickname"
-      placeholder="点击填入微信昵称"
-      placeholder-class="nick-ph"
-      value="{{nickname}}"
-      bindinput="onNicknameInput"
-      bindchange="onNicknameInput"
-      bindblur="onNicknameInput"
-    />
-
+    <!-- 不展示昵称输入框：登录后昵称默认为「长征小战士」，可在「我的」页修改一次 -->
     <view class="slogan">行万里路 · 学长征历史</view>
     <view class="flag-line">
       <view class="flag-dot"></view>
