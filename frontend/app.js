@@ -11,12 +11,6 @@ App({
     // 恢复本地登录态
     this.globalData.user = auth.getLocalUser();
     this.globalData.loggedIn = !!this.globalData.user;
-
-    // 登录后发放每日登录积分
-    if (this.globalData.loggedIn) {
-      const points = require('./services/points');
-      points.grantDailyLogin(this.globalData.user.id);
-    }
   },
 
   /**

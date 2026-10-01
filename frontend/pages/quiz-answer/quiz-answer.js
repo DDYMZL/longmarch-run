@@ -5,7 +5,6 @@
  */
 const app = getApp();
 const quiz = require('../../services/quiz');
-const medal = require('../../services/medal');
 
 Page({
   data: {
@@ -19,30 +18,36 @@ Page({
   },
 
   onLoad() {
-    const daily = quiz.getDaily(app.globalData.user.id);
+    quiz
+      .getDaily()
+      .then((daily) => {
+        // 今日已完成 -> 直接去结果页
+        if (daily.completed) {
+          wx.redirectTo({ url: '/pages/quiz-result/quiz-result' });
+          return;
+        }
+        if (!daily.questions || daily.questions.length === 0) {
+          wx.showToast({ title: '今日题目正在准备中', icon: 'none' });
+          setTimeout(() => wx.navigateBack(), 800);
+          return;
+        }
 
-    // 今日已完成 -> 直接去结果页
-    if (daily.completed) {
-      wx.redirectTo({ url: '/pages/quiz-result/quiz-result' });
-      return;
-    }
-    if (!daily.questions || daily.questions.length === 0) {
-      wx.showToast({ title: '今日题目正在准备中', icon: 'none' });
-      setTimeout(() => wx.navigateBack(), 800);
-      return;
-    }
+        const answers = {};
+        daily.questions.forEach((q) => (answers[q.id] = []));
 
-    const answers = {};
-    daily.questions.forEach((q) => (answers[q.id] = []));
-
-    this.setData({
-      questions: daily.questions,
-      total: daily.questions.length,
-      answers,
-      current: daily.questions[0],
-      selected: '',
-      questionAnim: 'q-slide-in'
-    });
+        this.setData({
+          questions: daily.questions,
+          total: daily.questions.length,
+          answers,
+          current: daily.questions[0],
+          selected: '',
+          questionAnim: 'q-slide-in'
+        });
+      })
+      .catch(() => {
+        wx.showToast({ title: '题目加载失败，请重试', icon: 'none' });
+        setTimeout(() => wx.navigateBack(), 800);
+      });
   },
 
   /**
@@ -98,9 +103,9 @@ Page({
     }));
 
     quiz
-      .submit(app.globalData.user.id, payload)
+      .submit(payload)
       .then(() => {
-        medal.checkAndGrant(app.globalData.user.id);
+        // 后端提交后自动判分、发积分并刷新勋章，直接进结果页
         wx.redirectTo({ url: '/pages/quiz-result/quiz-result' });
       })
       .catch((err) => {

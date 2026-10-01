@@ -21,13 +21,18 @@ Page({
   },
 
   refresh() {
-    // 先评估勋章（数据变化后可能新增），再读列表
-    medal.checkAndGrant(app.globalData.user.id);
-    const list = medal.getMedalList(app.globalData.user.id);
-    this.setData({
-      medals: list,
-      ownedCount: list.filter((m) => m.owned).length,
-      totalCount: list.length
-    });
+    // 后端勋章列表接口会自动评估发放，直接读取
+    medal
+      .getMedalList()
+      .then((list) => {
+        this.setData({
+          medals: list,
+          ownedCount: list.filter((m) => m.owned).length,
+          totalCount: list.length
+        });
+      })
+      .catch(() => {
+        this.setData({ medals: [], ownedCount: 0, totalCount: 0 });
+      });
   }
 });

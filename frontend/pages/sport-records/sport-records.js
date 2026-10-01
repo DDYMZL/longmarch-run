@@ -21,15 +21,21 @@ Page({
   },
 
   refresh() {
-    const userId = app.globalData.user.id;
-    const recent = sport.getRecent(userId, 30).reverse(); // 新 -> 旧
-    const sum = recent.reduce((s, r) => s + r.steps, 0);
-    const hasDays = recent.filter((r) => r.steps > 0).length;
+    sport
+      .getRecent(30)
+      .then((result) => {
+        const recent = result.reverse(); // 新 -> 旧
+        const sum = recent.reduce((s, r) => s + r.steps, 0);
+        const hasDays = recent.filter((r) => r.steps > 0).length;
 
-    this.setData({
-      records: recent,
-      totalSteps: sum,
-      avgSteps: hasDays > 0 ? Math.round(sum / hasDays) : 0
-    });
+        this.setData({
+          records: recent,
+          totalSteps: sum,
+          avgSteps: hasDays > 0 ? Math.round(sum / hasDays) : 0
+        });
+      })
+      .catch(() => {
+        this.setData({ records: [], totalSteps: 0, avgSteps: 0 });
+      });
   }
 });

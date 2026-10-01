@@ -27,13 +27,19 @@ Page({
   },
 
   refresh() {
-    const r = rank.getStepsRank(app.globalData.user.id);
-    this.setData({
-      list: r.list,
-      myRank: r.myRank,
-      mySteps: r.mySteps,
-      total: r.total
-    });
+    rank
+      .getStepsRank()
+      .then((r) => {
+        this.setData({
+          list: r.list,
+          myRank: r.myRank,
+          mySteps: r.mySteps,
+          total: r.total
+        });
+      })
+      .catch(() => {
+        this.setData({ list: [], myRank: null, mySteps: 0, total: 0 });
+      });
   },
 
   onPullDownRefresh() {

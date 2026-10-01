@@ -126,19 +126,17 @@ Page({
   /* ---------------- 数据 ---------------- */
 
   refresh() {
-    const userId = app.globalData.user.id;
     const requestId = (this._refreshRequestId || 0) + 1;
     this._refreshRequestId = requestId;
-    this.renderRoute(march.getRoute(userId));
 
     march
-      .refreshRouteNodes()
-      .then(() => {
+      .getRoute()
+      .then((route) => {
         if (this._refreshRequestId !== requestId) return;
-        this.renderRoute(march.getRoute(userId));
+        this.renderRoute(route);
       })
       .catch(() => {
-        // 网络失败时保留缓存或内置路线
+        // 网络失败时保留上一次渲染的路线
       });
   },
 

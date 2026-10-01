@@ -19,47 +19,54 @@ Page({
   },
 
   onLoad() {
-    const daily = quiz.getDaily(app.globalData.user.id);
-    const record = daily.record;
+    quiz
+      .getDaily()
+      .then((daily) => {
+        const record = daily.record;
 
-    if (!record) {
-      wx.showToast({ title: '暂无答题记录', icon: 'none' });
-      setTimeout(() => wx.switchTab({ url: '/pages/quiz/quiz' }), 800);
-      return;
-    }
+        if (!record) {
+          wx.showToast({ title: '暂无答题记录', icon: 'none' });
+          setTimeout(() => wx.switchTab({ url: '/pages/quiz/quiz' }), 800);
+          return;
+        }
 
-    this.setData({
-      record,
-      wrongCount: record.totalCount - record.correctCount
-    });
-
-    // 1. 分数滚动动画
-    this.animateScore(record.score);
-
-    // 2. 星星逐个点亮（间隔 220ms）
-    const starCount = Math.round(record.score / 20);
-    for (let i = 1; i <= starCount; i++) {
-      setTimeout(() => {
-        const key = 'stars[' + (i - 1) + ']';
-        this.setData({ [key]: true });
-      }, 500 + i * 220);
-    }
-
-    // 3. 满分彩带
-    if (record.score === 100) {
-      const confetti = [];
-      for (let i = 0; i < 14; i++) {
-        confetti.push({
-          id: i,
-          left: Math.round(Math.random() * 92 + 4), // 4% - 96%
-          delay: Math.random() * 1.2,
-          duration: 2.2 + Math.random() * 1.6,
-          color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
-          size: 10 + Math.round(Math.random() * 14)
+        this.setData({
+          record,
+          wrongCount: record.totalCount - record.correctCount
         });
-      }
-      this.setData({ confetti });
-    }
+
+        // 1. 分数滚动动画
+        this.animateScore(record.score);
+
+        // 2. 星星逐个点亮（间隔 220ms）
+        const starCount = Math.round(record.score / 20);
+        for (let i = 1; i <= starCount; i++) {
+          setTimeout(() => {
+            const key = 'stars[' + (i - 1) + ']';
+            this.setData({ [key]: true });
+          }, 500 + i * 220);
+        }
+
+        // 3. 满分彩带
+        if (record.score === 100) {
+          const confetti = [];
+          for (let i = 0; i < 14; i++) {
+            confetti.push({
+              id: i,
+              left: Math.round(Math.random() * 92 + 4), // 4% - 96%
+              delay: Math.random() * 1.2,
+              duration: 2.2 + Math.random() * 1.6,
+              color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+              size: 10 + Math.round(Math.random() * 14)
+            });
+          }
+          this.setData({ confetti });
+        }
+      })
+      .catch(() => {
+        wx.showToast({ title: '答题记录加载失败', icon: 'none' });
+        setTimeout(() => wx.switchTab({ url: '/pages/quiz/quiz' }), 800);
+      });
   },
 
   /**

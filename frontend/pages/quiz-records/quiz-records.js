@@ -19,9 +19,14 @@ Page({
   },
 
   refresh() {
-    const records = quiz.getRecords(app.globalData.user.id).map((r) =>
-      Object.assign({}, r, { text: r.date.slice(5) })
-    );
-    this.setData({ records });
+    quiz
+      .getRecords()
+      .then((result) => {
+        const records = result.map((r) => Object.assign({}, r, { text: r.date.slice(5) }));
+        this.setData({ records });
+      })
+      .catch(() => {
+        this.setData({ records: [] });
+      });
   }
 });

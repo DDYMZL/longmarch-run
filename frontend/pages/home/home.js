@@ -64,36 +64,36 @@ Page({
    * 刷新首页全部数据
    */
   refreshAll() {
-    const userId = app.globalData.user.id;
+    // 1. 步数 + 2. 路线状态 + 3. 答题状态（并行请求后端）
+    Promise.all([sport.getToday(), march.getRoute(), quiz.getDaily()])
+      .then((results) => {
+        const today = results[0];
+        const route = results[1];
+        const daily = results[2];
+        const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
 
-    // 1. 步数（未同步过则显示 0，引导用户同步）
-    const today = sport.getToday(userId);
-    const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
+        this.setData({
+          dailyTarget: today.target,
+          stepPercent: percent,
+          totalSteps: today.totalSteps,
+          routeLoading: false,
+          litCount: route.litCount,
+          totalCount: route.totalCount,
+          nextNode: route.nextNode,
+          finished: route.finished,
+          // 迷你路线图（预览前 6 个节点）
+          routeNodesPreview: route.nodes.slice(0, 6),
+          quizCompleted: daily.completed,
+          quizScore: daily.record ? daily.record.score : 0,
+          quizRemain: quiz.DAILY_COUNT
+        });
 
-    // 2. 路线状态
-    const route = march.getRoute(userId);
-
-    // 3. 答题状态
-    const daily = quiz.getDaily(userId);
-
-    this.setData({
-      dailyTarget: today.target,
-      stepPercent: percent,
-      totalSteps: today.totalSteps,
-      routeLoading: false,
-      litCount: route.litCount,
-      totalCount: route.totalCount,
-      nextNode: route.nextNode,
-      finished: route.finished,
-      // 迷你路线图（预览前 6 个节点）
-      routeNodesPreview: route.nodes.slice(0, 6),
-      quizCompleted: daily.completed,
-      quizScore: daily.record ? daily.record.score : 0,
-      quizRemain: quiz.DAILY_COUNT
-    });
-
-    // 步数滚动动画
-    this.animateSteps(today.steps);
+        // 步数滚动动画
+        this.animateSteps(today.steps);
+      })
+      .catch(() => {
+        this.setData({ routeLoading: false, routeError: '数据加载失败，请下拉重试' });
+      });
   },
 
   /**
@@ -118,22 +118,25 @@ Page({
    */
   handleSyncSteps() {
     if (this.data.syncing) return;
-    const userId = app.globalData.user.id;
     this.setData({ syncing: true, syncError: '' });
 
     sport
-      .syncToday(userId)
+      .syncToday()
       .then((result) => {
-        // 步数同步后：点亮节点 -> 刷新勋章
-        const newlyLit = march.lightUpNodes(userId);
-        const newMedals = medal.checkAndGrant(userId);
-
-        if (newlyLit.length > 0) {
+        // 步数同步后：点亮节点 -> 刷新勋章（后端联动）
+        return Promise.all([march.lightUpNodes(), medal.checkAndGrant()]).then((r) => ({
+          result: result,
+          newlyLit: r[0],
+          newMedals: r[1]
+        }));
+      })
+      .then((res) => {
+        if (res.newlyLit.length > 0) {
           // 逐个播放点亮庆祝弹层
-          this.playLitPopup(newlyLit.map((n) => n.name));
-        } else if (newMedals.length > 0) {
+          this.playLitPopup(res.newlyLit.map((n) => n.name));
+        } else if (res.newMedals.length > 0) {
           wx.showToast({ title: '获得新勋章！', icon: 'none' });
-        } else if (result.synced) {
+        } else if (res.result.synced) {
           wx.showToast({ title: '步数同步成功', icon: 'success' });
         } else {
           wx.showToast({ title: '今日已同步', icon: 'none' });
@@ -170,19 +173,23 @@ Page({
    * 演示用：手动补步数（无真机环境模拟微信运动数据变化）
    */
   handleAddSteps() {
-    const userId = app.globalData.user.id;
-    sport.addSteps(userId, 2000);
-    const newlyLit = march.lightUpNodes(userId);
-    const newMedals = medal.checkAndGrant(userId);
-    this.refreshAll();
+    sport
+      .addSteps(2000)
+      .then(() => Promise.all([march.lightUpNodes(), medal.checkAndGrant()]))
+      .then((r) => {
+        this.refreshAll();
 
-    if (newlyLit.length > 0) {
-      this.playLitPopup(newlyLit.map((n) => n.name));
-    } else if (newMedals.length > 0) {
-      wx.showToast({ title: '获得新勋章！', icon: 'none' });
-    } else {
-      wx.showToast({ title: '模拟 +2000 步', icon: 'none' });
-    }
+        if (r[0].length > 0) {
+          this.playLitPopup(r[0].map((n) => n.name));
+        } else if (r[1].length > 0) {
+          wx.showToast({ title: '获得新勋章！', icon: 'none' });
+        } else {
+          wx.showToast({ title: '模拟 +2000 步', icon: 'none' });
+        }
+      })
+      .catch((err) => {
+        wx.showToast({ title: (err && err.message) || '操作失败', icon: 'none' });
+      });
   },
 
   /**

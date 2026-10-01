@@ -27,18 +27,19 @@ Page({
   },
 
   refresh() {
-    const userId = app.globalData.user.id;
-    try {
-      const daily = quiz.getDaily(userId);
-      this.setData({
-        completed: daily.completed,
-        record: daily.record,
-        loading: false,
-        errorMsg: daily.questions === null && !daily.completed ? '今日题目正在准备中，请稍后再来。' : ''
+    quiz
+      .getDaily()
+      .then((daily) => {
+        this.setData({
+          completed: daily.completed,
+          record: daily.record,
+          loading: false,
+          errorMsg: daily.questions === null && !daily.completed ? '今日题目正在准备中，请稍后再来。' : ''
+        });
+      })
+      .catch(() => {
+        this.setData({ loading: false, errorMsg: '网络连接异常，请检查网络后重试。' });
       });
-    } catch (e) {
-      this.setData({ loading: false, errorMsg: '网络连接异常，请检查网络后重试。' });
-    }
   },
 
   /**
@@ -65,9 +66,15 @@ Page({
       confirmColor: '#C8102E',
       success: (res) => {
         if (res.confirm) {
-          quiz.resetToday(app.globalData.user.id);
-          this.refresh();
-          wx.showToast({ title: '已重置今日答题', icon: 'success' });
+          quiz
+            .resetToday()
+            .then(() => {
+              this.refresh();
+              wx.showToast({ title: '已重置今日答题', icon: 'success' });
+            })
+            .catch((err) => {
+              wx.showToast({ title: (err && err.message) || '重置失败', icon: 'none' });
+            });
         }
       }
     });

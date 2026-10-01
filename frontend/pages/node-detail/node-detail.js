@@ -22,27 +22,27 @@ Page({
     }
 
     const id = parseInt(options.id, 10);
-    const node = march.getNodeDetail(app.globalData.user.id, id);
+    march
+      .getNodeDetail(id)
+      .then((node) => {
+        const statusMap = {
+          completed: '★ 已点亮',
+          current: '◎ 进行中',
+          unlocked: '○ 未解锁'
+        };
 
-    if (!node) {
-      wx.showToast({ title: '节点不存在', icon: 'none' });
-      setTimeout(() => wx.navigateBack(), 800);
-      return;
-    }
-
-    const statusMap = {
-      completed: '★ 已点亮',
-      current: '◎ 进行中',
-      unlocked: '○ 未解锁'
-    };
-
-    this.setData({
-      node,
-      statusText: statusMap[node.status] || '未解锁',
-      targetText: util.formatNumber(node.targetSteps),
-      currentText: util.formatNumber(node.currentSteps)
-    });
-    wx.setNavigationBarTitle({ title: node.name });
+        this.setData({
+          node,
+          statusText: statusMap[node.status] || '未解锁',
+          targetText: util.formatNumber(node.targetSteps),
+          currentText: util.formatNumber(node.currentSteps)
+        });
+        wx.setNavigationBarTitle({ title: node.name });
+      })
+      .catch(() => {
+        wx.showToast({ title: '节点不存在', icon: 'none' });
+        setTimeout(() => wx.navigateBack(), 800);
+      });
   },
 
   /**
