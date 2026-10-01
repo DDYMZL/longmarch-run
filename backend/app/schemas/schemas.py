@@ -5,9 +5,10 @@
   前端未来从 mock 切换到真实接口时数据结构无需改动；
 - 请求模型（如登录、提交答卷）接受 camelCase 入参。
 """
+from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -25,6 +26,11 @@ class UserOut(CamelModel):
     nickname: str
     avatar: str
     org_id: Optional[int] = None
+
+    @field_validator("avatar", mode="before")
+    @classmethod
+    def empty_avatar(cls, value: Optional[str]) -> str:
+        return value or ""
 
 
 class LoginRequest(BaseModel):
@@ -68,6 +74,23 @@ class AddStepsRequest(BaseModel):
 
 
 # ---------------- 长征路线 ----------------
+class RouteNodeConfigOut(CamelModel):
+    id: int
+    name: str
+    icon: str
+    target_steps: int
+    historical_time: str
+    description: str
+    latitude: float
+    longitude: float
+    sort_order: int
+    is_enabled: bool
+
+
+class RouteNodeConfigListOut(CamelModel):
+    nodes: List[RouteNodeConfigOut] = []
+
+
 class RouteNodeOut(CamelModel):
     id: int
     name: str
@@ -234,9 +257,169 @@ class RankItem(CamelModel):
     steps: int
     is_me: bool
 
+    @field_validator("avatar", mode="before")
+    @classmethod
+    def empty_avatar(cls, value: Optional[str]) -> str:
+        return value or ""
+
 
 class RankListOut(CamelModel):
     list: List[RankItem]
     my_rank: Optional[int] = None
     my_steps: int = 0
     total: int = 0
+
+
+# ---------------- 管理后台（admin 前端项目专用契约，独立于小程序 camelCase 契约） ----------------
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AdminLoginOut(BaseModel):
+    token: str
+    username: str
+
+
+class AdminQuestionOption(BaseModel):
+    """题目选项：label 为 A/B/C/D，text 为选项内容。"""
+
+    label: str
+    text: str
+
+
+class AdminQuestionOut(BaseModel):
+    """题库条目（管理端可见正确答案 answer）。"""
+
+    id: int
+    type: str
+    question: str
+    options: List[AdminQuestionOption] = []
+    answer: List[str] = []
+    analysis: str = ""
+    score: int = 20
+
+
+class AdminQuestionListOut(BaseModel):
+    total: int
+    items: List[AdminQuestionOut] = []
+
+
+class AdminQuestionUpsert(BaseModel):
+    """新增/编辑题目请求体。type: single 单选 / judge 判断。"""
+
+    type: str
+    question: str
+    options: List[AdminQuestionOption] = []
+    answer: List[str] = []
+    analysis: str = ""
+    score: int = 20
+
+
+class AdminOrgNodeOut(BaseModel):
+    """组织架构树节点（含 children，供前端 el-table 树形展示）。"""
+
+    id: int
+    name: str
+    parent_id: Optional[int] = None
+    level: int = 1
+    sort_order: int = 0
+    children: List["AdminOrgNodeOut"] = []
+
+
+class AdminOrgTreeOut(BaseModel):
+    total: int
+    nodes: List[AdminOrgNodeOut] = []
+
+
+class AdminOrgUpsert(BaseModel):
+    """新增/编辑组织请求体；parent_id 为空表示顶级。level 由后端根据父节点自动计算。"""
+
+    name: str
+    parent_id: Optional[int] = None
+    sort_order: int = 0
+
+
+class AdminOrgSyncOut(BaseModel):
+    """组织架构同步结果统计。"""
+
+    source: str
+    created: int = 0
+    updated: int = 0
+    deleted: int = 0
+    kept: int = 0
+    skipped: List[int] = []
+
+
+class AdminRouteNodeOut(BaseModel):
+    id: int
+    name: str
+    icon: str
+    target_steps: int
+    historical_time: str
+    description: str
+    latitude: float
+    longitude: float
+    sort_order: int
+    is_enabled: bool
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class AdminRouteNodeListOut(BaseModel):
+    total: int
+    items: List[AdminRouteNodeOut] = []
+
+
+class AdminRouteNodeUpsert(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    icon: str = Field(default="", max_length=16)
+    target_steps: int = Field(ge=0)
+    historical_time: str = Field(default="", max_length=50)
+    description: str = ""
+    latitude: float = Field(ge=-90, le=90)
+    longitude: float = Field(ge=-180, le=180)
+    sort_order: int = Field(ge=0)
+    is_enabled: bool = True
+
+
+class AdminRouteNodeEnabled(BaseModel):
+    is_enabled: bool
+
+
+class AdminRankNodeOut(BaseModel):
+    id: int
+    name: str
+    target_steps: int
+    reached: bool
+    reached_at: Optional[datetime] = None
+
+
+class AdminRankItemOut(BaseModel):
+    rank: int
+    user_id: int
+    nickname: str
+    avatar: str
+    org_name: str = ""
+    total_steps: int
+    completed_nodes: int
+    node_count: int
+    last_reached_at: Optional[datetime] = None
+    created_at: datetime
+    nodes: List[AdminRankNodeOut] = []
+
+    @field_validator("avatar", mode="before")
+    @classmethod
+    def empty_avatar(cls, value: Optional[str]) -> str:
+        return value or ""
+
+
+class AdminRankListOut(BaseModel):
+    total: int = 0
+    total_steps: int = 0
+    completed_users: int = 0
+    route_nodes: List[AdminRankNodeOut] = []
+    items: List[AdminRankItemOut] = []
+
+
+AdminOrgNodeOut.model_rebuild()

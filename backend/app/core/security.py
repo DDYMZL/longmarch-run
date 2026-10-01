@@ -19,6 +19,18 @@ def create_access_token(user_id: int, openid: str) -> str:
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 
 
+def create_admin_token(username: str) -> str:
+    """签发管理后台令牌，role 固定为 admin，sub 存放用户名。"""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": username,
+        "role": "admin",
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.JWT_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
 def decode_token(token: str) -> Optional[dict]:
     """解析令牌，失败（过期/篡改）返回 None。"""
     try:

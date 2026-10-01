@@ -27,6 +27,13 @@ class Settings(BaseSettings):
     WX_APPID: str = ""
     WX_SECRET: str = ""
 
+    # 管理后台（admin 前端项目）登录账号
+    ADMIN_USERNAME: str = "admin"
+    ADMIN_PASSWORD: str = "112233"
+
+    # 组织架构外部同步接口地址（留空时同步使用内置种子数据，便于开发调试）
+    ORG_SYNC_API_URL: str = ""
+
     # 跨域来源
     CORS_ORIGINS: List[str] = ["*"]
 

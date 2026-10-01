@@ -1,4 +1,4 @@
-"""API 依赖：数据库会话、当前登录用户。"""
+"""API 依赖：数据库会话、当前登录用户、管理员身份。"""
 from typing import Optional
 
 from fastapi import Depends, HTTPException, status
@@ -38,3 +38,22 @@ def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在"
         )
     return user
+
+
+def get_current_admin(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(_bearer),
+) -> dict:
+    """从 Bearer Token 解析管理员身份（role=admin），失败抛 401。
+
+    管理后台账号不对应小程序 User 表，令牌由 POST /api/admin/login 签发。
+    """
+    if credentials is None or not credentials.credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="未登录或令牌缺失"
+        )
+    payload = decode_token(credentials.credentials)
+    if not payload or payload.get("role") != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员令牌无效或已过期"
+        )
+    return payload
