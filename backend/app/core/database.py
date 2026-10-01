@@ -2,9 +2,30 @@
 from typing import Generator
 
 from sqlalchemy import create_engine
+from sqlalchemy.dialects.postgresql.base import PGDialect
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 from app.core.config import settings
+
+
+def _patch_opengauss_version() -> None:
+    """兼容 openGauss：其 version() 返回不含 PostgreSQL 标识的版本串，SQLAlchemy 解析会报错。
+
+    openGauss 的 libpq 兼容报告 server_version=90204（即 PostgreSQL 9.2.4），
+    识别到 openGauss 时直接返回 (9, 2, 4)，其余情况走原生解析。
+    """
+    original = PGDialect._get_server_version_info
+
+    def _get_server_version_info(self, connection):  # type: ignore[no-untyped-def]
+        version = connection.exec_driver_sql("select pg_catalog.version()").scalar() or ""
+        if "openGauss" in version:
+            return (9, 2, 4)
+        return original(self, connection)
+
+    PGDialect._get_server_version_info = _get_server_version_info
+
+
+_patch_opengauss_version()
 
 _connect_args = {}
 if settings.DATABASE_URL.startswith("sqlite"):
@@ -26,10 +47,3 @@ def get_db() -> Generator[Session, None, None]:
         yield db
     finally:
         db.close()
-
-
-def init_db() -> None:
-    """建表（幂等）。导入 models 以注册全部表定义。"""
-    from app.models import models  # noqa: F401
-
-    Base.metadata.create_all(bind=engine)

@@ -15,8 +15,8 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api"
     DEBUG: bool = True
 
-    # 数据库（默认 SQLite，零配置即可运行）
-    DATABASE_URL: str = "sqlite:///./longmarch.db"
+    # 数据库（openGauss 兼容 PostgreSQL 协议，使用 psycopg2 驱动）
+    DATABASE_URL: str = "postgresql+psycopg2://gaussdb:LongMarch%40123@127.0.0.1:5118/longmarch"
 
     # JWT
     JWT_SECRET: str = "longmarch-dev-secret-change-me-please"

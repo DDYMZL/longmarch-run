@@ -1,0 +1,47 @@
+name: longmarch
+
+services:
+  opengauss:
+    image: opengauss/opengauss-server:latest
+    container_name: longmarch-opengauss
+    privileged: true
+    restart: unless-stopped
+    environment:
+      GS_NODENAME: longmarch
+      GS_USERNAME: gaussdb
+      GS_PASSWORD: "LongMarch@123"
+      GS_PORT: "5118"
+    ports:
+      - "5118:5118"
+    volumes:
+      - opengauss-data:/var/lib/opengauss
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - >-
+          LD_LIBRARY_PATH=/usr/local/opengauss/lib /usr/local/opengauss/bin/gsql
+          -h 127.0.0.1 -p 5118 -U gaussdb -W "$$GS_PASSWORD"
+          -d postgres -t -A -c "SELECT 1" | grep -q 1
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 60s
+
+  database-init:
+    image: opengauss/opengauss-server:latest
+    restart: "no"
+    depends_on:
+      opengauss:
+        condition: service_healthy
+    environment:
+      GS_HOST: opengauss
+      GS_PORT: "5118"
+      GS_USERNAME: gaussdb
+      GS_PASSWORD: "LongMarch@123"
+      GS_DATABASE: longmarch
+    entrypoint: ["/bin/bash", "/docker/init/init-db.sh"]
+    volumes:
+      - ./init:/docker/init:ro
+
+volumes:
+  opengauss-data:

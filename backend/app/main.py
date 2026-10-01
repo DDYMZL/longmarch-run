@@ -1,11 +1,11 @@
-"""FastAPI 应用入口：初始化数据库与种子数据、注册中间件与全部路由。
+"""FastAPI 应用入口：初始化种子数据、注册中间件与全部路由。
 
 启动：
     cd backend
     pip install -r requirements.txt
     python run.py                 # 或 uvicorn app.main:app --reload
 接口文档：
-    http://127.0.0.1:8000/docs    (Swagger UI)
+    http://127.0.0.1:8010/docs    (Swagger UI)
 """
 from contextlib import asynccontextmanager
 
@@ -14,14 +14,13 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import auth, march, medal, org, points, quiz, rank, sport
 from app.core.config import settings
-from app.core.database import SessionLocal, init_db
+from app.core.database import SessionLocal
 from app.data.seed import init_seed
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用启动：建表 + 写入静态种子数据（均幂等）。"""
-    init_db()
+    """应用启动：幂等写入静态种子数据。"""
     db = SessionLocal()
     try:
         init_seed(db)
