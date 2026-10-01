@@ -7,7 +7,7 @@
 | 组件 | 选型 | 说明 |
 | --- | --- | --- |
 | Web 框架 | FastAPI + Uvicorn | 异步、自带 Swagger 文档 |
-| ORM / 数据库 | SQLAlchemy 2.0 + SQLite | 默认 SQLite，零配置即可运行；可换 PostgreSQL/MySQL |
+| ORM / 数据库 | SQLAlchemy 2.0 + openGauss | Docker 承载，`psycopg2` 连接 PostgreSQL 兼容协议 |
 | 数据校验 | Pydantic v2 | 响应统一 camelCase 输出 |
 | 鉴权 | PyJWT | 登录签发 Bearer Token |
 | HTTP 客户端 | httpx | 调用微信 `code2Session` |
@@ -15,12 +15,17 @@
 ## 目录结构
 
 ```
+docker/
+├── compose.yml               # openGauss 服务、端口、账号和数据卷
+└── init/
+    ├── init-db.sh            # 建库并按文件名顺序执行未应用的 SQL
+    └── 001_schema.sql        # backend 基线表结构
 backend/
 ├── requirements.txt          # 依赖
 ├── .env.example              # 环境变量样例（复制为 .env）
 ├── run.py                    # 开发启动入口
 └── app/
-    ├── main.py               # 应用入口：建表 + 种子 + 注册路由
+    ├── main.py               # 应用入口：种子数据 + 注册路由
     ├── core/                 # 基础设施
     │   ├── config.py         # 配置（pydantic-settings）
     │   ├── database.py       # 引擎 / 会话 / Base
@@ -30,20 +35,16 @@ backend/
     ├── data/seed.py          # 种子数据：路线10 / 题库15 / 勋章6
     ├── schemas/schemas.py    # Pydantic 请求/响应模型
     ├── services/             # 业务逻辑（对应前端 services/*.js）
-    │   ├── auth_service.py   # 微信登录
-    │   ├── points_service.py # 积分
-    │   ├── sport_service.py  # 运动步数
-    │   ├── march_service.py  # 长征路线点亮
-    │   ├── quiz_service.py   # 每日答题
-    │   └── medal_service.py  # 勋章发放
-    └── api/
-        ├── deps.py           # 依赖：数据库会话、当前用户
-        └── routes/           # 路由：auth/sport/march/quiz/points/medal
+    └── api/                  # 依赖与路由
 ```
 
 ## 快速开始
 
+先在项目根目录启动 openGauss。首次启动时，`database-init` 会创建数据库和全部表；后续启动只执行尚未登记的 SQL 文件。
+
 ```bash
+docker compose -f docker/compose.yml up -d
+
 cd backend
 python -m venv .venv
 # Windows:  .venv\Scripts\activate
@@ -53,15 +54,24 @@ copy .env.example .env        # Windows；macOS/Linux 用 cp
 python run.py                 # 或 uvicorn app.main:app --reload
 ```
 
-- 服务地址：<http://127.0.0.1:8000>
-- 交互式文档（Swagger）：<http://127.0.0.1:8000/docs>
-- 首次启动会**自动建表并写入种子数据**（幂等，重复启动不会重复写入）。
+| 数据库项 | 值 |
+| --- | --- |
+| 地址 | `127.0.0.1` |
+| 端口 | `5118` |
+| 数据库 | `longmarch` |
+| 用户 | `gaussdb` |
+| 密码 | `LongMarch@123` |
+
+- 服务地址：<http://127.0.0.1:8010>
+- 交互式文档（Swagger）：<http://127.0.0.1:8010/docs>
+- 后端启动时只幂等写入业务种子数据，不负责建库建表。
+- 密码中的 `@` 在 `DATABASE_URL` 中写为 `%40`。
 
 ## 配置项（.env）
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `DATABASE_URL` | `sqlite:///./longmarch.db` | 数据库连接串 |
+| `DATABASE_URL` | `postgresql+psycopg2://gaussdb:LongMarch%40123@127.0.0.1:5118/longmarch` | 本地 Docker openGauss 连接串 |
 | `JWT_SECRET` | 开发默认值 | **生产务必修改** |
 | `JWT_EXPIRE_MINUTES` | `10080`（7天） | 令牌有效期 |
 | `WX_APPID` / `WX_SECRET` | 空 | 留空时登录使用 mock openid，便于本地调试 |
@@ -100,6 +110,7 @@ Authorization: Bearer <登录返回的 token>
 | GET | `/api/org/mine` | 我的所属组织（含全路径） |
 | POST | `/api/org/select` | 选定/修改所属组织（body: `orgId`，可选任意层级） |
 | GET | `/api/rank/steps` | 全员工累计步数总榜（跨所有组织，标记我的名次） |
+| GET | `/api/admin/rankings` | 管理端全员排名、统计概览及每人全部节点到达时间 |
 
 ## 业务规则（与前端 Mock 完全一致）
 
@@ -111,9 +122,16 @@ Authorization: Bearer <登录返回的 token>
 - **组织架构**：多级树（种子 13 个节点，4 级），用户可选定**任意层级**节点作为所属组织，登录后可随时修改。
 - **排名**：**员工个人**总榜（非组织间排名），按累计步数（`DailySport.steps` 求和）降序，跨所有组织；同分按 `user_id` 升序保证名次稳定；返回前 `TOP_LIMIT`（默认 100）条并始终包含当前用户。
 
-## 数据库结构变更提示
+## 数据库结构维护
 
-本项目用 `Base.metadata.create_all` 建表，**只会新增缺失的表，不会为已存在的表补列**。若你在本次「组织架构 + 排名」功能之前已启动过后端并生成了 `longmarch.db`，该库缺少 `users.org_id` 列与 `organizations` 表，需要**删除 `longmarch.db` 后重启**（开发期数据可丢弃），或改用 Alembic 迁移（见下方 TODO）。
+backend 所需的建库、建表、索引和结构变更统一维护在根目录 `docker/init/`：
+
+1. `init-db.sh` 创建 `longmarch` 数据库和 `schema_migrations` 版本表。
+2. `*.sql` 按文件名顺序执行，成功后写入版本表，同一脚本不会重复执行。
+3. 新增或修改表结构时，新建递增编号脚本（如 `002_add_xxx.sql`），不要修改已在共享数据库执行过的脚本。
+4. SQLAlchemy ORM 模型必须与 SQL 脚本同步修改；后端不调用 `create_all`。
+
+本地需要彻底重建数据库时，可先执行 `docker compose -f docker/compose.yml down -v` 删除数据卷，再重新 `up -d`。该命令会清空本地数据库数据。
 
 ## 与前端对接说明
 

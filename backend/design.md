@@ -6,7 +6,7 @@
 
 - 将前端 `../frontend/services/*.js` 的 Mock 业务逻辑**完整迁移**为服务端实现；
 - 响应结构（字段名、嵌套关系、枚举值）与前端 Mock **完全一致**，前端切换后端时页面层零改动；
-- 零配置可运行（默认 SQLite + mock openid），兼顾后续生产化（可换 PostgreSQL/MySQL、真实微信凭证）。
+- 使用根目录 `docker/compose.yml` 承载 openGauss，通过 PostgreSQL 兼容协议连接；数据库结构由 `docker/init/` 统一维护，同时保留 mock openid 便于本地联调。
 
 ## 2. 模块架构设计
 
@@ -14,7 +14,7 @@
 
 ```
                  ┌────────────────────────────────────────────┐
-  HTTP 请求 ───▶ │  api/routes/*.py   路由层（8 个域，21 个端点）  │
+  HTTP 请求 ───▶ │  api/routes/*.py   路由层（含管理后台接口）      │
                  │  参数校验 / service 调用 / 业务异常→HTTPException│
                  └───────────────┬────────────────────────────┘
                                  │  Depends(get_db) / get_current_user
@@ -41,9 +41,10 @@
 
 | 模块 | 文件 | 职责 |
 | --- | --- | --- |
-| 应用入口 | `app/main.py` | lifespan 内建表 + 种子；CORS；注册 8 个路由；`/` 健康检查 |
+| 应用入口 | `app/main.py` | lifespan 内写入种子；CORS；注册路由；`/` 健康检查 |
 | 配置 | `app/core/config.py` | `Settings`（pydantic-settings）：APP/DB/JWT/WX/CORS，`lru_cache` 单例 |
-| 数据库 | `app/core/database.py` | `engine`、`SessionLocal`、`Base`、`get_db`、`init_db`（`create_all`） |
+| 数据库 | `app/core/database.py` | `engine`、`SessionLocal`、`Base`、`get_db`；不负责建表 |
+| 数据库部署 | `../docker/` | openGauss Compose 配置、建库脚本、表结构和递增 SQL 变更 |
 | 安全 | `app/core/security.py` | `create_token`/`decode_token`（PyJWT HS256，`sub`=user_id） |
 | 工具 | `app/core/helpers.py` | 日期字符串、按「日期+用户」生成稳定模拟步数 |
 | 鉴权依赖 | `app/api/deps.py` | `get_current_user`：Bearer Token 缺失/无效/用户不存在统一 401 |
@@ -90,11 +91,15 @@
 > 与前端 `services/store.js` 的数据结构对应关系：
 > `dailySport`→`daily_sport`、`litNodes`→`lit_nodes`、`quizRecords`→`quiz_records`、`pointsLog`→`points_log`、`medals`→`user_medals`。
 
+### 3.3 数据库部署与结构变更
+
+本地 openGauss 使用数据库 `longmarch`、用户 `gaussdb`、端口 `5118`。`../docker/init/init-db.sh` 创建数据库及 `schema_migrations`，再按文件名顺序执行尚未登记的 SQL。`001_schema.sql` 是当前基线；后续变更新增递增编号脚本，并同步修改 SQLAlchemy ORM，FastAPI 不自动建表。
+
 ## 4. 关键接口定义
 
-Base URL：`http://127.0.0.1:8000`，前缀 `/api`。除 `POST /api/auth/login` 与 `GET /api/org/children` 外，均需 `Authorization: Bearer <token>`。响应字段全部 camelCase。
+Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 与 `GET /api/org/children` 外，均需 `Authorization: Bearer <token>`。响应字段全部 camelCase。
 
-### 4.1 接口总览（21 个端点）
+### 4.1 接口总览
 
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
@@ -119,6 +124,7 @@ Base URL：`http://127.0.0.1:8000`，前缀 `/api`。除 `POST /api/auth/login` 
 | GET | `/api/org/mine` | 是 | 我的组织 `{orgId, orgName, fullName, path}` |
 | POST | `/api/org/select` | 是 | 选定/修改组织 `{orgId}`；组织不存在 404 |
 | GET | `/api/rank/steps` | 是 | 全员工累计步数榜 `{list: [{rank, userId, nickname, avatar, orgName, steps, isMe}], myRank, mySteps, total}` |
+| GET | `/api/admin/rankings` | 管理员 | 全员排名统计；每人包含累计步数、组织、全部路线节点及实际到达时间 |
 
 ### 4.2 关键请求/响应示例
 
@@ -182,11 +188,11 @@ Base URL：`http://127.0.0.1:8000`，前缀 `/api`。除 `POST /api/auth/login` 
 | 积分 | 登录 +1；运动 5000 步 +5、10000 步 +10；答题 +5、满分额外 +10；点亮节点 +10；完成路线 +100；**同日同 reason 去重** |
 | 勋章 | `first-step` 首次运动；`learner` 累计答题 10 次；`master` 积分 ≥ 500；`luding` 点亮 6 个节点；`snow` 点亮 7 个；`victory` 全部点亮 |
 | 组织 | 树形逐级下钻；用户可选定任意层级节点；`/org/children` 不鉴权可浏览 |
-| 排名 | 跨组织员工个人总榜，按累计步数降序；`isMe` 标记本人行 |
+| 排名 | 跨组织员工个人总榜，按累计步数降序；小程序用 `isMe` 标记本人行，管理端返回全量人员及 `lit_nodes.lit_at` 节点到达时间 |
 
 ## 6. 关键设计决策与权衡
 
 1. **camelCase 契约优先**：以 `CamelModel` 统一序列化而非改动前端 Mock，换来前端平滑切换；代价是后端内部保持 snake_case 与输出层的转换分离。
-2. **SQLite + 幂等种子**：零配置保证「clone 即跑」；种子幂等使启动建库不依赖迁移工具。生产化 TODO（真实 code2Session、微信步数解密、头像上传、Alembic）见 `README.md`。
+2. **openGauss + SQL 版本表**：数据库由根目录 Docker Compose 承载，SQLAlchemy 通过 `psycopg2` 连接 PostgreSQL 兼容协议；`schema_migrations` 保证结构脚本只执行一次，业务种子仍由后端幂等写入。
 3. **勋章检查挂在副作用链尾**：运动/点亮/答题/登录后统一触发 `medal_service.check_and_grant`，避免遗漏判定时机；判定本身幂等（已拥有即跳过）。
 4. **`daily_questions` 抽题缓存表**：保证「同一天同一套题」的体验与幂等语义，避免每次请求重新随机导致前后端不一致。

@@ -14,7 +14,7 @@
 | 组件 | 选型 | 约束 |
 | --- | --- | --- |
 | Web 框架 | FastAPI + Uvicorn | 同步 `def` 路由即可，无需 `async def` |
-| ORM / 数据库 | SQLAlchemy 2.0（`Mapped`/`mapped_column` 风格）+ SQLite | 默认零配置；不得引入 Alembic 之外的迁移方案（当前靠 `create_all`） |
+| ORM / 数据库 | SQLAlchemy 2.0（`Mapped`/`mapped_column` 风格）+ openGauss | 根目录 `docker/compose.yml` 承载；建库、建表及结构变更统一维护在 `../docker/init/`，后端禁止调用 `create_all` |
 | 数据校验 | Pydantic v2 | 响应模型统一继承 `CamelModel` |
 | 鉴权 | PyJWT（HS256） | Bearer Token，由 `app.core.security` 签发/校验 |
 | 微信对接 | httpx（`code2Session`） | `WX_APPID`/`WX_SECRET` 为空时降级 mock openid |
@@ -23,13 +23,16 @@
 ## 3. 目录结构与分层约定
 
 ```
+../docker/
+├── compose.yml               # openGauss 服务、连接信息与数据卷
+└── init/                     # 建库、建表和后续结构变更 SQL
 backend/
 ├── run.py                    # 开发启动入口（勿在 app/ 内写启动逻辑）
 └── app/
-    ├── main.py               # 应用入口：lifespan 建表+种子、CORS、注册全部路由
+    ├── main.py               # 应用入口：lifespan 写入种子、CORS、注册全部路由
     ├── core/                 # 基础设施（不依赖业务模块）
     │   ├── config.py         # Settings（pydantic-settings，lru_cache 单例）
-    │   ├── database.py       # engine / SessionLocal / Base / get_db / init_db
+    │   ├── database.py       # engine / SessionLocal / Base / get_db
     │   ├── security.py       # JWT 签发与校验（create_token / decode_token）
     │   └── helpers.py        # 日期、模拟步数等纯工具函数
     ├── models/models.py      # SQLAlchemy ORM（静态配置表 + 用户业务表）
@@ -61,6 +64,7 @@ schemas 被 routes/services 引用；core 不 import 业务模块
 5. **副作用链**：凡影响步数、点亮、答题、积分的操作（sync/add/light-up/submit/login），调用后必须触发 `medal_service.check_and_grant`；积分发放必须统一走 `points_service`（保证「同日同 reason 去重」），禁止直接写 `PointsLog`。
 6. **数据库会话**：一律通过 `Depends(get_db)` 获取，禁止在 service 内自建 session；session 由依赖自动关闭。
 7. **JWT 载荷约定**：token 的 `sub` 为用户 id（int 的字符串形式），`app.core.security.decode_token` 失败时返回空，由 `deps.get_current_user` 统一转 401。
+8. **表结构单一来源**：`../docker/init/*.sql` 是数据库结构的执行来源；ORM 模型必须同步，禁止由 FastAPI 启动流程自动建表。
 
 ## 5. 编码规范（Python）
 
@@ -79,22 +83,24 @@ schemas 被 routes/services 引用；core 不 import 业务模块
 
 1. **先读**：修改某域（如 quiz）前，先读 `app/api/routes/<域>.py`、`app/services/<域>_service.py`、`app/schemas/schemas.py` 相关段、`app/models/models.py` 相关模型；涉及规则时对照 `../frontend/services/<域>.js` 与 `../frontend/mock/data.js`。
 2. **改接口必改三处**：新增/修改 API 需同步更新 ① `routes` ② `services`（如有业务） ③ `schemas`，并检查 `main.py` 注册与前端 Mock 结构一致性。
-3. **改表结构**：涉及字段变更时，检查 `data/seed.py` 与默认值；当前无迁移工具，开发期可删 `*.db` 重建（`_smoke_test.db` 是冒烟测试产物，勿提交）。
+3. **改表结构**：同步修改 `app/models/models.py`、`data/seed.py`（如涉及默认数据）和 `../docker/init/`；新增递增编号 SQL，禁止修改已在共享数据库执行过的脚本。
 4. **禁止行为**：
    - 禁止在路由中写业务规则；
    - 禁止绕过 `points_service` 直接写积分流水；
    - 禁止给响应加 snake_case 字段（破坏前端契约）；
    - 禁止破坏种子幂等性；
+   - 禁止在后端启动流程中调用 `Base.metadata.create_all`；
    - 禁止把 `_smoke_test.db`、`.env`、`__pycache__` 视为源码修改目标。
-5. **验证**：改动后运行 `python run.py` 确认可启动；有测试习惯时用 TestClient 冒烟关键接口；接口文档以 `/docs`（Swagger）核对响应字段。
+5. **验证**：运行 `docker compose -f docker/compose.yml up -d` 并确认 `database-init` 成功后，再运行 `python run.py`；用 TestClient 冒烟关键接口；接口文档以 `/docs`（Swagger）核对响应字段。
 6. **同步文档**：接口、业务规则变更时，同步更新本目录 `design.md` 与 `README.md` 的「API 一览」「业务规则」章节。
 
 ## 7. 快速启动（背景知识）
 
 ```bash
+docker compose -f docker/compose.yml up -d
 cd backend
 pip install -r requirements.txt
-python run.py                 # 默认 http://127.0.0.1:8000，Swagger 在 /docs
+python run.py                 # 默认 http://127.0.0.1:8010，Swagger 在 /docs
 ```
 
-首次启动自动建表 + 幂等写入种子数据；未配置 `WX_APPID`/`WX_SECRET` 时登录走 mock openid（开发调试用）。
+本地数据库为 `longmarch`，映射端口 `5118`，开发密码 `LongMarch@123`；首次启动由 `docker/init/` 建库建表，FastAPI 启动时仅幂等写入种子数据。
