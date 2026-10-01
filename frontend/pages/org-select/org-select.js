@@ -11,6 +11,7 @@
  */
 const app = getApp();
 const org = require('../../services/org');
+const auth = require('../../services/auth');
 
 Page({
   data: {
@@ -50,30 +51,35 @@ Page({
 
   /** 加载某层级列表；parentId 为 null 表示顶级 */
   loadLevel(parentId) {
-    const list = org.getChildren(parentId);
-    this.setData({
-      list: list,
-      currentId: parentId,
-      currentFullName: parentId ? org.getFullName(parentId) : ''
-    });
+    org
+      .getChildren(parentId)
+      .then((list) => {
+        this.setData({
+          list: list,
+          currentId: parentId,
+          currentFullName: this.data.stack.map((s) => s.name).join(' / ')
+        });
+      })
+      .catch(() => {
+        this.setData({ list: [], currentId: parentId, currentFullName: '' });
+      });
   },
 
   /** 点击组织名：有下级则下钻，无下级直接选定 */
   onTapRow(e) {
     const id = e.currentTarget.dataset.id;
+    const name = e.currentTarget.dataset.name;
     const hasChildren = e.currentTarget.dataset.has;
     if (hasChildren) {
-      this.drillInto(id);
+      this.drillInto(id, name);
     } else {
       this.confirmSelect(id);
     }
   },
 
   /** 下钻进入某组织的下级 */
-  drillInto(id) {
-    const node = org.getOrg(id);
-    if (!node) return;
-    const stack = this.data.stack.concat([{ id: node.id, name: node.name }]);
+  drillInto(id, name) {
+    const stack = this.data.stack.concat([{ id: id, name: name }]);
     this.setData({ stack: stack });
     this.loadLevel(id);
   },
@@ -104,19 +110,30 @@ Page({
     }
   },
 
-  /** 确认选定组织：持久化 + 更新全局用户 + 跳转 */
+  /** 确认选定组织：调后端持久化 + 更新全局用户 + 跳转 */
   confirmSelect(orgId) {
-    const updated = org.setUserOrg(orgId);
-    // 同步全局登录态，供「我的」等页面回显
-    if (app.globalData && app.globalData.user) {
-      app.globalData.user = updated;
-    }
-    this.setData({ selectedId: orgId });
+    org
+      .select(orgId)
+      .then((res) => {
+        // 同步本地缓存与全局登录态，供「我的」等页面回显
+        const updated = auth.updateLocalUser({
+          orgId: res.orgId,
+          orgName: res.orgName,
+          orgFullName: res.fullName
+        });
+        if (app.globalData && app.globalData.user && updated) {
+          app.globalData.user = updated;
+        }
+        this.setData({ selectedId: orgId });
 
-    wx.showToast({ title: '已选定组织', icon: 'success' });
-    setTimeout(() => {
-      this.afterSelect();
-    }, 600);
+        wx.showToast({ title: '已选定组织', icon: 'success' });
+        setTimeout(() => {
+          this.afterSelect();
+        }, 600);
+      })
+      .catch((err) => {
+        wx.showToast({ title: (err && err.message) || '选定失败，请重试', icon: 'none' });
+      });
   },
 
   /** 选定后的跳转：登录流程进首页，其余返回上一页 */

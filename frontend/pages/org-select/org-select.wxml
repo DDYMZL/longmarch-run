@@ -26,7 +26,7 @@
       wx:for="{{list}}"
       wx:key="id"
     >
-      <view class="org-main" data-id="{{item.id}}" data-has="{{item.hasChildren}}" bindtap="onTapRow">
+      <view class="org-main" data-id="{{item.id}}" data-name="{{item.name}}" data-has="{{item.hasChildren}}" bindtap="onTapRow">
         <text class="org-name">{{item.name}}</text>
         <text class="org-hint" wx:if="{{item.hasChildren}}">{{item.childCount}} 个下级 ›</text>
         <text class="org-hint org-hint-leaf" wx:else>末级组织</text>
