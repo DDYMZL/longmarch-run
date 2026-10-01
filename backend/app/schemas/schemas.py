@@ -422,4 +422,95 @@ class AdminRankListOut(BaseModel):
     items: List[AdminRankItemOut] = []
 
 
+class AdminOverviewUser(BaseModel):
+    """人员详情：基本信息。"""
+
+    user_id: int
+    nickname: str
+    avatar: str = ""
+    org_name: str = ""
+    created_at: Optional[datetime] = None
+
+
+class AdminOverviewRecentSport(BaseModel):
+    """人员详情：单日运动记录。"""
+
+    date: str
+    steps: int
+    text: str
+
+
+class AdminOverviewSport(BaseModel):
+    """人员详情：运动记录聚合。"""
+
+    today_steps: int = 0
+    total_steps: int = 0
+    recent: List[AdminOverviewRecentSport] = []
+
+
+class AdminOverviewQuizRecord(BaseModel):
+    """人员详情：单条答题记录。"""
+
+    date: str
+    total_count: int = 0
+    correct_count: int = 0
+    score: int = 0
+    points: int = 0
+    answer_at: int = 0
+
+
+class AdminOverviewMedal(BaseModel):
+    """人员详情：已获勋章。"""
+
+    id: str
+    name: str
+    icon: str
+    desc: str = ""
+    granted_at: Optional[datetime] = None
+
+
+class AdminOverviewNode(BaseModel):
+    """人员详情：长征路线节点到达情况。"""
+
+    id: int
+    name: str
+    target_steps: int
+    reached: bool
+    reached_at: Optional[datetime] = None
+
+
+class AdminOverviewMarch(BaseModel):
+    """人员详情：长征记录聚合。"""
+
+    completed_nodes: int = 0
+    node_count: int = 0
+    nodes: List[AdminOverviewNode] = []
+
+
+class AdminOverviewPoint(BaseModel):
+    """人员详情：积分流水条目。"""
+
+    date: str
+    reason: str
+    delta: int
+
+
+class AdminOverviewPoints(BaseModel):
+    """人员详情：积分聚合。"""
+
+    total: int = 0
+    logs: List[AdminOverviewPoint] = []
+
+
+class AdminUserOverviewOut(BaseModel):
+    """排名洞察点击人员后的完整详情聚合。"""
+
+    user: AdminOverviewUser
+    sport: AdminOverviewSport
+    quiz_records: List[AdminOverviewQuizRecord] = []
+    medals: List[AdminOverviewMedal] = []
+    march: AdminOverviewMarch
+    points: AdminOverviewPoints
+
+
 AdminOrgNodeOut.model_rebuild()

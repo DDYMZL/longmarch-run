@@ -27,6 +27,7 @@ from app.schemas.schemas import (
     AdminRouteNodeListOut,
     AdminRouteNodeOut,
     AdminRouteNodeUpsert,
+    AdminUserOverviewOut,
     MessageOut,
 )
 from app.services import admin_service
@@ -122,6 +123,20 @@ def set_route_node_enabled(
 )
 def rankings(db: Session = Depends(get_db)):
     return admin_service.get_rank_overview(db)
+
+
+@router.get(
+    "/users/{user_id}/overview",
+    response_model=AdminUserOverviewOut,
+    summary="人员详情聚合（运动/答题/勋章/长征/积分）",
+    dependencies=[Depends(get_current_admin)],
+)
+def user_overview(user_id: int, db: Session = Depends(get_db)):
+    """排名洞察点击人员后展示其全部业务数据；用户不存在返回 404。"""
+    overview = admin_service.get_user_overview(db, user_id)
+    if overview is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    return overview
 
 
 # ---------------- 题库维护 ----------------

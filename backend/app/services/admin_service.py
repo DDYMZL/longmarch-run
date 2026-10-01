@@ -16,12 +16,16 @@ from app.models.models import (
     DailyQuestion,
     DailySport,
     LitNode,
+    MedalDef,
     Organization,
+    PointsLog,
     Question,
+    QuizRecord,
     RouteNode,
     User,
+    UserMedal,
 )
-from app.services import org_service
+from app.services import org_service, sport_service
 
 
 # ---------------- 路线节点维护 ----------------
@@ -275,6 +279,113 @@ def get_rank_overview(db: Session) -> Dict:
             for node in route_nodes
         ],
         "items": items,
+    }
+
+
+# ---------------- 人员详情聚合 ----------------
+def get_user_overview(db: Session, user_id: int) -> Optional[Dict]:
+    """聚合某人员全部业务数据：基本信息、运动、答题、勋章、长征、积分。
+
+    供排名洞察点击人员后展示；用户不存在返回 None。
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None:
+        return None
+    route_nodes = (
+        db.query(RouteNode)
+        .filter(RouteNode.is_enabled.is_(True))
+        .order_by(RouteNode.sort_order, RouteNode.id)
+        .all()
+    )
+    lit_at_by_node = {
+        row.node_id: row.lit_at
+        for row in db.query(LitNode).filter(LitNode.user_id == user_id).all()
+    }
+    march_nodes = [
+        {
+            "id": node.id,
+            "name": node.name,
+            "target_steps": node.target_steps,
+            "reached": node.id in lit_at_by_node,
+            "reached_at": lit_at_by_node.get(node.id),
+        }
+        for node in route_nodes
+    ]
+
+    medals = [
+        {
+            "id": medal_def.id,
+            "name": medal_def.name,
+            "icon": medal_def.icon,
+            "desc": medal_def.desc,
+            "granted_at": granted_at,
+        }
+        for medal_def, granted_at in (
+            db.query(MedalDef, UserMedal.granted_at)
+            .join(UserMedal, UserMedal.medal_id == MedalDef.id)
+            .filter(UserMedal.user_id == user_id)
+            .order_by(UserMedal.granted_at)
+            .all()
+        )
+    ]
+
+    points_logs = (
+        db.query(PointsLog)
+        .filter(PointsLog.user_id == user_id)
+        .order_by(PointsLog.date.desc(), PointsLog.id.desc())
+        .all()
+    )
+    total_points = sum(item.delta for item in points_logs)
+
+    today = sport_service.get_today(db, user_id)
+    quiz_records = (
+        db.query(QuizRecord)
+        .filter(QuizRecord.user_id == user_id)
+        .order_by(QuizRecord.date.desc())
+        .all()
+    )
+
+    return {
+        "user": {
+            "user_id": user.id,
+            "nickname": user.nickname,
+            "avatar": user.avatar or "",
+            "org_name": (
+                org_service.get_full_name(db, user.org_id)
+                if user.org_id is not None
+                else ""
+            ),
+            "created_at": user.created_at,
+        },
+        "sport": {
+            "today_steps": today["steps"],
+            "total_steps": today["total_steps"],
+            "recent": sport_service.get_recent(db, user_id, 7),
+        },
+        "quiz_records": [
+            {
+                "date": record.date,
+                "total_count": record.total_count,
+                "correct_count": record.correct_count,
+                "score": record.score,
+                "points": record.points,
+                "answer_at": record.answer_at,
+            }
+            for record in quiz_records
+        ],
+        "medals": medals,
+        "march": {
+            "completed_nodes": len(lit_at_by_node),
+            "node_count": len(route_nodes),
+            "nodes": march_nodes,
+        },
+        "points": {
+            "total": total_points,
+            "logs": [
+                {"date": item.date, "reason": item.reason, "delta": item.delta}
+                for item in points_logs
+            ],
+        },
     }
 
 
