@@ -13,40 +13,32 @@
 const app = getApp();
 const march = require('../../services/march');
 
-// 10 个节点在地图上的相对位置（0-1，模拟西南 -> 西北的地理走向）
-const NODE_POS = [
-  { x: 0.86, y: 0.88 }, // 瑞金
-  { x: 0.72, y: 0.74 }, // 遵义
-  { x: 0.80, y: 0.62 }, // 四渡赤水
-  { x: 0.68, y: 0.52 }, // 巧渡金沙江
-  { x: 0.60, y: 0.42 }, // 强渡大渡河
-  { x: 0.68, y: 0.33 }, // 飞夺泸定桥
-  { x: 0.56, y: 0.26 }, // 翻越雪山
-  { x: 0.46, y: 0.20 }, // 过草地
-  { x: 0.30, y: 0.15 }, // 吴起镇
-  { x: 0.16, y: 0.10 } // 延安
-];
-
-// 10 个节点的真实经纬度（与 mock/data.js 的 ROUTE_NODES 顺序一致）
-const NODE_COORDS = [
-  { latitude: 25.885, longitude: 116.027 }, // 瑞金（江西）
-  { latitude: 27.72, longitude: 106.93 }, // 遵义（贵州）
-  { latitude: 28.3, longitude: 106.42 }, // 四渡赤水·土城（贵州）
-  { latitude: 26.28, longitude: 102.47 }, // 巧渡金沙江·皎平渡（川滇）
-  { latitude: 29.25, longitude: 102.3 }, // 强渡大渡河·安顺场（四川）
-  { latitude: 29.91, longitude: 102.24 }, // 飞夺泸定桥（四川）
-  { latitude: 30.75, longitude: 102.65 }, // 翻越雪山·夹金山（四川）
-  { latitude: 33.58, longitude: 102.96 }, // 过草地·若尔盖（川西北）
-  { latitude: 36.92, longitude: 108.18 }, // 吴起镇（陕西）
-  { latitude: 36.6, longitude: 109.49 } // 延安（陕西）
-];
-
 // 云朵 / 薄雾（相对坐标 + 尺度 + 速度）
 const CLOUDS = [
   { x: 0.12, y: 0.14, s: 1.0, v: 0.012 },
   { x: 0.52, y: 0.07, s: 0.7, v: 0.02 },
   { x: 0.88, y: 0.2, s: 0.85, v: 0.016 }
 ];
+
+/**
+ * 将任意路线经纬度归一化到 Canvas 安全绘制区域。
+ */
+function getCanvasNodePositions(nodes, width, height) {
+  if (!nodes.length) return [];
+  const latitudes = nodes.map((node) => node.latitude);
+  const longitudes = nodes.map((node) => node.longitude);
+  const minLat = Math.min.apply(null, latitudes);
+  const maxLat = Math.max.apply(null, latitudes);
+  const minLng = Math.min.apply(null, longitudes);
+  const maxLng = Math.max.apply(null, longitudes);
+  const latRange = maxLat - minLat;
+  const lngRange = maxLng - minLng;
+
+  return nodes.map((node) => ({
+    x: lngRange ? width * (0.12 + ((node.longitude - minLng) / lngRange) * 0.76) : width * 0.5,
+    y: latRange ? height * (0.12 + ((maxLat - node.latitude) / latRange) * 0.72) : height * 0.5
+  }));
+}
 
 /** 缓动函数 easeOutCubic */
 function easeOutCubic(t) {
@@ -120,25 +112,47 @@ Page({
   },
 
   onHide() {
+    this._refreshRequestId = (this._refreshRequestId || 0) + 1;
+    if (this._viewTimer) clearTimeout(this._viewTimer);
     this.stopAnim();
   },
 
   onUnload() {
+    this._refreshRequestId = (this._refreshRequestId || 0) + 1;
+    if (this._viewTimer) clearTimeout(this._viewTimer);
     this.stopAnim();
   },
 
   /* ---------------- 数据 ---------------- */
 
   refresh() {
-    const route = march.getRoute(app.globalData.user.id);
+    const userId = app.globalData.user.id;
+    const requestId = (this._refreshRequestId || 0) + 1;
+    this._refreshRequestId = requestId;
+    this.renderRoute(march.getRoute(userId));
+
+    march
+      .refreshRouteNodes()
+      .then(() => {
+        if (this._refreshRequestId !== requestId) return;
+        this.renderRoute(march.getRoute(userId));
+      })
+      .catch(() => {
+        // 网络失败时保留缓存或内置路线
+      });
+  },
+
+  /**
+   * 用当前配置绘制路线；网络刷新与本地缓存共用同一渲染入口。
+   */
+  renderRoute(route) {
     this.routeData = route;
 
     if (this.data.mode === 'real') {
       const mapData = this.buildMapData(route);
-      // 默认选中「进行中」节点，其次首个未解锁，兜底第一个
       const selectedNode =
-        route.nodes.find((n) => n.status === 'current') ||
-        route.nodes.find((n) => n.status !== 'completed') ||
+        route.nodes.find((node) => node.status === 'current') ||
+        route.nodes.find((node) => node.status !== 'completed') ||
         route.nodes[0] ||
         null;
       this.setData({
@@ -153,20 +167,23 @@ Page({
         selectedNode: selectedNode
       });
       this.playViewAnim();
-    } else {
-      this.setData({
-        nodes: route.nodes,
-        currentSteps: route.currentSteps,
-        totalSteps: route.totalSteps,
-        litCount: route.litCount,
-        totalCount: route.totalCount,
-        finished: route.finished
-      });
-      // 重置入场描画动画
-      if (this.ctx) {
-        this.animStart = Date.now();
-        this.startAnim();
-      }
+      return;
+    }
+
+    this.setData({
+      nodes: route.nodes,
+      currentSteps: route.currentSteps,
+      totalSteps: route.totalSteps,
+      litCount: route.litCount,
+      totalCount: route.totalCount,
+      finished: route.finished
+    });
+    if (this.ctx) {
+      this.buildMap();
+      this.buildStaticLayer();
+      this.buildGlowSprites();
+      this.animStart = Date.now();
+      this.startAnim();
     }
   },
 
@@ -193,21 +210,25 @@ Page({
    * 构建 <map> 组件的 markers 与 polylines
    */
   buildMapData(route) {
-    const targets = route.nodes.map((n) => n.targetSteps);
+    const targets = route.nodes.map((node) => node.targetSteps);
+    const coords = route.nodes.map((node) => ({
+      latitude: node.latitude,
+      longitude: node.longitude
+    }));
     const cur = Math.min(Math.max(route.currentSteps, 0), route.totalSteps);
 
     // 已完成路线坐标：逐节点累计，超出部分在当前目标段内线性插值
     const donePts = [];
-    for (let i = 0; i < NODE_COORDS.length; i++) {
+    for (let i = 0; i < coords.length; i++) {
       if (cur >= targets[i]) {
-        donePts.push(NODE_COORDS[i]);
+        donePts.push(coords[i]);
       } else {
         if (i > 0) {
           const t0 = targets[i - 1];
           const t1 = targets[i];
           const r = t1 > t0 ? (cur - t0) / (t1 - t0) : 1;
-          const p0 = NODE_COORDS[i - 1];
-          const p1 = NODE_COORDS[i];
+          const p0 = coords[i - 1];
+          const p1 = coords[i];
           donePts.push({
             latitude: p0.latitude + (p1.latitude - p0.latitude) * r,
             longitude: p0.longitude + (p1.longitude - p0.longitude) * r
@@ -223,12 +244,12 @@ Page({
       current: { color: '#C8102E', bgColor: '#FFF1F3' },
       unlocked: { color: '#999999', bgColor: '#F2F2F2' }
     };
-    const markers = route.nodes.map((node, i) => {
+    const markers = route.nodes.map((node) => {
       const style = labelStyle[node.status] || labelStyle.unlocked;
       return {
         id: node.id,
-        latitude: NODE_COORDS[i].latitude,
-        longitude: NODE_COORDS[i].longitude,
+        latitude: node.latitude,
+        longitude: node.longitude,
         width: 16,
         height: 16,
         callout: {
@@ -266,15 +287,16 @@ Page({
     }
 
     // 路线：灰色全程 + 金色已完成段
-    const polylines = [
-      {
-        points: NODE_COORDS.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
+    const polylines = [];
+    if (coords.length > 1) {
+      polylines.push({
+        points: coords,
         color: '#B9B2A4CC',
         width: 5,
         dottedLine: false,
         arrowLine: false
-      }
-    ];
+      });
+    }
     if (donePts.length > 1) {
       polylines.push({
         points: donePts,
@@ -294,15 +316,17 @@ Page({
    * 镜头推进动画：从全国视野俯冲到长征路线区域
    */
   playViewAnim() {
+    if (this._viewTimer) clearTimeout(this._viewTimer);
     this.setData({
       includePoints: [],
       mapLat: 34.5,
       mapLng: 108.5,
       mapScale: 4
     });
-    setTimeout(() => {
+    this._viewTimer = setTimeout(() => {
+      const nodes = (this.routeData && this.routeData.nodes) || [];
       this.setData({
-        includePoints: NODE_COORDS.map((p) => ({ latitude: p.latitude, longitude: p.longitude }))
+        includePoints: nodes.map((node) => ({ latitude: node.latitude, longitude: node.longitude }))
       });
     }, 700);
   },
@@ -374,14 +398,15 @@ Page({
    */
   buildMap() {
     const { cw, ch } = this;
-    // 节点逻辑坐标
-    this.nodePts = NODE_POS.map((p) => ({ x: p.x * cw, y: p.y * ch }));
+    const nodes = (this.routeData && this.routeData.nodes) || [];
+    this.nodePts = getCanvasNodePositions(nodes, cw, ch);
 
     // Catmull-Rom 平滑路径采样
     const segs = 30;
     const pts = this.nodePts;
     const n = pts.length;
     const path = [];
+    if (n === 1) path.push(pts[0]);
     for (let i = 0; i < n - 1; i++) {
       const p0 = pts[Math.max(0, i - 1)];
       const p1 = pts[i];
@@ -902,7 +927,7 @@ Page({
   drawProgressFlag(t) {
     const ctx = this.ctx;
     const route = this.routeData;
-    if (route.currentSteps <= 0) return;
+    if (route.currentSteps <= 0 || !this.path || this.path.length < 2) return;
 
     const ratio = route.totalSteps > 0 ? Math.min(1, route.currentSteps / route.totalSteps) : 0;
     const len = this.pathLen * ratio;

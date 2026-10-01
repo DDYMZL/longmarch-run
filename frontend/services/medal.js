@@ -4,7 +4,8 @@
  * 每次业务数据变化后调用 checkAndGrant 刷新勋章。
  */
 const store = require('./store');
-const { MEDALS, ROUTE_NODES } = require('../mock/data');
+const { MEDALS } = require('../mock/data');
+const march = require('./march');
 
 /**
  * 检查并发放勋章
@@ -18,7 +19,8 @@ function checkAndGrant(userId) {
   // 2. 红色学习者：完成 10 次答题
   // 3. 知识达人：累计答题积分达到 500（Mock 下按积分流水总额判定）
   // 4. 飞夺泸定桥 / 翻越雪山：点亮对应节点
-  // 5. 长征胜利：点亮全部 10 个节点
+  // 5. 长征胜利：点亮当前全部启用节点
+  const routeNodes = march.getRouteNodes();
   const totalSteps = Object.keys(data.dailySport).reduce(
     (sum, d) => sum + (data.dailySport[d] || 0),
     0
@@ -33,9 +35,9 @@ function checkAndGrant(userId) {
   const litNodeIds = {};
   data.litNodes.forEach((id) => (litNodeIds[id] = true));
 
-  // 未点亮但步数已达标的节点视为已点亮（与 march 服务口径一致）
-  ROUTE_NODES.forEach((n) => {
-    if (totalSteps >= n.targetSteps) litNodeIds[n.id] = true;
+  // 未点亮但步数已达标的启用节点视为已点亮（与 march 服务口径一致）
+  routeNodes.forEach((node) => {
+    if (totalSteps >= node.targetSteps) litNodeIds[node.id] = true;
   });
 
   const candidates = [];
@@ -44,7 +46,7 @@ function checkAndGrant(userId) {
   if (totalPoints >= 500) candidates.push('master');
   if (litNodeIds[nodeByName['飞夺泸定桥']]) candidates.push('luding');
   if (litNodeIds[nodeByName['翻越雪山']]) candidates.push('snow');
-  if (ROUTE_NODES.every((n) => litNodeIds[n.id])) candidates.push('victory');
+  if (routeNodes.every((node) => litNodeIds[node.id])) candidates.push('victory');
 
   const newly = [];
   candidates.forEach((id) => {

@@ -21,11 +21,18 @@
 
   <!-- 榜单 -->
   <view class="rank-list">
-    <view class="rank-item {{item.isMe ? 'rank-item-me' : ''}}" wx:for="{{list}}" wx:key="userId">
-      <view class="rank-badge rank-badge-{{item.rank <= 3 ? item.rank : 'n'}}">{{item.rank}}</view>
+    <view class="rank-item {{item.rank <= 3 ? 'rank-item-top' : ''}} rank-item-top-{{item.rank}} {{item.isMe ? 'rank-item-me' : ''}}" wx:for="{{list}}" wx:key="userId">
+      <view class="rank-position">
+        <view class="rank-badge rank-badge-{{item.rank <= 3 ? item.rank : 'n'}}">
+          <text class="rank-badge-num">{{item.rank}}</text>
+        </view>
+        <text class="rank-top-label" wx:if="{{item.rank === 1}}">冠军</text>
+        <text class="rank-top-label" wx:elif="{{item.rank === 2}}">亚军</text>
+        <text class="rank-top-label" wx:elif="{{item.rank === 3}}">季军</text>
+      </view>
       <view class="rank-avatar">
         <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" />
-        <text wx:else class="rank-avatar-ph">🏃</text>
+        <text wx:else class="rank-avatar-ph">跑</text>
       </view>
       <view class="rank-info">
         <view class="rank-name">
@@ -34,7 +41,10 @@
         </view>
         <view class="rank-org">{{item.orgName || '未选择组织'}}</view>
       </view>
-      <view class="rank-steps">{{item.steps}}</view>
+      <view class="rank-steps-wrap">
+        <text class="rank-steps">{{item.steps}}</text>
+        <text class="rank-steps-unit">步</text>
+      </view>
     </view>
   </view>
 </view>

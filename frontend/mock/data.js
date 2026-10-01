@@ -4,8 +4,7 @@
  */
 
 /**
- * 长征路线节点（10 个）
- * sort 为顺序，targetSteps 为累计步数要求
+ * 长征路线节点（10 个），网络不可用且无缓存时使用。
  */
 const ROUTE_NODES = [
   {
@@ -14,7 +13,11 @@ const ROUTE_NODES = [
     targetSteps: 0,
     historicalTime: '1934年10月',
     icon: '🚩',
-    description: '1934年10月，中央红军从江西瑞金出发，开始了举世闻名的二万五千里长征。瑞金是中华苏维埃共和国临时中央政府所在地，被称为"红色故都"。'
+    description: '1934年10月，中央红军从江西瑞金出发，开始了举世闻名的二万五千里长征。瑞金是中华苏维埃共和国临时中央政府所在地，被称为"红色故都"。',
+    latitude: 25.885,
+    longitude: 116.027,
+    sortOrder: 1,
+    isEnabled: true
   },
   {
     id: 2,
@@ -22,7 +25,11 @@ const ROUTE_NODES = [
     targetSteps: 5000,
     historicalTime: '1935年1月',
     icon: '🏛️',
-    description: '1935年1月，中共中央在遵义召开政治局扩大会议（遵义会议），确立了毛泽东同志在党中央和红军的领导地位，在极端危急的关头挽救了党、挽救了红军、挽救了中国革命。'
+    description: '1935年1月，中共中央在遵义召开政治局扩大会议（遵义会议），确立了毛泽东同志在党中央和红军的领导地位，在极端危急的关头挽救了党、挽救了红军、挽救了中国革命。',
+    latitude: 27.72,
+    longitude: 106.93,
+    sortOrder: 2,
+    isEnabled: true
   },
   {
     id: 3,
@@ -30,7 +37,11 @@ const ROUTE_NODES = [
     targetSteps: 10000,
     historicalTime: '1935年1-3月',
     icon: '🌊',
-    description: '1935年初，中央红军在赤水河流域四次渡河，灵活机动地调动和迷惑敌人，跳出国民党军重兵包围圈，是毛泽东军事指挥艺术的"得意之笔"。'
+    description: '1935年初，中央红军在赤水河流域四次渡河，灵活机动地调动和迷惑敌人，跳出国民党军重兵包围圈，是毛泽东军事指挥艺术的"得意之笔"。',
+    latitude: 28.3,
+    longitude: 106.42,
+    sortOrder: 3,
+    isEnabled: true
   },
   {
     id: 4,
@@ -38,7 +49,11 @@ const ROUTE_NODES = [
     targetSteps: 15000,
     historicalTime: '1935年5月',
     icon: '⛵',
-    description: '1935年5月，红军仅凭7条小船，在皎平渡用七天七夜巧渡金沙江，摆脱了数十万敌军的围追堵截，取得了战略转移中具有决定意义的胜利。'
+    description: '1935年5月，红军仅凭7条小船，在皎平渡用七天七夜巧渡金沙江，摆脱了数十万敌军的围追堵截，取得了战略转移中具有决定意义的胜利。',
+    latitude: 26.28,
+    longitude: 102.47,
+    sortOrder: 4,
+    isEnabled: true
   },
   {
     id: 5,
@@ -46,7 +61,11 @@ const ROUTE_NODES = [
     targetSteps: 20000,
     historicalTime: '1935年5月',
     icon: '⚔️',
-    description: '1935年5月，红军先遣队在安顺场强渡大渡河，十七勇士冒着枪林弹雨渡河成功，为红军主力打开了北上的通道。'
+    description: '1935年5月，红军先遣队在安顺场强渡大渡河，十七勇士冒着枪林弹雨渡河成功，为红军主力打开了北上的通道。',
+    latitude: 29.25,
+    longitude: 102.3,
+    sortOrder: 5,
+    isEnabled: true
   },
   {
     id: 6,
@@ -54,7 +73,11 @@ const ROUTE_NODES = [
     targetSteps: 25000,
     historicalTime: '1935年5月29日',
     icon: '🌉',
-    description: '1935年5月29日，红军22名突击队员在泸定桥铁索上匍匐前进，冒着敌人火力夺取桥头，创造了长征中的英雄壮举。'
+    description: '1935年5月29日，红军22名突击队员在泸定桥铁索上匍匐前进，冒着敌人火力夺取桥头，创造了长征中的英雄壮举。',
+    latitude: 29.91,
+    longitude: 102.24,
+    sortOrder: 6,
+    isEnabled: true
   },
   {
     id: 7,
@@ -62,7 +85,11 @@ const ROUTE_NODES = [
     targetSteps: 35000,
     historicalTime: '1935年6月',
     icon: '🏔️',
-    description: '1935年6月，红军翻越了终年积雪、空气稀薄的夹金山等大雪山，许多战士长眠于雪山之上，用生命诠释了坚定的理想信念。'
+    description: '1935年6月，红军翻越了终年积雪、空气稀薄的夹金山等大雪山，许多战士长眠于雪山之上，用生命诠释了坚定的理想信念。',
+    latitude: 30.75,
+    longitude: 102.65,
+    sortOrder: 7,
+    isEnabled: true
   },
   {
     id: 8,
@@ -70,7 +97,11 @@ const ROUTE_NODES = [
     targetSteps: 45000,
     historicalTime: '1935年8月',
     icon: '🌾',
-    description: '1935年8月，红军穿越人迹罕至的松潘草地。草地沼泽遍布、气候恶劣，红军指战员以顽强的意志走出了这片"死亡之地"。'
+    description: '1935年8月，红军穿越人迹罕至的松潘草地。草地沼泽遍布、气候恶劣，红军指战员以顽强的意志走出了这片"死亡之地"。',
+    latitude: 33.58,
+    longitude: 102.96,
+    sortOrder: 8,
+    isEnabled: true
   },
   {
     id: 9,
@@ -78,7 +109,11 @@ const ROUTE_NODES = [
     targetSteps: 55000,
     historicalTime: '1935年10月',
     icon: '🎺',
-    description: '1935年10月，中央红军到达陕甘革命根据地的吴起镇，与陕北红军胜利会师，宣告中央红军长征胜利结束。'
+    description: '1935年10月，中央红军到达陕甘革命根据地的吴起镇，与陕北红军胜利会师，宣告中央红军长征胜利结束。',
+    latitude: 36.92,
+    longitude: 108.18,
+    sortOrder: 9,
+    isEnabled: true
   },
   {
     id: 10,
@@ -86,7 +121,11 @@ const ROUTE_NODES = [
     targetSteps: 65000,
     historicalTime: '1936年10月',
     icon: '⭐',
-    description: '延安是中共中央所在地和中国革命的圣地。红军三大主力会师后，中国革命的大本营扎根西北，延安成为指引中国革命的灯塔。'
+    description: '延安是中共中央所在地和中国革命的圣地。红军三大主力会师后，中国革命的大本营扎根西北，延安成为指引中国革命的灯塔。',
+    latitude: 36.6,
+    longitude: 109.49,
+    sortOrder: 10,
+    isEnabled: true
   }
 ];
 

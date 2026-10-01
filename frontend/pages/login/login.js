@@ -1,7 +1,7 @@
 /**
  * 登录页
- * 流程：点击「微信授权登录」-> chooseAvatar 选取微信头像 -> wx.login 换用户信息与 Token（Mock）
- *       登录成功后头像被持久化保存，首页与「我的」均回显微信头像。
+ * 流程：点击「微信授权登录」-> chooseAvatar 选取微信头像 -> wx.login 换后端用户与 JWT。
+ * 登录成功后头像被持久化保存，首页与「我的」均回显微信头像。
  */
 const auth = require('../../services/auth');
 const points = require('../../services/points');

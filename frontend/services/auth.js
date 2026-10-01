@@ -1,20 +1,11 @@
 /**
- * 微信登录服务（Mock）
- *
- * 正式流程：
- *   wx.login() -> code -> 后端 -> 微信服务端 -> openid/session_key -> 后端生成 Token
- *
- * 当前无后端，使用 wx.login 拿到 code 后在本地模拟创建用户，
- * 保证登录流程与页面交互和正式版一致，后续仅需替换为真实接口。
+ * 微信登录服务
+ * wx.login() -> 后端换取 openid -> JWT。
  */
-const USER_KEY = 'lm_login_user';
+const requestService = require('./request');
+const store = require('./store');
 
-/**
- * 生成模拟 openid
- */
-function mockOpenid() {
-  return 'mock_openid_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
-}
+const USER_KEY = 'lm_login_user';
 
 /**
  * 持久化头像：chooseAvatar 返回的是临时路径（重启后失效），
@@ -55,12 +46,19 @@ function persistAvatar(tempPath) {
 }
 
 /**
- * 微信登录，返回 Promise<user>
- * @param {{nickname?:string, avatar?:string}} [profile] 头像昵称填写能力采集的资料
- * @returns {Promise<{id:string, openid:string, nickname:string, avatar:string}>}
+ * 微信登录，返回后端用户。
+ * @param {{nickname?:string, avatar?:string}} [profile]
+ * @returns {Promise<{id:number, nickname:string, avatar:string, orgId:number|null}>}
  */
 function wxLogin(profile) {
   const p = profile || {};
+  let previousUser = null;
+  try {
+    previousUser = wx.getStorageSync(USER_KEY) || null;
+  } catch (e) {
+    previousUser = null;
+  }
+
   return new Promise((resolve, reject) => {
     wx.login({
       success: (res) => {
@@ -68,21 +66,28 @@ function wxLogin(profile) {
           reject(new Error('微信登录失败'));
           return;
         }
-        // Mock：直接用 code 换本地用户
-        // 注意：openid 只生成一次，id 与 openid 必须一致（后续以 id 作为数据主键）
-        const openid = mockOpenid();
-        // 头像为临时路径，先持久化再写入用户信息
-        persistAvatar(p.avatar || '').then((avatar) => {
-          const user = {
-            id: openid,
-            openid: openid,
-            nickname: p.nickname || '长征小战士',
-            avatar: avatar,
-            loginAt: new Date().getTime()
-          };
-          wx.setStorageSync(USER_KEY, user);
-          resolve(user);
-        });
+        persistAvatar(p.avatar || '')
+          .then((avatar) =>
+            requestService.request({
+              url: '/auth/login',
+              method: 'POST',
+              data: {
+                code: res.code,
+                nickname: p.nickname || '',
+                avatar: avatar
+              }
+            })
+          )
+          .then((result) => {
+            const user = Object.assign({}, result.user, { loginAt: new Date().getTime() });
+            wx.setStorageSync(requestService.TOKEN_KEY, result.token);
+            if (previousUser && previousUser.id !== undefined) {
+              store.migrateUserData(previousUser.id, user.id);
+            }
+            wx.setStorageSync(USER_KEY, user);
+            resolve(user);
+          })
+          .catch(reject);
       },
       fail: () => reject(new Error('微信登录失败，请重试'))
     });
@@ -90,21 +95,23 @@ function wxLogin(profile) {
 }
 
 /**
- * 获取本地已登录用户，未登录返回 null
+ * 获取本地已登录用户；旧 Mock 登录态没有 Token，需重新授权。
  */
 function getLocalUser() {
   try {
-    return wx.getStorageSync(USER_KEY) || null;
+    const user = wx.getStorageSync(USER_KEY) || null;
+    return user && requestService.getToken() ? user : null;
   } catch (e) {
     return null;
   }
 }
 
 /**
- * 清除登录态
+ * 清除登录态。
  */
 function clearLocalUser() {
   wx.removeStorageSync(USER_KEY);
+  wx.removeStorageSync(requestService.TOKEN_KEY);
 }
 
 module.exports = {

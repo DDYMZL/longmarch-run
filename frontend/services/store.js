@@ -74,10 +74,33 @@ function clearCache(userId) {
   }
 }
 
+/**
+ * 首次切换到后端用户 ID 时复制旧 Mock 用户数据；目标已有数据则不覆盖。
+ * @param {string|number} fromUserId
+ * @param {string|number} toUserId
+ * @returns {boolean}
+ */
+function migrateUserData(fromUserId, toUserId) {
+  if (!fromUserId || !toUserId || String(fromUserId) === String(toUserId)) return false;
+  try {
+    const target = wx.getStorageSync(KEY_PREFIX + toUserId);
+    if (target && typeof target === 'object') return false;
+    const source = wx.getStorageSync(KEY_PREFIX + fromUserId);
+    if (!source || typeof source !== 'object') return false;
+    const migrated = Object.assign(emptyData(), source);
+    wx.setStorageSync(KEY_PREFIX + toUserId, migrated);
+    _cache[toUserId] = migrated;
+    return true;
+  } catch (e) {
+    return false;
+  }
+}
+
 module.exports = {
   KEY_PREFIX,
   emptyData,
   getUserData,
   saveUserData,
-  clearCache
+  clearCache,
+  migrateUserData
 };

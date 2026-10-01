@@ -3,7 +3,7 @@ const auth = require('./services/auth');
 App({
   globalData: {
     user: null,
-    // 是否已登录（本地 Mock 登录态）
+    // 本地用户与 JWT 同时存在才视为已登录
     loggedIn: false
   },
 
