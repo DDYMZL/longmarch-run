@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
 from app.schemas.schemas import OrgChildrenOut, SelectOrgRequest, UserOrgOut
@@ -37,4 +38,5 @@ def select(
     user = org_service.set_user_org(db, current.id, payload.org_id)
     if user is None:
         raise HTTPException(status_code=404, detail="组织不存在")
+    ws_manager.broadcast(ws_manager.build_event("org.select", current.id))
     return org_service.get_user_org(db, user)

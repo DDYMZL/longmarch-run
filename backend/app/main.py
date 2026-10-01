@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import admin, auth, march, medal, org, points, quiz, rank, sport
+from app.api.routes import admin, auth, march, medal, org, points, quiz, rank, sport, ws
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.data.seed import init_seed
@@ -53,6 +53,7 @@ app.include_router(points.router, prefix=_prefix)
 app.include_router(medal.router, prefix=_prefix)
 app.include_router(org.router, prefix=_prefix)
 app.include_router(rank.router, prefix=_prefix)
+app.include_router(ws.router, prefix=_prefix)
 app.include_router(admin.router, prefix=_prefix)
 
 

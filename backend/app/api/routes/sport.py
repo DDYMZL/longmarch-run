@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
 from app.schemas.schemas import (
@@ -28,6 +29,7 @@ def sync(current: User = Depends(get_current_user), db: Session = Depends(get_db
     """同步微信运动步数（未接入真实数据时按日期模拟），并刷新勋章。"""
     result = sport_service.sync_today(db, current.id)
     medal_service.check_and_grant(db, current.id)
+    ws_manager.broadcast(ws_manager.build_event("sport.sync", current.id))
     return result
 
 
@@ -48,4 +50,5 @@ def add_steps(
 ):
     sport_service.add_steps(db, current.id, payload.delta)
     medal_service.check_and_grant(db, current.id)
+    ws_manager.broadcast(ws_manager.build_event("sport.add", current.id))
     return sport_service.get_today(db, current.id)

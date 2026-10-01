@@ -3,6 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
 from app.schemas.schemas import (
@@ -50,4 +51,5 @@ def light_up(current: User = Depends(get_current_user), db: Session = Depends(ge
     """按当前累计步数点亮达标节点、发放积分，并刷新勋章。"""
     newly = march_service.light_up_nodes(db, current.id)
     medal_service.check_and_grant(db, current.id)
+    ws_manager.broadcast(ws_manager.build_event("march.light-up", current.id))
     return {"newly_lit": newly}

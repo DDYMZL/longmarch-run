@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
 from app.schemas.schemas import (
@@ -37,6 +38,7 @@ def submit(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     medal_service.check_and_grant(db, current.id)
+    ws_manager.broadcast(ws_manager.build_event("quiz.submit", current.id))
     return record
 
 
@@ -48,4 +50,5 @@ def records(current: User = Depends(get_current_user), db: Session = Depends(get
 @router.post("/reset", response_model=MessageOut, summary="重置今日答题（调试用）")
 def reset(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
     quiz_service.reset_today(db, current.id)
+    ws_manager.broadcast(ws_manager.build_event("quiz.reset", current.id))
     return {"message": "已重置今日答题"}

@@ -10,7 +10,8 @@ export default defineConfig(({ mode }) => {
       proxy: {
         '/api': {
           target: env.VITE_API_PROXY || 'http://127.0.0.1:8010',
-          changeOrigin: true
+          changeOrigin: true,
+          ws: true
         }
       }
     }
