@@ -1,6 +1,6 @@
 /**
  * 昵称功能小程序自动化测试（微信开发者工具 automator）
- * 覆盖：微信名称直接登录 -> mine 页修改昵称（成功一次） -> 二次修改拦截 -> 退出重登昵称不被微信名覆盖
+ * 覆盖：微信名称直接登录 -> mine 页修改昵称（成功一次） -> 二次修改拦截 -> 退出重登昵称不被微信名覆盖 -> 已改名隐藏修改按钮
  * 前置：后端 http://127.0.0.1:8010 已运行；开发者工具已开自动化端口 9420。
  * 用法：node nickname-test.cjs
  * 结果：stdout PASS/FAIL + results-nickname.json
@@ -238,8 +238,8 @@ async function main() {
     'nickname=' + (reloginUser && reloginUser.nickname));
 
   const editEls2 = await getEls(minePage2, '.mine-name-edit');
-  const editText2 = editEls2 && editEls2.length ? await text(editEls2[0]) : '';
-  record('M08', '已改名用户入口展示「已修改」', /已修改/.test(editText2 || ''), 'text=' + editText2);
+  record('M08', '已改名用户不再显示修改按钮', !editEls2 || editEls2.length === 0,
+    'count=' + (editEls2 ? editEls2.length : 'none'));
 
   const failed = results.filter((r) => !r.pass);
   console.log('== 结果：%d 通过 / %d 失败 ==', results.length - failed.length, failed.length);

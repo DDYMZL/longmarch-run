@@ -28,13 +28,13 @@
 | M03 mine 页展示微信名称且未改名 | ✅ | nickname=微信昵称甲，nicknameChangedAt=null |
 | M04 昵称修改入口展示 | ✅ | 昵称旁「✎ 修改昵称」 |
 | M05 首次修改昵称成功并记录时间 | ✅ | 弹窗输入「新昵称乙」→ nickname 更新且 nicknameChangedAt 非空 |
-| M06 二次修改被拦截 | ✅ | 再次点击入口昵称不变（前端拦截 + 后端 400 兜底） |
+| M06 二次修改被拦截 | ✅ | 再次触发修改昵称不变（前端兜底拦截 + 后端 400 兜底） |
 | M07 重登后昵称保持改后值 | ✅ | 以微信名重新登录，昵称仍为「新昵称乙」 |
-| M08 已改名用户入口展示「已修改」 | ✅ | 昵称旁标签变为「已修改」 |
+| M08 已改名用户不再显示修改按钮 | ✅ | 昵称旁修改按钮整体隐藏（wx:if 按 nicknameChangedAt） |
 
 ## 3. 视觉证据
 
-`frontend/test/images/mine-nickname-changed.png`：mine 页昵称「新昵称乙」+「已修改」标签。
+`frontend/test/images/mine-nickname-changed.png`：mine 页昵称「新昵称乙」，昵称旁不再显示修改按钮。
 
 ## 4. 回归验证
 
@@ -47,4 +47,4 @@
 | --- | --- |
 | `pages/login/login.wxml/js` | 文案改为微信昵称一键填入直登（点击输入框填入微信昵称）；登录错误提示同步 |
 | `services/auth.js` | 新增 `updateNickname(name)` → `PUT /api/auth/nickname`，成功后合并本地登录态 |
-| `pages/mine/mine.wxml/js/wxss` | 昵称旁新增修改入口：未改过可点（showModal editable 输入），改过展示「已修改」 |
+| `pages/mine/mine.wxml/js/wxss` | 昵称旁修改入口仅在未修改过时展示，弹窗明确提示「昵称仅可修改一次」；已改名（nicknameChangedAt 有值）整块隐藏 |

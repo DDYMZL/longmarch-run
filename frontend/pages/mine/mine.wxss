@@ -50,7 +50,7 @@
   white-space: nowrap;
 }
 
-/* 昵称旁修改入口：未改过可点，改过后置灰 */
+/* 昵称旁修改入口：仅未修改过时展示，已改名整块隐藏 */
 .mine-name-edit {
   flex: none;
   padding: 6rpx 18rpx;
@@ -59,10 +59,6 @@
   background: rgba(255, 255, 255, 0.16);
   border: 2rpx solid rgba(255, 233, 168, 0.5);
   border-radius: 26rpx;
-}
-
-.mine-name-edit text:last-child {
-  color: rgba(255, 255, 255, 0.6);
 }
 
 /* 昵称下方组织行（点击修改） */

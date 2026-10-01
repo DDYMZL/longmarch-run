@@ -108,10 +108,10 @@ login 页 → 点「微信授权登录」按钮(open-type="chooseAvatar")
 
 ### 4.2 昵称修改（每人仅一次）
 
-mine 页昵称旁「✎ 修改昵称」入口（`user.nicknameChangedAt` 为空时展示）→ wx.showModal(editable) 输入新昵称
+mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为空时展示，弹窗明确提示仅可修改一次）
   → auth.updateNickname(name) → PUT /api/auth/nickname {nickname}
   → 成功：后端返回最新用户（含 nicknameChangedAt），更新本地登录态与全局 user
-  → 已修改过的用户入口展示「已修改」，点击提示不可再次修改（后端同样以 400 兜底）
+  → 已修改过的用户不再展示修改按钮（后端同样以 400 兜底）
 ```
 
 ### 4.3 步数同步与点亮链路

@@ -89,7 +89,7 @@ Page({
 
   /**
    * 修改昵称：每人仅一次（后端校验）。
-   * 已修改过的用户点击时提示不可再次修改。
+   * 修改入口仅在未修改过时展示（wxml 按 nicknameChangedAt 隐藏），此处兜底拦截二次修改。
    */
   handleEditNickname() {
     const user = this.data.user;

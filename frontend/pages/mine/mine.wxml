@@ -7,10 +7,8 @@
     </view>
     <view class="mine-name-row">
       <view class="mine-name">{{user.nickname}}</view>
-      <view class="mine-name-edit" bindtap="handleEditNickname">
-        <text wx:if="{{!user.nicknameChangedAt}}">✎ 修改昵称</text>
-        <text wx:else>已修改</text>
-      </view>
+      <!-- 修改入口：仅未修改过时展示，已改名（nicknameChangedAt 有值）则隐藏 -->
+      <view wx:if="{{!user.nicknameChangedAt}}" class="mine-name-edit" bindtap="handleEditNickname">✎ 修改昵称</view>
     </view>
     <!-- 组织架构：显示在昵称下方，点击可修改 -->
     <view class="mine-org" bindtap="goOrgSelect">
