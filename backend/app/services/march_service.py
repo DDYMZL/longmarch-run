@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Set
 from sqlalchemy.orm import Session
 
 from app.models.models import DailySport, LitNode, RouteNode
-from app.services import points_service
+from app.services import event_service, points_service
 
 
 def _total_steps(db: Session, user_id: int) -> int:
@@ -112,7 +112,11 @@ def get_node_detail(db: Session, user_id: int, node_id: int) -> Optional[Dict]:
 
 
 def light_up_nodes(db: Session, user_id: int) -> List[Dict]:
-    """点亮步数达标且未点亮的节点，发放积分；全部点亮额外 +100。返回本次新点亮节点。"""
+    """点亮步数达标且未点亮的节点，发放积分；全部点亮额外 +100。返回本次新点亮节点。
+
+    副作用：LitNode 记录点亮时刻累计步数快照（step_snapshot），并写
+    NODE_UNLOCK / COMPLETE_ROUTE 事件（我的足迹与管理端动态同源）。
+    """
     current_steps = _total_steps(db, user_id)
     lit = _lit_node_ids(db, user_id)
     nodes_def = _ordered_nodes(db)
@@ -120,7 +124,7 @@ def light_up_nodes(db: Session, user_id: int) -> List[Dict]:
     newly: List[Dict] = []
     for n in nodes_def:
         if current_steps >= n.target_steps and n.id not in lit:
-            db.add(LitNode(user_id=user_id, node_id=n.id))
+            db.add(LitNode(user_id=user_id, node_id=n.id, step_snapshot=current_steps))
             lit.add(n.id)
             newly.append(
                 {
@@ -141,7 +145,14 @@ def light_up_nodes(db: Session, user_id: int) -> List[Dict]:
         db.commit()
         for item in newly:
             points_service.grant(db, user_id, f"点亮节点：{item['name']}", 10)
+            event_service.record(
+                db,
+                user_id,
+                "NODE_UNLOCK",
+                {"nodeId": item["id"], "nodeName": item["name"], "stepSnapshot": current_steps},
+            )
         if len(lit) >= len(nodes_def):
             points_service.grant(db, user_id, "完成长征路线", 100)
+            event_service.record(db, user_id, "COMPLETE_ROUTE", {"totalSteps": current_steps})
 
     return newly

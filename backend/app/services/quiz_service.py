@@ -13,7 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.core.helpers import today_str
 from app.models.models import DailyQuestion, PointsLog, Question, QuizRecord
-from app.services import points_service
+from app.services import event_service, points_service
 
 DAILY_COUNT = 5
 
@@ -101,6 +101,8 @@ def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
             wrong_list.append(
                 {
                     "index": idx + 1,
+                    "question_id": q.id if q else 0,
+                    "category": (q.category or "") if q else "",
                     "question": q.question if q else "",
                     "correct_answer": "".join(right),
                     "analysis": q.analysis if q else "",
@@ -123,8 +125,13 @@ def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
     db.commit()
 
     points_service.grant(db, user_id, "每日答题", 5)
+    event_service.record(
+        db, user_id, "QUIZ_COMPLETE",
+        {"date": date, "score": score, "correctCount": correct_count},
+    )
     if score == 100:
         points_service.grant(db, user_id, "答题满分", 10)
+        event_service.record(db, user_id, "QUIZ_FULL_SCORE", {"date": date})
 
     return _record_out(record)
 

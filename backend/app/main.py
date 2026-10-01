@@ -16,14 +16,16 @@ from app.api.routes import admin, auth, march, medal, org, points, quiz, rank, s
 from app.core.config import settings
 from app.core.database import SessionLocal
 from app.data.seed import init_seed
+from app.services import streak_service
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用启动：幂等写入静态种子数据。"""
+    """应用启动：幂等写入静态种子数据；全量重算连续行军缓存（daily_sport 为准兜底）。"""
     db = SessionLocal()
     try:
         init_seed(db)
+        streak_service.recompute_all(db)
     finally:
         db.close()
     yield

@@ -3,7 +3,11 @@
 勋章由后端根据用户行为自动发放，业务数据变化后调用 check_and_grant 刷新。
 条件：
   first-step 完成首次运动同步；learner 完成 10 次答题；master 累计积分 ≥ 500；
-  luding / snow 点亮对应节点（id 6 / 7）；victory 点亮全部节点。
+  luding / snow 点亮对应节点（id 6 / 7）；victory 点亮全部节点；
+  persistence 连续行军 ≥7 天；streak-30 连续行军 ≥30 天；
+  day-10k 单日 ≥10000 步；steps-100k / steps-500k 累计 ≥10万 / 50万 步；
+  fearless（隐藏）连续 7 天每天 ≥10000 步。
+新获勋章写 BADGE_UNLOCK 事件（我的足迹与管理端动态同源）。
 """
 from typing import Dict, List, Set
 
@@ -20,6 +24,7 @@ from app.models.models import (
     RouteNode,
     UserMedal,
 )
+from app.services import event_service, streak_service
 
 
 def _owned_ids(db: Session, user_id: int) -> Set[str]:
@@ -73,6 +78,27 @@ def check_and_grant(db: Session, user_id: int) -> List[str]:
     if all_nodes and all(n.id in lit for n in all_nodes):
         candidates.append("victory")
 
+    # 连续行军与步数挑战类（以 daily_sport 记录为准实时计算）
+    _current, best_streak = streak_service.compute_streaks(db, user_id)
+    if best_streak >= 7:
+        candidates.append("persistence")
+    if best_streak >= 30:
+        candidates.append("streak-30")
+    has_day_10k = (
+        db.query(DailySport.id)
+        .filter(DailySport.user_id == user_id, DailySport.steps >= 10000)
+        .first()
+        is not None
+    )
+    if has_day_10k:
+        candidates.append("day-10k")
+    if total_steps >= 100000:
+        candidates.append("steps-100k")
+    if total_steps >= 500000:
+        candidates.append("steps-500k")
+    if streak_service.compute_run_with_min_steps(db, user_id, 10000) >= 7:
+        candidates.append("fearless")
+
     newly: List[str] = []
     for mid in candidates:
         if mid not in owned:
@@ -81,6 +107,19 @@ def check_and_grant(db: Session, user_id: int) -> List[str]:
             newly.append(mid)
     if newly:
         db.commit()
+        defs = {m.id: m for m in db.query(MedalDef).filter(MedalDef.id.in_(newly)).all()}
+        for mid in newly:
+            medal_def = defs.get(mid)
+            event_service.record(
+                db,
+                user_id,
+                "BADGE_UNLOCK",
+                {
+                    "medalId": mid,
+                    "medalName": medal_def.name if medal_def else mid,
+                    "hidden": bool(medal_def.hidden) if medal_def else False,
+                },
+            )
     return newly
 
 

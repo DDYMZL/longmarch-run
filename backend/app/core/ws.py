@@ -25,6 +25,18 @@ def build_event(reason: str, user_id: int) -> dict:
     return {"type": "data_changed", "reason": reason, "user_id": user_id, "at": _now_ms()}
 
 
+def build_activity(event_type: str, user_id: int, nickname: str, text: str) -> dict:
+    """构造实时动态事件（管理端驾驶舱/大屏动态流直接展示 text）。"""
+    return {
+        "type": "activity",
+        "eventType": event_type,
+        "userId": user_id,
+        "nickname": nickname,
+        "text": text,
+        "at": _now_ms(),
+    }
+
+
 async def connect(ws: WebSocket) -> None:
     """接受连接并登记；同时记录事件循环供同步代码投递。"""
     global _loop

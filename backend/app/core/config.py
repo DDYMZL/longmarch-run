@@ -34,6 +34,11 @@ class Settings(BaseSettings):
     # 组织架构外部同步接口地址（留空时同步使用内置种子数据，便于开发调试）
     ORG_SYNC_API_URL: str = ""
 
+    # 长征活动规则
+    STRIDE_M: float = 0.7  # 平均步长（米），估算距离(km) = 步数 × 步长 / 1000
+    STREAK_GOAL_STEPS: int = 5000  # 连续行军每日达标步数（当天达到即计入连续行军）
+    ACTIVITY_START_DATE: str = "2026-09-01"  # 活动起始日（答题「第 N 期」等的基准）
+
     # 跨域来源
     CORS_ORIGINS: List[str] = ["*"]
 
