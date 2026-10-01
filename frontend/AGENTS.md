@@ -58,7 +58,7 @@ services -> request.js / config.js；march.js 可读 mock/data.js 兜底
 4. **头像持久化**：`chooseAvatar` 返回临时路径（工具 `http://tmp/`、真机 `wxfile://tmp_`），**必须**经 `auth.persistAvatar`（`FileSystemManager.saveFile`）转持久路径，否则重启丢头像；仅 `https://` 网络头像直接返回。
 5. **登录态守卫**：非 tab 页**没有**全局路由守卫，每个子页 `onShow/onLoad` 需自行判断 `app.globalData.loggedIn`，未登录跳转 login 页。
 6. **march 双模式地图**：默认实景 `<map>`（真实经纬度 `NODE_COORDS` + polyline/markers），可切 Canvas 2D「星空远征」插画地图。Canvas 每帧绘制一律读 `this.routeData`；静态元素只在 `buildStaticLayer` 烘焙一次；渐变缓存（`_goldGrad`/`_flagGrad`）与光晕精灵须在画布重建时重置；离屏画布（`wx.createOffscreenCanvas`）相关调用**必须包 try/catch** 降级为低版本基础库每帧直绘路径。
-7. **微信登录交互契约**：login 页「微信授权登录」按钮本身即 `<button open-type="chooseAvatar">`（点击先弹微信头像选择，选完在 `bindchooseavatar` 回调完成登录），昵称用 `<input type="nickname">` 采集；登录页**无独立「选择头像」按钮**。
+7. **微信登录交互契约**：login 页「微信授权登录」按钮本身即 `<button open-type="chooseAvatar">`（点击先弹微信头像选择，选完在 `bindchooseavatar` 回调完成登录）；登录页**无昵称输入框**；首次登录的用户在 org-select 页用 `<input type="nickname">` 采集微信名（可跳过，经 `PUT /auth/nickname/initial` 落库且不消耗「每人仅一次」改名机会）；登录页**无独立「选择头像」按钮**。
 8. **任意节点（含未解锁）可进 node-detail 看历史**：不得在入口处拦截未解锁节点。
 
 ## 5. 编码规范

@@ -10,6 +10,21 @@
     </view>
   </scroll-view>
 
+  <!-- 首次登录：采集微信昵称作为用户名（可跳过，未填写用默认昵称，之后可在「我的」修改一次） -->
+  <view class="nick-block" wx:if="{{showNickInput}}">
+    <view class="nick-row">
+      <text class="nick-label">昵称</text>
+      <input
+        class="nick-input"
+        type="nickname"
+        placeholder="点击填入微信昵称（可跳过）"
+        value="{{nickname}}"
+        bindinput="onNickInput"
+      />
+    </view>
+    <text class="nick-tip">未填写将使用默认昵称，选定组织后可在「我的」页修改一次</text>
+  </view>
+
   <!-- 当前所处组织：一键选择本级 -->
   <view class="current-bar" wx:if="{{currentId}}">
     <view class="current-text">

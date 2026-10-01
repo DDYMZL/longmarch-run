@@ -20,13 +20,20 @@ Page({
     list: [], // 当前层级组织列表
     currentId: null, // 当前所处组织 id（stack 末级），null 表示顶级
     currentFullName: '', // 当前所处组织全路径名
-    selectedId: null // 用户已选定的组织 id（回显）
+    selectedId: null, // 用户已选定的组织 id（回显）
+    showNickInput: false, // 首次登录（未改名）时展示微信昵称采集
+    nickname: '' // 昵称输入框内容
   },
 
   onLoad(options) {
     const from = (options && options.from) || '';
     const user = app.globalData.user || {};
-    this.setData({ from: from, selectedId: user.orgId || null });
+    this.setData({
+      from: from,
+      selectedId: user.orgId || null,
+      // 仅首次登录引导、且尚未使用过改名机会时采集微信名
+      showNickInput: from === 'login' && !user.nicknameChangedAt
+    });
     // 登录后强制选组织：隐藏左上角「返回主页」按钮，选完才能离开
     if (from === 'login') {
       this.hideHomeButton();
@@ -110,10 +117,20 @@ Page({
     }
   },
 
-  /** 确认选定组织：调后端持久化 + 更新全局用户 + 跳转 */
+  /** 昵称输入框内容变化 */
+  onNickInput(e) {
+    this.setData({ nickname: e.detail.value });
+  },
+
+  /** 确认选定组织：先落昵称（可选）再调后端持久化 + 更新全局用户 + 跳转 */
   confirmSelect(orgId) {
-    org
-      .select(orgId)
+    const nick = (this.data.nickname || '').trim();
+    // 昵称设置失败不阻塞组织选择（后端默认昵称兜底）
+    const setNick = this.data.showNickInput && nick
+      ? auth.setInitialNickname(nick).catch(() => null)
+      : Promise.resolve(null);
+    setNick
+      .then(() => org.select(orgId))
       .then((res) => {
         // 同步本地缓存与全局登录态，供「我的」等页面回显
         const updated = auth.updateLocalUser({

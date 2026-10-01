@@ -43,7 +43,8 @@
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空插画），节点点击进详情、点亮进度 |
 | `pages/quiz/quiz` | tab | 答题入口：今日答题状态、开始答题 |
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（运动记录/答题记录） |
-| `pages/login/login` | 子页 | 微信登录：`chooseAvatar` 头像（不展示昵称输入框，默认昵称「长征小战士」，可在「我的」页改一次），登录后发每日登录积分 |
+| `pages/login/login` | 子页 | 微信登录：`chooseAvatar` 头像（页面不采集昵称），登录后发每日登录积分；已选组织的用户直达首页，新用户转组织选择页 |
+| `pages/org-select/org-select` | 子页 | 组织选择（逐级下钻，任意层级可选）；首次登录（未改名）时顶部采集微信昵称（`input type="nickname"`，可跳过），选定组织后落库并进首页 |
 | `pages/node-detail/node-detail` | 子页 | 节点历史详情（任意状态可看，含未解锁） |
 | `pages/quiz-answer/quiz-answer` | 子页 | 答题过程（单选/判断、逐题作答） |
 | `pages/quiz-result/quiz-result` | 子页 | 答题结果（得分、错题解析） |
@@ -57,7 +58,7 @@
 
 | 前端 service | 主要方法 | 对应后端接口 | 核心业务 |
 | --- | --- | --- | --- |
-| `auth.js` | `wxLogin(profile)` / `getLocalUser()` / `updateNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname` | 登录态管理；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验） |
+| `auth.js` | `wxLogin(profile)` / `getLocalUser()` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
 | `sport.js` | 今日步数 / `syncToday()` / `addSteps()` / 最近记录 | `/api/sport/today, sync, recent, add` | 步数按「用户+日期」覆盖；模拟步数 |
 | `march.js` | `refreshRouteNodes()` / `getRouteNodes()` / `getRoute()` / `getNodeDetail()` / `lightUpNodes()` | `/api/march/route-nodes, route, node/{id}, light-up` | 三级降级获取节点配置；步数达标由后端点亮并广播 |
 | `quiz.js` | `getDaily()` / `submit()` / 记录 / `resetToday()` | `/api/quiz/daily, submit, records, reset` | 每日抽 5 题（同日同套）、判分、每日一次 |
@@ -95,17 +96,25 @@
 ```
 login 页 → 点「微信授权登录」按钮(open-type="chooseAvatar")
   → 微信弹头像选择（选完回调 bindchooseavatar）（页面不展示昵称输入框）
-  → auth.wxLogin({avatar})  // 不采集昵称，后端默认「长征小战士」，可在「我的」页修改一次
+  → auth.wxLogin({avatar})  // 登录页不采集昵称，新用户默认「长征小战士」
       ├─ wx.login() 拿 code
       ├─ persistAvatar：https:// 直返；http://tmp / wxfile://tmp_ 经 saveFile 转持久路径
       └─ request.js POST /api/auth/login {code, nickname: "", avatar}
-         → 后端返回 {token, user}（昵称仅首次创建时写入，后续登录不覆盖）
+         → 后端返回 {token, user}（openid 唯一建号；昵称仅首次创建时写入，后续登录不覆盖）
   → setStorageSync('lm_auth_token', token)
   → store.migrateUserData(oldUserId, newUserId)  // 首次切后端，旧 Mock 数据迁移
   → setStorageSync('lm_login_user', user) → app.setLoginUser(user) → 跳转
   → 无 orgId 时 redirectTo 组织选择页，否则 switchTab 首页
 
-### 4.2 昵称修改（每人仅一次）
+### 4.2 组织选择（首次登录）
+
+org-select 页 → 首次登录且未改名时顶部展示昵称采集（`input type="nickname"`，可跳过）
+  → 逐级下钻 / 直接选定任一组织
+  → 确认选定：先 `auth.setInitialNickname(昵称)`（PUT /api/auth/nickname/initial，不消耗改名机会，失败不阻塞）
+    → `org.select(orgId)`（POST /api/org/select 后端落库）
+    → 合并最新用户进本地登录态与全局 user → switchTab 首页
+
+### 4.3 昵称修改（每人仅一次）
 
 mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为空时展示，弹窗明确提示仅可修改一次）
   → auth.updateNickname(name) → PUT /api/auth/nickname {nickname}
@@ -113,7 +122,7 @@ mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为
   → 已修改过的用户不再展示修改按钮（后端同样以 400 兜底）
 ```
 
-### 4.3 步数同步与点亮链路
+### 4.4 步数同步与点亮链路
 
 ```
 home/march 触发 → sport.syncToday()（POST /api/sport/sync 后端落库）
@@ -122,7 +131,7 @@ home/march 触发 → sport.syncToday()（POST /api/sport/sync 后端落库）
   → 页面 onShow 时 refresh() 拉最新数据展示；后端同步向管理端广播 data_changed
 ```
 
-### 4.4 每日答题链路
+### 4.5 每日答题链路
 
 ```
 quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 题、按用户+日期固定）
@@ -130,7 +139,7 @@ quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 
   → quiz-result 展示得分与错题解析 → 返回后 quiz 页 refresh() 显示已完成
 ```
 
-### 4.5 march 双模式地图
+### 4.6 march 双模式地图
 
 - **路线节点配置**：`march.js` 维护模块级 `routeNodes` 变量，读取顺序为 `GET /api/march/route-nodes`（成功后写入 Storage `lm_route_nodes`）→ Storage 缓存 → 内置 `mock/data.js`。每次路线页 `onShow` 先用缓存即时渲染，再异步刷新，成功后重绘。请求序号防止旧响应覆盖。
 - **实景模式（默认）**：原生 `<map>` + 节点 `latitude/longitude`（来自后端配置）→ `markers`（节点三态图标）+ `polyline`（路线）+ `includePoints` 视野动画。

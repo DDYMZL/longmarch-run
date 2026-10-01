@@ -2,6 +2,45 @@
   padding-bottom: 40rpx;
 }
 
+/* 首次登录昵称采集 */
+.nick-block {
+  background: #FFFFFF;
+  margin: 20rpx 30rpx 0;
+  padding: 22rpx 26rpx;
+  border-radius: 16rpx;
+  border: 2rpx dashed #E5C9A1;
+}
+
+.nick-row {
+  display: flex;
+  align-items: center;
+}
+
+.nick-label {
+  font-size: 28rpx;
+  color: #5A1A1A;
+  font-weight: 600;
+  margin-right: 20rpx;
+  flex-shrink: 0;
+}
+
+.nick-input {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333333;
+  padding: 10rpx 16rpx;
+  background: #FDF6EA;
+  border-radius: 12rpx;
+}
+
+.nick-tip {
+  display: block;
+  margin-top: 12rpx;
+  font-size: 22rpx;
+  color: #B8860B;
+  line-height: 1.5;
+}
+
 /* 面包屑 */
 .crumb-bar {
   background: #FFFFFF;

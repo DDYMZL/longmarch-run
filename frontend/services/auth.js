@@ -123,6 +123,21 @@ function updateNickname(nickname) {
 }
 
 /**
+ * 首次引导设置昵称（组织选择页采集微信名），不消耗「每人仅一次」改名机会。
+ * @param {string} nickname
+ * @returns {Promise<object>} 更新后的用户
+ */
+function setInitialNickname(nickname) {
+  return requestService
+    .request({
+      url: '/auth/nickname/initial',
+      method: 'PUT',
+      data: { nickname: nickname }
+    })
+    .then((user) => updateLocalUser(user));
+}
+
+/**
  * 更新本地用户缓存并返回新用户（如组织选择结果）。
  * @param {object} patch
  * @returns {object|null}
@@ -149,6 +164,7 @@ module.exports = {
   wxLogin,
   getLocalUser,
   updateNickname,
+  setInitialNickname,
   updateLocalUser,
   clearLocalUser
 };
