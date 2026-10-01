@@ -1,4 +1,4 @@
-// 路由：登录页 + 后台布局（题库维护 / 组织架构），带登录守卫
+// 路由：登录页 + 后台布局（排名洞察 / 题库维护 / 组织架构），带登录守卫
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { isLoggedIn } from '../store/auth'
@@ -13,8 +13,20 @@ const routes: RouteRecordRaw[] = [
   {
     path: '/',
     component: () => import('../layout/AdminLayout.vue'),
-    redirect: '/questions',
+    redirect: '/rankings',
     children: [
+      {
+        path: 'rankings',
+        name: 'rankings',
+        component: () => import('../pages/RankingsView.vue'),
+        meta: { title: '排名洞察' }
+      },
+      {
+        path: 'route-nodes',
+        name: 'route-nodes',
+        component: () => import('../views/RouteNodesView.vue'),
+        meta: { title: '路线点位' }
+      },
       {
         path: 'questions',
         name: 'questions',

@@ -65,6 +65,26 @@ export interface OrgSyncResult {
   skipped: number[]
 }
 
+export interface RouteNode {
+  id: number
+  name: string
+  icon: string
+  target_steps: number
+  historical_time: string
+  description: string
+  latitude: number
+  longitude: number
+  sort_order: number
+  is_enabled: boolean
+}
+
+export type RouteNodeUpsert = Omit<RouteNode, 'id'>
+
+export interface RouteNodeListResult {
+  total: number
+  items: RouteNode[]
+}
+
 export interface MessageResult {
   message: string
 }
@@ -72,6 +92,25 @@ export interface MessageResult {
 // ---------------- 登录 ----------------
 export function login(username: string, password: string) {
   return request.post<LoginResult>('/admin/login', { username, password })
+}
+
+// ---------------- 路线节点 ----------------
+export function fetchRouteNodes() {
+  return request.get<RouteNodeListResult>('/admin/route-nodes')
+}
+
+export function createRouteNode(data: RouteNodeUpsert) {
+  return request.post<RouteNode>('/admin/route-nodes', data)
+}
+
+export function updateRouteNode(id: number, data: RouteNodeUpsert) {
+  return request.put<RouteNode>(`/admin/route-nodes/${id}`, data)
+}
+
+export function setRouteNodeEnabled(id: number, isEnabled: boolean) {
+  return request.patch<RouteNode>(`/admin/route-nodes/${id}/enabled`, {
+    is_enabled: isEnabled
+  })
 }
 
 // ---------------- 题库 ----------------
