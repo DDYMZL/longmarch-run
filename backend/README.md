@@ -19,7 +19,9 @@ docker/
 ├── compose.yml               # openGauss 服务、端口、账号和数据卷
 └── init/
     ├── init-db.sh            # 建库并按文件名顺序执行未应用的 SQL
-    └── 001_schema.sql        # backend 基线表结构
+    ├── 001_schema.sql        # backend 基线表结构
+    ├── 002_route_node_config.sql  # 路线节点增加经纬度/排序/启用
+    └── 003_optional_user_avatar.sql  # avatar 改为可空
 backend/
 ├── requirements.txt          # 依赖
 ├── .env.example              # 环境变量样例（复制为 .env）
@@ -92,11 +94,13 @@ Authorization: Bearer <登录返回的 token>
 | GET | `/` | 健康检查 |
 | POST | `/api/auth/login` | 微信登录（body: `code`、可选 `nickname`/`avatar`），返回 `token` + `user` |
 | GET | `/api/auth/me` | 当前登录用户信息 |
+| PUT | `/api/auth/nickname` | 修改昵称（body: `nickname`），每人仅一次，已修改过返回 400 |
 | GET | `/api/sport/today` | 今日步数概况 |
 | POST | `/api/sport/sync` | 同步今日步数（同日覆盖，非累加） |
 | GET | `/api/sport/recent?n=7` | 最近 n 天运动记录 |
 | POST | `/api/sport/add` | 手动补充步数（演示用，body: `delta`） |
-| GET | `/api/march/route` | 长征路线进度（含各节点状态） |
+| GET | `/api/march/route` | 长征路线进度（含各节点状态，仅统计启用节点） |
+| GET | `/api/march/route-nodes` | 启用节点配置列表（含经纬度，供小程序缓存） |
 | GET | `/api/march/node/{node_id}` | 节点详情（任意状态可查看） |
 | POST | `/api/march/light-up` | 点亮达标节点、发放积分 |
 | GET | `/api/quiz/daily` | 今日题目（同一天同一套题） |
@@ -111,14 +115,18 @@ Authorization: Bearer <登录返回的 token>
 | POST | `/api/org/select` | 选定/修改所属组织（body: `orgId`，可选任意层级） |
 | GET | `/api/rank/steps` | 全员工累计步数总榜（跨所有组织，标记我的名次） |
 | GET | `/api/admin/rankings` | 管理端全员排名、统计概览及每人全部节点到达时间 |
+| GET | `/api/admin/route-nodes` | 全部路线节点列表（含停用节点） |
+| POST | `/api/admin/route-nodes` | 新增路线节点（校验坐标/步数/排序/递增） |
+| PUT | `/api/admin/route-nodes/{id}` | 编辑路线节点 |
+| PATCH | `/api/admin/route-nodes/{id}/enabled` | 启用/停用路线节点 |
 
 ## 业务规则（与前端 Mock 完全一致）
 
 - **步数**：按 `用户 + 日期` 唯一，同日同步为覆盖而非累加；未接入真实微信运动时按「日期+用户」生成稳定模拟步数（4000~12999）。
-- **路线**：累计步数达到节点 `targetSteps` 即点亮，**点亮后永久保留**；节点状态分 `completed / current / unlocked`。
+- **路线**：累计步数达到节点 `targetSteps` 即点亮，**点亮后永久保留**；节点状态分 `completed / current / unlocked`。管理后台可启停节点，停用节点不在小程序可见路线中，不参与完成判定和排名，但已有点亮记录保留。
 - **答题**：每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可完成一次；题目接口**不返回答案**。
 - **积分**：登录 +1、运动 5000/10000 步 +5/+10、答题 +5 满分额外 +10、点亮节点 +10、完成路线 +100；**同日同原因去重**。
-- **勋章**：`first-step`（首次运动）、`learner`（10 次答题）、`master`（积分≥500）、`luding`/`snow`（点亮节点 6/7）、`victory`（全部点亮）。
+- **勋章**：`first-step`（首次运动）、`learner`（10 次答题）、`master`（积分≥500）、`luding`/`snow`（点亮节点 6/7）、`victory`（全部**启用**节点点亮）。
 - **组织架构**：多级树（种子 13 个节点，4 级），用户可选定**任意层级**节点作为所属组织，登录后可随时修改。
 - **排名**：**员工个人**总榜（非组织间排名），按累计步数（`DailySport.steps` 求和）降序，跨所有组织；同分按 `user_id` 升序保证名次稳定；返回前 `TOP_LIMIT`（默认 100）条并始终包含当前用户。
 
@@ -135,9 +143,10 @@ backend 所需的建库、建表、索引和结构变更统一维护在根目录
 
 ## 与前端对接说明
 
-1. 前端 `frontend/services/` 目前仍是本地 Mock（读写 Storage），可独立运行、无需后端。
-2. 切换到真实后端时，将各 service 内部实现改为 `wx.request` 调用上表接口即可；**响应字段已统一为 camelCase，与原 Mock 返回结构一致**，页面层无需改动。
-3. 登录流程：前端 `wx.login()` 拿 `code` → `POST /api/auth/login` → 保存 `token` → 后续请求带 `Authorization: Bearer <token>`。
+1. 前端 `frontend/services/auth.js` 已对接真实后端登录（`wx.login` → `POST /api/auth/login` → JWT）；`march.js` 已对接路线节点配置（`GET /api/march/route-nodes`，三级降级：网络→缓存→内置 Mock）。
+2. 其余业务（sport/quiz/points/medal/org/rank）也已全量切换为真实接口（`wx.request` + JWT）；**响应字段为 camelCase，与原 Mock 返回结构一致**，前端页面层零改动。
+3. 登录流程：前端 `wx.login()` 拿 `code` → `POST /api/auth/login` → 保存 `token` 到 `lm_auth_token` → 后续请求带 `Authorization: Bearer <token>`。401 时自动清理登录态并跳转登录页。
+4. 管理端实时推送：`GET /api/ws/updates?token=<JWT>` 建立 WebSocket 长连接（admin 与用户 token 均可），小程序侧任何用户数据写入（步数/答题/点亮/组织/登录/勋章）成功后广播 `data_changed` 事件，管理端排名洞察据此自动刷新。
 
 ## 待完善（生产化 TODO）
 

@@ -4,7 +4,6 @@
  * 登录成功后头像被持久化保存，首页与「我的」均回显微信头像。
  */
 const auth = require('../../services/auth');
-const points = require('../../services/points');
 const app = getApp();
 
 Page({
@@ -37,15 +36,16 @@ Page({
   },
 
   /**
-   * 执行登录
+   * 执行登录：直接使用微信名称（昵称输入框一键填入的微信昵称）登录。
+   * 登录后可在「我的」页修改昵称，每人仅一次。
    * @param {string} avatar chooseAvatar 选取的头像临时路径
    */
   doLogin(avatar) {
     if (this.data.loading) return;
-    // 昵称必填：点击输入框可一键使用微信昵称，首页/我的将展示该名称
+    // 微信昵称：点击输入框可一键填入，登录直接使用该名称
     const nickname = (this.data.nickname || '').trim();
     if (!nickname) {
-      this.setData({ errorMsg: '请先填写昵称（点击输入框可一键使用微信昵称）' });
+      this.setData({ errorMsg: '请先点击上方输入框填入微信昵称' });
       return;
     }
     this.setData({ loading: true, errorMsg: '' });
@@ -54,8 +54,6 @@ Page({
       .wxLogin({ nickname: nickname, avatar: avatar })
       .then((user) => {
         app.setLoginUser(user);
-        // 每日登录积分
-        points.grantDailyLogin(user.id);
 
         wx.showToast({ title: '登录成功', icon: 'success' });
         setTimeout(() => {

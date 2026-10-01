@@ -5,7 +5,13 @@
       <image wx:if="{{user.avatar}}" src="{{user.avatar}}" mode="aspectFill" />
       <text wx:else class="avatar-placeholder">🏃</text>
     </view>
-    <view class="mine-name">{{user.nickname}}</view>
+    <view class="mine-name-row">
+      <view class="mine-name">{{user.nickname}}</view>
+      <view class="mine-name-edit" bindtap="handleEditNickname">
+        <text wx:if="{{!user.nicknameChangedAt}}">✎ 修改昵称</text>
+        <text wx:else>已修改</text>
+      </view>
+    </view>
     <!-- 组织架构：显示在昵称下方，点击可修改 -->
     <view class="mine-org" bindtap="goOrgSelect">
       <text class="mine-org-icon">🏢</text>

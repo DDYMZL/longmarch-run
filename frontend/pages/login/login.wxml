@@ -3,11 +3,11 @@
     <view class="logo">🚩</view>
     <view class="app-name">长征运动挑战</view>
 
-    <!-- 昵称：微信「头像昵称填写」能力，点击可一键填入微信昵称（必填，首页/我的将展示此名称） -->
+    <!-- 昵称：微信「头像昵称填写」能力，点击输入框可一键填入微信昵称，登录后仅可修改一次 -->
     <input
       class="nickname-input"
       type="nickname"
-      placeholder="请填写昵称（可用微信昵称）"
+      placeholder="点击填入微信昵称"
       placeholder-class="nick-ph"
       value="{{nickname}}"
       bindinput="onNicknameInput"

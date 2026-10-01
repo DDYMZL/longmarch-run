@@ -107,6 +107,37 @@ function getLocalUser() {
 }
 
 /**
+ * 修改昵称（每个用户仅允许一次，后端校验）。
+ * 成功后把后端返回的最新用户信息合并进本地缓存。
+ * @param {string} nickname
+ * @returns {Promise<object>} 更新后的用户
+ */
+function updateNickname(nickname) {
+  return requestService
+    .request({
+      url: '/auth/nickname',
+      method: 'PUT',
+      data: { nickname: nickname }
+    })
+    .then((user) => updateLocalUser(user));
+}
+
+/**
+ * 更新本地用户缓存并返回新用户（如组织选择结果）。
+ * @param {object} patch
+ * @returns {object|null}
+ */
+function updateLocalUser(patch) {
+  try {
+    const user = Object.assign({}, wx.getStorageSync(USER_KEY) || {}, patch);
+    wx.setStorageSync(USER_KEY, user);
+    return user;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
  * 清除登录态。
  */
 function clearLocalUser() {
@@ -117,5 +148,7 @@ function clearLocalUser() {
 module.exports = {
   wxLogin,
   getLocalUser,
+  updateNickname,
+  updateLocalUser,
   clearLocalUser
 };

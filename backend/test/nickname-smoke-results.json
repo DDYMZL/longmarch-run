@@ -1,0 +1,66 @@
+{
+  "run_code": "e2e-nickname-1790840315",
+  "user_id": 92,
+  "results": [
+    {
+      "id": "N01",
+      "name": "管理端登录",
+      "ok": true,
+      "detail": "st=200"
+    },
+    {
+      "id": "N02",
+      "name": "首次登录以微信名称建号（未改名状态）",
+      "ok": true,
+      "detail": "st=200 nickname=微信昵称测试员 changedAt=None"
+    },
+    {
+      "id": "N03",
+      "name": "重复登录不覆盖已建立昵称",
+      "ok": true,
+      "detail": "nickname=微信昵称测试员"
+    },
+    {
+      "id": "N04",
+      "name": "首次修改昵称成功（返回修改时间）",
+      "ok": true,
+      "detail": "st=200 nickname=长征小红军 changedAt=2026-10-01T07:38:36.095164"
+    },
+    {
+      "id": "N05",
+      "name": "第二次修改被拒绝（仅一次）",
+      "ok": true,
+      "detail": "st=400 detail=昵称仅可修改一次，无法再次修改"
+    },
+    {
+      "id": "N06",
+      "name": "已改名用户重复登录昵称保持改后值",
+      "ok": true,
+      "detail": "nickname=长征小红军 changedAt=2026-10-01T07:38:36.095164"
+    },
+    {
+      "id": "N07",
+      "name": "排名洞察返回曾用名与修改时间",
+      "ok": true,
+      "detail": "st=200 item={'nickname': '长征小红军', 'original_nickname': '微信昵称测试员', 'nickname_changed_at': '2026-10-01T07:38:36.095164'}"
+    },
+    {
+      "id": "N08",
+      "name": "人员详情返回曾用名与修改时间",
+      "ok": true,
+      "detail": "st=200 nickname=长征小红军 original=微信昵称测试员"
+    },
+    {
+      "id": "N09",
+      "name": "空昵称被拒绝",
+      "ok": true,
+      "detail": "st=400"
+    },
+    {
+      "id": "N10",
+      "name": "未登录修改昵称被拒绝",
+      "ok": true,
+      "detail": "st=401"
+    }
+  ]
+}

@@ -89,6 +89,84 @@ export interface MessageResult {
   message: string
 }
 
+// ---------------- 人员详情聚合 ----------------
+export interface OverviewUser {
+  user_id: number
+  nickname: string
+  avatar: string
+  org_name: string
+  original_nickname: string
+  nickname_changed_at: string | null
+  created_at: string | null
+}
+
+export interface OverviewRecentSport {
+  date: string
+  steps: number
+  text: string
+}
+
+export interface OverviewSport {
+  today_steps: number
+  total_steps: number
+  recent: OverviewRecentSport[]
+}
+
+export interface OverviewQuizRecord {
+  date: string
+  total_count: number
+  correct_count: number
+  score: number
+  points: number
+  answer_at: number
+}
+
+export interface OverviewMedal {
+  id: string
+  name: string
+  icon: string
+  desc: string
+  granted_at: string | null
+}
+
+export interface OverviewNode {
+  id: number
+  name: string
+  target_steps: number
+  reached: boolean
+  reached_at: string | null
+}
+
+export interface OverviewMarch {
+  completed_nodes: number
+  node_count: number
+  nodes: OverviewNode[]
+}
+
+export interface OverviewPoint {
+  date: string
+  reason: string
+  delta: number
+}
+
+export interface OverviewPoints {
+  total: number
+  logs: OverviewPoint[]
+}
+
+export interface UserOverview {
+  user: OverviewUser
+  sport: OverviewSport
+  quiz_records: OverviewQuizRecord[]
+  medals: OverviewMedal[]
+  march: OverviewMarch
+  points: OverviewPoints
+}
+
+export function fetchUserOverview(userId: number) {
+  return request.get<UserOverview>(`/admin/users/${userId}/overview`)
+}
+
 // ---------------- 登录 ----------------
 export function login(username: string, password: string) {
   return request.post<LoginResult>('/admin/login', { username, password })

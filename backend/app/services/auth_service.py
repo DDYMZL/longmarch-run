@@ -4,6 +4,7 @@
 未配置 WX_APPID/WX_SECRET 时使用 mock openid（由 code 稳定派生），便于本地开发调试。
 """
 import hashlib
+from datetime import datetime
 from typing import Optional, Tuple
 
 import httpx
@@ -46,14 +47,21 @@ def _code2session(code: str) -> Optional[str]:
 def wx_login(
     db: Session, code: str, nickname: str = "", avatar: str = ""
 ) -> Tuple[str, User]:
-    """登录：换取 openid -> 建/查用户 -> 更新资料 -> 返回 (token, user)。"""
+    """登录：换取 openid -> 建/查用户 -> 返回 (token, user)。
+
+    昵称仅在首次创建时写入（并记作曾用名 original_nickname），后续登录
+    不再覆盖昵称——改名只能在应用内通过 update_nickname 完成且仅一次。
+    头像允许随每次微信登录更新。
+    """
     openid = _code2session(code) or _mock_openid(code)
 
     user = db.query(User).filter(User.openid == openid).first()
     if user is None:
+        final_nickname = (nickname or "").strip() or DEFAULT_NICKNAME
         user = User(
             openid=openid,
-            nickname=nickname or DEFAULT_NICKNAME,
+            nickname=final_nickname,
+            original_nickname=final_nickname,
             avatar=avatar or None,
         )
         db.add(user)
@@ -61,9 +69,6 @@ def wx_login(
         db.refresh(user)
     else:
         changed = False
-        if nickname and user.nickname != nickname:
-            user.nickname = nickname
-            changed = True
         if avatar and user.avatar != avatar:
             user.avatar = avatar
             changed = True
@@ -73,3 +78,25 @@ def wx_login(
 
     token = create_access_token(user.id, user.openid)
     return token, user
+
+
+def update_nickname(db: Session, user: User, nickname: str) -> User:
+    """修改昵称：每个用户仅允许一次，已修改过抛 ValueError。
+
+    与当前昵称相同的修改视为无操作，不消耗唯一机会。
+    """
+    new_name = (nickname or "").strip()
+    if not new_name:
+        raise ValueError("昵称不能为空")
+    if user.nickname_changed_at is not None:
+        raise ValueError("昵称仅可修改一次，无法再次修改")
+    if new_name == user.nickname:
+        return user
+    # 兼容未回填曾用名的存量用户：修改前先把当前昵称记为曾用名
+    if not user.original_nickname:
+        user.original_nickname = user.nickname
+    user.nickname = new_name
+    user.nickname_changed_at = datetime.utcnow()
+    db.commit()
+    db.refresh(user)
+    return user

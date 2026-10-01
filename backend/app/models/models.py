@@ -87,7 +87,11 @@ class Organization(Base):
 
 # ---------------- 用户业务数据 ----------------
 class User(Base):
-    """用户（微信登录创建）。openid 唯一。"""
+    """用户（微信登录创建）。openid 唯一。
+
+    nickname_changed_at 非空表示已使用唯一一次改名机会；original_nickname
+    记录登录时的微信昵称（曾用名），供管理端展示修改记录。
+    """
 
     __tablename__ = "users"
 
@@ -96,6 +100,8 @@ class User(Base):
     nickname: Mapped[str] = mapped_column(String(64), default="长征小战士")
     avatar: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
     org_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True, default=None)
+    original_nickname: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    nickname_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 

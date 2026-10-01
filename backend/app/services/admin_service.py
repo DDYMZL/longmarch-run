@@ -246,6 +246,8 @@ def get_rank_overview(db: Session) -> Dict:
                 "nickname": user.nickname,
                 "avatar": user.avatar,
                 "org_name": org_names.get(user.org_id, ""),
+                "original_nickname": user.original_nickname or user.nickname,
+                "nickname_changed_at": user.nickname_changed_at,
                 "total_steps": steps_by_user.get(user.id, 0),
                 "completed_nodes": len(reached_nodes),
                 "node_count": len(route_nodes),
@@ -355,6 +357,8 @@ def get_user_overview(db: Session, user_id: int) -> Optional[Dict]:
                 if user.org_id is not None
                 else ""
             ),
+            "original_nickname": user.original_nickname or user.nickname,
+            "nickname_changed_at": user.nickname_changed_at,
             "created_at": user.created_at,
         },
         "sport": {

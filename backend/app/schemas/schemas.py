@@ -26,6 +26,7 @@ class UserOut(CamelModel):
     nickname: str
     avatar: str
     org_id: Optional[int] = None
+    nickname_changed_at: Optional[datetime] = None
 
     @field_validator("avatar", mode="before")
     @classmethod
@@ -44,6 +45,12 @@ class LoginRequest(BaseModel):
 class LoginResponse(CamelModel):
     token: str
     user: UserOut
+
+
+class NicknameUpdateRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    nickname: str = Field(min_length=1, max_length=64)
 
 
 # ---------------- 运动 ----------------
@@ -98,6 +105,10 @@ class RouteNodeOut(CamelModel):
     target_steps: int
     status: str
     remain: int
+    historical_time: str = ""
+    description: str = ""
+    latitude: float = 0
+    longitude: float = 0
 
 
 class RouteOut(CamelModel):
@@ -401,6 +412,8 @@ class AdminRankItemOut(BaseModel):
     nickname: str
     avatar: str
     org_name: str = ""
+    original_nickname: str = ""
+    nickname_changed_at: Optional[datetime] = None
     total_steps: int
     completed_nodes: int
     node_count: int
@@ -423,12 +436,14 @@ class AdminRankListOut(BaseModel):
 
 
 class AdminOverviewUser(BaseModel):
-    """人员详情：基本信息。"""
+    """人员详情：基本信息（含昵称修改记录）。"""
 
     user_id: int
     nickname: str
     avatar: str = ""
     org_name: str = ""
+    original_nickname: str = ""
+    nickname_changed_at: Optional[datetime] = None
     created_at: Optional[datetime] = None
 
 

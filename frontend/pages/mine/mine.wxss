@@ -34,14 +34,35 @@
   font-size: 72rpx;
 }
 
+.mine-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+}
+
 .mine-name {
-  max-width: 480rpx;
-  margin: 0 auto;
+  max-width: 400rpx;
   font-size: 38rpx;
   font-weight: 600;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* 昵称旁修改入口：未改过可点，改过后置灰 */
+.mine-name-edit {
+  flex: none;
+  padding: 6rpx 18rpx;
+  font-size: 22rpx;
+  color: #FFE9A8;
+  background: rgba(255, 255, 255, 0.16);
+  border: 2rpx solid rgba(255, 233, 168, 0.5);
+  border-radius: 26rpx;
+}
+
+.mine-name-edit text:last-child {
+  color: rgba(255, 255, 255, 0.6);
 }
 
 /* 昵称下方组织行（点击修改） */

@@ -4,6 +4,7 @@
  * 入口：运动记录 / 答题记录 / 我的勋章 / 退出登录
  */
 const app = getApp();
+const auth = require('../../services/auth');
 const sport = require('../../services/sport');
 const march = require('../../services/march');
 const quiz = require('../../services/quiz');
@@ -36,28 +37,37 @@ Page({
   },
 
   refresh() {
-    const userId = app.globalData.user.id;
+    // 并行拉取后端数据（勋章列表接口会自动评估发放）
+    Promise.all([
+      sport.getToday(),
+      march.getRoute(),
+      quiz.getRecords(),
+      medal.getMedalList(),
+      points.getTotal()
+    ])
+      .then((results) => {
+        const today = results[0];
+        const route = results[1];
+        const records = results[2];
+        const medalList = results[3];
+        const totalPoints = results[4];
+        const ownedMedals = medalList.filter((m) => m.owned);
 
-    // 勋章检查（登录进入时刷新一次）
-    medal.checkAndGrant(userId);
-
-    const today = sport.getToday(userId);
-    const route = march.getRoute(userId);
-    const records = quiz.getRecords(userId);
-    const medalList = medal.getMedalList(userId);
-    const ownedMedals = medalList.filter((m) => m.owned);
-
-    this.setData({
-      user: app.globalData.user,
-      totalSteps: today.totalSteps,
-      litCount: route.litCount,
-      totalCount: route.totalCount,
-      quizCount: records.length,
-      points: points.getTotal(userId),
-      medalIcons: ownedMedals.slice(0, 6).map((m) => m.icon),
-      medalCount: ownedMedals.length,
-      medalTotal: medalList.length
-    });
+        this.setData({
+          user: app.globalData.user,
+          totalSteps: today.totalSteps,
+          litCount: route.litCount,
+          totalCount: route.totalCount,
+          quizCount: records.length,
+          points: totalPoints,
+          medalIcons: ownedMedals.slice(0, 6).map((m) => m.icon),
+          medalCount: ownedMedals.length,
+          medalTotal: medalList.length
+        });
+      })
+      .catch(() => {
+        this.setData({ user: app.globalData.user });
+      });
   },
 
   goSportRecords() {
@@ -75,6 +85,47 @@ Page({
   /** 选择 / 修改组织架构 */
   goOrgSelect() {
     wx.navigateTo({ url: '/pages/org-select/org-select?from=mine' });
+  },
+
+  /**
+   * 修改昵称：每人仅一次（后端校验）。
+   * 已修改过的用户点击时提示不可再次修改。
+   */
+  handleEditNickname() {
+    const user = this.data.user;
+    if (!user) return;
+    if (user.nicknameChangedAt) {
+      wx.showToast({ title: '昵称仅可修改一次', icon: 'none' });
+      return;
+    }
+    wx.showModal({
+      title: '修改昵称',
+      editable: true,
+      placeholderText: '请输入新昵称',
+      content: '昵称仅可修改一次，请确认无误后提交',
+      confirmColor: '#C8102E',
+      success: (res) => {
+        if (!res.confirm) return;
+        const name = (res.content || '').trim();
+        if (!name) {
+          wx.showToast({ title: '昵称不能为空', icon: 'none' });
+          return;
+        }
+        auth
+          .updateNickname(name)
+          .then((updated) => {
+            if (updated) app.setLoginUser(updated);
+            this.setData({ user: updated || user });
+            wx.showToast({ title: '修改成功', icon: 'success' });
+          })
+          .catch((err) => {
+            wx.showToast({
+              title: (err && err.message) || '修改失败，请重试',
+              icon: 'none'
+            });
+          });
+      }
+    });
   },
 
   /**
