@@ -24,7 +24,17 @@ def _lit_node_ids(db: Session, user_id: int) -> Set[int]:
 
 
 def _ordered_nodes(db: Session) -> List[RouteNode]:
-    return db.query(RouteNode).order_by(RouteNode.id.asc()).all()
+    return (
+        db.query(RouteNode)
+        .filter(RouteNode.is_enabled.is_(True))
+        .order_by(RouteNode.sort_order.asc(), RouteNode.id.asc())
+        .all()
+    )
+
+
+def get_route_nodes(db: Session) -> List[RouteNode]:
+    """返回供小程序展示的启用节点配置。"""
+    return _ordered_nodes(db)
 
 
 def get_route(db: Session, user_id: int) -> Dict:
@@ -44,7 +54,7 @@ def get_route(db: Session, user_id: int) -> Dict:
             status = "completed"
         else:
             prev = nodes_def[idx - 1] if idx > 0 else None
-            status = "current" if (prev and current_steps >= prev.target_steps) else "unlocked"
+            status = "current" if prev is None or current_steps >= prev.target_steps else "unlocked"
         nodes.append(
             {
                 "id": n.id,
@@ -76,7 +86,11 @@ def get_route(db: Session, user_id: int) -> Dict:
 def get_node_detail(db: Session, user_id: int, node_id: int) -> Optional[Dict]:
     """获取单个节点详情（含状态与距离）。任意状态节点均可查看。"""
     route = get_route(db, user_id)
-    node_def = db.query(RouteNode).filter(RouteNode.id == node_id).first()
+    node_def = (
+        db.query(RouteNode)
+        .filter(RouteNode.id == node_id, RouteNode.is_enabled.is_(True))
+        .first()
+    )
     if node_def is None:
         return None
     state = next((x for x in route["nodes"] if x["id"] == node_id), None)

@@ -54,7 +54,7 @@ def wx_login(
         user = User(
             openid=openid,
             nickname=nickname or DEFAULT_NICKNAME,
-            avatar=avatar or "",
+            avatar=avatar or None,
         )
         db.add(user)
         db.commit()

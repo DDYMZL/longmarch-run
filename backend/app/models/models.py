@@ -12,9 +12,12 @@ from typing import Optional
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
+    Boolean,
     DateTime,
     ForeignKey,
     Integer,
+    Numeric,
     String,
     Text,
     UniqueConstraint,
@@ -26,16 +29,20 @@ from app.core.database import Base
 
 # ---------------- 静态配置数据 ----------------
 class RouteNode(Base):
-    """长征路线节点（10 个）。target_steps 为累计步数要求。"""
+    """长征路线节点。target_steps 为累计步数要求。"""
 
     __tablename__ = "route_nodes"
 
-    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name: Mapped[str] = mapped_column(String(50))
     target_steps: Mapped[int] = mapped_column(Integer, default=0)
     historical_time: Mapped[str] = mapped_column(String(50), default="")
     icon: Mapped[str] = mapped_column(String(16), default="")
     description: Mapped[str] = mapped_column(Text, default="")
+    latitude: Mapped[float] = mapped_column(Numeric(9, 6))
+    longitude: Mapped[float] = mapped_column(Numeric(10, 6))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
 class Question(Base):
@@ -87,7 +94,7 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     openid: Mapped[str] = mapped_column(String(64), unique=True, index=True)
     nickname: Mapped[str] = mapped_column(String(64), default="长征小战士")
-    avatar: Mapped[str] = mapped_column(String(500), default="")
+    avatar: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
     org_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
@@ -130,7 +137,7 @@ class QuizRecord(Base):
     score: Mapped[int] = mapped_column(Integer, default=0)
     points: Mapped[int] = mapped_column(Integer, default=0)
     wrong_list: Mapped[list] = mapped_column(JSON, default=list)
-    answer_at: Mapped[int] = mapped_column(Integer, default=0)
+    answer_at: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
 class DailyQuestion(Base):

@@ -13,42 +13,52 @@ ROUTE_NODES = [
     {
         "id": 1, "name": "瑞金", "target_steps": 0, "historical_time": "1934年10月", "icon": "🚩",
         "description": "1934年10月，中央红军从江西瑞金出发，开始了举世闻名的二万五千里长征。瑞金是中华苏维埃共和国临时中央政府所在地，被称为“红色故都”。",
+        "latitude": 25.885, "longitude": 116.027, "sort_order": 1, "is_enabled": True,
     },
     {
         "id": 2, "name": "遵义", "target_steps": 5000, "historical_time": "1935年1月", "icon": "🏛️",
         "description": "1935年1月，中共中央在遵义召开政治局扩大会议（遵义会议），确立了毛泽东同志在党中央和红军的领导地位，在极端危急的关头挽救了党、挽救了红军、挽救了中国革命。",
+        "latitude": 27.72, "longitude": 106.93, "sort_order": 2, "is_enabled": True,
     },
     {
         "id": 3, "name": "四渡赤水", "target_steps": 10000, "historical_time": "1935年1-3月", "icon": "🌊",
         "description": "1935年初，中央红军在赤水河流域四次渡河，灵活机动地调动和迷惑敌人，跳出国民党军重兵包围圈，是毛泽东军事指挥艺术的“得意之笔”。",
+        "latitude": 28.3, "longitude": 106.42, "sort_order": 3, "is_enabled": True,
     },
     {
         "id": 4, "name": "巧渡金沙江", "target_steps": 15000, "historical_time": "1935年5月", "icon": "⛵",
         "description": "1935年5月，红军仅凭7条小船，在皎平渡用七天七夜巧渡金沙江，摆脱了数十万敌军的围追堵截，取得了战略转移中具有决定意义的胜利。",
+        "latitude": 26.28, "longitude": 102.47, "sort_order": 4, "is_enabled": True,
     },
     {
         "id": 5, "name": "强渡大渡河", "target_steps": 20000, "historical_time": "1935年5月", "icon": "⚔️",
         "description": "1935年5月，红军先遣队在安顺场强渡大渡河，十七勇士冒着枪林弹雨渡河成功，为红军主力打开了北上的通道。",
+        "latitude": 29.25, "longitude": 102.3, "sort_order": 5, "is_enabled": True,
     },
     {
         "id": 6, "name": "飞夺泸定桥", "target_steps": 25000, "historical_time": "1935年5月29日", "icon": "🌉",
         "description": "1935年5月29日，红军22名突击队员在泸定桥铁索上匍匐前进，冒着敌人火力夺取桥头，创造了长征中的英雄壮举。",
+        "latitude": 29.91, "longitude": 102.24, "sort_order": 6, "is_enabled": True,
     },
     {
         "id": 7, "name": "翻越雪山", "target_steps": 35000, "historical_time": "1935年6月", "icon": "🏔️",
         "description": "1935年6月，红军翻越了终年积雪、空气稀薄的夹金山等大雪山，许多战士长眠于雪山之上，用生命诠释了坚定的理想信念。",
+        "latitude": 30.75, "longitude": 102.65, "sort_order": 7, "is_enabled": True,
     },
     {
         "id": 8, "name": "过草地", "target_steps": 45000, "historical_time": "1935年8月", "icon": "🌾",
         "description": "1935年8月，红军穿越人迹罕至的松潘草地。草地沼泽遍布、气候恶劣，红军指战员以顽强的意志走出了这片“死亡之地”。",
+        "latitude": 33.58, "longitude": 102.96, "sort_order": 8, "is_enabled": True,
     },
     {
         "id": 9, "name": "吴起镇", "target_steps": 55000, "historical_time": "1935年10月", "icon": "🎺",
         "description": "1935年10月，中央红军到达陕甘革命根据地的吴起镇，与陕北红军胜利会师，宣告中央红军长征胜利结束。",
+        "latitude": 36.92, "longitude": 108.18, "sort_order": 9, "is_enabled": True,
     },
     {
         "id": 10, "name": "延安", "target_steps": 65000, "historical_time": "1936年10月", "icon": "⭐",
         "description": "延安是中共中央所在地和中国革命的圣地。红军三大主力会师后，中国革命的大本营扎根西北，延安成为指引中国革命的灯塔。",
+        "latitude": 36.6, "longitude": 109.49, "sort_order": 10, "is_enabled": True,
     },
 ]
 

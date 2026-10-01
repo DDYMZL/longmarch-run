@@ -53,7 +53,7 @@ def check_and_grant(db: Session, user_id: int) -> List[str]:
     lit: Set[int] = {
         r[0] for r in db.query(LitNode.node_id).filter(LitNode.user_id == user_id).all()
     }
-    all_nodes = db.query(RouteNode).all()
+    all_nodes = db.query(RouteNode).filter(RouteNode.is_enabled.is_(True)).all()
     # 与 march 服务口径一致：步数达标的节点视为已点亮
     for n in all_nodes:
         if total_steps >= n.target_steps:

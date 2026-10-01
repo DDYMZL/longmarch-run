@@ -5,10 +5,26 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.database import get_db
 from app.models.models import User
-from app.schemas.schemas import LightUpResult, NodeDetailOut, RouteOut
+from app.schemas.schemas import (
+    LightUpResult,
+    NodeDetailOut,
+    RouteNodeConfigListOut,
+    RouteOut,
+)
 from app.services import march_service, medal_service
 
 router = APIRouter(prefix="/march", tags=["march"])
+
+
+@router.get(
+    "/route-nodes",
+    response_model=RouteNodeConfigListOut,
+    summary="启用的路线节点配置",
+)
+def route_nodes(
+    current: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    return {"nodes": march_service.get_route_nodes(db)}
 
 
 @router.get("/route", response_model=RouteOut, summary="长征路线进度")
