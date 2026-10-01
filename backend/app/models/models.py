@@ -29,7 +29,12 @@ from app.core.database import Base
 
 # ---------------- 静态配置数据 ----------------
 class RouteNode(Base):
-    """长征路线节点。target_steps 为累计步数要求。"""
+    """长征路线节点。target_steps 为累计步数要求。
+
+    brief/significance/figures/location/images/audio/keywords 为「历史事件卡」
+    内容字段，种子仅补空值，管理端可编辑。本库空字符串按 NULL 存储
+    （Oracle 兼容模式），字符串内容列保持可空，读取时 None 即空值。
+    """
 
     __tablename__ = "route_nodes"
 
@@ -39,6 +44,13 @@ class RouteNode(Base):
     historical_time: Mapped[str] = mapped_column(String(50), default="")
     icon: Mapped[str] = mapped_column(String(16), default="")
     description: Mapped[str] = mapped_column(Text, default="")
+    brief: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, default=None)
+    significance: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    figures: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
+    location: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
+    images: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=list)
+    audio: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
+    keywords: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, default=None)
     latitude: Mapped[float] = mapped_column(Numeric(9, 6))
     longitude: Mapped[float] = mapped_column(Numeric(10, 6))
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
@@ -46,7 +58,10 @@ class RouteNode(Base):
 
 
 class Question(Base):
-    """题库（15 题）。type: single 单选 / judge 判断。"""
+    """题库（15 题）。type: single 单选 / judge 判断。
+
+    category 为知识画像分类：event 历史事件 / route 长征路线 / figure 历史人物。
+    """
 
     __tablename__ = "questions"
 
@@ -57,10 +72,15 @@ class Question(Base):
     answer: Mapped[list] = mapped_column(JSON, default=list)
     analysis: Mapped[str] = mapped_column(Text, default="")
     score: Mapped[int] = mapped_column(Integer, default=20)
+    category: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
 
 
 class MedalDef(Base):
-    """勋章定义（6 个）。判定逻辑见 services/medal_service。"""
+    """勋章定义。判定逻辑见 services/medal_service。
+
+    category: starter 入门 / route 路线 / challenge 挑战 / complete 完成；
+    hidden 为 True 的勋章未获得时不公开获取条件。
+    """
 
     __tablename__ = "medal_defs"
 
@@ -68,6 +88,9 @@ class MedalDef(Base):
     name: Mapped[str] = mapped_column(String(50))
     icon: Mapped[str] = mapped_column(String(16))
     desc: Mapped[str] = mapped_column(String(200), default="")
+    category: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
+    hidden: Mapped[bool] = mapped_column(Boolean, default=False)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class Organization(Base):
@@ -91,6 +114,8 @@ class User(Base):
 
     nickname_changed_at 非空表示已使用唯一一次改名机会；original_nickname
     记录登录时的微信昵称（曾用名），供管理端展示修改记录。
+    continuous_days / max_continuous_days 为连续行军缓存，由 sport 写入链路
+    维护（streak_service），启动时按 daily_sport 全量重算兜底。
     """
 
     __tablename__ = "users"
@@ -102,11 +127,17 @@ class User(Base):
     org_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True, default=None)
     original_nickname: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
     nickname_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    continuous_days: Mapped[int] = mapped_column(Integer, default=0)
+    max_continuous_days: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class DailySport(Base):
-    """每日步数（user_id + date 唯一，同日覆盖而非累加）。"""
+    """每日步数（user_id + date 唯一，同日覆盖而非累加）。
+
+    distance 为估算距离（km）= steps × 步长；is_goal_completed 表示当日达到
+    行军目标（连续行军判定依据）；is_makeup / makeup_at 为补签预留字段。
+    """
 
     __tablename__ = "daily_sport"
     __table_args__ = (UniqueConstraint("user_id", "date", name="uq_sport_user_date"),)
@@ -115,10 +146,17 @@ class DailySport(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     date: Mapped[str] = mapped_column(String(10), index=True)
     steps: Mapped[int] = mapped_column(Integer, default=0)
+    distance: Mapped[float] = mapped_column(Numeric(10, 2), default=0)
+    is_goal_completed: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_makeup: Mapped[bool] = mapped_column(Boolean, default=False)
+    makeup_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
 
 
 class LitNode(Base):
-    """已点亮节点（user_id + node_id 唯一，点亮后永久保留）。"""
+    """已点亮节点（user_id + node_id 唯一，点亮后永久保留）。
+
+    step_snapshot 记录点亮时刻的累计步数（历史数据回填为 0，展示时判空）。
+    """
 
     __tablename__ = "lit_nodes"
     __table_args__ = (UniqueConstraint("user_id", "node_id", name="uq_lit_user_node"),)
@@ -127,6 +165,7 @@ class LitNode(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     node_id: Mapped[int] = mapped_column(Integer)
     lit_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    step_snapshot: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class QuizRecord(Base):
@@ -180,3 +219,21 @@ class UserMedal(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     medal_id: Mapped[str] = mapped_column(String(50))
     granted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class UserEvent(Base):
+    """用户统一业务事件（「我的长征足迹」与管理端实时动态同源）。
+
+    event_type 取值见 services/event_service：FIRST_STEP / DAILY_GOAL /
+    NODE_UNLOCK / BADGE_UNLOCK / QUIZ_COMPLETE / QUIZ_FULL_SCORE /
+    STREAK_* / STEP_10000 / TOTAL_STEPS_100000 / COMPLETE_ROUTE。
+    event_data 为事件负载（节点名、勋章名、步数快照等）。
+    """
+
+    __tablename__ = "user_event"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    event_type: Mapped[str] = mapped_column(String(30))
+    event_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+    event_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
