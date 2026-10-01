@@ -11,6 +11,9 @@ venv/
 node_modules/
 project.private.config.json
 
+# 管理后台构建产物
+admin/dist/
+
 # 支付宝开发者工具（误用生成的配置）
 mini.project.json
 
@@ -27,3 +30,10 @@ Thumbs.db
 
 # 日志
 *.log
+
+# 测试运行临时产物（含令牌等敏感数据，禁止入库）
+frontend/test/token.txt
+frontend/test/*.json
+frontend/test/automator/results*.json
+frontend/test/automator/state.json
+frontend/test/automator/console-log.json
