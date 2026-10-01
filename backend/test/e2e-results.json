@@ -1,0 +1,147 @@
+{
+  "date": "2026-10-01 15:38:48",
+  "backend": "http://127.0.0.1:8010/api",
+  "testUser": 5,
+  "results": [
+    {
+      "id": "B01",
+      "name": "管理端排名总览",
+      "ok": true,
+      "detail": "users=86 totalSteps=227870"
+    },
+    {
+      "id": "B02",
+      "name": "人员详情聚合（五模块齐全）",
+      "ok": true,
+      "detail": "keys=['march', 'medals', 'points', 'quiz_records', 'sport', 'user'] march.nodes=10 medals=3 points.total=1"
+    },
+    {
+      "id": "B03",
+      "name": "人员详情-不存在用户返回404",
+      "ok": true,
+      "detail": "status=404"
+    },
+    {
+      "id": "M01",
+      "name": "运动-今日步数",
+      "ok": true,
+      "detail": "{\"date\": \"2026-10-01\", \"steps\": 44600, \"target\": 10000, \"totalSteps\": 44600}"
+    },
+    {
+      "id": "M02",
+      "name": "运动-最近30天",
+      "ok": true,
+      "detail": "days=30"
+    },
+    {
+      "id": "M03",
+      "name": "长征-路线节点含经纬度/史料",
+      "ok": true,
+      "detail": "nodes=10 lit=7/10"
+    },
+    {
+      "id": "M04",
+      "name": "长征-节点详情",
+      "ok": true,
+      "detail": "status=completed remain=0"
+    },
+    {
+      "id": "M05",
+      "name": "答题-每日5题且不泄露答案",
+      "ok": true,
+      "detail": "questions=5 completed=False"
+    },
+    {
+      "id": "M06",
+      "name": "勋章-列表自动评估",
+      "ok": true,
+      "detail": "owned=3/6"
+    },
+    {
+      "id": "M07",
+      "name": "积分-总额与流水",
+      "ok": true,
+      "detail": "total=1"
+    },
+    {
+      "id": "M08",
+      "name": "排名-全员步数榜",
+      "ok": true,
+      "detail": "total=86 myRank=3"
+    },
+    {
+      "id": "M09",
+      "name": "组织-顶级列表",
+      "ok": true,
+      "detail": "nodes=1"
+    },
+    {
+      "id": "M10",
+      "name": "组织-选定回写",
+      "ok": true,
+      "detail": "orgId=4 fullName=长征集团总部 / 华南分公司"
+    },
+    {
+      "id": "M11",
+      "name": "运动-补充步数",
+      "ok": true,
+      "detail": "steps=46100"
+    },
+    {
+      "id": "M12",
+      "name": "长征-点亮达标节点",
+      "ok": true,
+      "detail": "newly=1"
+    },
+    {
+      "id": "M13",
+      "name": "勋章-主动评估发放",
+      "ok": true,
+      "detail": "newly=[]"
+    },
+    {
+      "id": "M13b",
+      "name": "答题-重置今日答题",
+      "ok": true,
+      "detail": "completed=False questions=5"
+    },
+    {
+      "id": "M14",
+      "name": "答题-提交判分满分",
+      "ok": true,
+      "detail": "score=100 correct=5/5"
+    },
+    {
+      "id": "M15",
+      "name": "答题-记录列表",
+      "ok": true,
+      "detail": "records=1"
+    },
+    {
+      "id": "M16",
+      "name": "积分-答题积分入账",
+      "ok": true,
+      "detail": "logs=[{\"date\": \"2026-10-01\", \"reason\": \"答题满分\", \"delta\": 10}, {\"date\": \"2026-10-01\", \"reason\": \"每日答题\", \"delta\": 5}, {\"date\": \"2026-10-01\", \"reason\": \"点亮节点：过草地\", \"delta\": 10}, {\"date\": \"2026-10-01\", \"reason\""
+    },
+    {
+      "id": "W01",
+      "name": "WS-用户令牌连接并接收运动变更广播",
+      "ok": true,
+      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 5, \"at\": 1790840328612}"
+    },
+    {
+      "id": "W02",
+      "name": "WS-管理端令牌连接并接收广播",
+      "ok": true,
+      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 5, \"at\": 1790840328668}"
+    },
+    {
+      "id": "W03",
+      "name": "WS-无效令牌拒绝",
+      "ok": true,
+      "detail": "server rejected WebSocket connection: HTTP 403"
+    }
+  ],
+  "passed": 23,
+  "failed": 0
+}
