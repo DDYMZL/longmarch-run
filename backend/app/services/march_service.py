@@ -88,7 +88,7 @@ def get_route(db: Session, user_id: int) -> Dict:
 
 
 def get_node_detail(db: Session, user_id: int, node_id: int) -> Optional[Dict]:
-    """获取单个节点详情（含状态与距离）。任意状态节点均可查看。"""
+    """获取单个节点详情（含状态、距离与历史事件卡内容）。任意状态节点均可查看。"""
     route = get_route(db, user_id)
     node_def = (
         db.query(RouteNode)
@@ -108,12 +108,21 @@ def get_node_detail(db: Session, user_id: int, node_id: int) -> Optional[Dict]:
         "status": state["status"] if state else "unlocked",
         "remain": state["remain"] if state else node_def.target_steps,
         "current_steps": route["current_steps"],
+        "brief": node_def.brief or "",
+        "significance": node_def.significance or "",
+        "figures": node_def.figures or "",
+        "location": node_def.location or "",
+        "images": node_def.images or [],
+        "audio": node_def.audio or "",
+        "keywords": node_def.keywords or "",
     }
 
 
 def light_up_nodes(db: Session, user_id: int) -> List[Dict]:
     """点亮步数达标且未点亮的节点，发放积分；全部点亮额外 +100。返回本次新点亮节点。
 
+    每个新点亮节点附带 gained_points / lit_at / next_node（下一站名称与剩余步数，
+    全部点亮时为 None），供前端到达动画与「抵达事件卡」直接使用。
     副作用：LitNode 记录点亮时刻累计步数快照（step_snapshot），并写
     NODE_UNLOCK / COMPLETE_ROUTE 事件（我的足迹与管理端动态同源）。
     """
@@ -122,9 +131,12 @@ def light_up_nodes(db: Session, user_id: int) -> List[Dict]:
     nodes_def = _ordered_nodes(db)
 
     newly: List[Dict] = []
+    lit_records: List[LitNode] = []
     for n in nodes_def:
         if current_steps >= n.target_steps and n.id not in lit:
-            db.add(LitNode(user_id=user_id, node_id=n.id, step_snapshot=current_steps))
+            record = LitNode(user_id=user_id, node_id=n.id, step_snapshot=current_steps)
+            db.add(record)
+            lit_records.append(record)
             lit.add(n.id)
             newly.append(
                 {
@@ -143,6 +155,17 @@ def light_up_nodes(db: Session, user_id: int) -> List[Dict]:
 
     if newly:
         db.commit()
+        # 点亮完成后的下一站（本次操作后第一个未达标节点）
+        upcoming = next((n for n in nodes_def if current_steps < n.target_steps), None)
+        next_node = (
+            {"name": upcoming.name, "remain": upcoming.target_steps - current_steps}
+            if upcoming
+            else None
+        )
+        for item, record in zip(newly, lit_records):
+            item["gained_points"] = 10
+            item["lit_at"] = record.lit_at
+            item["next_node"] = next_node
         for item in newly:
             points_service.grant(db, user_id, f"点亮节点：{item['name']}", 10)
             event_service.record(

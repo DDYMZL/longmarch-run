@@ -11,6 +11,7 @@ from app.models.models import User
 from app.schemas.schemas import (
     MessageOut,
     QuizDailyOut,
+    QuizKnowledgeOut,
     QuizRecordOut,
     SubmitRequest,
 )
@@ -45,6 +46,12 @@ def submit(
 @router.get("/records", response_model=List[QuizRecordOut], summary="答题记录")
 def records(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return quiz_service.get_records(db, current.id)
+
+
+@router.get("/knowledge", response_model=QuizKnowledgeOut, summary="知识画像")
+def knowledge(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """按题目分类（历史事件/长征路线/历史人物）聚合历史答题正确率。"""
+    return quiz_service.get_knowledge(db, current.id)
 
 
 @router.post("/reset", response_model=MessageOut, summary="重置今日答题（调试用）")

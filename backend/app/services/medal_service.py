@@ -124,21 +124,34 @@ def check_and_grant(db: Session, user_id: int) -> List[str]:
 
 
 def get_medal_list(db: Session, user_id: int) -> List[Dict]:
-    """勋章列表（含未获得状态），按定义顺序返回。"""
-    owned = _owned_ids(db, user_id)
+    """勋章列表（含未获得状态），按定义顺序返回。
+
+    扩展字段（功能 9 勋章墙）：category / hidden / sort_order / granted_at /
+    condition_desc（隐藏且未获得时不公开获取条件）。
+    """
+    owned_rows = db.query(UserMedal).filter(UserMedal.user_id == user_id).all()
+    granted_at = {r.medal_id: r.granted_at for r in owned_rows}
     defs = {m.id: m for m in db.query(MedalDef).all()}
     result: List[Dict] = []
     for seed in MEDALS:  # 保持 seed 中定义的展示顺序
         m = defs.get(seed["id"])
         if m is None:
             continue
+        owned = m.id in granted_at
+        hidden = bool(m.hidden)
+        return_desc = m.desc or ""
         result.append(
             {
                 "id": m.id,
                 "name": m.name,
                 "icon": m.icon,
-                "desc": m.desc,
-                "owned": m.id in owned,
+                "desc": m.desc or "",
+                "owned": owned,
+                "category": m.category or "",
+                "hidden": hidden,
+                "sort_order": m.sort_order,
+                "granted_at": granted_at.get(m.id),
+                "condition_desc": "获得条件暂未公布" if (hidden and not owned) else return_desc,
             }
         )
     return result

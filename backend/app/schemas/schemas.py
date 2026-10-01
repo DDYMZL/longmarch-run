@@ -59,6 +59,12 @@ class SportToday(CamelModel):
     steps: int
     target: int
     total_steps: int
+    current_streak: int = 0
+    max_streak: int = 0
+    streak_goal: int = 0
+    today_goal_completed: bool = False
+    next_streak_milestone: Optional[int] = None
+    streak_remain: int = 0
 
 
 class SportSync(CamelModel):
@@ -72,6 +78,30 @@ class RecentItem(CamelModel):
     date: str
     steps: int
     text: str
+
+
+class CalendarDay(CamelModel):
+    date: str
+    steps: int = 0
+    level: int = 0
+    goal_completed: bool = False
+    quiz_done: bool = False
+    quiz_score: int = 0
+    lit_nodes: List[str] = []
+
+
+class CalendarStats(CamelModel):
+    month_steps: int = 0
+    sport_days: int = 0
+    avg_steps: int = 0
+    max_steps: int = 0
+    current_streak: int = 0
+
+
+class SportCalendarOut(CamelModel):
+    month: str
+    days: List[CalendarDay] = []
+    stats: CalendarStats
 
 
 class AddStepsRequest(BaseModel):
@@ -131,10 +161,32 @@ class NodeDetailOut(CamelModel):
     status: str
     remain: int
     current_steps: int
+    brief: str = ""
+    significance: str = ""
+    figures: str = ""
+    location: str = ""
+    images: List[str] = []
+    audio: str = ""
+    keywords: str = ""
+
+
+class LightUpNextNode(CamelModel):
+    """点亮后距离下一站的提示（全部点亮时为 null）。"""
+
+    name: str
+    remain: int
+
+
+class LightUpNodeOut(RouteNodeOut):
+    """本次新点亮节点：含积分、点亮时间与下一站提示（前端到达动画数据）。"""
+
+    gained_points: int = 0
+    lit_at: Optional[datetime] = None
+    next_node: Optional[LightUpNextNode] = None
 
 
 class LightUpResult(CamelModel):
-    newly_lit: List[RouteNodeOut] = []
+    newly_lit: List[LightUpNodeOut] = []
 
 
 # ---------------- 答题 ----------------
@@ -154,6 +206,8 @@ class QuestionOut(CamelModel):
 
 class WrongItem(CamelModel):
     index: int
+    question_id: int = 0
+    category: str = ""
     question: str
     correct_answer: str
     analysis: str
@@ -171,9 +225,23 @@ class QuizRecordOut(CamelModel):
 
 class QuizDailyOut(CamelModel):
     date: str
+    issue_no: int = 1
     completed: bool
     questions: Optional[List[QuestionOut]] = None
     record: Optional[QuizRecordOut] = None
+
+
+class KnowledgeCategory(CamelModel):
+    key: str
+    name: str
+    rate: int = 0
+    asked: int = 0
+    wrong: int = 0
+
+
+class QuizKnowledgeOut(CamelModel):
+    categories: List[KnowledgeCategory] = []
+    overall_rate: int = 0
 
 
 class AnswerItem(BaseModel):
@@ -210,6 +278,11 @@ class MedalItem(CamelModel):
     icon: str
     desc: str
     owned: bool
+    category: str = ""
+    hidden: bool = False
+    sort_order: int = 0
+    granted_at: Optional[datetime] = None
+    condition_desc: str = ""
 
 
 class MedalListOut(CamelModel):
@@ -219,6 +292,108 @@ class MedalListOut(CamelModel):
 
 class MedalGrantResult(CamelModel):
     newly: List[str] = []
+
+
+# ---------------- 个人档案 / 足迹 ----------------
+class ProfileUser(CamelModel):
+    nickname: str
+    avatar: str = ""
+    org_name: str = ""
+    created_at: Optional[datetime] = None
+    join_days: int = 1
+
+    @field_validator("avatar", mode="before")
+    @classmethod
+    def empty_avatar(cls, value: Optional[str]) -> str:
+        return value or ""
+
+
+class ProfileNodeRef(CamelModel):
+    id: int
+    name: str
+    icon: str
+
+
+class ProfileNextNode(ProfileNodeRef):
+    remain: int = 0
+
+
+class ProfileStats(CamelModel):
+    total_steps: int = 0
+    total_distance: float = 0
+    sport_days: int = 0
+    current_streak: int = 0
+    max_streak: int = 0
+    max_day_steps: int = 0
+    avg_daily_steps: int = 0
+    progress: int = 0
+    lit_count: int = 0
+    total_count: int = 0
+    current_node: Optional[ProfileNodeRef] = None
+    next_node: Optional[ProfileNextNode] = None
+
+
+class ProfileQuizStats(CamelModel):
+    total_count: int = 0
+    correct_rate: int = 0
+    full_score_count: int = 0
+
+
+class ProfileMedalStats(CamelModel):
+    owned_count: int = 0
+    total_count: int = 0
+
+
+class ProfilePointsStats(CamelModel):
+    total: int = 0
+
+
+class ProfileSummaryOut(CamelModel):
+    user: ProfileUser
+    stats: ProfileStats
+    quiz: ProfileQuizStats
+    medals: ProfileMedalStats
+    points: ProfilePointsStats
+
+
+class TimelineItem(CamelModel):
+    event_type: str
+    event_time: datetime
+    text: str = ""
+    data: dict = {}
+
+
+class ProfileTimelineOut(CamelModel):
+    items: List[TimelineItem] = []
+
+
+# ---------------- 今日播报 ----------------
+class BroadcastGlobal(CamelModel):
+    today_users: int = 0
+    today_steps: int = 0
+    today_lit_count: int = 0
+    today_quiz_users: int = 0
+    total_users: int = 0
+
+
+class BroadcastPersonal(CamelModel):
+    today_steps: int = 0
+    beat_percent: int = 0
+    remain_to_next: int = 0
+    next_node_name: str = ""
+
+
+class BroadcastMemory(CamelModel):
+    node_id: int
+    title: str
+    historical_time: str = ""
+    brief: str = ""
+
+
+class BroadcastTodayOut(CamelModel):
+    global_: BroadcastGlobal = Field(alias="global", default_factory=BroadcastGlobal)
+    personal: BroadcastPersonal = BroadcastPersonal()
+    memory: Optional[BroadcastMemory] = None
 
 
 # ---------------- 通用 ----------------
