@@ -7,7 +7,7 @@
 本目录是「长征主题运动 + 每日答题」小程序（`../frontend`，原生微信小程序）的**后端服务**。
 
 - 业务逻辑由前端 `frontend/services/*.js` 的 Mock 实现**完整迁移**而来，数据结构与字段命名与前端 Mock 返回完全一致；
-- 前端目前仍以本地 Mock 独立运行，后端目标是让其**平滑切换**到真实接口，因此「与前端 Mock 数据结构一致」是第一优先级约束。
+- 前端已全量切换到真实接口（登录、组织、步数、路线、答题、积分、勋章、排名），因此「与前端服务层消费结构一致（camelCase）」是第一优先级约束；前端 `mock/data.js` 仅作路线节点离线兜底。
 
 ## 2. 技术栈（不可随意更换）
 
@@ -93,6 +93,7 @@ schemas 被 routes/services 引用；core 不 import 业务模块
    - 禁止把 `_smoke_test.db`、`.env`、`__pycache__` 视为源码修改目标。
 5. **验证**：运行 `docker compose -f docker/compose.yml up -d` 并确认 `database-init` 成功后，再运行 `python run.py`；用 TestClient 冒烟关键接口；接口文档以 `/docs`（Swagger）核对响应字段。
 6. **同步文档**：接口、业务规则变更时，同步更新本目录 `design.md` 与 `README.md` 的「API 一览」「业务规则」章节。
+7. **测试约定**：功能开发或缺陷修复完成后必须测试：测试报告（Markdown）放 `backend/test/docs/`，截图等视觉证据放 `backend/test/images/`；接口冒烟使用 TestClient（`backend/test/` 现有脚本），WebSocket 与聚合接口的验证记录同样入 docs。
 
 ## 7. 快速启动（背景知识）
 
