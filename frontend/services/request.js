@@ -68,7 +68,13 @@ function request(options) {
         if (res.statusCode === 401) clearSession();
         reject(new Error(errorMessage(res.data, res.statusCode === 401 ? '登录已过期，请重新登录' : '请求失败')));
       },
-      fail: (err) => reject(new Error((err && err.errMsg) || '网络连接失败'))
+      fail: (err) => {
+        const raw = (err && err.errMsg) || '';
+        const msg = /url not in domain list/i.test(raw)
+          ? '请求域名未通过校验：真机调试请在手机调试面板开启「不校验合法域名」'
+          : '网络连接失败：真机调试请确认手机与电脑同一局域网，且 config.js 中 LAN_IP 为电脑局域网 IP';
+        reject(new Error(msg));
+      }
     });
   });
 }

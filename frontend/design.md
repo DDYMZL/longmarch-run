@@ -67,7 +67,7 @@
 | `rank.js` | `getStepsRank()` | `/api/rank/steps` | 全员工累计步数总榜 |
 | `store.js` | `migrateUserData()` / `clearCache()` | （后端无对应，落库到 DB） | 遗留：登录时 Mock→真实用户 ID 数据迁移 |
 | `request.js` | `request(options)` / `getToken()` | — | 统一 wx.request 封装：Bearer JWT、401 清理、FastAPI 错误解析 |
-| `config.js` | `API_BASE_URL` | — | API 地址集中配置（开发 `http://127.0.0.1:8010/api`） |
+| `config.js` | `API_BASE_URL` | — | API 地址集中配置：开发者工具用 `127.0.0.1:8010/api`，真机自动切换 `http://<电脑局域网IP>:8010/api`（LAN_IP 常量，电脑 IP 变化时需同步更新） |
 
 ## 3. 核心数据模型
 
