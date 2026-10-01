@@ -9,10 +9,15 @@
  *   node ui-test.cjs 2    长征路线 + 节点详情
  *   node ui-test.cjs 3    每日答题（满分 / 重置 / 零分）
  *   node ui-test.cjs 4    排行榜 + 我的 + 记录页 + 勋章
- *   node ui-test.cjs 5    修改组织 + 退出登录 + 未登录深链缺陷验证
+ *   node ui-test.cjs 5    修改组织 + 退出登录 + 未登录深链守卫验证
  *   node ui-test.cjs merge 汇总结果
  *
  * 前置：后端 http://127.0.0.1:8010 已运行；开发者工具已开自动化端口 9420。
+ * 数据环境：登录/运动/路线/答题/排行/组织/勋章/积分全部走真实后端
+ * （services/*.js → request.js → FastAPI），前端无本地业务数据生成。
+ * wx.login 以 mockWxMethod 固定 code：IDE 未登录微信账号时真实 wx.login 报 41002（appid missing），
+ * 而后端未配微信凭证时由 code 派生 mock openid，仍走完整真实登录链路；
+ * 同一套件运行内各阶段共用同一 code = 同一测试用户（阶段 1 强制换新用户）。
  * 阶段间依赖：阶段 1 完成登录与运动数据（storage 在 IDE 会话间持久），后续阶段复用登录态。
  * 各阶段可安全重跑：阶段 1 先清 storage；阶段 3 先重置今日答题；阶段 5 缺登录态时自动重登。
  */
@@ -33,7 +38,7 @@ const STATE_FILE = path.join(__dirname, 'state.json');
 const RESULTS_FILE = path.join(__dirname, 'results.json');
 const CONSOLE_FILE = path.join(__dirname, 'console-log.json');
 
-// mock/data.js QUESTION_BANK 的 id → 正确答案（判分为前端本地 mock）
+// 后端题库（15 题，与 mock/data.js 种子一致）的 id → 正确答案（判分在服务端）
 const ANSWERS = {
   1: 'B', 2: 'A', 3: 'A', 4: 'A', 5: 'A', 6: 'A', 7: 'A',
   8: 'A', 9: 'B', 10: 'A', 11: 'C', 12: 'A', 13: 'A', 14: 'A', 15: 'A'
@@ -64,6 +69,40 @@ function withTimeout(p, ms, label) {
 
 function readJson(file, fallback) {
   try { return JSON.parse(fs.readFileSync(file, 'utf8')); } catch (e) { return fallback; }
+}
+
+/**
+ * 套件级登录 code：IDE 账号会话掉线时真实 wx.login 报 41002（appid missing），
+ * 而后端在未配置微信凭证时由 code 稳定派生 mock openid（backend auth_service._mock_openid），
+ * 故以 mockWxMethod 固定 wx.login 返回本 code，仍走完整真实后端登录链路。
+ * 同一套件运行内所有阶段共用同一 code = 同一测试用户；阶段 1 强制换新（全新数据用户）。
+ */
+function ensureLoginCode(forceNew) {
+  const state = readJson(STATE_FILE, {});
+  if (forceNew || !state.loginCode) {
+    state.loginCode = 'automator-' + Date.now();
+    try { fs.writeFileSync(STATE_FILE, JSON.stringify(state)); } catch (e) { /* ignore */ }
+  }
+  return state.loginCode;
+}
+
+/**
+ * 拦截 wx.login：返回固定 code（见 ensureLoginCode 注释）。
+ * 必须在桥就绪后应用：过早应用的 mock 会随 appservice 完成 bundle 加载而被冲掉
+ * （表现为 mockWxMethod 返回成功但 doLogin 时仍走真实 wx.login 报 41002）。
+ * 应用后立即实测验证，未生效则重试。
+ */
+async function ensureWxLoginMock(loginCode) {
+  for (let i = 0; i < 5; i++) {
+    await cmd(() => mini.mockWxMethod('login', { code: loginCode }), 'mockWxMethod login', 1).catch(() => {});
+    const got = await cmd(() => mini.evaluate(() => new Promise((resolve) => {
+      wx.login({ success: (r) => resolve(r && r.code ? r.code : 'NO_CODE'), fail: () => resolve('FAIL_BRANCH') });
+    })), 'verify wx.login mock', 1).catch(() => 'EVAL_ERR');
+    if (got === loginCode) return;
+    console.log('wx.login mock 未生效(' + (i + 1) + '/5): got=' + got + '，重试');
+    await sleep(2000);
+  }
+  throw new Error('wx.login mock 反复未生效，放弃本阶段');
 }
 
 function record(id, name, pass, detail) {
@@ -346,7 +385,7 @@ async function resetAppState() {
   }), 'evaluate resetAppState');
 }
 
-async function connectAndListen() {
+async function connectAndListen(loginCode) {
   console.log('连接 ' + WS_ENDPOINT + ' ...');
   mini = await withTimeout(automator.connect({ wsEndpoint: WS_ENDPOINT }), 30000, 'automator.connect');
   mini.on('console', (msg) => {
@@ -368,6 +407,8 @@ async function connectAndListen() {
       return p && p.path ? p : null;
     } catch (e) { return null; }
   }, 60000, 2000, '自动化桥就绪');
+  // 桥就绪（appservice bundle 已加载）后再 mock，避免被启动过程冲掉
+  await ensureWxLoginMock(loginCode);
 }
 
 /* ================= 阶段 1：登录 + 组织 + 首页运动 ================= */
@@ -484,7 +525,10 @@ async function phase1() {
   const quizBadge = await cmd(() => homePage.data('quizRemain'), 'data quizRemain');
   record('T04c', '首页今日答题入口状态', quizBadge === 5, '剩余题数=' + quizBadge);
 
-  fs.writeFileSync(STATE_FILE, JSON.stringify({ seededSteps: syncedSteps, afterDemo, litCount, totalCount }));
+  // 保留 ensureLoginCode 写入的 loginCode（阶段 2-5 需复用同一用户）
+  const prevState = readJson(STATE_FILE, {});
+  fs.writeFileSync(STATE_FILE, JSON.stringify(Object.assign({}, prevState,
+    { seededSteps: syncedSteps, afterDemo, litCount, totalCount })));
 }
 
 /* ================= 阶段 2：长征路线 + 节点详情 ================= */
@@ -637,8 +681,8 @@ async function phase4() {
   const mySteps = rAll.mySteps;
   const total = rAll.total;
   const meEl = await cmd(() => rankPage.$('.rank-item-me'), 'rank-item-me');
-  record('T09', '排行榜（本用户 + 18 名模拟成员）',
-    rList.length === 19 && !!meEl && mySteps === afterDemo && myRank >= 1 && myRank <= 19,
+  record('T09', '排行榜（真实后端总榜，当前用户在榜且高亮）',
+    rList && rList.length >= 1 && !!meEl && mySteps === afterDemo && myRank >= 1 && myRank <= total && total >= 1,
     'list=' + rList.length + ' myRank=' + myRank + ' mySteps=' + mySteps + '(state=' + afterDemo + ') total=' + total + ' me高亮=' + !!meEl);
   await shot('09-rank');
 
@@ -689,7 +733,7 @@ async function phase4() {
   await cmd(() => mini.navigateBack(), 'navigateBack mine3');
 }
 
-/* ================= 阶段 5：修改组织 + 退出 + 深链缺陷 ================= */
+/* ================= 阶段 5：修改组织 + 退出 + 深链守卫 ================= */
 async function phase5() {
   await ensureLoggedIn();
   await cmd(() => mini.switchTab('/pages/mine/mine'), 'switchTab mine p5');
@@ -720,41 +764,53 @@ async function phase5() {
   const loggedOut = await cmd(() => mini.callWxMethod('getStorageSync', 'lm_auth_token'), 'getStorage after logout');
   record('T15', '退出登录', loggedOut === '', 'token已清除=' + (loggedOut === ''));
 
+  // 未登录深链（修复后预期）：页面数据接口返回 401 → request.js 清理登录态并 reLaunch 登录页，
+  // 页面不崩溃、无 TypeError 日志
+  // 深链导航必须从 app 侧发起（evaluate 内 wx.reLaunch）：automator 桥的 reLaunch 命令
+  // 偶发丢响应（命令超时）会把 IDE 的导航串行化楔死，此后一切导航（含 app 侧 401 后的
+  // reLaunch login）报 reLaunch:fail timeout，深链断言必然误失败（实测 probe-hook2）。
   const excBefore = consoleLogs.length;
-  await cmd(() => mini.reLaunch('/pages/quiz-result/quiz-result').catch(() => null), 'reLaunch deeplink result', 1);
-  await sleep(3000);
-  const p1 = await cmd(() => mini.currentPage(), 'currentPage deeplink1');
-  const crashLogs1 = consoleLogs.slice(excBefore).filter((l) => /Cannot read propert|TypeError|null/.test(l.args));
-  record('T16a', '未登录深链答题结果页（预期异常）', p1 && p1.path === 'pages/quiz-result/quiz-result',
-    '停留页=' + (p1 && p1.path) + ' 异常日志=' + crashLogs1.length + ' 条');
+  await cmd(() => mini.evaluate(() => wx.reLaunch({ url: '/pages/quiz-result/quiz-result' })),
+    'app reLaunch deeplink result', 2);
+  let p1 = null;
+  try {
+    p1 = await waitPage('pages/login/login', 15000);
+  } catch (e) {
+    try { p1 = await cmd(() => mini.currentPage(), 'currentPage deeplink1'); } catch (e2) { p1 = null; }
+  }
+  const crashLogs1 = consoleLogs.slice(excBefore).filter((l) => /Cannot read propert|TypeError/.test(l.args));
+  record('T16a', '未登录深链答题结果页（401 自动跳回登录页，不崩溃）',
+    p1 && p1.path === 'pages/login/login' && crashLogs1.length === 0,
+    '最终页=' + (p1 && p1.path) + ' 崩溃日志=' + crashLogs1.length + ' 条');
   if (crashLogs1.length) {
-    addDefect('F1', '未登录状态深链 quiz-result 页 onLoad 直接崩溃（缺少登录守卫）',
-      'reLaunch /pages/quiz-result/quiz-result 后 app.globalData.user=null，quiz-result.js onLoad 读取 user.id 抛 TypeError，页面未跳回登录页。日志：' +
+    addDefect('F1', '未登录状态深链 quiz-result 页崩溃（登录守卫失效）',
+      'reLaunch /pages/quiz-result/quiz-result 后未跳回登录页且抛 TypeError。日志：' +
       (crashLogs1[0] && crashLogs1[0].args).slice(0, 300));
   }
   await shot('13-deeplink-quiz-result');
 
   const excBefore2 = consoleLogs.length;
-  await cmd(() => mini.reLaunch('/pages/quiz-answer/quiz-answer').catch(() => null), 'reLaunch deeplink answer', 1);
-  await sleep(3000);
-  const p2 = await cmd(() => mini.currentPage(), 'currentPage deeplink2');
-  const crashLogs2 = consoleLogs.slice(excBefore2).filter((l) => /Cannot read propert|TypeError|null/.test(l.args));
-  let anonymousAnswerable = false;
+  await cmd(() => mini.evaluate(() => wx.reLaunch({ url: '/pages/quiz-answer/quiz-answer' })),
+    'app reLaunch deeplink answer', 2);
+  let p2 = null;
   try {
-    const cur = await cmd(() => p2.data('current'), 'data current deeplink');
-    anonymousAnswerable = !!(cur && cur.id);
-  } catch (e) { /* crashed */ }
-  record('T16b', '未登录深链答题页（预期异常）', true,
-    '停留页=' + (p2 && p2.path) + ' 异常日志=' + crashLogs2.length + ' 条 题目仍可渲染=' + anonymousAnswerable);
+    p2 = await waitPage('pages/login/login', 15000);
+  } catch (e) {
+    try { p2 = await cmd(() => mini.currentPage(), 'currentPage deeplink2'); } catch (e2) { p2 = null; }
+  }
+  const crashLogs2 = consoleLogs.slice(excBefore2).filter((l) => /Cannot read propert|TypeError/.test(l.args));
+  record('T16b', '未登录深链答题页（401 自动跳回登录页，不崩溃）',
+    p2 && p2.path === 'pages/login/login' && crashLogs2.length === 0,
+    '最终页=' + (p2 && p2.path) + ' 崩溃日志=' + crashLogs2.length + ' 条');
   if (crashLogs2.length) {
-    addDefect('F2', '未登录状态深链 quiz-answer 页 onLoad 直接崩溃（缺少登录守卫）',
-      'reLaunch /pages/quiz-answer/quiz-answer 后读取 app.globalData.user.id 抛 TypeError。日志：' +
+    addDefect('F2', '未登录状态深链 quiz-answer 页崩溃（登录守卫失效）',
+      'reLaunch /pages/quiz-answer/quiz-answer 后未跳回登录页且抛 TypeError。日志：' +
       (crashLogs2[0] && crashLogs2[0].args).slice(0, 300));
   }
   await shot('14-deeplink-quiz-answer');
 
   await resetAppState();
-  await cmd(() => mini.reLaunch('/pages/login/login').catch(() => null), 'cleanup relaunch', 1);
+  await cmd(() => mini.evaluate(() => wx.reLaunch({ url: '/pages/login/login' })), 'cleanup relaunch', 1);
   await sleep(800);
 }
 
@@ -811,7 +867,9 @@ async function main() {
   }, WATCHDOG_MS);
 
   try {
-    await connectAndListen();
+    // 阶段 1 强制新 code（全新用户，保证断言起点干净）；后续阶段复用同一用户
+    const loginCode = ensureLoginCode(phase === '1');
+    await connectAndListen(loginCode);
     const fn = { 1: phase1, 2: phase2, 3: phase3, 4: phase4, 5: phase5 }[phase];
     await fn();
     console.log('===== 阶段 ' + phase + ' 完成：' +

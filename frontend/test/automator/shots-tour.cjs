@@ -10,6 +10,8 @@
  *
  * 前置：后端 http://127.0.0.1:8010 已运行；开发者工具自动化端口 9420 可用
  * （连不上时本脚本会自动执行 cli.bat auto 重开桥）。
+ * wx.login 与套件同法 mock（复用 ui-test.cjs 落盘的 loginCode，保证与断言同一测试用户）；
+ * 详见 ui-test.cjs 头注（IDE 未登录微信账号时真实 wx.login 报 41002）。
  */
 const path = require('path');
 const fs = require('fs');
@@ -22,8 +24,8 @@ const PROJECT = 'D:/project/longmarch-run';
 const IMAGES_DIR = path.join(__dirname, '..', 'images');
 const NICKNAME = '自动化测试员';
 const AVATAR = 'https://example.com/auto-avatar.png';
-// mock/data.js QUESTION_BANK id → 正确答案。getDaily 每日随机抽 5 题（非前 5），
-// 映射必须覆盖全题库；页面题目对象不含 answer（判分在 quiz.submit 内部读题库）
+// 后端题库（15 题，与 mock/data.js 种子一致）id → 正确答案。每日随机抽 5 题（非前 5），
+// 映射必须覆盖全题库；页面题目对象不含 answer（判分在后端 quiz.submit）
 const CORRECT = {
   1: 'B', 2: 'A', 3: 'A', 4: 'A', 5: 'A', 6: 'A', 7: 'A',
   8: 'A', 9: 'B', 10: 'A', 11: 'C', 12: 'A', 13: 'A', 14: 'A', 15: 'A'
@@ -77,6 +79,30 @@ async function connectMini() {
   return await withTimeout(automator.connect({ wsEndpoint: WS }), 25000, 'connect-final');
 }
 
+/** 复用 ui-test.cjs 落盘的 loginCode，保证巡礼与断言同一测试用户 */
+function tourLoginCode() {
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(__dirname, 'state.json'), 'utf8'));
+    if (s && s.loginCode) return s.loginCode;
+  } catch (e) { /* ignore */ }
+  return 'automator-tour-' + Date.now();
+}
+
+/** 应用并实测验证 wx.login mock（须在页面已加载后调用，否则会被启动过程冲掉） */
+async function ensureLoginMock(mini) {
+  const code = tourLoginCode();
+  for (let i = 0; i < 5; i++) {
+    await withTimeout(mini.mockWxMethod('login', { code }), 10000, 'mock login').catch(() => {});
+    const got = await withTimeout(mini.evaluate(() => new Promise((resolve) => {
+      wx.login({ success: (r) => resolve(r && r.code ? r.code : 'NO_CODE'), fail: () => resolve('FAIL_BRANCH') });
+    })), 10000, 'verify login mock').catch(() => 'EVAL_ERR');
+    if (got === code) return;
+    console.log('wx.login mock 未生效(' + (i + 1) + '/5): got=' + got + '，重试');
+    await sleep(2000);
+  }
+  throw new Error('wx.login mock 反复未生效');
+}
+
 async function shot(mini, name) {
   const file = path.join(IMAGES_DIR, name + '.png');
   for (let i = 0; i < 2; i++) {
@@ -108,6 +134,8 @@ async function loginFlow(mini) {
   await resetAuth(mini);
   await cmd(() => mini.reLaunch('/pages/login/login'), 'reLaunch login', 2);
   const login = await waitPath(mini, 'pages/login/login');
+  // 页面加载完成后 mock wx.login（过早 mock 会被 appservice 启动过程冲掉）
+  await ensureLoginMock(mini);
   await cmd(() => login.setData({ nickname: NICKNAME }), 'setData nickname', 2);
   await cmd(() => login.callMethod('doLogin', AVATAR), 'doLogin', 2);
   return await waitPath(mini, 'pages/org-select/org-select');
@@ -252,15 +280,16 @@ const STATES = [
     await waitPath(mini, 'pages/medals/medals');
     await sleep(1800);
   }],
-  // F1/F2 缺陷复现：未登录深链，onLoad 崩溃为预期行为（截图即证据）
+  // 未登录深链（修复后行为）：401 → request.js 清理登录态并跳登录页，截图即证据
+  // 深链导航走 evaluate 内 app 侧 wx.reLaunch（桥 reLaunch 命令丢响应会楔死导航串行化）
   ['15-deeplink-quiz-result', async (mini) => {
     await resetAuth(mini);
-    await cmd(() => mini.reLaunch('/pages/quiz-result/quiz-result'), 'reLaunch quiz-result deeplink', 2);
+    await cmd(() => mini.evaluate(() => wx.reLaunch({ url: '/pages/quiz-result/quiz-result' })), 'app reLaunch quiz-result deeplink', 2);
     await sleep(2500);
   }],
   ['16-deeplink-quiz-answer', async (mini) => {
     await resetAuth(mini);
-    await cmd(() => mini.reLaunch('/pages/quiz-answer/quiz-answer'), 'reLaunch quiz-answer deeplink', 2);
+    await cmd(() => mini.evaluate(() => wx.reLaunch({ url: '/pages/quiz-answer/quiz-answer' })), 'app reLaunch quiz-answer deeplink', 2);
     await sleep(2500);
   }],
 ];
