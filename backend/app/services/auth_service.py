@@ -100,3 +100,21 @@ def update_nickname(db: Session, user: User, nickname: str) -> User:
     db.commit()
     db.refresh(user)
     return user
+
+
+def set_initial_nickname(db: Session, user: User, nickname: str) -> User:
+    """首次引导（组织选择）设置昵称：不消耗「每人仅一次」的改名机会。
+
+    已使用过改名机会时拒绝覆盖，避免绕开唯一机会限制。
+    """
+    new_name = (nickname or "").strip()
+    if not new_name:
+        raise ValueError("昵称不能为空")
+    if user.nickname_changed_at is not None:
+        raise ValueError("昵称已修改过，无法覆盖")
+    if new_name == user.nickname:
+        return user
+    user.nickname = new_name
+    db.commit()
+    db.refresh(user)
+    return user

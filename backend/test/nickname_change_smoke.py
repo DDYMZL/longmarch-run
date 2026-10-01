@@ -3,6 +3,7 @@
 昵称修改（每人仅一次）功能冒烟验收脚本（后端黑盒）
 覆盖：登录建号记录微信名 / 重复登录不覆盖昵称 / 一次改名 / 二次改名拦截
       / 排名洞察与人员详情展示修改记录 / 未登录拦截
+      / 首次引导设置昵称不消耗改名机会 / 已改名用户引导接口拒绝
 用法：cd backend && python test/nickname_change_smoke.py
 结果：stdout PASS/FAIL + test/nickname-smoke-results.json 证据文件
 """
@@ -116,6 +117,21 @@ def main():
     # 9. 未登录修改昵称：401
     st, _ = http("/auth/nickname", method="PUT", data={"nickname": "匿名"})
     record("N10", "未登录修改昵称被拒绝", st == 401, "st=%d" % st)
+
+    # 10. 新用户首次引导设置昵称：不消耗「仅一次」改名机会
+    code2 = RUN_CODE + "-b"
+    st, fresh = http("/auth/login", method="POST", data={"code": code2, "nickname": "", "avatar": ""})
+    token2 = fresh["token"] if st == 200 else None
+    ini_st, ini = http("/auth/nickname/initial", token2, "PUT", {"nickname": "引导昵称甲"})
+    ok1 = ini_st == 200 and ini.get("nickname") == "引导昵称甲" and ini.get("nicknameChangedAt") is None
+    rename_st, rename = http("/auth/nickname", token2, "PUT", {"nickname": "引导后正式改名"})
+    ok2 = rename_st == 200 and rename.get("nickname") == "引导后正式改名" and bool(rename.get("nicknameChangedAt"))
+    record("N11", "首次引导设置昵称不消耗改名机会（随后仍可改名）", ok1 and ok2,
+           "ini_st=%d iniChanged=%s rename_st=%d" % (ini_st, ini.get("nicknameChangedAt"), rename_st))
+
+    # 11. 已改名用户调首次引导接口：400 拒绝覆盖
+    st, res11 = http("/auth/nickname/initial", token2, "PUT", {"nickname": "想绕过限制"})
+    record("N12", "已改名用户首次引导接口被拒绝", st == 400, "st=%d detail=%s" % (st, res11.get("detail") if isinstance(res11, dict) else None))
 
     failed = [r for r in RESULTS if not r["ok"]]
     print("== 结果：%d 通过 / %d 失败 ==" % (len(RESULTS) - len(failed), len(failed)))

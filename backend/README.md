@@ -95,6 +95,7 @@ Authorization: Bearer <登录返回的 token>
 | POST | `/api/auth/login` | 微信登录（body: `code`、可选 `nickname`/`avatar`），返回 `token` + `user` |
 | GET | `/api/auth/me` | 当前登录用户信息 |
 | PUT | `/api/auth/nickname` | 修改昵称（body: `nickname`），每人仅一次，已修改过返回 400 |
+| PUT | `/api/auth/nickname/initial` | 首次引导设置昵称（body: `nickname`），不消耗改名机会，已改过名返回 400 |
 | GET | `/api/sport/today` | 今日步数概况 |
 | POST | `/api/sport/sync` | 同步今日步数（同日覆盖，非累加） |
 | GET | `/api/sport/recent?n=7` | 最近 n 天运动记录 |

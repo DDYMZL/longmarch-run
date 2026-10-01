@@ -46,3 +46,22 @@ def update_nickname(
         raise HTTPException(status_code=400, detail=str(exc))
     ws_manager.broadcast(ws_manager.build_event("auth.nickname", user.id))
     return UserOut.model_validate(user)
+
+
+@router.put(
+    "/auth/nickname/initial",
+    response_model=UserOut,
+    summary="首次引导设置昵称（不消耗改名机会）",
+)
+def set_initial_nickname(
+    payload: NicknameUpdateRequest,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """新用户首次进入（组织选择）时设置昵称，不占用「每人仅一次」的改名机会。"""
+    try:
+        user = auth_service.set_initial_nickname(db, current, payload.nickname)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    ws_manager.broadcast(ws_manager.build_event("auth.nickname", user.id))
+    return UserOut.model_validate(user)

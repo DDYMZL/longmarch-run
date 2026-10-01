@@ -20,7 +20,7 @@
 
 ## 2. 结论摘要
 
-**10 / 10 全部通过**，无阻塞缺陷。
+**12 / 12 全部通过**，无阻塞缺陷。
 
 | 用例 | 结果 | 关键断言 |
 | --- | --- | --- |
@@ -34,6 +34,8 @@
 | N08 人员详情返回修改记录 | ✅ | 同上（`/admin/users/92/overview`） |
 | N09 空昵称被拒绝 | ✅ | 400 |
 | N10 未登录修改被拒绝 | ✅ | 401 |
+| N11 首次引导设置昵称不消耗改名机会 | ✅ | 引导后 nicknameChangedAt=null，随后仍可正式改名成功 |
+| N12 已改名用户引导接口被拒绝 | ✅ | 400「昵称已修改过，无法覆盖」 |
 
 ## 3. 回归验证
 
@@ -45,7 +47,7 @@
 | --- | --- |
 | `docker/init/004_nickname_change.sql` | users 表新增 `original_nickname`、`nickname_changed_at`，存量回填 |
 | `app/models/models.py` | User 模型同步两列 |
-| `app/services/auth_service.py` | 登录仅在创建时写昵称（记曾用名）；新增 `update_nickname`（仅一次） |
-| `app/api/routes/auth.py` | 新增 `PUT /api/auth/nickname`（400 拦截 + WS 广播） |
+| `app/services/auth_service.py` | 登录仅在创建时写昵称（记曾用名）；新增 `update_nickname`（仅一次）、`set_initial_nickname`（首次引导，不消耗机会） |
+| `app/api/routes/auth.py` | 新增 `PUT /api/auth/nickname`（400 拦截 + WS 广播）、`PUT /api/auth/nickname/initial`（首次引导） |
 | `app/schemas/schemas.py` | `UserOut` 增加 `nicknameChangedAt`；新增 `NicknameUpdateRequest`；管理端两个模型增加曾用名/修改时间 |
 | `app/services/admin_service.py` | 排名总览与人员详情返回 `original_nickname` / `nickname_changed_at` |
