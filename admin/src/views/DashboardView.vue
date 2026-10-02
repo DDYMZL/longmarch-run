@@ -2,7 +2,11 @@
 // 驾驶舱：核心指标 + 运动趋势（7/30 天）+ 路线总览 + 实时动态
 // 组织维度统计已按需求取消（2026-10-01 决策），本页只做整体指标
 import { computed, onBeforeUnmount, onMounted, ref, shallowRef } from 'vue'
-import * as echarts from 'echarts'
+// echarts 按需引入：仅注册柱状图/折线图与所需组件，替代全量 import（约省 1MB 打包体积）
+import * as echarts from 'echarts/core'
+import { BarChart, LineChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
+import { CanvasRenderer } from 'echarts/renderers'
 import {
   fetchActivities,
   fetchDashboard,
@@ -12,6 +16,8 @@ import {
   type TrendResult
 } from '../api/admin'
 import { formatNumber, formatTime, useLiveUpdates } from '../utils/liveUpdates'
+
+echarts.use([BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
 const loading = ref(false)
 const trendLoading = ref(false)
@@ -61,7 +67,7 @@ async function load() {
 
 // ---------------- 趋势图（echarts） ----------------
 const chartEl = ref<HTMLElement | null>(null)
-const chart = shallowRef<echarts.ECharts | null>(null)
+const chart = shallowRef<echarts.EChartsType | null>(null)
 
 function renderChart() {
   if (!chartEl.value) return

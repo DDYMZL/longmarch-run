@@ -1,18 +1,58 @@
 import { createApp } from 'vue'
-import ElementPlus from 'element-plus'
-import zhCn from 'element-plus/es/locale/lang/zh-cn'
-import 'element-plus/dist/index.css'
-import * as ElementPlusIconsVue from '@element-plus/icons-vue'
+import {
+  Check,
+  CircleCheck,
+  DataAnalysis,
+  Delete,
+  Download,
+  EditPen,
+  Location,
+  Lock,
+  Monitor,
+  Odometer,
+  OfficeBuilding,
+  Plus,
+  Position,
+  Promotion,
+  Refresh,
+  Search,
+  TrendCharts,
+  User,
+  UserFilled
+} from '@element-plus/icons-vue'
 
 import App from './App.vue'
 import router from './router'
+import { setupElementPlus } from './plugins/element-plus'
 import './style.css'
 
+// 模板中实际用到的图标（含 :icon="'Refresh'" 这类字符串引用），按需全局注册
+const icons = {
+  Check,
+  CircleCheck,
+  DataAnalysis,
+  Delete,
+  Download,
+  EditPen,
+  Location,
+  Lock,
+  Monitor,
+  Odometer,
+  OfficeBuilding,
+  Plus,
+  Position,
+  Promotion,
+  Refresh,
+  Search,
+  TrendCharts,
+  User,
+  UserFilled
+}
+
 const app = createApp(App)
-// 全局注册 Element Plus 图标组件
-for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
+for (const [key, component] of Object.entries(icons)) {
   app.component(key, component)
 }
-app.use(ElementPlus, { locale: zhCn })
+setupElementPlus(app)
 app.use(router)
 app.mount('#app')
