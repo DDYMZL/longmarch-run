@@ -131,9 +131,9 @@ mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为
 
 ```
 home/march 触发 → sport.syncToday()（POST /api/sport/sync 后端落库，维护连续行军）
-  → march.lightUpNodes()（POST /api/march/light-up，后端点亮并发放积分，返回 newlyLit）
+  → march.lightUpNodes()（POST /api/march/light-up，后端点亮并发放积分，返回 newlyLit + newlyCompletedChapters）
   → medal.checkAndGrant()（POST /api/medal/check，后端判定发放）
-  → 有新点亮节点时播放抵达事件卡（march 页 Canvas 金光扩散动画 + 逐节点弹层）
+  → 有新点亮/新完成章节时按队列播放「节点抵达事件卡 → 章节完成仪式卡」（utils/arrivePopup.js 共用播放器；march 页另有 Canvas 金光扩散动画）
   → 页面 onShow 时 refresh() 拉最新数据展示；后端同步向管理端广播 data_changed / activity
 ```
 
@@ -151,6 +151,7 @@ quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 
 - **实景模式（默认）**：原生 `<map>` + 节点 `latitude/longitude`（来自后端配置）→ `markers`（节点三态图标 + 「🚩 我在这里」进度旗）+ `polyline`（灰色全程 + 金色已完成段，段内线性插值）+ `includePoints` 视野动画（仅首次进入播放，步数刷新不重播）。
 - **插画模式**：「星空远征」深色主题 Canvas 2D；节点画布坐标由 `getCanvasNodePositions()` 按经纬度边界归一化计算（非硬编码），兼容任意节点数量和排列；静态层经 `wx.createOffscreenCanvas` 烘焙一次；动态元素（云、星、光晕精灵、流光彗尾）每帧 rAF 绘制；渐变对象缓存复用；离屏调用包 try/catch 降级。
 - **行军轨迹（006 P0）**：绘制进度统一取后端 `routeProgress`（旧接口降级为步数比例，见 `calcRouteProgress`/`currentRatio`）；步数刷新只从旧进度插值推进到新进度（约 800ms，`progressAnim`），仅首次渲染播放完整入场描画；当前行军点为「呼吸光点（光晕缩放）+ 3 颗上升光尘 + 摆动红旗」。
+- **长征章节（006 P0-3）**：章节视图（状态/点亮数/进度/介绍）由后端 `GET /api/march/route` 随路线统一下发；地图上方固定展示当前章节卡（标题 + 已点亮/总数 + 进度条，`progressPct` 渲染前预计算）；章节完成仪式卡由 light-up 响应驱动，与节点抵达卡共用 `utils/arrivePopup.js` 队列播放器（章节卡含历史介绍停留 3400ms，节点卡 2400ms），home 页步数同步弹层同源。
 
 ## 5. 核心业务规则（与后端完全一致，见 `../backend/design.md` §5）
 
@@ -158,6 +159,7 @@ quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 
 | --- | --- |
 | 步数 | 「用户+日期」唯一，同日同步**覆盖**；模拟步数按「日期+用户」稳定生成（4000~12999） |
 | 路线 | 累计步数 ≥ `targetSteps` 即点亮，**永久保留**；节点状态 `completed / current / unlocked`；后台可启停节点，停用节点不可见但已有 `LitNode` 记录保留 |
+| 章节 | 5 章配置于后端 `march_service.CHAPTERS`（每章 2 节点，划分可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`；完成写 `CHAPTER_COMPLETE` 事件并触发前端章节完成仪式，不改变既有节点点亮与积分规则 |
 | 答题 | 每日随机 5 题、每题 20 分、满分 100；同用户同日仅一次提交；题目按 event/route/figure 分类支撑知识画像 |
 | 积分 | 登录 +1；运动 5000 步 +5、10000 步 +10；答题 +5、满分 +10；点亮节点 +10；完成路线 +100；同日同 reason 去重 |
 | 连续行军 | 当日步数 ≥ 5000 即完成当日行军；连续天数/最长连续由后端维护并下发 |

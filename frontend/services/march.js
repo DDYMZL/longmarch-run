@@ -27,13 +27,18 @@ function getNodeDetail(nodeId) {
 }
 
 /**
- * 按当前累计步数点亮达标节点（后端发放积分并刷新勋章）。
- * @returns {Promise<Array>} 本次新点亮的节点
+ * 按当前累计步数点亮达标节点（后端发放积分、判定章节完成并刷新勋章）。
+ * @returns {Promise<{newlyLit:Array, newlyCompletedChapters:Array}>}
+ *   newlyLit 本次新点亮节点（含 gainedPoints/nextNode，供抵达事件卡）；
+ *   newlyCompletedChapters 本次新完成章节（含 title/intro，供章节完成仪式）。
  */
 function lightUpNodes() {
   return requestService
     .request({ url: '/march/light-up', method: 'POST' })
-    .then((result) => result.newlyLit || []);
+    .then((result) => ({
+      newlyLit: result.newlyLit || [],
+      newlyCompletedChapters: result.newlyCompletedChapters || []
+    }));
 }
 
 module.exports = {

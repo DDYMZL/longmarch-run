@@ -12,6 +12,7 @@
  */
 const app = getApp();
 const march = require('../../services/march');
+const arrivePopup = require('../../utils/arrivePopup');
 
 // 云朵 / 薄雾（相对坐标 + 尺度 + 速度）
 const CLOUDS = [
@@ -89,7 +90,10 @@ Page({
     polylines: [],
     // 实景地图当前选中的节点（点 marker 后在底部信息卡展示）
     selectedNode: null,
-    // 抵达事件卡弹层（light-up 返回新点亮节点后逐个播放）
+    // 章节系统（后端统一下发）：各章状态与当前章节卡
+    chapters: [],
+    currentChapter: null,
+    // 抵达事件卡弹层（light-up 返回新点亮节点/新完成章节后按队列播放）
     litPopup: null
   },
 
@@ -133,14 +137,15 @@ Page({
     const requestId = (this._refreshRequestId || 0) + 1;
     this._refreshRequestId = requestId;
 
-    // 先尝试点亮达标节点（幂等，仅返回本次新点亮），再拉取路线；
-    // 有新点亮时播放到达动画序列（轨迹推进 → 节点发光扩散 → 抵达事件卡）。
+    // 先尝试点亮达标节点（幂等，仅返回本次新点亮与新完成章节），再拉取路线；
+    // 有新点亮时播放到达动画序列（轨迹推进 → 节点发光扩散 → 抵达事件卡 → 章节仪式）。
     march
       .lightUpNodes()
-      .catch(() => [])
-      .then((newlyLit) => {
+      .catch(() => ({ newlyLit: [], newlyCompletedChapters: [] }))
+      .then((res) => {
         if (this._refreshRequestId !== requestId) return null;
-        this._pendingLit = newlyLit;
+        this._pendingLit = res.newlyLit;
+        this._pendingChapters = res.newlyCompletedChapters;
         return march.getRoute();
       })
       .then((route) => {
@@ -154,48 +159,22 @@ Page({
   },
 
   /**
-   * 有新点亮节点时播放到达动画序列：
-   * 插画地图模式下节点发光扩散（轨迹推进由路线入场描画承担），随后逐个弹「抵达事件卡」。
+   * 有新点亮节点或新完成章节时播放到达动画序列：
+   * 插画地图模式下节点发光扩散（轨迹推进由路线入场/增量描画承担），
+   * 随后按队列逐个弹「抵达事件卡 → 章节完成仪式卡」（需求 §4.5）。
    * 已点亮节点点击仅查看详情，不触发动画（动画只由 light-up 响应驱动）。
    */
   playArriveIfNeeded() {
-    const lit = this._pendingLit;
+    const lit = this._pendingLit || [];
+    const chapters = this._pendingChapters || [];
     this._pendingLit = null;
-    if (!lit || lit.length === 0) return;
+    this._pendingChapters = null;
+    if (lit.length === 0 && chapters.length === 0) return;
 
-    if (this.data.mode === 'canvas') {
+    if (lit.length > 0 && this.data.mode === 'canvas') {
       this.arriveFx = { ids: lit.map((n) => n.id), start: Date.now() };
     }
-    this.playArrivePopup(lit);
-  },
-
-  /**
-   * 抵达事件卡（逐个播放）：恭喜抵达 + 历史时间 + 积分 + 下一站距离
-   */
-  playArrivePopup(nodes) {
-    let i = 0;
-    const showNext = () => {
-      if (i >= nodes.length) {
-        this.setData({ litPopup: null });
-        return;
-      }
-      const n = nodes[i];
-      this.setData({
-        litPopup: {
-          key: Date.now(),
-          name: n.name,
-          icon: n.icon || '★',
-          historicalTime: n.historicalTime || '',
-          gainedPoints: n.gainedPoints || 0,
-          nextName: n.nextNode ? n.nextNode.name : '',
-          nextRemain: n.nextNode ? n.nextNode.remain : 0
-        }
-      });
-      i++;
-      if (this.popupTimer) clearTimeout(this.popupTimer);
-      this.popupTimer = setTimeout(showNext, 2400);
-    };
-    showNext();
+    arrivePopup.playArriveQueue(this, lit, chapters);
   },
 
   /**
@@ -209,6 +188,14 @@ Page({
         ? this.routeData.routeProgress
         : null;
     this.routeData = route;
+
+    // 章节视图（需求 §4.4）：progressPct 预计算供 WXML 进度条；全部完成时展示末章
+    const chapters = (route.chapters || []).map((c) =>
+      Object.assign({}, c, { progressPct: Math.round((c.progress || 0) * 100) })
+    );
+    const currentChapter =
+      chapters.find((c) => c.id === route.currentChapterId) ||
+      (route.finished && chapters.length ? chapters[chapters.length - 1] : null);
 
     if (this.data.mode === 'real') {
       const mapData = this.buildMapData(route);
@@ -226,7 +213,9 @@ Page({
         finished: route.finished,
         markers: mapData.markers,
         polylines: mapData.polylines,
-        selectedNode: selectedNode
+        selectedNode: selectedNode,
+        chapters: chapters,
+        currentChapter: currentChapter
       });
       // 镜头俯冲只在首次进入播放，后续刷新保持当前视野
       if (!this._viewPlayed) {
@@ -242,7 +231,9 @@ Page({
       totalSteps: route.totalSteps,
       litCount: route.litCount,
       totalCount: route.totalCount,
-      finished: route.finished
+      finished: route.finished,
+      chapters: chapters,
+      currentChapter: currentChapter
     });
     if (this.ctx) {
       if (prevProgress === null || !this.path) {

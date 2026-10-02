@@ -1,7 +1,13 @@
 <view class="home-page">
-  <!-- 抵达事件卡弹层 -->
+  <!-- 抵达事件卡 / 章节完成仪式弹层 -->
   <view wx:if="{{litPopup}}" class="lit-overlay" wx:key="{{litPopup.key}}">
-    <view class="lit-card">
+    <view wx:if="{{litPopup.kind === 'chapter'}}" class="lit-card chapter-lit-card">
+      <view class="lit-star anim-pop">🚩</view>
+      <view class="lit-title">🎉 章节完成</view>
+      <view class="lit-name">{{litPopup.title}}</view>
+      <view class="lit-chapter-intro">{{litPopup.intro}}</view>
+    </view>
+    <view wx:else class="lit-card">
       <view class="lit-star anim-pop">★</view>
       <view class="lit-burst">
         <view class="lit-particle p1"></view>

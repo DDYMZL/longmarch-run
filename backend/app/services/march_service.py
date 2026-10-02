@@ -4,13 +4,41 @@
   completed 已点亮（累计步数达标，一旦点亮永久保留）；
   current   进行中（达到上一节点但未达当前节点）；
   unlocked  未解锁（未达到上一节点）。
+
+章节系统（需求 §4）：10 个节点划分为 5 章，章节名称与节点归属集中在
+CHAPTERS 配置（管理端可视化编辑为后续增强）；章节状态由后端统一下发，
+章节最后节点点亮写 CHAPTER_COMPLETE 事件（不改变原有节点点亮逻辑）。
 """
-from typing import Dict, List, Optional, Set
+from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
 from app.models.models import DailySport, LitNode, RouteNode
 from app.services import event_service, points_service
+
+# 长征章节配置（node_ids 对应 route_nodes 主键；介绍为公开史实概述，供章节完成仪式展示）
+CHAPTERS: List[Dict] = [
+    {
+        "id": 1, "name": "出发", "title": "第一章 · 出发", "node_ids": [1, 2],
+        "intro": "1934年10月，中央红军从瑞金等地出发踏上战略转移征途；1935年1月，遵义会议在最危急的关头挽救了党和红军。",
+    },
+    {
+        "id": 2, "name": "转折", "title": "第二章 · 转折", "node_ids": [3, 4],
+        "intro": "四渡赤水出奇兵，巧渡金沙江摆脱数十万敌军围追堵截，红军由被动转为主动。",
+    },
+    {
+        "id": 3, "name": "突围", "title": "第三章 · 突围", "node_ids": [5, 6],
+        "intro": "1935年5月，强渡大渡河、飞夺泸定桥，红军以血肉之躯撕开北上通道。",
+    },
+    {
+        "id": 4, "name": "翻越", "title": "第四章 · 翻越", "node_ids": [7, 8],
+        "intro": "翻越皑皑雪山，跋涉茫茫草地，红军以非凡意志战胜自然极限。",
+    },
+    {
+        "id": 5, "name": "会师", "title": "第五章 · 会师", "node_ids": [9, 10],
+        "intro": "1935年10月中央红军抵达吴起镇，1936年10月三大主力胜利会师，长征宣告胜利结束。",
+    },
+]
 
 
 def _total_steps(db: Session, user_id: int) -> int:
@@ -35,6 +63,53 @@ def _ordered_nodes(db: Session) -> List[RouteNode]:
 def get_route_nodes(db: Session) -> List[RouteNode]:
     """返回供小程序展示的启用节点配置。"""
     return _ordered_nodes(db)
+
+
+def _chapter_views(nodes: List[Dict]) -> Tuple[List[Dict], Optional[int]]:
+    """按路线节点状态计算章节视图与当前章节 id。
+
+    status：COMPLETED 全部点亮 / ACTIVE 第一个未完成章 / LOCKED 之后各章；
+    节点全部停用的章节跳过不下发。
+    """
+    status_by_id = {x["id"]: x["status"] for x in nodes}
+    views: List[Dict] = []
+    for ch in CHAPTERS:
+        ids = [nid for nid in ch["node_ids"] if nid in status_by_id]
+        if not ids:
+            continue
+        lit = sum(1 for nid in ids if status_by_id[nid] == "completed")
+        views.append(
+            {
+                "id": ch["id"],
+                "name": ch["name"],
+                "title": ch["title"],
+                "node_ids": ids,
+                "lit_count": lit,
+                "total_count": len(ids),
+                "progress": lit / len(ids),
+                "intro": ch["intro"],
+                "status": "LOCKED",
+            }
+        )
+    active_found = False
+    for v in views:
+        if v["lit_count"] == v["total_count"]:
+            v["status"] = "COMPLETED"
+        elif not active_found:
+            v["status"] = "ACTIVE"
+            active_found = True
+    current_chapter_id = next((v["id"] for v in views if v["status"] == "ACTIVE"), None)
+    return views, current_chapter_id
+
+
+def _completed_chapters(lit_ids: Set[int], enabled_ids: Set[int]) -> List[Dict]:
+    """返回指定点亮集合下已完成的章节配置（route 顺序）。"""
+    done: List[Dict] = []
+    for ch in CHAPTERS:
+        ids = [nid for nid in ch["node_ids"] if nid in enabled_ids]
+        if ids and all(nid in lit_ids for nid in ids):
+            done.append(ch)
+    return done
 
 
 def get_route(db: Session, user_id: int) -> Dict:
@@ -94,6 +169,8 @@ def get_route(db: Session, user_id: int) -> Dict:
             min(1.0, max(0.0, (current_steps - prev_target) / span)) if span > 0 else 1.0
         )
 
+    chapters, current_chapter_id = _chapter_views(nodes)
+
     return {
         "nodes": nodes,
         "current_steps": current_steps,
@@ -105,6 +182,8 @@ def get_route(db: Session, user_id: int) -> Dict:
         "current_node_id": current_node_id,
         "current_progress": current_progress,
         "route_progress": route_progress,
+        "chapters": chapters,
+        "current_chapter_id": current_chapter_id,
     }
 
 
@@ -139,17 +218,22 @@ def get_node_detail(db: Session, user_id: int, node_id: int) -> Optional[Dict]:
     }
 
 
-def light_up_nodes(db: Session, user_id: int) -> List[Dict]:
-    """点亮步数达标且未点亮的节点，发放积分；全部点亮额外 +100。返回本次新点亮节点。
+def light_up_nodes(db: Session, user_id: int) -> Tuple[List[Dict], List[Dict]]:
+    """点亮步数达标且未点亮的节点，发放积分；全部点亮额外 +100。
 
-    每个新点亮节点附带 gained_points / lit_at / next_node（下一站名称与剩余步数，
-    全部点亮时为 None），供前端到达动画与「抵达事件卡」直接使用。
+    返回 (本次新点亮节点, 本次新完成章节)：
+    - 每个新点亮节点附带 gained_points / lit_at / next_node（下一站名称与剩余步数，
+      全部点亮时为 None），供前端到达动画与「抵达事件卡」直接使用；
+    - 每个新完成章节附带 id / name / title / intro，供前端「章节完成仪式」使用。
     副作用：LitNode 记录点亮时刻累计步数快照（step_snapshot），并写
-    NODE_UNLOCK / COMPLETE_ROUTE 事件（我的足迹与管理端动态同源）。
+    NODE_UNLOCK / CHAPTER_COMPLETE / COMPLETE_ROUTE 事件（我的足迹与管理端动态同源）。
+    章节完成不改变原有节点点亮逻辑与积分规则（需求 §4.5）。
     """
     current_steps = _total_steps(db, user_id)
     lit = _lit_node_ids(db, user_id)
     nodes_def = _ordered_nodes(db)
+    enabled_ids = {n.id for n in nodes_def}
+    chapters_before = {ch["id"] for ch in _completed_chapters(lit, enabled_ids)}
 
     newly: List[Dict] = []
     lit_records: List[LitNode] = []
@@ -174,29 +258,46 @@ def light_up_nodes(db: Session, user_id: int) -> List[Dict]:
                 }
             )
 
-    if newly:
-        db.commit()
-        # 点亮完成后的下一站（本次操作后第一个未达标节点）
-        upcoming = next((n for n in nodes_def if current_steps < n.target_steps), None)
-        next_node = (
-            {"name": upcoming.name, "remain": upcoming.target_steps - current_steps}
-            if upcoming
-            else None
-        )
-        for item, record in zip(newly, lit_records):
-            item["gained_points"] = 10
-            item["lit_at"] = record.lit_at
-            item["next_node"] = next_node
-        for item in newly:
-            points_service.grant(db, user_id, f"点亮节点：{item['name']}", 10)
-            event_service.record(
-                db,
-                user_id,
-                "NODE_UNLOCK",
-                {"nodeId": item["id"], "nodeName": item["name"], "stepSnapshot": current_steps},
-            )
-        if len(lit) >= len(nodes_def):
-            points_service.grant(db, user_id, "完成长征路线", 100)
-            event_service.record(db, user_id, "COMPLETE_ROUTE", {"totalSteps": current_steps})
+    if not newly:
+        return [], []
 
-    return newly
+    db.commit()
+    # 点亮完成后的下一站（本次操作后第一个未达标节点）
+    upcoming = next((n for n in nodes_def if current_steps < n.target_steps), None)
+    next_node = (
+        {"name": upcoming.name, "remain": upcoming.target_steps - current_steps}
+        if upcoming
+        else None
+    )
+    for item, record in zip(newly, lit_records):
+        item["gained_points"] = 10
+        item["lit_at"] = record.lit_at
+        item["next_node"] = next_node
+    for item in newly:
+        points_service.grant(db, user_id, f"点亮节点：{item['name']}", 10)
+        event_service.record(
+            db,
+            user_id,
+            "NODE_UNLOCK",
+            {"nodeId": item["id"], "nodeName": item["name"], "stepSnapshot": current_steps},
+        )
+    if len(lit) >= len(nodes_def):
+        points_service.grant(db, user_id, "完成长征路线", 100)
+        event_service.record(db, user_id, "COMPLETE_ROUTE", {"totalSteps": current_steps})
+
+    # 章节完成判定：本次点亮后新完成的章节写 CHAPTER_COMPLETE 事件
+    new_chapters: List[Dict] = []
+    for ch in _completed_chapters(lit, enabled_ids):
+        if ch["id"] in chapters_before:
+            continue
+        event_service.record(
+            db,
+            user_id,
+            "CHAPTER_COMPLETE",
+            {"chapterId": ch["id"], "chapterName": ch["title"]},
+        )
+        new_chapters.append(
+            {"id": ch["id"], "name": ch["name"], "title": ch["title"], "intro": ch["intro"]}
+        )
+
+    return newly, new_chapters

@@ -33,6 +33,58 @@
   animation: popIn 0.6s ease 0.3s both;
 }
 
+/* 当前章节卡（需求 §4.4）：叠在头部总览下缘 */
+.chapter-card {
+  margin: -30rpx 30rpx 14rpx;
+  background: #FFFFFF;
+  border-radius: 16rpx;
+  padding: 20rpx 24rpx;
+  box-shadow: 0 6rpx 18rpx rgba(140, 30, 30, 0.1);
+  animation: fadeUp 0.5s ease 0.18s both;
+}
+
+.chapter-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 12rpx;
+}
+
+.chapter-title {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #A00D26;
+  letter-spacing: 2rpx;
+}
+
+.chapter-count {
+  font-size: 24rpx;
+  color: #8A7F6C;
+}
+
+.chapter-bar {
+  height: 12rpx;
+  border-radius: 6rpx;
+  background: rgba(212, 160, 23, 0.16);
+  overflow: hidden;
+}
+
+.chapter-bar-inner {
+  height: 100%;
+  border-radius: 6rpx;
+  background: linear-gradient(90deg, #E8C76A, #D4A017);
+  transition: width 0.6s ease;
+}
+
+/* 章节完成仪式卡 */
+.chapter-lit-card .lit-chapter-intro {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #6B5B3E;
+  text-align: justify;
+}
+
 /* 地图模式切换 */
 .mode-switch {
   display: flex;

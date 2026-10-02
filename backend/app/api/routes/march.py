@@ -48,8 +48,8 @@ def node_detail(
 
 @router.post("/light-up", response_model=LightUpResult, summary="点亮达标节点")
 def light_up(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """按当前累计步数点亮达标节点、发放积分，并刷新勋章。"""
-    newly = march_service.light_up_nodes(db, current.id)
+    """按当前累计步数点亮达标节点、发放积分，并刷新勋章；同时判定章节完成。"""
+    newly, new_chapters = march_service.light_up_nodes(db, current.id)
     medal_service.check_and_grant(db, current.id)
     ws_manager.broadcast(ws_manager.build_event("march.light-up", current.id))
-    return {"newly_lit": newly}
+    return {"newly_lit": newly, "newly_completed_chapters": new_chapters}

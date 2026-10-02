@@ -476,6 +476,14 @@
   line-height: 1.5;
 }
 
+.chapter-lit-card .lit-chapter-intro {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  line-height: 1.7;
+  color: #6B5B3E;
+  text-align: justify;
+}
+
 /* 当前节点脉冲（迷你路线图） */
 .pulse-current {
   animation: pulseRed 1.6s ease-out infinite;

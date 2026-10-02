@@ -141,6 +141,29 @@ class RouteNodeOut(CamelModel):
     longitude: float = 0
 
 
+class ChapterOut(CamelModel):
+    """长征章节视图（需求 §4.3/4.4）：LOCKED 未开始 / ACTIVE 当前章 / COMPLETED 已完成。"""
+
+    id: int
+    name: str
+    title: str
+    status: str
+    node_ids: List[int] = []
+    lit_count: int = 0
+    total_count: int = 0
+    progress: float = 0
+    intro: str = ""
+
+
+class ChapterCompletedOut(CamelModel):
+    """本次新完成章节（light-up 返回，供章节完成仪式展示）。"""
+
+    id: int
+    name: str
+    title: str
+    intro: str = ""
+
+
 class RouteOut(CamelModel):
     nodes: List[RouteNodeOut]
     current_steps: int
@@ -153,6 +176,9 @@ class RouteOut(CamelModel):
     current_node_id: Optional[int] = None
     current_progress: float = 0
     route_progress: float = 0
+    # 章节系统：各章状态与当前章节（全部完成时为 null）
+    chapters: List[ChapterOut] = []
+    current_chapter_id: Optional[int] = None
 
 
 class NodeDetailOut(CamelModel):
@@ -191,6 +217,7 @@ class LightUpNodeOut(RouteNodeOut):
 
 class LightUpResult(CamelModel):
     newly_lit: List[LightUpNodeOut] = []
+    newly_completed_chapters: List[ChapterCompletedOut] = []
 
 
 # ---------------- 答题 ----------------

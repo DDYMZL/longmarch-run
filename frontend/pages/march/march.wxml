@@ -1,7 +1,13 @@
 <view class="march-page">
-  <!-- 抵达事件卡弹层 -->
+  <!-- 抵达事件卡 / 章节完成仪式弹层 -->
   <view wx:if="{{litPopup}}" class="lit-overlay" wx:key="{{litPopup.key}}">
-    <view class="lit-card">
+    <view wx:if="{{litPopup.kind === 'chapter'}}" class="lit-card chapter-lit-card">
+      <view class="lit-star anim-pop">🚩</view>
+      <view class="lit-title">🎉 章节完成</view>
+      <view class="lit-name">{{litPopup.title}}</view>
+      <view class="lit-chapter-intro">{{litPopup.intro}}</view>
+    </view>
+    <view wx:else class="lit-card">
       <view class="lit-star anim-pop">★</view>
       <view class="lit-title">🎉 恭喜抵达</view>
       <view class="lit-name">{{litPopup.icon}} {{litPopup.name}}</view>
@@ -17,6 +23,17 @@
     <view class="march-header-title">长征路线</view>
     <view class="march-header-sub">累计 {{currentSteps}} / {{totalSteps}} 步 · 已点亮 {{litCount}}/{{totalCount}}</view>
     <view wx:if="{{finished}}" class="finish-banner">🎉 恭喜完成长征路线！</view>
+  </view>
+
+  <!-- 当前章节卡（需求 §4.4） -->
+  <view wx:if="{{currentChapter}}" class="chapter-card">
+    <view class="chapter-head">
+      <text class="chapter-title">{{currentChapter.title}}</text>
+      <text class="chapter-count">{{currentChapter.litCount}} / {{currentChapter.totalCount}} 节点</text>
+    </view>
+    <view class="chapter-bar">
+      <view class="chapter-bar-inner" style="width: {{currentChapter.progressPct}}%"></view>
+    </view>
   </view>
 
   <!-- 地图模式切换 -->

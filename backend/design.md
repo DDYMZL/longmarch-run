@@ -127,7 +127,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | GET | `/api/march/route` | 是 | 路线进度 `{nodes, currentSteps, totalSteps, litCount, totalCount, nextNode, finished, currentNodeId, currentProgress, routeProgress}`；仅统计启用节点；轨迹进度字段见下 |
 | GET | `/api/march/route-nodes` | 是 | 启用节点配置列表（含经纬度），小程序缓存使用 |
 | GET | `/api/march/node/{node_id}` | 是 | 节点详情（任意状态可看，含未解锁），不存在 404 |
-| POST | `/api/march/light-up` | 是 | 点亮达标节点，返回 `{newlyLit: [...]}`，发放积分并刷新勋章 |
+| POST | `/api/march/light-up` | 是 | 点亮达标节点，返回 `{newlyLit: [...], newlyCompletedChapters: [...]}`，发放积分并刷新勋章 |
 | GET | `/api/quiz/daily` | 是 | 今日题目 `{date, completed, questions?, record?}`（同天同套，不含答案） |
 | POST | `/api/quiz/submit` | 是 | 提交答卷 `{answers: [{questionId, answer[]}]}` → 判分记录；重复提交 400 |
 | GET | `/api/quiz/records` | 是 | 答题记录列表 |
@@ -179,13 +179,26 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
   "currentSteps": 8236, "totalSteps": 45000, "litCount": 2, "totalCount": 10,
   "nextNode": { "id": 3, "name": "四渡赤水", "icon": "🛶", "targetSteps": 10000, "status": "current", "remain": 1764 },
   "finished": false,
-  "currentNodeId": 3, "currentProgress": 0.65, "routeProgress": 0.18
+  "currentNodeId": 3, "currentProgress": 0.65, "routeProgress": 0.18,
+  "chapters": [
+    { "id": 1, "name": "出发", "title": "第一章 · 出发", "status": "COMPLETED",
+      "nodeIds": [1, 2], "litCount": 2, "totalCount": 2, "progress": 1, "intro": "……" },
+    { "id": 2, "name": "转折", "title": "第二章 · 转折", "status": "ACTIVE",
+      "nodeIds": [3, 4], "litCount": 0, "totalCount": 2, "progress": 0, "intro": "……" }
+  ],
+  "currentChapterId": 2
 }
 ```
 
 `currentNodeId` / `currentProgress` / `routeProgress` 为行军轨迹进度字段（006 高级化迭代）：
 当前前往节点（下一站，全程完成时为 null）、当前区间段内进度 0~1、全程进度 0~1；
 由后端统一计算，小程序只负责表现。
+
+`chapters` / `currentChapterId` 为长征章节字段（006 P0-3）：
+
+- **章节配置**：`march_service.CHAPTERS` 模块级配置（5 章 × 每章 2 节点，`node_ids` 对应 route_nodes 主键，介绍为公开史实概述）；调整章节划分只需改配置，管理端可视化编辑为后续增强。
+- **章节状态**：基于节点状态计算——章内启用节点全部点亮为 `COMPLETED`，第一个未完成章为 `ACTIVE`，之后各章为 `LOCKED`；节点全部停用的章节跳过不下发；全部完成时 `currentChapterId` 为 null。
+- **章节完成判定**：`light_up_nodes` 对比本次点亮前后已完成章节集合，新增完成章写入 `CHAPTER_COMPLETE` 事件（我的足迹与管理端动态同源），并在响应 `newlyCompletedChapters` 中返回 `{id, name, title, intro}` 供前端章节完成仪式展示；章节完成不改变既有节点点亮逻辑与积分规则。
 
 **今日题目**（`GET /api/quiz/daily`，`questions` 不含 `answer`）：
 
@@ -218,6 +231,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | --- | --- |
 | 步数 | 按「用户+日期」唯一，同日同步**覆盖**；未接真实微信运动时按「日期+用户」生成稳定模拟步数（4000~12999）；`/sport/add` 演示补步 |
 | 路线 | 累计步数 ≥ 节点 `targetSteps` 即点亮，点亮**永久保留**；节点状态 `completed`（已点亮）/ `current`（下一目标）/ `unlocked`（未解锁）；停用节点不在小程序可见路线中，不参与完成判定和排名，已有 lit_nodes 记录保留 |
+| 章节 | 5 章配置于 `march_service.CHAPTERS`（每章 2 个 route_nodes 主键，划分与介绍可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`（全部停用的章节不下发）；`light_up_nodes` 对比点亮前后完成集，新完成章写 `CHAPTER_COMPLETE` 事件并随响应返回（含 title/intro 供前端仪式展示），不改变节点点亮与积分规则 |
 | 答题 | 每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可提交一次；题目接口**不下发答案**；`/quiz/reset` 仅供调试 |
 | 积分 | 登录 +1；运动 5000 步 +5、10000 步 +10；答题 +5、满分额外 +10；点亮节点 +10；完成路线 +100；**同日同 reason 去重** |
 | 勋章 | 12 枚分四类：入门（first-step 首次运动 / learner 答题 10 次 / persistence 连续行军 7 天）、路线（luding 点亮泸定桥 / snow 点亮雪山）、挑战（day-10k 单日万步 / steps-100k / steps-500k / streak-30 连续 30 天 / master 积分≥500 / fearless 连续 7 天日万步，隐藏）、完成（victory 全部**启用**节点点亮）；隐藏勋章未获得时不公开条件 |

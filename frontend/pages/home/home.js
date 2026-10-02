@@ -10,6 +10,7 @@ const march = require('../../services/march');
 const quiz = require('../../services/quiz');
 const medal = require('../../services/medal');
 const broadcast = require('../../services/broadcast');
+const arrivePopup = require('../../utils/arrivePopup');
 
 /**
  * 今日行军状态文案（需求 §6.3/6.4：按真实数据分档，不随机生成）
@@ -183,17 +184,18 @@ Page({
     sport
       .syncToday()
       .then((result) => {
-        // 步数同步后：点亮节点 -> 刷新勋章（后端联动）
+        // 步数同步后：点亮节点（含章节判定）-> 刷新勋章（后端联动）
         return Promise.all([march.lightUpNodes(), medal.checkAndGrant()]).then((r) => ({
           result: result,
-          newlyLit: r[0],
+          newlyLit: r[0].newlyLit,
+          newlyCompletedChapters: r[0].newlyCompletedChapters,
           newMedals: r[1]
         }));
       })
       .then((res) => {
-        if (res.newlyLit.length > 0) {
-          // 逐个播放「抵达事件卡」
-          this.playLitPopup(res.newlyLit);
+        if (res.newlyLit.length > 0 || res.newlyCompletedChapters.length > 0) {
+          // 按队列播放「抵达事件卡 → 章节完成仪式」
+          this.playLitPopup(res.newlyLit, res.newlyCompletedChapters);
         } else if (res.newMedals.length > 0) {
           wx.showToast({ title: '获得新勋章！', icon: 'none' });
         } else if (res.result.synced) {
@@ -212,35 +214,6 @@ Page({
   },
 
   /**
-   * 抵达事件卡（逐个播放）：恭喜抵达 + 历史时间 + 积分 + 下一站距离
-   */
-  playLitPopup(nodes) {
-    let i = 0;
-    const showNext = () => {
-      if (i >= nodes.length) {
-        this.setData({ litPopup: null });
-        return;
-      }
-      const n = nodes[i];
-      this.setData({
-        litPopup: {
-          key: Date.now(),
-          name: n.name,
-          icon: n.icon || '★',
-          historicalTime: n.historicalTime || '',
-          gainedPoints: n.gainedPoints || 0,
-          nextName: n.nextNode ? n.nextNode.name : '',
-          nextRemain: n.nextNode ? n.nextNode.remain : 0
-        }
-      });
-      i++;
-      if (this.popupTimer) clearTimeout(this.popupTimer);
-      this.popupTimer = setTimeout(showNext, 2400);
-    };
-    showNext();
-  },
-
-  /**
    * 演示用：手动补步数（无真机环境模拟微信运动数据变化）
    */
   handleAddSteps() {
@@ -250,8 +223,8 @@ Page({
       .then((r) => {
         this.refreshAll();
 
-        if (r[0].length > 0) {
-          this.playLitPopup(r[0]);
+        if (r[0].newlyLit.length > 0 || r[0].newlyCompletedChapters.length > 0) {
+          this.playLitPopup(r[0].newlyLit, r[0].newlyCompletedChapters);
         } else if (r[1].length > 0) {
           wx.showToast({ title: '获得新勋章！', icon: 'none' });
         } else {
@@ -261,6 +234,13 @@ Page({
       .catch((err) => {
         wx.showToast({ title: (err && err.message) || '操作失败', icon: 'none' });
       });
+  },
+
+  /**
+   * 抵达事件队列（逐个播放）：先节点抵达卡，后章节完成仪式卡（需求 §4.5）
+   */
+  playLitPopup(newlyLit, newChapters) {
+    arrivePopup.playArriveQueue(this, newlyLit, newChapters);
   },
 
   /**

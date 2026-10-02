@@ -29,6 +29,8 @@ def build_text(event_type: str, data: Optional[dict] = None) -> str:
         return f"完成当日行军目标（{d.get('steps', 0)} 步），连续行军 {d.get('streak', 1)} 天"
     if event_type == "NODE_UNLOCK":
         return f"点亮「{d.get('nodeName', '')}」"
+    if event_type == "CHAPTER_COMPLETE":
+        return f"完成长征章节「{d.get('chapterName', '')}」"
     if event_type == "BADGE_UNLOCK":
         return f"获得勋章「{d.get('medalName', '')}」"
     if event_type == "QUIZ_COMPLETE":
