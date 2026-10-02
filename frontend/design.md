@@ -148,8 +148,9 @@ quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 
 ### 4.6 march 双模式地图
 
 - **路线节点配置**：`march.js` 维护模块级 `routeNodes` 变量，读取顺序为 `GET /api/march/route-nodes`（成功后写入 Storage `lm_route_nodes`）→ Storage 缓存 → 内置 `mock/data.js`。每次路线页 `onShow` 先用缓存即时渲染，再异步刷新，成功后重绘。请求序号防止旧响应覆盖。
-- **实景模式（默认）**：原生 `<map>` + 节点 `latitude/longitude`（来自后端配置）→ `markers`（节点三态图标）+ `polyline`（路线）+ `includePoints` 视野动画。
+- **实景模式（默认）**：原生 `<map>` + 节点 `latitude/longitude`（来自后端配置）→ `markers`（节点三态图标 + 「🚩 我在这里」进度旗）+ `polyline`（灰色全程 + 金色已完成段，段内线性插值）+ `includePoints` 视野动画（仅首次进入播放，步数刷新不重播）。
 - **插画模式**：「星空远征」深色主题 Canvas 2D；节点画布坐标由 `getCanvasNodePositions()` 按经纬度边界归一化计算（非硬编码），兼容任意节点数量和排列；静态层经 `wx.createOffscreenCanvas` 烘焙一次；动态元素（云、星、光晕精灵、流光彗尾）每帧 rAF 绘制；渐变对象缓存复用；离屏调用包 try/catch 降级。
+- **行军轨迹（006 P0）**：绘制进度统一取后端 `routeProgress`（旧接口降级为步数比例，见 `calcRouteProgress`/`currentRatio`）；步数刷新只从旧进度插值推进到新进度（约 800ms，`progressAnim`），仅首次渲染播放完整入场描画；当前行军点为「呼吸光点（光晕缩放）+ 3 颗上升光尘 + 摆动红旗」。
 
 ## 5. 核心业务规则（与后端完全一致，见 `../backend/design.md` §5）
 

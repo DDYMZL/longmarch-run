@@ -124,7 +124,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | GET | `/api/profile/summary` | 是 | 个人档案聚合：用户信息、加入天数/阶段、运动/答题/积分统计、连续行军、路线完成度 |
 | GET | `/api/profile/timeline?limit=` | 是 | 我的长征足迹：`user_event` 倒序时间轴（文案与事件表同源） |
 | GET | `/api/broadcast/today` | 是 | 今日长征播报：期号、全局运动汇总、今日长征彩蛋（历史事件卡）、个人当日状态 |
-| GET | `/api/march/route` | 是 | 路线进度 `{nodes, currentSteps, totalSteps, litCount, totalCount, nextNode, finished}`；仅统计启用节点 |
+| GET | `/api/march/route` | 是 | 路线进度 `{nodes, currentSteps, totalSteps, litCount, totalCount, nextNode, finished, currentNodeId, currentProgress, routeProgress}`；仅统计启用节点；轨迹进度字段见下 |
 | GET | `/api/march/route-nodes` | 是 | 启用节点配置列表（含经纬度），小程序缓存使用 |
 | GET | `/api/march/node/{node_id}` | 是 | 节点详情（任意状态可看，含未解锁），不存在 404 |
 | POST | `/api/march/light-up` | 是 | 点亮达标节点，返回 `{newlyLit: [...]}`，发放积分并刷新勋章 |
@@ -178,9 +178,14 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
   ],
   "currentSteps": 8236, "totalSteps": 45000, "litCount": 2, "totalCount": 10,
   "nextNode": { "id": 3, "name": "四渡赤水", "icon": "🛶", "targetSteps": 10000, "status": "current", "remain": 1764 },
-  "finished": false
+  "finished": false,
+  "currentNodeId": 3, "currentProgress": 0.65, "routeProgress": 0.18
 }
 ```
+
+`currentNodeId` / `currentProgress` / `routeProgress` 为行军轨迹进度字段（006 高级化迭代）：
+当前前往节点（下一站，全程完成时为 null）、当前区间段内进度 0~1、全程进度 0~1；
+由后端统一计算，小程序只负责表现。
 
 **今日题目**（`GET /api/quiz/daily`，`questions` 不含 `answer`）：
 
