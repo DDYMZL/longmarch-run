@@ -97,10 +97,10 @@ Page({
       wx.showToast({ title: '昵称仅可修改一次', icon: 'none' });
       return;
     }
+    // 提示语放标题（输入框外），输入框内不放 placeholderText；editable 弹窗 content 在模拟器会与输入框叠层，故不使用
     wx.showModal({
-      title: '修改昵称',
+      title: '请输入真实姓名',
       editable: true,
-      content: '请输入真实姓名。昵称仅可修改一次，请确认无误后提交',
       confirmColor: '#C8102E',
       success: (res) => {
         if (!res.confirm) return;

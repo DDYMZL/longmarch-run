@@ -73,6 +73,11 @@ async function shotOrgSelect() {
 async function shotMineModal() {
   mini = await withTimeout(automator.connect({ wsEndpoint: WS }), 30000, 'connect');
   await freshLogin('shots-realname-b-' + Date.now());
+  // 新用户无组织会被 mine 页守卫弹回 org-select，先选定首个顶级组织
+  const orgPage = await waitPath('pages/org-select/org-select');
+  await sleep(1500); // 等组织列表加载
+  await cmd(() => orgPage.callMethod('confirmSelect', 1), 'confirmSelect', 2);
+  await sleep(2000); // 选定后自动 switchTab 首页
   // 主动导航起手（截图后桥退化，本状态独立连接 + switchTab 唤醒）
   await cmd(() => mini.switchTab('/pages/mine/mine'), 'switchTab mine');
   const minePage = await waitPath('pages/mine/mine');

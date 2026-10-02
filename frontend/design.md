@@ -71,7 +71,7 @@
 | `broadcast.js` | `getToday()` | `/api/broadcast/today` | 今日长征播报（期号/全局汇总/彩蛋/个人状态） |
 | `org.js` | 组织树下钻 / 我的组织 / 选定组织 | `/api/org/children, mine, select` | 组织树（任意层级可选） |
 | `rank.js` | `getStepsRank()` | `/api/rank/steps` | 全员工累计步数总榜 |
-| `store.js` | `migrateUserData()` / `clearCache()` | （后端无对应，落库到 DB） | 遗留：登录时 Mock→真实用户 ID 数据迁移 |
+| `store.js` | `migrateUserData()` | （后端无对应，落库到 DB） | 遗留：登录时 Mock→真实用户 ID 数据迁移 |
 | `request.js` | `request(options)` / `getToken()` | — | 统一 wx.request 封装：Bearer JWT、401 清理、FastAPI 错误解析 |
 | `config.js` | `API_BASE_URL` | — | API 地址集中配置：开发者工具用 `127.0.0.1:8010/api`，真机自动切换 `http://<电脑局域网IP>:8010/api`（LAN_IP 常量，电脑 IP 变化时需同步更新） |
 
@@ -121,7 +121,7 @@ org-select 页 → 首次登录且未改名时顶部展示姓名采集（`input 
 
 ### 4.3 昵称修改（每人仅一次）
 
-mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为空时展示；弹窗 content 提示「请输入真实姓名、仅可修改一次」，输入框内不放 placeholderText）
+mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为空时展示；弹窗标题即提示「请输入真实姓名」，输入框内不放 placeholderText；editable 弹窗 content 在模拟器与输入框叠层，故提示不放 content）
   → auth.updateNickname(name) → PUT /api/auth/nickname {nickname}
   → 成功：后端返回最新用户（含 nicknameChangedAt），更新本地登录态与全局 user
   → 已修改过的用户不再展示修改按钮（后端同样以 400 兜底）
