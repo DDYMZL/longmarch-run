@@ -406,8 +406,18 @@ def get_user_overview(db: Session, user_id: int) -> Optional[Dict]:
 
 # ---------------- 组织架构维护 ----------------
 def get_org_tree(db: Session) -> Dict:
-    """返回完整组织树（children 嵌套）与节点总数，供前端树形表格展示。"""
+    """返回完整组织树（children 嵌套）与节点总数，供前端树形表格展示。
+
+    每个节点附带人数统计：direct_user_count 为直接选择该组织的用户数，
+    total_user_count 为含全部下级组织的累计用户数（后序累加）。
+    """
     nodes = db.query(Organization).order_by(Organization.sort_order, Organization.id).all()
+    direct_counts = dict(
+        db.query(User.org_id, func.count(User.id))
+        .filter(User.org_id.isnot(None))
+        .group_by(User.org_id)
+        .all()
+    )
     tree_map: Dict[Optional[int], List[Dict]] = {}
     for n in nodes:
         item = {
@@ -416,12 +426,24 @@ def get_org_tree(db: Session) -> Dict:
             "parent_id": n.parent_id,
             "level": n.level,
             "sort_order": n.sort_order,
+            "direct_user_count": int(direct_counts.get(n.id, 0)),
+            "total_user_count": 0,
             "children": [],
         }
         tree_map.setdefault(n.parent_id, []).append(item)
     for item in tree_map.get(None, []):
         _fill_children(item, tree_map)
+        _accumulate_user_count(item)
     return {"total": len(nodes), "nodes": tree_map.get(None, [])}
+
+
+def _accumulate_user_count(item: Dict) -> int:
+    """后序遍历累加子树人数，写入 total_user_count 并返回该节点累计值。"""
+    total = item["direct_user_count"]
+    for child in item["children"]:
+        total += _accumulate_user_count(child)
+    item["total_user_count"] = total
+    return total
 
 
 def _fill_children(item: Dict, tree_map: Dict[Optional[int], List[Dict]]) -> None:

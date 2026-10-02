@@ -153,7 +153,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | PUT | `/api/admin/route-nodes/{id}` | 管理员 | 编辑路线节点（含历史事件卡 7 字段） |
 | PATCH | `/api/admin/route-nodes/{id}/enabled` | 管理员 | 启用/停用节点 |
 | GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 管理员 | 题库 CRUD（含 category 分类） |
-| GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 管理员 | 组织架构树 CRUD；`POST /api/admin/orgs/sync` 从外部系统同步 |
+| GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 管理员 | 组织架构树 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计，后序累加）；`POST /api/admin/orgs/sync` 从外部系统同步 |
 
 ### 4.2 关键请求/响应示例
 

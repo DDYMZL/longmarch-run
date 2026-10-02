@@ -578,13 +578,18 @@ class AdminScreenOut(BaseModel):
 
 
 class AdminOrgNodeOut(BaseModel):
-    """组织架构树节点（含 children，供前端 el-table 树形展示）。"""
+    """组织架构树节点（含 children，供前端 el-table 树形展示）。
+
+    direct_user_count 为直接归属该组织的用户数；total_user_count 为含全部下级的累计用户数。
+    """
 
     id: int
     name: str
     parent_id: Optional[int] = None
     level: int = 1
     sort_order: int = 0
+    direct_user_count: int = 0
+    total_user_count: int = 0
     children: List["AdminOrgNodeOut"] = []
 
 

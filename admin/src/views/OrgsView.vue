@@ -188,6 +188,20 @@ onMounted(loadTree)
         </template>
       </el-table-column>
       <el-table-column prop="sort_order" label="排序" width="80" align="center" />
+      <el-table-column label="直属人数" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag size="small" :type="row.direct_user_count > 0 ? 'success' : 'info'">
+            {{ row.direct_user_count }}
+          </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="成员总数（含下级）" width="140" align="center">
+        <template #default="{ row }">
+          <el-tag size="small" :type="row.total_user_count > 0 ? 'warning' : 'info'">
+            {{ row.total_user_count }}
+          </el-tag>
+        </template>
+      </el-table-column>
       <el-table-column label="操作" width="220" align="center" fixed="right">
         <template #default="{ row }">
           <el-button link type="primary" @click="openCreate(row)">新增下级</el-button>

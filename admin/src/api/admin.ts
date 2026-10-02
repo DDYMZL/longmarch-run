@@ -44,6 +44,8 @@ export interface OrgNode {
   parent_id: number | null
   level: number
   sort_order: number
+  direct_user_count: number
+  total_user_count: number
   children: OrgNode[]
 }
 
