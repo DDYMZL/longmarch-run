@@ -90,6 +90,40 @@
       </view>
     </view>
 
+    <!-- 足迹地图（P1-6，需求 §7：时间+路线结合，点击节点看抵达详情） -->
+    <view class="card anim-card" style="animation-delay: 200ms">
+      <view class="card-title">🗺️ 足迹地图</view>
+      <view wx:if="{{footprints.length === 0}}" class="empty-tip">还没有点亮任何节点，去运动迈出第一步吧</view>
+      <view class="fp-chain" wx:else>
+        <view class="fp-item" wx:for="{{footprints}}" wx:key="id" data-id="{{item.id}}" bindtap="toggleFootprint">
+          <view class="fp-rail">
+            <view class="fp-dot {{fpSelected === item.id ? 'active' : ''}}"></view>
+            <view class="fp-line" wx:if="{{!item.isLast}}"></view>
+          </view>
+          <view class="fp-main">
+            <view class="fp-row">
+              <text class="fp-name">{{item.icon}} {{item.name}}</text>
+              <text class="fp-date">{{item.litDate}}</text>
+            </view>
+            <view class="fp-detail" wx:if="{{fpSelected === item.id}}">
+              <view class="fp-detail-date">{{item.litDate}}</view>
+              <view class="fp-detail-arrive">我在这一天抵达 <text class="fp-detail-node">{{item.name}}</text></view>
+              <view class="fp-detail-stats">
+                <view class="fp-detail-stat">
+                  <text class="fp-detail-num">{{item.dayStepsText}}</text>
+                  <text class="fp-detail-label">当日步数（步）</text>
+                </view>
+                <view class="fp-detail-stat">
+                  <text class="fp-detail-num">{{item.cumStepsText}}</text>
+                  <text class="fp-detail-label">累计步数（步）</text>
+                </view>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <!-- 历史数据区 -->
     <view class="card anim-card" style="animation-delay: 220ms">
       <view class="card-title">历史数据</view>

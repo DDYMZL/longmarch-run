@@ -246,6 +246,24 @@ class GlobalGoalOut(CamelModel):
     next_milestone: Optional[GlobalGoalNextOut] = None
 
 
+class FootprintNodeOut(CamelModel):
+    """我的长征足迹节点（需求 §7.2/§7.3）：点亮日期 + 当日步数 + 点亮时累计步数。"""
+
+    id: int
+    name: str
+    icon: str
+    lit_at: Optional[datetime] = None
+    lit_date: str = ""
+    day_steps: int = 0
+    cum_steps: int = 0
+
+
+class FootprintsOut(CamelModel):
+    """我的长征足迹（需求 §7）：按路线顺序的已点亮节点足迹链。"""
+
+    nodes: List[FootprintNodeOut] = []
+
+
 # ---------------- 答题 ----------------
 class OptionOut(CamelModel):
     label: str

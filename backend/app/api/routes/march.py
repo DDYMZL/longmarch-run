@@ -7,6 +7,7 @@ from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
 from app.schemas.schemas import (
+    FootprintsOut,
     GlobalGoalOut,
     LightUpResult,
     NodeDetailOut,
@@ -40,6 +41,14 @@ def global_goal(
 ):
     """全员共同目标（需求 §11）：全员累计步数对 2 亿步总目标的进度与阶段里程碑。"""
     return march_service.get_global_goal(db)
+
+
+@router.get("/footprints", response_model=FootprintsOut, summary="我的长征足迹")
+def footprints(
+    current: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """我的长征足迹（需求 §7）：已点亮节点的点亮日期/当日步数/累计步数（时间+路线结合）。"""
+    return march_service.get_footprints(db, current.id)
 
 
 @router.get("/node/{node_id}", response_model=NodeDetailOut, summary="节点详情")

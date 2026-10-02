@@ -43,7 +43,7 @@
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空长征），节点点击进详情、点亮进度、到达动画（金光扩散+粒子+抵达事件卡）；星空长征（§13）：节点三态星形、星河轨迹星尘、点亮四阶段动画、拖动/捏合缩放/双击复位（view 变换+命中逆变换+边界钳制） |
 | `pages/quiz/quiz` | tab | 今日长征情报：期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（我的长征/行军日历/运动记录/答题记录） |
-| `pages/profile/profile` | 子页 | 我的长征档案：加入天数/阶段标签、运动/答题/积分统计、路线完成度、足迹时间轴 |
+| `pages/profile/profile` | 子页 | 我的长征档案：加入天数/阶段标签、运动/答题/积分统计、路线完成度、足迹地图（§7 点亮节点链/点击展开抵达详情：日期+当日步数+累计步数）、足迹时间轴 |
 | `pages/calendar/calendar` | 子页 | 行军日历：月视图（步数热力等级/答题/点亮标记）、月统计、当日详情弹层 |
 | `pages/login/login` | 子页 | 微信登录：`chooseAvatar` 头像（页面不采集昵称），登录后发每日登录积分；已选组织的用户直达首页，新用户转组织选择页 |
 | `pages/org-select/org-select` | 子页 | 组织选择（逐级下钻，任意层级可选）；首次登录（未改名）时顶部采集姓名（`input type="nickname"`，可跳过，提示语「请输入真实姓名」放输入框旁侧、不占 placeholder），选定组织后落库并进首页 |
@@ -63,7 +63,7 @@
 | --- | --- | --- | --- |
 | `auth.js` | `wxLogin(profile)` / `getLocalUser()` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
 | `sport.js` | 今日步数 / `syncToday()` / `addSteps()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, add, calendar` | 步数按「用户+日期」覆盖；模拟步数；行军日历月聚合 |
-| `march.js` | `refreshRouteNodes()` / `getRouteNodes()` / `getRoute()` / `getNodeDetail()` / `lightUpNodes()` / `getGlobalGoal()` | `/api/march/route-nodes, route, node/{id}, light-up, global` | 三级降级获取节点配置；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑） |
+| `march.js` | `refreshRouteNodes()` / `getRouteNodes()` / `getRoute()` / `getNodeDetail()` / `lightUpNodes()` / `getGlobalGoal()` | `/api/march/route-nodes, route, node/{id}, light-up, global, footprints` | 三级降级获取节点配置；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹 |
 | `quiz.js` | `getDaily()` / `submit()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, records, reset, knowledge` | 每日抽 5 题（同日同套）、判分、每日一次；知识画像分类正确率 |
 | `points.js` | `grantDailyLogin()` / 总额与流水 | `/api/points`、登录副链路 | 积分发放（同日同 reason 去重） |
 | `medal.js` | `checkAndGrant()` / `getMedalList()` | `/api/medal/list, check` | 12 枚勋章判定与发放（分类/隐藏/排序由后端下发） |

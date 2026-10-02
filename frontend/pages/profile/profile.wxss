@@ -224,3 +224,122 @@
   color: #999;
   margin-top: 6rpx;
 }
+
+/* 足迹地图（P1-6，需求 §7） */
+.fp-chain {
+  margin-top: 10rpx;
+}
+
+.fp-item {
+  display: flex;
+  align-items: stretch;
+}
+
+.fp-rail {
+  width: 32rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.fp-dot {
+  width: 16rpx;
+  height: 16rpx;
+  border-radius: 50%;
+  background: #C8102E;
+  border: 3rpx solid #F5D9A0;
+  margin-top: 12rpx;
+  flex-shrink: 0;
+}
+
+.fp-dot.active {
+  background: #E8B84B;
+  box-shadow: 0 0 12rpx rgba(232, 184, 75, 0.8);
+}
+
+.fp-line {
+  width: 4rpx;
+  flex: 1;
+  min-height: 28rpx;
+  background: linear-gradient(180deg, #C8102E 0%, #E8C98A 100%);
+}
+
+.fp-main {
+  flex: 1;
+  margin-left: 16rpx;
+  padding-bottom: 20rpx;
+}
+
+.fp-item:last-child .fp-main {
+  padding-bottom: 0;
+}
+
+.fp-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  height: 44rpx;
+}
+
+.fp-name {
+  font-size: 27rpx;
+  color: #333;
+  font-weight: 600;
+}
+
+.fp-date {
+  font-size: 22rpx;
+  color: #999;
+  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
+}
+
+.fp-detail {
+  margin-top: 10rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #FFF8EA 0%, #FDEFD8 100%);
+  border: 1rpx solid #F0DCA8;
+}
+
+.fp-detail-date {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #A00D26;
+  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
+}
+
+.fp-detail-arrive {
+  margin-top: 8rpx;
+  font-size: 25rpx;
+  color: #4A3B2A;
+}
+
+.fp-detail-node {
+  color: #C8102E;
+  font-weight: 700;
+}
+
+.fp-detail-stats {
+  display: flex;
+  gap: 48rpx;
+  margin-top: 16rpx;
+}
+
+.fp-detail-stat {
+  display: flex;
+  flex-direction: column;
+}
+
+.fp-detail-num {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #A00D26;
+  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
+}
+
+.fp-detail-label {
+  font-size: 20rpx;
+  color: #8C7A5B;
+  margin-top: 4rpx;
+}

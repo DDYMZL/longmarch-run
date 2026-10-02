@@ -14,6 +14,7 @@ from typing import Dict, List, Optional, Set, Tuple
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
+from app.core.helpers import to_local
 from app.models.models import DailySport, LitNode, RouteNode
 from app.services import event_service, points_service
 
@@ -254,6 +255,53 @@ def get_global_goal(db: Session) -> Dict:
             else None
         ),
     }
+
+
+def get_footprints(db: Session, user_id: int) -> Dict:
+    """我的长征足迹（需求 §7）：已点亮节点 + 点亮日期 + 当日步数 + 点亮时累计步数。
+
+    数据源（§7.4）：lit_nodes（lit_at / step_snapshot）与 daily_sport 当日步数，
+    不新增冗余存储。lit_date 为本地日期（与 DailySport.date 同口径，lit_at 按
+    UTC 存储转本地）；cum_steps 取点亮时刻累计快照（历史回填数据 snapshot=0，
+    由前端判空展示）。
+    """
+    rows = (
+        db.query(LitNode, RouteNode)
+        .join(RouteNode, LitNode.node_id == RouteNode.id)
+        .filter(LitNode.user_id == user_id, RouteNode.is_enabled.is_(True))
+        .order_by(RouteNode.sort_order.asc(), RouteNode.id.asc())
+        .all()
+    )
+    if not rows:
+        return {"nodes": []}
+    lit_dates = {
+        to_local(lit.lit_at).strftime("%Y-%m-%d") for lit, _ in rows if lit.lit_at
+    }
+    day_steps = (
+        {
+            d: s
+            for d, s in db.query(DailySport.date, DailySport.steps)
+            .filter(DailySport.user_id == user_id, DailySport.date.in_(lit_dates))
+            .all()
+        }
+        if lit_dates
+        else {}
+    )
+    nodes: List[Dict] = []
+    for lit, rn in rows:
+        local_date = to_local(lit.lit_at).strftime("%Y-%m-%d") if lit.lit_at else ""
+        nodes.append(
+            {
+                "id": rn.id,
+                "name": rn.name,
+                "icon": rn.icon,
+                "lit_at": lit.lit_at,
+                "lit_date": local_date,
+                "day_steps": int(day_steps.get(local_date) or 0),
+                "cum_steps": int(lit.step_snapshot or 0),
+            }
+        )
+    return {"nodes": nodes}
 
 
 def get_node_detail(db: Session, user_id: int, node_id: int) -> Optional[Dict]:

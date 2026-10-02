@@ -49,9 +49,18 @@ function getGlobalGoal() {
   return requestService.request({ url: '/march/global' });
 }
 
+/**
+ * 我的长征足迹（需求 §7）：已点亮节点的点亮日期/当日步数/点亮时累计步数。
+ * @returns {Promise<{nodes:Array<{id:number, name:string, icon:string, litAt:string, litDate:string, daySteps:number, cumSteps:number}>}>}
+ */
+function getFootprints() {
+  return requestService.request({ url: '/march/footprints' });
+}
+
 module.exports = {
   getRoute,
   getNodeDetail,
   lightUpNodes,
-  getGlobalGoal
+  getGlobalGoal,
+  getFootprints
 };
