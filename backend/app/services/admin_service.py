@@ -225,21 +225,22 @@ def get_rank_overview(db: Session) -> Dict:
             .all()
         )
     }
+    # 仅取启用节点点亮记录的三列（禁用节点的历史记录不参与展示，避免全表加载）
     reached_by_user: Dict[int, Dict[int, object]] = {}
-    for row in db.query(LitNode).order_by(LitNode.lit_at).all():
-        reached_by_user.setdefault(row.user_id, {})[row.node_id] = row.lit_at
+    lit_rows = (
+        db.query(LitNode.user_id, LitNode.node_id, LitNode.lit_at)
+        .filter(LitNode.node_id.in_(route_node_ids))
+        .order_by(LitNode.lit_at)
+        .all()
+    )
+    for lit_user_id, lit_node_id, lit_at in lit_rows:
+        reached_by_user.setdefault(lit_user_id, {})[lit_node_id] = lit_at
 
-    org_names = {
-        org_id: org_service.get_full_name(db, org_id)
-        for org_id in {user.org_id for user in users if user.org_id is not None}
-    }
+    # 组织全路径名整表一次加载（避免逐组织逐层回溯查询）
+    org_names = org_service.get_full_name_map(db, [user.org_id for user in users])
     items = []
     for user in users:
-        reached_nodes = {
-            node_id: reached_at
-            for node_id, reached_at in reached_by_user.get(user.id, {}).items()
-            if node_id in route_node_ids
-        }
+        reached_nodes = reached_by_user.get(user.id, {})
         node_details = [
             {
                 "id": node.id,

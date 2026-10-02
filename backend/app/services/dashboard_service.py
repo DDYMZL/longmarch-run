@@ -8,6 +8,7 @@ screen：大屏单接口聚合（指标 + 路线总览 + 7 日趋势 + 动态，
 库内 created_at / lit_at / event_time 为 UTC 存储，按本地日期分桶时统一经
 helpers.to_local / local_to_utc 换算。
 """
+from bisect import bisect_left
 from datetime import datetime
 from typing import Dict, List
 
@@ -69,23 +70,22 @@ def get_dashboard(db: Session) -> Dict:
     quiz_users = db.query(QuizRecord.user_id).distinct().count()
     medals_granted = db.query(UserMedal.id).count()
 
-    route_overview = [
-        {
-            "node_id": n.id,
-            "name": n.name,
-            "target_steps": n.target_steps,
-            "lit_count": sum(1 for value in totals.values() if value >= n.target_steps),
-            "completion_rate": (
-                round(
-                    sum(1 for value in totals.values() if value >= n.target_steps)
-                    / total_users * 100
-                )
-                if total_users
-                else 0
-            ),
-        }
-        for n in nodes
-    ]
+    # 累计步数升序后二分计数：每节点 O(log U)，替代逐节点 O(U) 全量扫描（用户量大时关键路径）
+    sorted_totals = sorted(totals.values())
+    route_overview = []
+    for n in nodes:
+        lit_count = len(sorted_totals) - bisect_left(sorted_totals, n.target_steps)
+        route_overview.append(
+            {
+                "node_id": n.id,
+                "name": n.name,
+                "target_steps": n.target_steps,
+                "lit_count": lit_count,
+                "completion_rate": (
+                    round(lit_count / total_users * 100) if total_users else 0
+                ),
+            }
+        )
 
     return {
         "metrics": {

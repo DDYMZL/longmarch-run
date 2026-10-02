@@ -23,7 +23,15 @@ from fastapi.testclient import TestClient
 
 from app.core.database import SessionLocal
 from app.main import app
-from app.models.models import User
+from app.models.models import (
+    DailySport,
+    LitNode,
+    PointsLog,
+    QuizRecord,
+    User,
+    UserEvent,
+    UserMedal,
+)
 
 RESULTS = []
 SMOKE_CODE = "s5-org-count-smoke"
@@ -42,9 +50,19 @@ def walk(nodes):
 
 
 def cleanup_smoke_user():
+    # 冒烟用户在历次运行中会产生积分/运动等业务行，需先清子表再删用户（FK 约束）
     db = SessionLocal()
     try:
-        db.query(User).filter(User.openid == SMOKE_OPENID).delete(synchronize_session=False)
+        user_ids = [
+            row[0]
+            for row in db.query(User.id).filter(User.openid == SMOKE_OPENID).all()
+        ]
+        if user_ids:
+            for model in (PointsLog, DailySport, LitNode, UserMedal, QuizRecord, UserEvent):
+                db.query(model).filter(model.user_id.in_(user_ids)).delete(
+                    synchronize_session=False
+                )
+            db.query(User).filter(User.id.in_(user_ids)).delete(synchronize_session=False)
         db.commit()
     finally:
         db.close()

@@ -16,14 +16,6 @@ from app.services import org_service
 TOP_LIMIT = 100
 
 
-def _org_name_map(db: Session, org_ids: List[int]) -> Dict[int, str]:
-    """批量取组织全路径名，避免逐条查询。"""
-    result: Dict[int, str] = {}
-    for oid in set(o for o in org_ids if o):
-        result[oid] = org_service.get_full_name(db, oid)
-    return result
-
-
 def get_steps_rank(db: Session, current_user_id: int) -> Dict:
     """全员工累计步数排行榜。
 
@@ -38,7 +30,8 @@ def get_steps_rank(db: Session, current_user_id: int) -> Dict:
     )
 
     users = db.query(User).all()
-    org_names = _org_name_map(db, [u.org_id for u in users])
+    # 组织全路径名整表一次加载（避免逐组织逐层回溯查询）
+    org_names = org_service.get_full_name_map(db, [u.org_id for u in users])
 
     entries: List[Dict] = []
     for u in users:

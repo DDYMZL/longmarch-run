@@ -71,6 +71,27 @@ def get_full_name(db: Session, org_id: int) -> str:
     return " / ".join(p["name"] for p in get_path(db, org_id))
 
 
+def get_full_name_map(db: Session, org_ids: List[Optional[int]]) -> Dict[int, str]:
+    """批量计算组织全路径名：整表一次加载、内存回溯，避免逐组织逐层查询（N+1）。
+
+    供排名、榜单等需要成批组织名的场景使用；不存在的 id 映射为空串。
+    """
+    rows = db.query(Organization.id, Organization.name, Organization.parent_id).all()
+    info = {oid: (name, parent_id) for oid, name, parent_id in rows}
+    result: Dict[int, str] = {}
+    for org_id in set(o for o in org_ids if o is not None):
+        names: List[str] = []
+        current: Optional[int] = org_id
+        guard = 0
+        while current in info and guard < 32:
+            name, current = info[current]
+            names.append(name)
+            guard += 1
+        names.reverse()
+        result[org_id] = " / ".join(names)
+    return result
+
+
 def set_user_org(db: Session, user_id: int, org_id: int) -> Optional[User]:
     """设定用户所属组织；组织不存在返回 None。"""
     org = get_org(db, org_id)
