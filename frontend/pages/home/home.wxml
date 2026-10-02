@@ -228,4 +228,31 @@
       </view>
     </view>
   </view>
+
+  <!-- 组织共同长征目标（P1-3，需求 §10） -->
+  <view class="card anim-card" style="animation-delay: 560ms" wx:if="{{orgName}}">
+    <view class="card-title">
+      <text>🚀 集体长征</text>
+      <text class="org-tag">{{orgName}}</text>
+    </view>
+    <view class="om-progress-row">
+      <view class="progress-bar om-bar">
+        <view class="progress-inner" style="width: {{omProgress}}%">
+          <view class="progress-shine"></view>
+        </view>
+      </view>
+      <view class="om-pct">{{omProgress}}%</view>
+    </view>
+    <view class="om-stats">累计 {{omTotalText}} 步 · 参与 {{memberCount}} 人</view>
+    <view class="om-position" wx:if="{{!omFinished}}">
+      当前到达：{{omCurrent}}<text wx:if="{{omNext}}"> → 下一站：{{omNext}}</text>
+    </view>
+    <view class="om-position" wx:else>🏆 组织已共同完成长征路线！</view>
+    <view class="om-nodes">
+      <view class="om-node {{item.status}}" wx:for="{{omNodes}}" wx:key="id">
+        <text class="om-node-name">{{item.name}}</text>
+        <text class="om-node-pct">{{item.pctLabel}}</text>
+      </view>
+    </view>
+  </view>
 </view>

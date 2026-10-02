@@ -490,6 +490,31 @@ class OrgCompanionsOut(CamelModel):
     companions: List[CompanionItemOut] = []
 
 
+class OrgMarchNodeOut(CamelModel):
+    """组织路线节点（需求 §10.3：completed=100% / current=累计占比 / 其余 0%）。"""
+
+    id: int
+    name: str
+    target_steps: int
+    status: str
+    pct: int = 0
+
+
+class OrgMarchOut(CamelModel):
+    """组织共同长征目标（需求 §10）：组织集体进度 + 组织路线。"""
+
+    org: Optional[UserOrgOut] = None
+    member_count: int = 0
+    total_steps: int = 0
+    progress_pct: int = 0
+    current_node_name: str = ""
+    next_node_name: str = ""
+    finished: bool = False
+    lit_count: int = 0
+    total_count: int = 0
+    nodes: List[OrgMarchNodeOut] = []
+
+
 class SelectOrgRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

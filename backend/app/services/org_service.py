@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.helpers import today_str
 from app.models.models import DailySport, Organization, User
+from app.services import march_service
 
 
 def _child_counts(db: Session, parent_ids: List[int]) -> Dict[int, int]:
@@ -180,4 +181,71 @@ def get_companions(db: Session, user: User, limit: int = 6) -> Dict:
             }
             for uid, nickname, avatar, steps in rows
         ],
+    }
+
+
+def get_org_march(db: Session, user: User) -> Dict:
+    """组织共同长征目标（需求 §10）：组织集体进度 + 组织路线。
+
+    计算规则（§10.4）：组织累计步数 = 子树成员累计有效步数之和（daily_sport
+    按用户+日期覆盖存储，天然无重复统计）；组织路线按组织累计步数现算
+    （与个人路线共用 _route_state，无持久点亮概念）。
+    节点 pct：已完成 100 / 当前节点按累计步数占其目标比例 / 其余 0（§10.3 展示口径）。
+    """
+    empty = {
+        "org": None, "member_count": 0, "total_steps": 0, "progress_pct": 0,
+        "current_node_name": "", "next_node_name": "", "finished": False,
+        "lit_count": 0, "total_count": 0, "nodes": [],
+    }
+    if not user.org_id:
+        return empty
+    org_ids = _subtree_org_ids(db, user.org_id)
+    member_count = (
+        db.query(func.count(User.id)).filter(User.org_id.in_(org_ids)).scalar() or 0
+    )
+    total = (
+        db.query(func.coalesce(func.sum(DailySport.steps), 0))
+        .join(User, DailySport.user_id == User.id)
+        .filter(User.org_id.in_(org_ids))
+        .scalar()
+    )
+    total = int(total or 0)
+
+    nodes_def = march_service._ordered_nodes(db)
+    lit = {n.id for n in nodes_def if total >= n.target_steps}
+    state = march_service._route_state(nodes_def, lit, total)
+
+    nodes = [
+        {
+            "id": x["id"],
+            "name": x["name"],
+            "target_steps": x["target_steps"],
+            "status": x["status"],
+            "pct": (
+                100 if x["status"] == "completed"
+                else min(100, round(total / x["target_steps"] * 100)) if x["status"] == "current" and x["target_steps"] > 0
+                else 0
+            ),
+        }
+        for x in state["nodes"]
+    ]
+    # §10.2 口径：「当前到达」= 正在抵达的节点（第一个未完成），「下一站」为其后一个
+    current_idx = next((i for i, x in enumerate(nodes) if x["status"] != "completed"), None)
+    current_name = nodes[current_idx]["name"] if current_idx is not None else (nodes[-1]["name"] if nodes else "")
+    next_name = (
+        nodes[current_idx + 1]["name"]
+        if current_idx is not None and current_idx + 1 < len(nodes)
+        else ""
+    )
+    return {
+        "org": get_user_org(db, user),
+        "member_count": int(member_count),
+        "total_steps": total,
+        "progress_pct": round(state["route_progress"] * 100),
+        "current_node_name": current_name,
+        "next_node_name": next_name,
+        "finished": state["finished"],
+        "lit_count": state["lit_count"],
+        "total_count": state["total_count"],
+        "nodes": nodes,
     }

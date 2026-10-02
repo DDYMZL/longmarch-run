@@ -678,3 +678,69 @@
   color: #A00D26;
   font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
 }
+
+/* ===== 集体长征卡（P1-3，需求 §10） ===== */
+.om-progress-row {
+  display: flex;
+  align-items: center;
+  margin-top: 16rpx;
+}
+
+.om-bar {
+  flex: 1;
+  margin: 0;
+}
+
+.om-pct {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #A00D26;
+  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
+}
+
+.om-stats {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  color: #8C7A5B;
+}
+
+.om-position {
+  margin-top: 10rpx;
+  font-size: 25rpx;
+  color: #4A3B2A;
+  font-weight: 600;
+}
+
+.om-nodes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+
+.om-node {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  background: #F5EFE0;
+  font-size: 22rpx;
+  color: #8C7A5B;
+}
+
+.om-node.completed {
+  background: rgba(200, 16, 46, 0.1);
+  color: #A00D26;
+}
+
+.om-node.current {
+  background: #A00D26;
+  color: #F5D9A0;
+}
+
+.om-node-pct {
+  margin-left: 8rpx;
+  font-weight: 700;
+}

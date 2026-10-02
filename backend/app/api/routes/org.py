@@ -8,7 +8,13 @@ from app.api.deps import get_current_user
 from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
-from app.schemas.schemas import OrgChildrenOut, OrgCompanionsOut, SelectOrgRequest, UserOrgOut
+from app.schemas.schemas import (
+    OrgChildrenOut,
+    OrgCompanionsOut,
+    OrgMarchOut,
+    SelectOrgRequest,
+    UserOrgOut,
+)
 from app.services import org_service
 
 router = APIRouter(prefix="/org", tags=["org"])
@@ -36,6 +42,12 @@ def companions(
 ):
     """我的组织同行概况（需求 §9）：同行人数 / 今日共同前进 / 同行者（今日步数倒序，限量）。"""
     return org_service.get_companions(db, current, max(1, min(limit, 50)))
+
+
+@router.get("/march", response_model=OrgMarchOut, summary="组织共同长征目标")
+def org_march(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """组织集体长征（需求 §10）：组织累计步数 = 子树成员累计有效步数之和，路线进度按此计算。"""
+    return org_service.get_org_march(db, current)
 
 
 @router.post("/select", response_model=UserOrgOut, summary="选定/修改所属组织")

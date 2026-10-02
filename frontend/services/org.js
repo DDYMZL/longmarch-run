@@ -30,8 +30,17 @@ function getCompanions(limit) {
   return requestService.request({ url: '/org/companions?limit=' + (limit || 6) });
 }
 
+/**
+ * 组织共同长征目标（需求 §10）：组织累计步数与组织路线（按组织累计步数计算）。
+ * @returns {Promise<{org:object|null, memberCount:number, totalSteps:number, progressPct:number, currentNodeName:string, nextNodeName:string, finished:boolean, nodes:Array}>}
+ */
+function getOrgMarch() {
+  return requestService.request({ url: '/org/march' });
+}
+
 module.exports = {
   getChildren,
   select,
-  getCompanions
+  getCompanions,
+  getOrgMarch
 };

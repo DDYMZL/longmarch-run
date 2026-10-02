@@ -77,6 +77,13 @@ Page({
     memberCount: 0,
     orgTodayStepsText: '0',
     companions: [],
+    // 集体长征（P1-3，需求 §10）
+    omProgress: 0,
+    omTotalText: '0',
+    omCurrent: '',
+    omNext: '',
+    omFinished: false,
+    omNodes: [],
     // 抵达事件卡弹层
     litPopup: null
   },
@@ -131,7 +138,8 @@ Page({
       broadcast.getToday(),
       medal.getMedalList(),
       broadcast.getActivities(6).catch(() => null), // 动态流失败不阻塞首页主数据
-      org.getCompanions(6).catch(() => null) // 组织同行失败同上
+      org.getCompanions(6).catch(() => null), // 组织同行失败同上
+      org.getOrgMarch().catch(() => null) // 集体长征失败同上
     ])
       .then((results) => {
         const today = results[0];
@@ -141,6 +149,7 @@ Page({
         const medals = results[4];
         const activities = results[5];
         const orgData = results[6];
+        const orgMarch = results[7];
         const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
 
         // 勋章行：已获得的排前面（按获得时间倒序取最近 6 枚展示）
@@ -200,6 +209,23 @@ Page({
               avatar: c.avatar || '',
               isSelf: !!c.isSelf,
               stepsText: util.formatNumber(c.todaySteps)
+            }))
+          });
+        }
+
+        // 集体长征（需求 §10：组织累计步数映射路线进度，节点 pct 后端下发）
+        if (orgMarch !== null) {
+          this.setData({
+            omProgress: orgMarch.progressPct,
+            omTotalText: util.formatNumber(orgMarch.totalSteps),
+            omCurrent: orgMarch.currentNodeName || '',
+            omNext: orgMarch.nextNodeName || '',
+            omFinished: !!orgMarch.finished,
+            omNodes: (orgMarch.nodes || []).map((n) => ({
+              id: n.id,
+              name: n.name,
+              status: n.status,
+              pctLabel: n.status === 'completed' ? '✓' : (n.status === 'current' ? n.pct + '%' : '0%')
             }))
           });
         }

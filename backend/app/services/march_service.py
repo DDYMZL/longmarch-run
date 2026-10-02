@@ -112,17 +112,14 @@ def _completed_chapters(lit_ids: Set[int], enabled_ids: Set[int]) -> List[Dict]:
     return done
 
 
-def get_route(db: Session, user_id: int) -> Dict:
-    """计算节点状态列表 + 路线整体进度。"""
-    nodes_def = _ordered_nodes(db)
-    current_steps = _total_steps(db, user_id)
-    lit = _lit_node_ids(db, user_id)
+def _route_state(
+    nodes_def: List[RouteNode], lit: Set[int], current_steps: int
+) -> Dict:
+    """由累计步数 + 点亮集合计算节点状态列表与路线进度（个人/组织路线共用）。
 
-    # 步数达标即视为点亮（规则：点亮后永久保留，即使步数下降也不取消）
-    for n in nodes_def:
-        if current_steps >= n.target_steps:
-            lit.add(n.id)
-
+    lit 为已点亮节点 id 集合（个人含历史持久点亮；组织路线按步数达标现算，
+    调用方负责构造）。状态规则见模块 docstring。
+    """
     nodes: List[Dict] = []
     for idx, n in enumerate(nodes_def):
         if n.id in lit:
@@ -169,12 +166,8 @@ def get_route(db: Session, user_id: int) -> Dict:
             min(1.0, max(0.0, (current_steps - prev_target) / span)) if span > 0 else 1.0
         )
 
-    chapters, current_chapter_id = _chapter_views(nodes)
-
     return {
         "nodes": nodes,
-        "current_steps": current_steps,
-        "total_steps": total_steps_target,
         "lit_count": lit_count,
         "total_count": total_count,
         "next_node": next_node,
@@ -182,6 +175,35 @@ def get_route(db: Session, user_id: int) -> Dict:
         "current_node_id": current_node_id,
         "current_progress": current_progress,
         "route_progress": route_progress,
+        "total_steps_target": total_steps_target,
+    }
+
+
+def get_route(db: Session, user_id: int) -> Dict:
+    """计算节点状态列表 + 路线整体进度。"""
+    nodes_def = _ordered_nodes(db)
+    current_steps = _total_steps(db, user_id)
+    lit = _lit_node_ids(db, user_id)
+
+    # 步数达标即视为点亮（规则：点亮后永久保留，即使步数下降也不取消）
+    for n in nodes_def:
+        if current_steps >= n.target_steps:
+            lit.add(n.id)
+
+    state = _route_state(nodes_def, lit, current_steps)
+    chapters, current_chapter_id = _chapter_views(state["nodes"])
+
+    return {
+        "nodes": state["nodes"],
+        "current_steps": current_steps,
+        "total_steps": state["total_steps_target"],
+        "lit_count": state["lit_count"],
+        "total_count": state["total_count"],
+        "next_node": state["next_node"],
+        "finished": state["finished"],
+        "current_node_id": state["current_node_id"],
+        "current_progress": state["current_progress"],
+        "route_progress": state["route_progress"],
         "chapters": chapters,
         "current_chapter_id": current_chapter_id,
     }

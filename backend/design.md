@@ -59,11 +59,11 @@
 | --- | --- | --- |
 | `auth_service` | `auth.js` | `wx_login`：code→微信 code2Session→openid→建/查用户→签发 JWT；凭证为空时 mock openid；`update_nickname`：昵称仅可修改一次 |
 | `sport_service` | `sport.js` | 今日步数查询/同步（同日覆盖）、最近 n 天记录、手动补步、行军日历聚合（按月） |
-| `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段）、按累计步数点亮 |
+| `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段）、按累计步数点亮；`_route_state` 为节点状态/进度计算共用内核（个人路线与组织路线复用） |
 | `quiz_service` | `quiz.js` | 每日抽 5 题（同用户同日同套，缓存于 `daily_questions`）、判分提交（每日一次）、记录、重置、知识画像（按题目分类统计正确率） |
 | `points_service` | `points.js` | 积分总额、流水；`grant` 按「同日同 reason」去重；`grant_daily_login` 等快捷方法 |
 | `medal_service` | `medal.js` | 12 枚勋章的判定与发放（`check_and_grant` 返回新获列表），含连续行军/步数里程碑/隐藏勋章 |
-| `org_service` | `org.js` | 组织树逐级下钻、用户组织查询/选定（任意层级）；`get_companions` 同组织同行者（子树口径人数/今日总步数/同行者列表，隐私只下发昵称/头像/步数） |
+| `org_service` | `org.js` | 组织树逐级下钻、用户组织查询/选定（任意层级）；`get_companions` 同组织同行者（子树口径人数/今日总步数/同行者列表，隐私只下发昵称/头像/步数）；`get_org_march` 组织共同长征目标（子树成员累计步数映射组织路线，复用 `march_service._route_state` 现算无持久点亮） |
 | `rank_service` | `rank.js` | 全员工累计步数总榜（跨组织，降序，标记我的名次） |
 | `event_service` | —（足迹时间轴/实时动态数据源） | 统一事件系统：`record` 写 `user_event` 并向 WS 广播 `activity`；`build_text` 生成与小程序足迹同源的中文文案；`list_public_activities` 提供小程序实时动态（脱敏由 `ACTIVITY_MASK_NICKNAME` 控制，`mask_nickname` 实现）；事件类型如 FIRST_STEP/DAILY_GOAL/STREAK_*/NODE_LIT/MEDAL_GRANTED/QUIZ_DONE 等 |
 | `streak_service` | —（内嵌于 sport 写入链） | 连续行军：写入侧 `on_sport_upsert` 在当日首次达标时维护 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件；读取侧 `compute_streaks` 以 `daily_sport.is_goal_completed` 重算 |
@@ -140,6 +140,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | GET | `/api/org/children?parent_id=` | 否 | 按层级下钻组织树（留空返回顶级） |
 | GET | `/api/org/mine` | 是 | 我的组织 `{orgId, orgName, fullName, path}` |
 | GET | `/api/org/companions?limit=` | 是 | 同组织同行者（需求 §9）：`{org, memberCount, todayTotalSteps, companions[]}`；口径为用户所选组织的整棵子树，同行者按今日步数倒序限量（≤50），条目仅昵称/头像/今日步数/isSelf（§9.4 隐私） |
+| GET | `/api/org/march` | 是 | 组织共同长征目标（需求 §10）：`{org, memberCount, totalSteps, progressPct, currentNodeName, nextNodeName, finished, litCount, totalCount, nodes[]}`；组织累计步数=子树成员累计有效步数之和，`currentNodeName`=第一个未完成节点、`nextNodeName`=其后一个（§10.2），节点 pct 已完成100/当前按累计占目标比例/其余0（§10.3） |
 | POST | `/api/org/select` | 是 | 选定/修改组织 `{orgId}`；组织不存在 404 |
 | GET | `/api/rank/steps` | 是 | 全员工累计步数榜 `{list: [{rank, userId, nickname, avatar, orgName, steps, isMe}], myRank, mySteps, total}` |
 | WS | `/api/ws/updates?token=` | 是 | 实时推送长连接：数据写入广播 `data_changed`；`user_event` 写入广播 `activity`（含文案） |
