@@ -21,6 +21,14 @@ function formatNumber(num) {
   return String(num || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+/** 中文大数格式化：>=1亿 -> 1.63亿，>=1万 -> 5000万，否则千分位 */
+function formatCn(num) {
+  const v = Number(num) || 0;
+  if (v >= 100000000) return String(Number((v / 100000000).toFixed(2))) + '亿';
+  if (v >= 10000) return String(Number((v / 10000).toFixed(1))) + '万';
+  return formatNumber(v);
+}
+
 /**
  * 格式化后端时间为本地 YYYY-MM-DD HH:mm。
  * 后端时间列为 UTC 存储的 naive ISO（无时区后缀），按 UTC 解析再转本地显示。
@@ -60,6 +68,7 @@ module.exports = {
   pad,
   formatDate,
   formatNumber,
+  formatCn,
   formatTime,
   formatRelative
 };

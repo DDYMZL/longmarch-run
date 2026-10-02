@@ -7,6 +7,7 @@ from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
 from app.schemas.schemas import (
+    GlobalGoalOut,
     LightUpResult,
     NodeDetailOut,
     RouteNodeConfigListOut,
@@ -31,6 +32,14 @@ def route_nodes(
 @router.get("/route", response_model=RouteOut, summary="长征路线进度")
 def route(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return march_service.get_route(db, current.id)
+
+
+@router.get("/global", response_model=GlobalGoalOut, summary="全员共同长征目标")
+def global_goal(
+    current: User = Depends(get_current_user), db: Session = Depends(get_db)
+):
+    """全员共同目标（需求 §11）：全员累计步数对 2 亿步总目标的进度与阶段里程碑。"""
+    return march_service.get_global_goal(db)
 
 
 @router.get("/node/{node_id}", response_model=NodeDetailOut, summary="节点详情")

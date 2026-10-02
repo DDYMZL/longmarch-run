@@ -39,7 +39,7 @@
 
 | 页面 | 类型 | 职责 |
 | --- | --- | --- |
-| `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、抵达事件卡弹层 |
+| `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、🌍全员同行卡（全员累计中文大数/进度/下一阶段/里程碑✓○芯片）、抵达事件卡弹层 |
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空插画），节点点击进详情、点亮进度、到达动画（Canvas 金光扩散 + 抵达事件卡） |
 | `pages/quiz/quiz` | tab | 今日长征情报：期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（我的长征/行军日历/运动记录/答题记录） |
@@ -63,7 +63,7 @@
 | --- | --- | --- | --- |
 | `auth.js` | `wxLogin(profile)` / `getLocalUser()` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
 | `sport.js` | 今日步数 / `syncToday()` / `addSteps()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, add, calendar` | 步数按「用户+日期」覆盖；模拟步数；行军日历月聚合 |
-| `march.js` | `refreshRouteNodes()` / `getRouteNodes()` / `getRoute()` / `getNodeDetail()` / `lightUpNodes()` | `/api/march/route-nodes, route, node/{id}, light-up` | 三级降级获取节点配置；步数达标由后端点亮并广播 |
+| `march.js` | `refreshRouteNodes()` / `getRouteNodes()` / `getRoute()` / `getNodeDetail()` / `lightUpNodes()` / `getGlobalGoal()` | `/api/march/route-nodes, route, node/{id}, light-up, global` | 三级降级获取节点配置；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑） |
 | `quiz.js` | `getDaily()` / `submit()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, records, reset, knowledge` | 每日抽 5 题（同日同套）、判分、每日一次；知识画像分类正确率 |
 | `points.js` | `grantDailyLogin()` / 总额与流水 | `/api/points`、登录副链路 | 积分发放（同日同 reason 去重） |
 | `medal.js` | `checkAndGrant()` / `getMedalList()` | `/api/medal/list, check` | 12 枚勋章判定与发放（分类/隐藏/排序由后端下发） |

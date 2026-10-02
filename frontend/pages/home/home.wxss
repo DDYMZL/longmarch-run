@@ -744,3 +744,51 @@
   margin-left: 8rpx;
   font-weight: 700;
 }
+
+/* 全员同行（P1-4，需求 §11） */
+.gg-lead {
+  font-size: 24rpx;
+  color: #8C7A5B;
+}
+
+.gg-total {
+  margin-top: 6rpx;
+  font-size: 52rpx;
+  font-weight: 700;
+  color: #A00D26;
+  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
+}
+
+.gg-unit {
+  margin-left: 8rpx;
+  font-size: 24rpx;
+  font-weight: 400;
+  color: #8C7A5B;
+}
+
+.gg-milestones {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+
+.gg-ms {
+  display: flex;
+  align-items: center;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  background: #F5EFE0;
+  font-size: 22rpx;
+  color: #8C7A5B;
+}
+
+.gg-ms.reached {
+  background: rgba(200, 16, 46, 0.1);
+  color: #A00D26;
+}
+
+.gg-ms-mark {
+  margin-left: 8rpx;
+  font-weight: 700;
+}

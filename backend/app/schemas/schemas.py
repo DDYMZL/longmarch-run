@@ -220,6 +220,32 @@ class LightUpResult(CamelModel):
     newly_completed_chapters: List[ChapterCompletedOut] = []
 
 
+class GlobalMilestoneOut(CamelModel):
+    """全员共同目标阶段里程碑（需求 §11.2）。"""
+
+    name: str
+    steps: int
+    reached: bool
+
+
+class GlobalGoalNextOut(CamelModel):
+    """下一未达成里程碑（全部达成时为 null）。"""
+
+    name: str
+    steps: int
+    remain: int
+
+
+class GlobalGoalOut(CamelModel):
+    """全员共同长征目标（需求 §11）：全员累计步数 / 总目标 / 阶段里程碑。"""
+
+    total_steps: int = 0
+    target_steps: int = 0
+    progress_pct: float = 0.0
+    milestones: List[GlobalMilestoneOut] = []
+    next_milestone: Optional[GlobalGoalNextOut] = None
+
+
 # ---------------- 答题 ----------------
 class OptionOut(CamelModel):
     label: str

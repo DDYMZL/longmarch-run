@@ -59,7 +59,7 @@
 | --- | --- | --- |
 | `auth_service` | `auth.js` | `wx_login`：code→微信 code2Session→openid→建/查用户→签发 JWT；凭证为空时 mock openid；`update_nickname`：昵称仅可修改一次 |
 | `sport_service` | `sport.js` | 今日步数查询/同步（同日覆盖）、最近 n 天记录、手动补步、行军日历聚合（按月） |
-| `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段）、按累计步数点亮；`_route_state` 为节点状态/进度计算共用内核（个人路线与组织路线复用） |
+| `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段）、按累计步数点亮；`_route_state` 为节点状态/进度计算共用内核（个人路线与组织路线复用）；`get_global_goal` 全员共同长征目标（全员累计步数对 GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES 配置，里程碑实时计算） |
 | `quiz_service` | `quiz.js` | 每日抽 5 题（同用户同日同套，缓存于 `daily_questions`）、判分提交（每日一次）、记录、重置、知识画像（按题目分类统计正确率） |
 | `points_service` | `points.js` | 积分总额、流水；`grant` 按「同日同 reason」去重；`grant_daily_login` 等快捷方法 |
 | `medal_service` | `medal.js` | 12 枚勋章的判定与发放（`check_and_grant` 返回新获列表），含连续行军/步数里程碑/隐藏勋章 |
@@ -126,6 +126,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | GET | `/api/broadcast/today` | 是 | 今日长征播报：期号、全局运动汇总、今日长征彩蛋（历史事件卡）、个人当日状态 |
 | GET | `/api/broadcast/activities?limit=` | 是 | 实时行军动态（小程序）：`user_event` 关联昵称倒序；隐私边界只下发昵称/文案/类型/时间（不含 user_id 与事件参数），`ACTIVITY_MASK_NICKNAME=true` 时昵称脱敏（如「王*明」）；实时增量经 WS `activity` 消息下发 |
 | GET | `/api/march/route` | 是 | 路线进度 `{nodes, currentSteps, totalSteps, litCount, totalCount, nextNode, finished, currentNodeId, currentProgress, routeProgress}`；仅统计启用节点；轨迹进度字段见下 |
+| GET | `/api/march/global` | 是 | 全员共同长征目标（需求 §11）：`{totalSteps, targetSteps, progressPct, milestones[{name,steps,reached}], nextMilestone{name,steps,remain}|null}`；全员累计=全部用户 daily_sport 之和，目标/里程碑配置于 `march_service.GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES` |
 | GET | `/api/march/route-nodes` | 是 | 启用节点配置列表（含经纬度），小程序缓存使用 |
 | GET | `/api/march/node/{node_id}` | 是 | 节点详情（任意状态可看，含未解锁），不存在 404 |
 | POST | `/api/march/light-up` | 是 | 点亮达标节点，返回 `{newlyLit: [...], newlyCompletedChapters: [...]}`，发放积分并刷新勋章 |

@@ -255,4 +255,31 @@
       </view>
     </view>
   </view>
+
+  <!-- 全员共同长征目标（P1-4，需求 §11） -->
+  <view class="card anim-card" style="animation-delay: 620ms">
+    <view class="card-title">
+      <text>🌍 全员同行</text>
+    </view>
+    <view class="gg-lead">我们已经一起走了</view>
+    <view class="gg-total">{{ggTotalText}}<text class="gg-unit">步</text></view>
+    <view class="om-progress-row">
+      <view class="progress-bar om-bar">
+        <view class="progress-inner" style="width: {{ggProgress}}%">
+          <view class="progress-shine"></view>
+        </view>
+      </view>
+      <view class="om-pct">{{ggProgress}}%</view>
+    </view>
+    <view class="om-position" wx:if="{{!ggAllDone}}">
+      距离下一阶段「{{ggNextName}}」 {{ggRemainText}}步
+    </view>
+    <view class="om-position" wx:else>🏆 全员共同目标已全部达成！</view>
+    <view class="gg-milestones">
+      <view class="gg-ms {{item.reached ? 'reached' : ''}}" wx:for="{{ggMilestones}}" wx:key="name">
+        <text class="gg-ms-name">{{item.name}}</text>
+        <text class="gg-ms-mark">{{item.mark}}</text>
+      </view>
+    </view>
+  </view>
 </view>

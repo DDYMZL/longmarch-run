@@ -84,6 +84,13 @@ Page({
     omNext: '',
     omFinished: false,
     omNodes: [],
+    // 全员同行（P1-4，需求 §11）
+    ggTotalText: '0',
+    ggProgress: 0,
+    ggNextName: '',
+    ggRemainText: '0',
+    ggAllDone: false,
+    ggMilestones: [],
     // 抵达事件卡弹层
     litPopup: null
   },
@@ -139,7 +146,8 @@ Page({
       medal.getMedalList(),
       broadcast.getActivities(6).catch(() => null), // 动态流失败不阻塞首页主数据
       org.getCompanions(6).catch(() => null), // 组织同行失败同上
-      org.getOrgMarch().catch(() => null) // 集体长征失败同上
+      org.getOrgMarch().catch(() => null), // 集体长征失败同上
+      march.getGlobalGoal().catch(() => null) // 全员同行失败同上
     ])
       .then((results) => {
         const today = results[0];
@@ -150,6 +158,7 @@ Page({
         const activities = results[5];
         const orgData = results[6];
         const orgMarch = results[7];
+        const globalGoal = results[8];
         const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
 
         // 勋章行：已获得的排前面（按获得时间倒序取最近 6 枚展示）
@@ -226,6 +235,22 @@ Page({
               name: n.name,
               status: n.status,
               pctLabel: n.status === 'completed' ? '✓' : (n.status === 'current' ? n.pct + '%' : '0%')
+            }))
+          });
+        }
+
+        // 全员同行（需求 §11：全员累计步数对 2 亿步总目标，里程碑状态后端下发）
+        if (globalGoal !== null) {
+          this.setData({
+            ggTotalText: util.formatCn(globalGoal.totalSteps),
+            ggProgress: globalGoal.progressPct,
+            ggNextName: globalGoal.nextMilestone ? globalGoal.nextMilestone.name : '',
+            ggRemainText: globalGoal.nextMilestone ? util.formatCn(globalGoal.nextMilestone.remain) : '0',
+            ggAllDone: !globalGoal.nextMilestone,
+            ggMilestones: (globalGoal.milestones || []).map((m) => ({
+              name: m.name,
+              reached: !!m.reached,
+              mark: m.reached ? '✓' : '○'
             }))
           });
         }

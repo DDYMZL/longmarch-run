@@ -41,8 +41,17 @@ function lightUpNodes() {
     }));
 }
 
+/**
+ * 全员共同长征目标（需求 §11）：全员累计步数 / 2 亿步总目标 / 阶段里程碑。
+ * @returns {Promise<{totalSteps:number, targetSteps:number, progressPct:number, milestones:Array<{name:string, steps:number, reached:boolean}>, nextMilestone:object|null}>}
+ */
+function getGlobalGoal() {
+  return requestService.request({ url: '/march/global' });
+}
+
 module.exports = {
   getRoute,
   getNodeDetail,
-  lightUpNodes
+  lightUpNodes,
+  getGlobalGoal
 };

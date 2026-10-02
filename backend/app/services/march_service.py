@@ -11,6 +11,7 @@ CHAPTERS 配置（管理端可视化编辑为后续增强）；章节状态由�
 """
 from typing import Dict, List, Optional, Set, Tuple
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.models import DailySport, LitNode, RouteNode
@@ -38,6 +39,16 @@ CHAPTERS: List[Dict] = [
         "id": 5, "name": "会师", "title": "第五章 · 会师", "node_ids": [9, 10],
         "intro": "1935年10月中央红军抵达吴起镇，1936年10月三大主力胜利会师，长征宣告胜利结束。",
     },
+]
+
+# 全员共同长征目标配置（需求 §11）：活动总目标与阶段里程碑。
+# name 为展示文案（随配置调整）；管理端可视化编辑为后续增强。
+GLOBAL_GOAL_STEPS = 200_000_000
+GLOBAL_MILESTONES: List[Dict] = [
+    {"name": "5000万", "steps": 50_000_000},
+    {"name": "1亿", "steps": 100_000_000},
+    {"name": "1.5亿", "steps": 150_000_000},
+    {"name": "2亿", "steps": 200_000_000},
 ]
 
 
@@ -206,6 +217,42 @@ def get_route(db: Session, user_id: int) -> Dict:
         "route_progress": state["route_progress"],
         "chapters": chapters,
         "current_chapter_id": current_chapter_id,
+    }
+
+
+def get_global_goal(db: Session) -> Dict:
+    """全员共同长征目标（需求 §11）：全员累计步数对总目标的进度与阶段里程碑。
+
+    全员累计步数 = 全部用户 daily_sport.steps 之和（按用户+日期覆盖存储，
+    无重复统计）。里程碑达成状态按累计步数实时计算；§11.3 的解锁内容 /
+    全局动画 / 系统动态等奖励钩子为后续增强（需系统级事件通道，不在本期）。
+    """
+    total = int(
+        db.query(func.coalesce(func.sum(DailySport.steps), 0)).scalar() or 0
+    )
+    milestones = [
+        {"name": m["name"], "steps": m["steps"], "reached": total >= m["steps"]}
+        for m in GLOBAL_MILESTONES
+    ]
+    upcoming = next((m for m in milestones if not m["reached"]), None)
+    return {
+        "total_steps": total,
+        "target_steps": GLOBAL_GOAL_STEPS,
+        "progress_pct": (
+            min(100.0, round(total / GLOBAL_GOAL_STEPS * 100, 1))
+            if GLOBAL_GOAL_STEPS > 0
+            else 0.0
+        ),
+        "milestones": milestones,
+        "next_milestone": (
+            {
+                "name": upcoming["name"],
+                "steps": upcoming["steps"],
+                "remain": upcoming["steps"] - total,
+            }
+            if upcoming
+            else None
+        ),
     }
 
 
