@@ -1,4 +1,17 @@
 <view class="march-page">
+  <!-- 抵达事件卡弹层 -->
+  <view wx:if="{{litPopup}}" class="lit-overlay" wx:key="{{litPopup.key}}">
+    <view class="lit-card">
+      <view class="lit-star anim-pop">★</view>
+      <view class="lit-title">🎉 恭喜抵达</view>
+      <view class="lit-name">{{litPopup.icon}} {{litPopup.name}}</view>
+      <view class="lit-time" wx:if="{{litPopup.historicalTime}}">{{litPopup.historicalTime}}</view>
+      <view class="lit-points">+{{litPopup.gainedPoints}} 积分</view>
+      <view class="lit-next" wx:if="{{litPopup.nextName}}">距下一站「{{litPopup.nextName}}」还需 {{litPopup.nextRemain}} 步</view>
+      <view class="lit-next" wx:else>🏆 长征路线已全部完成！</view>
+    </view>
+  </view>
+
   <!-- 路线总览 -->
   <view class="march-header">
     <view class="march-header-title">长征路线</view>

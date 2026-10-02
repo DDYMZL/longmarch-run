@@ -79,3 +79,109 @@
   border-color: #E8C76A;
   background: #FBF3DC;
 }
+
+/* 分类分组 */
+.medal-group {
+  margin-top: 10rpx;
+}
+
+.group-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #5A1A1A;
+  padding: 20rpx 40rpx 0;
+}
+
+.group-title::before {
+  content: '';
+  display: inline-block;
+  width: 8rpx;
+  height: 24rpx;
+  background: #D4A017;
+  border-radius: 4rpx;
+  margin-right: 12rpx;
+  vertical-align: -2rpx;
+}
+
+/* 隐藏勋章（🔒 神秘态） */
+.medal-card.locked {
+  background: #F4F1EC;
+}
+
+.medal-card.locked .medal-name {
+  color: #999999;
+}
+
+/* 详情弹层 */
+.medal-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.medal-detail {
+  width: 560rpx;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 50rpx 40rpx 40rpx;
+  text-align: center;
+}
+
+.detail-icon {
+  font-size: 100rpx;
+  line-height: 1.2;
+}
+
+.detail-name {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #5A1A1A;
+  margin-top: 16rpx;
+}
+
+.detail-state {
+  display: inline-block;
+  font-size: 22rpx;
+  color: #999999;
+  border: 1rpx solid #DDDDDD;
+  border-radius: 20rpx;
+  padding: 4rpx 20rpx;
+  margin-top: 14rpx;
+}
+
+.detail-state.owned {
+  color: #B8860B;
+  border-color: #E8C76A;
+  background: #FBF3DC;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 16rpx 0;
+  font-size: 26rpx;
+  text-align: left;
+}
+
+.detail-label {
+  color: #666666;
+  flex-shrink: 0;
+  margin-right: 24rpx;
+}
+
+.detail-value {
+  color: #333333;
+  text-align: right;
+  line-height: 1.6;
+}
+
+.detail-close {
+  margin-top: 24rpx;
+}

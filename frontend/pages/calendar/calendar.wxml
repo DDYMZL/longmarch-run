@@ -1,0 +1,99 @@
+<view class="calendar-page">
+  <view wx:if="{{loading}}" class="empty-tip">日历加载中…</view>
+  <view wx:elif="{{errorMsg}}" class="empty-tip">{{errorMsg}}</view>
+
+  <block wx:else>
+    <!-- 月份切换 -->
+    <view class="month-bar">
+      <view class="month-arrow" bindtap="prevMonth">‹</view>
+      <view class="month-title">{{monthTitle}}</view>
+      <view class="month-arrow {{isCurrentMonth ? 'disabled' : ''}}" bindtap="nextMonth">›</view>
+    </view>
+
+    <!-- 月统计条 -->
+    <view class="card stats-card" wx:if="{{stats}}">
+      <view class="stat-row">
+        <view class="stat-item">
+          <view class="stat-value">{{stats.monthSteps}}</view>
+          <view class="stat-label">月总步数</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{stats.sportDays}}</view>
+          <view class="stat-label">运动天数</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{stats.avgSteps}}</view>
+          <view class="stat-label">日均步数</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value">{{stats.maxSteps}}</view>
+          <view class="stat-label">单日最高</view>
+        </view>
+        <view class="stat-item">
+          <view class="stat-value text-red">🔥 {{stats.currentStreak}}</view>
+          <view class="stat-label">连续行军</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 月历 -->
+    <view class="card calendar-card">
+      <view class="weekday-row">
+        <view class="weekday" wx:for="{{weekdays}}" wx:key="*this">{{item}}</view>
+      </view>
+      <view class="day-grid">
+        <view
+          wx:for="{{cells}}"
+          wx:key="key"
+          class="day-cell {{item.blank ? 'blank' : ''}} lv-{{item.level}} {{item.isToday ? 'today' : ''}}"
+          data-cell="{{item}}"
+          bindtap="handleDayTap"
+        >
+          <block wx:if="{{!item.blank}}">
+            <view class="day-num">{{item.day}}</view>
+            <view class="day-marks">
+              <text wx:if="{{item.quizDone}}" class="mark">📝</text>
+              <text wx:if="{{item.litNodes.length > 0}}" class="mark">⭐</text>
+            </view>
+          </block>
+        </view>
+      </view>
+
+      <!-- 色阶图例 -->
+      <view class="legend">
+        <view class="legend-item"><view class="legend-dot lv-1"></view>1-4999</view>
+        <view class="legend-item"><view class="legend-dot lv-2"></view>5000+ 达标</view>
+        <view class="legend-item"><view class="legend-dot lv-3"></view>10000+</view>
+        <view class="legend-item"><text class="mark">📝</text>答题</view>
+        <view class="legend-item"><text class="mark">⭐</text>点亮</view>
+      </view>
+    </view>
+
+    <!-- 当日详情弹层 -->
+    <view wx:if="{{selected}}" class="detail-mask" bindtap="closeDetail">
+      <view class="detail-card anim-pop" catchtap="noop">
+        <view class="detail-title">
+          {{selected.date}}{{selected.isToday ? '（今天）' : ''}}
+        </view>
+        <view class="detail-steps">{{selected.stepsText}} 步</view>
+        <view class="detail-goal {{selected.goalCompleted ? 'done' : ''}}">
+          {{selected.goalCompleted ? '🎯 已达成连续行军目标（5000 步）' : '未达成连续行军目标'}}
+        </view>
+        <view class="divider"></view>
+        <view class="detail-row">
+          <text class="detail-label">每日情报</text>
+          <text wx:if="{{selected.quizDone}}" class="detail-value">已完成，得分 {{selected.quizScore}}</text>
+          <text wx:else class="detail-value text-gray">未完成</text>
+        </view>
+        <view class="detail-row">
+          <text class="detail-label">点亮节点</text>
+          <text wx:if="{{selected.litNodes.length > 0}}" class="detail-value text-gold">
+            ⭐ {{selected.litNodes.join('、')}}
+          </text>
+          <text wx:else class="detail-value text-gray">无</text>
+        </view>
+        <button class="btn-ghost detail-close" bindtap="closeDetail">关闭</button>
+      </view>
+    </view>
+  </block>
+</view>

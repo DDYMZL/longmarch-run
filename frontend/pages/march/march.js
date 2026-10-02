@@ -88,7 +88,9 @@ Page({
     markers: [],
     polylines: [],
     // 实景地图当前选中的节点（点 marker 后在底部信息卡展示）
-    selectedNode: null
+    selectedNode: null,
+    // 抵达事件卡弹层（light-up 返回新点亮节点后逐个播放）
+    litPopup: null
   },
 
   onReady() {
@@ -114,12 +116,14 @@ Page({
   onHide() {
     this._refreshRequestId = (this._refreshRequestId || 0) + 1;
     if (this._viewTimer) clearTimeout(this._viewTimer);
+    if (this.popupTimer) clearTimeout(this.popupTimer);
     this.stopAnim();
   },
 
   onUnload() {
     this._refreshRequestId = (this._refreshRequestId || 0) + 1;
     if (this._viewTimer) clearTimeout(this._viewTimer);
+    if (this.popupTimer) clearTimeout(this.popupTimer);
     this.stopAnim();
   },
 
@@ -129,15 +133,69 @@ Page({
     const requestId = (this._refreshRequestId || 0) + 1;
     this._refreshRequestId = requestId;
 
+    // 先尝试点亮达标节点（幂等，仅返回本次新点亮），再拉取路线；
+    // 有新点亮时播放到达动画序列（轨迹推进 → 节点发光扩散 → 抵达事件卡）。
     march
-      .getRoute()
+      .lightUpNodes()
+      .catch(() => [])
+      .then((newlyLit) => {
+        if (this._refreshRequestId !== requestId) return null;
+        this._pendingLit = newlyLit;
+        return march.getRoute();
+      })
       .then((route) => {
-        if (this._refreshRequestId !== requestId) return;
+        if (!route || this._refreshRequestId !== requestId) return;
         this.renderRoute(route);
+        this.playArriveIfNeeded();
       })
       .catch(() => {
         // 网络失败时保留上一次渲染的路线
       });
+  },
+
+  /**
+   * 有新点亮节点时播放到达动画序列：
+   * 插画地图模式下节点发光扩散（轨迹推进由路线入场描画承担），随后逐个弹「抵达事件卡」。
+   * 已点亮节点点击仅查看详情，不触发动画（动画只由 light-up 响应驱动）。
+   */
+  playArriveIfNeeded() {
+    const lit = this._pendingLit;
+    this._pendingLit = null;
+    if (!lit || lit.length === 0) return;
+
+    if (this.data.mode === 'canvas') {
+      this.arriveFx = { ids: lit.map((n) => n.id), start: Date.now() };
+    }
+    this.playArrivePopup(lit);
+  },
+
+  /**
+   * 抵达事件卡（逐个播放）：恭喜抵达 + 历史时间 + 积分 + 下一站距离
+   */
+  playArrivePopup(nodes) {
+    let i = 0;
+    const showNext = () => {
+      if (i >= nodes.length) {
+        this.setData({ litPopup: null });
+        return;
+      }
+      const n = nodes[i];
+      this.setData({
+        litPopup: {
+          key: Date.now(),
+          name: n.name,
+          icon: n.icon || '★',
+          historicalTime: n.historicalTime || '',
+          gainedPoints: n.gainedPoints || 0,
+          nextName: n.nextNode ? n.nextNode.name : '',
+          nextRemain: n.nextNode ? n.nextNode.remain : 0
+        }
+      });
+      i++;
+      if (this.popupTimer) clearTimeout(this.popupTimer);
+      this.popupTimer = setTimeout(showNext, 2400);
+    };
+    showNext();
   },
 
   /**
@@ -508,7 +566,54 @@ Page({
     this.drawStars(t);
     this.drawRoute(t);
     this.drawNodes(t);
+    this.drawArriveFx();
     this.drawProgressFlag(t);
+  },
+
+  /**
+   * 到达动画：新点亮节点发光扩散（两层扩散金环 + 渐隐光晕，约 2.2s）
+   */
+  drawArriveFx() {
+    const fx = this.arriveFx;
+    if (!fx || !this.routeData || !this.nodePts) return;
+    const elapsed = (Date.now() - fx.start) / 2200;
+    if (elapsed >= 1) {
+      this.arriveFx = null;
+      return;
+    }
+    const ctx = this.ctx;
+    const glow = easeOutCubic(Math.min(1, elapsed * 1.15));
+
+    fx.ids.forEach((id) => {
+      let idx = -1;
+      for (let i = 0; i < this.routeData.nodes.length; i++) {
+        if (this.routeData.nodes[i].id === id) {
+          idx = i;
+          break;
+        }
+      }
+      if (idx < 0) return;
+      const p = this.nodePts[idx];
+
+      // 中心光晕放大渐隐（图标激活）
+      if (this.glowGold) {
+        const s = 40 + glow * 64;
+        ctx.globalAlpha = (1 - elapsed) * 0.9;
+        ctx.drawImage(this.glowGold, p.x - s / 2, p.y - s / 2, s, s);
+      }
+      // 两层扩散金环
+      for (let k = 0; k < 2; k++) {
+        const pr = Math.max(0, Math.min(1, elapsed * 1.3 - k * 0.22));
+        if (pr <= 0) continue;
+        ctx.globalAlpha = (1 - pr) * 0.75;
+        ctx.strokeStyle = '#FFD98A';
+        ctx.lineWidth = 2.5 - pr * 1.4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 10 + pr * 46, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    });
   },
 
   /**

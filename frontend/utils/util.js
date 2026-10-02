@@ -35,6 +35,19 @@ function formatNumber(num) {
   return String(num || 0).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
+/**
+ * 格式化后端时间为本地 YYYY-MM-DD HH:mm。
+ * 后端时间列为 UTC 存储的 naive ISO（无时区后缀），按 UTC 解析再转本地显示。
+ * @param {string} iso 如 2026-10-01T16:10:35.619914
+ */
+function formatTime(iso) {
+  if (!iso) return '';
+  const d = new Date(String(iso) + 'Z');
+  if (isNaN(d.getTime())) return '';
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
+    ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
 /** 生成 [min, max] 范围内的随机整数 */
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
@@ -71,6 +84,7 @@ module.exports = {
   formatDate,
   recentDates,
   formatNumber,
+  formatTime,
   randomInt,
   shuffle,
   seededSteps

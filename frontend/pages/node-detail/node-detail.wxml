@@ -1,13 +1,38 @@
 <view wx:if="{{node}}" class="node-detail-page">
-  <!-- 头部插画 -->
-  <view class="hero">
+  <!-- 历史图片（有图 swiper，无图插画占位） -->
+  <swiper wx:if="{{node.images.length > 0}}" class="hero-swiper" indicator-dots autoplay circular>
+    <swiper-item wx:for="{{node.images}}" wx:key="*this">
+      <image class="hero-image" src="{{item}}" mode="aspectFill" />
+    </swiper-item>
+  </swiper>
+  <view wx:else class="hero">
     <view class="hero-icon">{{node.icon}}</view>
-    <view class="hero-name">{{node.name}}</view>
-    <view class="hero-time">{{node.historicalTime}}</view>
+  </view>
+
+  <!-- 标题 + 关键词 -->
+  <view class="title-block">
+    <view class="title-name">{{node.name}}</view>
+    <view class="keyword-row" wx:if="{{keywordList.length > 0}}">
+      <text class="keyword-chip" wx:for="{{keywordList}}" wx:key="*this">{{item}}</text>
+    </view>
+  </view>
+
+  <!-- 时间 / 地点 -->
+  <view class="card meta-card anim-card">
+    <view class="meta-row">
+      <view class="meta-item">
+        <view class="meta-label">历史时间</view>
+        <view class="meta-value">{{node.historicalTime}}</view>
+      </view>
+      <view class="meta-item" wx:if="{{node.location}}">
+        <view class="meta-label">地点</view>
+        <view class="meta-value">{{node.location}}</view>
+      </view>
+    </view>
   </view>
 
   <!-- 数据卡片 -->
-  <view class="card stats-card">
+  <view class="card stats-card anim-card" style="animation-delay: 80ms">
     <view class="stat-row">
       <view class="stat-item">
         <view class="stat-value">{{targetText}}</view>
@@ -30,10 +55,42 @@
     </view>
   </view>
 
+  <!-- 简介 -->
+  <view class="card brief-card anim-card" style="animation-delay: 140ms" wx:if="{{node.brief}}">
+    <view class="brief-text">{{node.brief}}</view>
+  </view>
+
   <!-- 历史故事 -->
-  <view class="card">
+  <view class="card anim-card" style="animation-delay: 200ms">
     <view class="card-title">历史故事</view>
     <view class="story-text">{{node.description}}</view>
+  </view>
+
+  <!-- 历史意义 -->
+  <view class="card anim-card" style="animation-delay: 260ms" wx:if="{{node.significance}}">
+    <view class="card-title">历史意义</view>
+    <view class="story-text">{{node.significance}}</view>
+  </view>
+
+  <!-- 相关人物 -->
+  <view class="card anim-card" style="animation-delay: 320ms" wx:if="{{node.figures}}">
+    <view class="card-title">相关人物</view>
+    <view class="figures-text">{{node.figures}}</view>
+  </view>
+
+  <!-- 路线位置（小地图） -->
+  <view class="card anim-card" style="animation-delay: 380ms">
+    <view class="card-title">路线位置</view>
+    <map
+      class="mini-map"
+      latitude="{{node.latitude}}"
+      longitude="{{node.longitude}}"
+      scale="7"
+      markers="{{markers}}"
+      enable-scroll="{{false}}"
+      enable-zoom="{{false}}"
+      enable-rotate="{{false}}"
+    ></map>
   </view>
 
   <view class="detail-actions">

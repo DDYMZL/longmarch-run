@@ -94,6 +94,31 @@ page {
   margin: 20rpx 0;
 }
 
+/* 进度条（首页/profile 共用） */
+.progress-bar {
+  position: relative;
+  height: 20rpx;
+  background: #F0E6D2;
+  border-radius: 10rpx;
+  overflow: hidden;
+}
+
+.progress-inner {
+  height: 100%;
+  background: linear-gradient(90deg, #D4A017, #E8C76A);
+  border-radius: 10rpx;
+  transition: width 0.4s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* 卡片标题右侧链接 */
+.link-more {
+  font-size: 26rpx;
+  color: #C8102E;
+  font-weight: normal;
+}
+
 /* ==================== 全局动画体系 ==================== */
 
 /* 卡片滑入 */

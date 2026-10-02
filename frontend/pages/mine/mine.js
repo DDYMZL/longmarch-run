@@ -1,14 +1,11 @@
 /**
  * 个人中心
- * 展示：用户信息 / 累计步数 / 点亮节点 / 累计答题 / 积分 / 勋章
- * 入口：运动记录 / 答题记录 / 我的勋章 / 退出登录
+ * 数据区改引 profile summary 口径（累计步数/点亮节点/答题/积分），
+ * 入口：我的长征 / 行军日历 / 组织架构 / 运动记录 / 答题记录 / 我的勋章 / 退出登录
  */
 const app = getApp();
 const auth = require('../../services/auth');
-const sport = require('../../services/sport');
-const march = require('../../services/march');
-const quiz = require('../../services/quiz');
-const points = require('../../services/points');
+const profile = require('../../services/profile');
 const medal = require('../../services/medal');
 
 Page({
@@ -20,7 +17,8 @@ Page({
     quizCount: 0,
     points: 0,
     medalIcons: [],
-    medalCount: 0
+    medalCount: 0,
+    medalTotal: 0
   },
 
   onShow() {
@@ -37,29 +35,20 @@ Page({
   },
 
   refresh() {
-    // 并行拉取后端数据（勋章列表接口会自动评估发放）
-    Promise.all([
-      sport.getToday(),
-      march.getRoute(),
-      quiz.getRecords(),
-      medal.getMedalList(),
-      points.getTotal()
-    ])
+    // 档案聚合 + 勋章图标条（勋章列表接口会自动评估发放）
+    Promise.all([profile.getSummary(), medal.getMedalList()])
       .then((results) => {
-        const today = results[0];
-        const route = results[1];
-        const records = results[2];
-        const medalList = results[3];
-        const totalPoints = results[4];
+        const summary = results[0];
+        const medalList = results[1];
         const ownedMedals = medalList.filter((m) => m.owned);
 
         this.setData({
           user: app.globalData.user,
-          totalSteps: today.totalSteps,
-          litCount: route.litCount,
-          totalCount: route.totalCount,
-          quizCount: records.length,
-          points: totalPoints,
+          totalSteps: summary.stats.totalSteps,
+          litCount: summary.stats.litCount,
+          totalCount: summary.stats.totalCount,
+          quizCount: summary.quiz.totalCount,
+          points: summary.points.total,
           medalIcons: ownedMedals.slice(0, 6).map((m) => m.icon),
           medalCount: ownedMedals.length,
           medalTotal: medalList.length
@@ -68,6 +57,16 @@ Page({
       .catch(() => {
         this.setData({ user: app.globalData.user });
       });
+  },
+
+  /** 我的长征（档案页） */
+  goProfile() {
+    wx.navigateTo({ url: '/pages/profile/profile' });
+  },
+
+  /** 行军日历 */
+  goCalendar() {
+    wx.navigateTo({ url: '/pages/calendar/calendar' });
   },
 
   goSportRecords() {

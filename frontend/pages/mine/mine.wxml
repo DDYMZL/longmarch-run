@@ -50,6 +50,14 @@
 
   <!-- 功能入口 -->
   <view class="card menu-card anim-card" style="animation-delay: 280ms">
+    <view class="menu-item" bindtap="goProfile">
+      <text>我的长征</text>
+      <text class="menu-arrow">›</text>
+    </view>
+    <view class="menu-item" bindtap="goCalendar">
+      <text>行军日历</text>
+      <text class="menu-arrow">›</text>
+    </view>
     <view class="menu-item" bindtap="goOrgSelect">
       <text>组织架构</text>
       <text class="menu-arrow">›</text>

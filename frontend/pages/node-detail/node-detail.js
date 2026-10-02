@@ -1,6 +1,7 @@
 /**
- * 节点详情页
- * 展示：节点名 / 历史图片(插画占位) / 目标步数 / 我的累计步数 / 状态 / 历史故事
+ * 节点详情页（历史事件卡）
+ * 结构：历史图片(有图 swiper / 无图插画) → 标题+关键词 → 时间/地点 → 数据卡
+ *       → 简介 → 历史故事 → 历史意义 → 相关人物 → 路线位置(小地图)
  */
 const app = getApp();
 const march = require('../../services/march');
@@ -11,7 +12,9 @@ Page({
     node: null,
     statusText: '',
     targetText: '',
-    currentText: ''
+    currentText: '',
+    keywordList: [],
+    markers: []
   },
 
   onLoad(options) {
@@ -35,7 +38,26 @@ Page({
           node,
           statusText: statusMap[node.status] || '未解锁',
           targetText: util.formatNumber(node.targetSteps),
-          currentText: util.formatNumber(node.currentSteps)
+          currentText: util.formatNumber(node.currentSteps),
+          keywordList: node.keywords ? node.keywords.split(',').filter((k) => k) : [],
+          markers: [
+            {
+              id: node.id,
+              latitude: node.latitude,
+              longitude: node.longitude,
+              width: 24,
+              height: 24,
+              callout: {
+                content: node.name,
+                color: '#5A1A1A',
+                bgColor: '#FBF3DC',
+                fontSize: 12,
+                borderRadius: 8,
+                padding: 6,
+                display: 'ALWAYS'
+              }
+            }
+          ]
         });
         wx.setNavigationBarTitle({ title: node.name });
       })

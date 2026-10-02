@@ -11,7 +11,7 @@
 
   <!-- 得分 -->
   <view class="result-hero">
-    <view class="result-title">今日答题完成</view>
+    <view class="result-title">情报任务完成</view>
     <view class="result-score">{{displayScore}} 分</view>
     <view class="result-stars">
       <text wx:for="{{stars}}" wx:key="*this" class="star {{item ? 'on' : ''}}">★</text>
@@ -49,7 +49,7 @@
     </view>
   </view>
   <view class="card anim-card" style="animation-delay: 420ms" wx:else>
-    <view class="perfect-tip">🎉 全部答对，太棒了！</view>
+    <view class="perfect-tip">🎉 完美通关，全部答对！</view>
   </view>
 
   <!-- 操作 -->

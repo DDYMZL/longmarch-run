@@ -101,3 +101,61 @@
   color: #B8B0A0;
   text-decoration: underline;
 }
+
+/* 期号 */
+.quiz-hero-issue {
+  display: inline-block;
+  font-size: 22rpx;
+  color: #FFE9A8;
+  background: rgba(255, 255, 255, 0.16);
+  border-radius: 20rpx;
+  padding: 4rpx 24rpx;
+  margin-top: 14rpx;
+  letter-spacing: 2rpx;
+}
+
+/* 知识画像 */
+.knowledge-card {
+  margin-top: 20rpx;
+}
+
+.knowledge-overall {
+  font-size: 24rpx;
+  color: #D4A017;
+  font-weight: normal;
+}
+
+.knowledge-item {
+  padding: 14rpx 0;
+}
+
+.knowledge-head {
+  display: flex;
+  justify-content: space-between;
+  font-size: 26rpx;
+  margin-bottom: 10rpx;
+}
+
+.knowledge-name {
+  color: #333333;
+  font-weight: 500;
+}
+
+.knowledge-rate {
+  color: #999999;
+  font-size: 24rpx;
+}
+
+.knowledge-bar {
+  height: 14rpx;
+  background: #F0E6D2;
+  border-radius: 7rpx;
+  overflow: hidden;
+}
+
+.knowledge-bar-inner {
+  height: 100%;
+  background: linear-gradient(90deg, #C8102E, #E8C76A);
+  border-radius: 7rpx;
+  transition: width 0.4s ease;
+}

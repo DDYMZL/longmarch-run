@@ -4,17 +4,42 @@
     <view class="medals-sub">已获得勋章</view>
   </view>
 
-  <view class="medal-grid">
-    <view
-      class="medal-card {{item.owned ? 'owned anim-glow' : 'anim-card'}}"
-      style="animation-delay: {{index * 90}}ms"
-      wx:for="{{medals}}"
-      wx:key="id"
-    >
-      <view class="medal-icon">{{item.icon}}</view>
-      <view class="medal-name">{{item.name}}</view>
-      <view class="medal-desc">{{item.desc}}</view>
-      <view class="medal-state">{{item.owned ? '已获得' : '未获得'}}</view>
+  <!-- 分类分组 -->
+  <view class="medal-group" wx:for="{{groups}}" wx:key="key" wx:for-item="group">
+    <view class="group-title">{{group.name}}</view>
+    <view class="medal-grid">
+      <view
+        class="medal-card {{item.owned ? 'owned anim-glow' : ''}} {{item.locked ? 'locked' : ''}}"
+        wx:for="{{group.medals}}"
+        wx:key="id"
+        data-item="{{item}}"
+        bindtap="handleMedalTap"
+      >
+        <view class="medal-icon">{{item.icon}}</view>
+        <view class="medal-name">{{item.name}}</view>
+        <view class="medal-state">{{item.owned ? '已获得' : (item.locked ? '未解锁' : '未获得')}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 勋章详情弹层 -->
+  <view wx:if="{{selected}}" class="medal-mask" bindtap="closeDetail">
+    <view class="medal-detail anim-pop" catchtap="noop">
+      <view class="detail-icon">{{selected.icon}}</view>
+      <view class="detail-name">{{selected.name}}</view>
+      <view class="detail-state {{selected.owned ? 'owned' : ''}}">
+        {{selected.owned ? '已获得' : (selected.locked ? '未解锁' : '未获得')}}
+      </view>
+      <view class="divider"></view>
+      <view class="detail-row">
+        <text class="detail-label">获得条件</text>
+        <text class="detail-value">{{selected.desc}}</text>
+      </view>
+      <view class="detail-row" wx:if="{{selected.grantedText}}">
+        <text class="detail-label">获得时间</text>
+        <text class="detail-value">{{selected.grantedText}}</text>
+      </view>
+      <button class="btn-ghost detail-close" bindtap="closeDetail">关闭</button>
     </view>
   </view>
 </view>

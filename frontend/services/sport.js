@@ -37,11 +37,22 @@ function syncToday() {
 }
 
 /**
- * 获取今日步数概况。
- * @returns {Promise<{date:string, steps:number, target:number, totalSteps:number}>}
+ * 获取今日步数概况（含连续行军卡片字段）。
+ * @returns {Promise<{date:string, steps:number, target:number, totalSteps:number,
+ *   currentStreak:number, maxStreak:number, streakGoal:number, todayGoalCompleted:boolean,
+ *   nextStreakMilestone:number|null, streakRemain:number}>}
  */
 function getToday() {
   return requestService.request({ url: '/sport/today' });
+}
+
+/**
+ * 行军日历（整月逐日步数档位 + 答题/点亮标记 + 月度统计）。
+ * @param {string} month 格式 YYYY-MM
+ * @returns {Promise<{month:string, days:Array, stats:object}>}
+ */
+function getCalendar(month) {
+  return requestService.request({ url: '/sport/calendar?month=' + month });
 }
 
 /**
@@ -68,6 +79,7 @@ module.exports = {
   authorizeWeRun,
   syncToday,
   getToday,
+  getCalendar,
   getRecent,
   addSteps
 };

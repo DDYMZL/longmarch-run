@@ -1,6 +1,6 @@
 <view class="home-page">
-  <!-- 点亮节点庆祝弹层 -->
-  <view wx:if="{{litPopup}}" class="lit-overlay">
+  <!-- 抵达事件卡弹层 -->
+  <view wx:if="{{litPopup}}" class="lit-overlay" wx:key="{{litPopup.key}}">
     <view class="lit-card">
       <view class="lit-star anim-pop">★</view>
       <view class="lit-burst">
@@ -13,9 +13,12 @@
         <view class="lit-particle p7"></view>
         <view class="lit-particle p8"></view>
       </view>
-      <view class="lit-title">点亮节点</view>
-      <view class="lit-name">{{litPopup.name}}</view>
-      <view class="lit-points">+10 积分</view>
+      <view class="lit-title">🎉 恭喜抵达</view>
+      <view class="lit-name">{{litPopup.icon}} {{litPopup.name}}</view>
+      <view class="lit-time" wx:if="{{litPopup.historicalTime}}">{{litPopup.historicalTime}}</view>
+      <view class="lit-points">+{{litPopup.gainedPoints}} 积分</view>
+      <view class="lit-next" wx:if="{{litPopup.nextName}}">距下一站「{{litPopup.nextName}}」还需 {{litPopup.nextRemain}} 步</view>
+      <view class="lit-next" wx:else>🏆 长征路线已全部完成！</view>
     </view>
   </view>
 
@@ -31,10 +34,10 @@
     </view>
   </view>
 
-  <!-- 今日运动 -->
+  <!-- 今日行军卡 -->
   <view class="card sport-card anim-card" style="animation-delay: 60ms">
     <view class="card-title">
-      <text>今日运动</text>
+      <text>今日行军</text>
       <text class="sport-date">{{todaySteps > 0 ? '已同步' : '未同步'}}</text>
     </view>
 
@@ -42,7 +45,7 @@
       <text class="step-num">{{todaySteps}}</text>
       <text class="step-unit">步</text>
     </view>
-    <view class="step-target">今日目标：{{dailyTarget}} 步</view>
+    <view class="step-target">今日目标：{{dailyTarget}} 步 · 击败 {{beatPercent}}% 的战友</view>
 
     <view class="progress-bar">
       <view class="progress-inner" style="width: {{stepPercent}}%">
@@ -50,6 +53,11 @@
       </view>
     </view>
     <view class="progress-text">{{stepPercent}}%</view>
+
+    <view class="next-node-tip" wx:if="{{nextNodeName && !finished}}">
+      距下一站「{{nextNodeName}}」还需 {{remainToNext}} 步
+    </view>
+    <view class="next-node-tip" wx:elif="{{finished}}">🏆 已完成全部长征路线</view>
 
     <view wx:if="{{syncError}}" class="error-tip">{{syncError}}</view>
 
@@ -61,8 +69,8 @@
     </view>
   </view>
 
-  <!-- 长征进度 -->
-  <view class="card anim-card" style="animation-delay: 160ms">
+  <!-- 长征进度（迷你路线） -->
+  <view class="card anim-card" style="animation-delay: 140ms">
     <view class="card-title" bindtap="goMarch">
       <text>长征进度</text>
       <text class="link-more">查看路线 ›</text>
@@ -72,11 +80,8 @@
     <view wx:elif="{{routeError}}" class="empty-tip">{{routeError}}</view>
     <block wx:else>
       <view class="march-summary">
-        <view class="summary-main">已完成 {{litCount}} / {{totalCount}} 个节点</view>
+        <view class="summary-main">已点亮 {{litCount}} / {{totalCount}} 个节点</view>
         <view class="summary-sub" wx:if="{{finished}}">🎉 恭喜完成长征路线！</view>
-        <view class="summary-sub" wx:elif="{{nextNode}}">
-          距下一站「{{nextNode.name}}」还需 {{nextNode.remain}} 步
-        </view>
       </view>
 
       <!-- 迷你路线图 -->
@@ -94,22 +99,72 @@
     </block>
   </view>
 
-  <!-- 今日答题 -->
+  <!-- 连续行军卡 -->
+  <view class="card streak-card anim-card" style="animation-delay: 200ms" bindtap="goCalendar">
+    <view class="card-title">
+      <text>连续行军</text>
+      <text class="link-more">行军日历 ›</text>
+    </view>
+    <view class="streak-row">
+      <view class="streak-main">
+        <text class="streak-fire">🔥</text>
+        <text class="streak-num">{{currentStreak}}</text>
+        <text class="streak-unit">天</text>
+      </view>
+      <view class="streak-side">
+        <view class="streak-goal {{todayGoalCompleted ? 'done' : ''}}">
+          {{todayGoalCompleted ? '今日目标已达成 ✓' : '今日目标 ' + streakGoal + ' 步'}}
+        </view>
+        <view class="streak-mile" wx:if="{{nextStreakMilestone}}">
+          再坚持 {{streakRemain}} 天可达 {{nextStreakMilestone}} 天里程碑
+        </view>
+        <view class="streak-mile" wx:else>已达最高里程碑，继续保持！</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- 今日长征情报卡 -->
   <view class="card quiz-card anim-card" style="animation-delay: 260ms">
     <view class="card-title">
-      <text>今日答题</text>
+      <text>今日长征情报 · 第 {{issueNo}} 期</text>
       <text class="quiz-badge">{{quizCompleted ? '已完成' : quizRemain + ' 道题'}}</text>
     </view>
 
     <block wx:if="{{quizCompleted}}">
       <view class="quiz-done">
-        <view class="quiz-done-score">今日得分：{{quizScore}} 分</view>
-        <view class="quiz-done-tip">明天继续挑战</view>
+        <view class="quiz-done-score">本期得分：{{quizScore}} 分</view>
+        <view class="quiz-done-tip">明天继续挑战新一期情报</view>
       </view>
     </block>
     <block wx:else>
-      <view class="quiz-tip">今日还有 {{quizRemain}} 道题等待挑战</view>
-      <button class="btn-primary quiz-btn" bindtap="goQuiz">开始答题</button>
+      <view class="quiz-tip">破译 {{quizRemain}} 道情报题，赢取积分</view>
+      <button class="btn-primary quiz-btn" bindtap="goQuiz">开始破译</button>
     </block>
+  </view>
+
+  <!-- 长征记忆卡 -->
+  <view class="card memory-card anim-card" style="animation-delay: 320ms" wx:if="{{memory}}" bindtap="goMemoryNode">
+    <view class="card-title">
+      <text>长征记忆</text>
+      <text class="link-more">了解详情 ›</text>
+    </view>
+    <view class="memory-title">{{memory.title}}</view>
+    <view class="memory-time" wx:if="{{memory.historicalTime}}">{{memory.historicalTime}}</view>
+    <view class="memory-brief" wx:if="{{memory.brief}}">{{memory.brief}}</view>
+  </view>
+
+  <!-- 勋章行 -->
+  <view class="card anim-card" style="animation-delay: 380ms">
+    <view class="card-title" bindtap="goMedals">
+      <text>我的勋章（{{medalOwned}}/{{medalTotal}}）</text>
+      <text class="link-more">勋章墙 ›</text>
+    </view>
+    <view wx:if="{{medalPreview.length === 0}}" class="empty-tip">还没有勋章，去运动或答题赢取吧</view>
+    <view class="medal-row" wx:else>
+      <view class="medal-item" wx:for="{{medalPreview}}" wx:key="id" bindtap="goMedals">
+        <view class="medal-icon">{{item.icon}}</view>
+        <view class="medal-name">{{item.name}}</view>
+      </view>
+    </view>
   </view>
 </view>

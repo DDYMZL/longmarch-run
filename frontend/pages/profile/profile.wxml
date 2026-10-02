@@ -1,0 +1,117 @@
+<view class="profile-page">
+  <view wx:if="{{loading}}" class="empty-tip">档案加载中…</view>
+  <view wx:elif="{{errorMsg}}" class="empty-tip">{{errorMsg}}</view>
+
+  <block wx:else>
+    <!-- 头部：头像 / 昵称 / 组织 / 参与天数 / 阶段称号 -->
+    <view class="profile-header">
+      <view class="profile-avatar">
+        <image wx:if="{{summary.user.avatar}}" src="{{summary.user.avatar}}" mode="aspectFill" />
+        <text wx:else class="avatar-placeholder">🏃</text>
+      </view>
+      <view class="profile-header-info">
+        <view class="profile-name">{{summary.user.nickname}}</view>
+        <view class="profile-org" wx:if="{{summary.user.orgName}}">🏢 {{summary.user.orgName}}</view>
+        <view class="profile-tags">
+          <text class="tag tag-gold">参与第 {{summary.user.joinDays}} 天</text>
+          <text class="tag tag-red">{{stage}}</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 核心数据 5 格 -->
+    <view class="card anim-card" style="animation-delay: 60ms">
+      <view class="stat-grid">
+        <view class="stat-cell">
+          <view class="stat-num">{{totalStepsText}}</view>
+          <view class="stat-label">累计步数</view>
+        </view>
+        <view class="stat-cell">
+          <view class="stat-num">{{distanceText}}</view>
+          <view class="stat-label">累计里程(km)</view>
+        </view>
+        <view class="stat-cell">
+          <view class="stat-num">{{summary.stats.sportDays}}</view>
+          <view class="stat-label">运动天数</view>
+        </view>
+        <view class="stat-cell">
+          <view class="stat-num">🔥 {{summary.stats.currentStreak}}</view>
+          <view class="stat-label">连续行军(天)</view>
+        </view>
+        <view class="stat-cell">
+          <view class="stat-num">{{summary.stats.maxStreak}}</view>
+          <view class="stat-label">最长连续(天)</view>
+        </view>
+      </view>
+      <view class="stat-grid stat-grid-sub">
+        <view class="stat-cell">
+          <view class="stat-num">{{summary.stats.maxDaySteps}}</view>
+          <view class="stat-label">单日最高</view>
+        </view>
+        <view class="stat-cell">
+          <view class="stat-num">{{summary.stats.avgDailySteps}}</view>
+          <view class="stat-label">日均步数</view>
+        </view>
+        <view class="stat-cell">
+          <view class="stat-num">{{summary.quiz.correctRate}}%</view>
+          <view class="stat-label">答题正确率</view>
+        </view>
+        <view class="stat-cell">
+          <view class="stat-num">{{summary.quiz.fullScoreCount}}</view>
+          <view class="stat-label">满分次数</view>
+        </view>
+        <view class="stat-cell">
+          <view class="stat-num text-gold">{{summary.points.total}}</view>
+          <view class="stat-label">积分</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 长征进度 -->
+    <view class="card anim-card" style="animation-delay: 140ms">
+      <view class="card-title">
+        <text>长征进度</text>
+        <text class="link-more" bindtap="goCalendar">行军日历 ›</text>
+      </view>
+      <view class="progress-bar">
+        <view class="progress-inner" style="width: {{summary.stats.progress}}%"></view>
+      </view>
+      <view class="route-row">
+        <view class="route-done">已点亮 {{summary.stats.litCount}} / {{summary.stats.totalCount}}（{{summary.stats.progress}}%）</view>
+      </view>
+      <view class="route-nodes-row">
+        <view wx:if="{{summary.stats.currentNode}}" class="route-node-chip" bindtap="goNodeDetail" data-id="{{summary.stats.currentNode.id}}">
+          {{summary.stats.currentNode.icon}} 当前：{{summary.stats.currentNode.name}}
+        </view>
+        <view wx:if="{{summary.stats.nextNode}}" class="route-node-chip next" bindtap="goNodeDetail" data-id="{{summary.stats.nextNode.id}}">
+          下一站：{{summary.stats.nextNode.name}}（还差 {{summary.stats.nextNode.remain}} 步）
+        </view>
+        <view wx:else class="route-node-chip next">🎉 已完成长征路线</view>
+      </view>
+    </view>
+
+    <!-- 历史数据区 -->
+    <view class="card anim-card" style="animation-delay: 220ms">
+      <view class="card-title">历史数据</view>
+      <view class="history-row">
+        <text>累计答题 {{summary.quiz.totalCount}} 次</text>
+        <text>勋章 {{summary.medals.ownedCount}} / {{summary.medals.totalCount}}</text>
+      </view>
+    </view>
+
+    <!-- 长征足迹时间轴 -->
+    <view class="card anim-card" style="animation-delay: 300ms">
+      <view class="card-title">长征足迹</view>
+      <view wx:if="{{timeline.length === 0}}" class="empty-tip">暂无足迹，去运动或答题吧</view>
+      <view class="timeline">
+        <view class="timeline-item" wx:for="{{timeline}}" wx:key="eventType">
+          <view class="timeline-dot">{{item.icon}}</view>
+          <view class="timeline-body">
+            <view class="timeline-text">{{item.text}}</view>
+            <view class="timeline-time">{{item.timeText}}</view>
+          </view>
+        </view>
+      </view>
+    </view>
+  </block>
+</view>

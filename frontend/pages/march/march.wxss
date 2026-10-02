@@ -309,3 +309,80 @@
   color: #D4A017;
   margin-top: 6rpx;
 }
+
+/* ==================== 抵达事件卡弹层 ==================== */
+.lit-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(60, 10, 10, 0.45);
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: litFadeIn 0.25s ease both;
+}
+
+@keyframes litFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.lit-card {
+  position: relative;
+  width: 480rpx;
+  background: linear-gradient(160deg, #FFFDF6, #FBF3DC);
+  border-radius: 28rpx;
+  padding: 60rpx 40rpx 50rpx;
+  text-align: center;
+  animation: popIn 0.55s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  box-shadow: 0 20rpx 60rpx rgba(120, 40, 10, 0.35);
+}
+
+.lit-star {
+  font-size: 100rpx;
+  color: #D4A017;
+  line-height: 1;
+  text-shadow: 0 0 40rpx rgba(212, 160, 23, 0.8);
+  animation: spinIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
+}
+
+.lit-title {
+  margin-top: 24rpx;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #C8102E;
+  letter-spacing: 4rpx;
+}
+
+.lit-name {
+  margin-top: 10rpx;
+  font-size: 44rpx;
+  font-weight: 700;
+  color: #5A1A1A;
+}
+
+.lit-time {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #B8860B;
+}
+
+.lit-points {
+  margin-top: 14rpx;
+  display: inline-block;
+  font-size: 26rpx;
+  color: #B8860B;
+  background: rgba(212, 160, 23, 0.12);
+  border-radius: 24rpx;
+  padding: 8rpx 28rpx;
+}
+
+.lit-next {
+  margin-top: 18rpx;
+  font-size: 24rpx;
+  color: #8a6d3b;
+  line-height: 1.5;
+}

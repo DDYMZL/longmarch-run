@@ -1,0 +1,253 @@
+/* 行军日历页 */
+.calendar-page {
+  min-height: 100vh;
+  padding-bottom: 40rpx;
+}
+
+/* 月份切换条 */
+.month-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 30rpx 40rpx 10rpx;
+}
+
+.month-title {
+  font-size: 34rpx;
+  font-weight: 600;
+  color: #5a1a1a;
+}
+
+.month-arrow {
+  width: 64rpx;
+  height: 64rpx;
+  line-height: 60rpx;
+  text-align: center;
+  font-size: 44rpx;
+  color: #c8102e;
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 2rpx 8rpx rgba(140, 30, 30, 0.1);
+}
+
+.month-arrow.disabled {
+  color: #ccc;
+  box-shadow: none;
+}
+
+/* 月统计条 */
+.stats-card {
+  padding: 24rpx 10rpx;
+}
+
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.stat-item {
+  flex: 1;
+  text-align: center;
+}
+
+.stat-value {
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.stat-label {
+  font-size: 20rpx;
+  color: #999;
+  margin-top: 4rpx;
+}
+
+/* 月历 */
+.calendar-card {
+  padding: 24rpx;
+}
+
+.weekday-row {
+  display: flex;
+  margin-bottom: 12rpx;
+}
+
+.weekday {
+  width: 14.28%;
+  text-align: center;
+  font-size: 22rpx;
+  color: #999;
+}
+
+.day-grid {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.day-cell {
+  width: 14.28%;
+  height: 88rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.day-cell.blank {
+  background: transparent;
+}
+
+.day-num {
+  font-size: 24rpx;
+  color: #666;
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  border-radius: 50%;
+}
+
+/* 四档色阶 */
+.day-cell.lv-1 .day-num {
+  background: #f6e7c9;
+  color: #8b6914;
+}
+
+.day-cell.lv-2 .day-num {
+  background: #e8c76a;
+  color: #5a1a1a;
+  font-weight: 600;
+}
+
+.day-cell.lv-3 .day-num {
+  background: linear-gradient(135deg, #c8102e, #a00d26);
+  color: #fff;
+  font-weight: 700;
+}
+
+.day-cell.today .day-num {
+  border: 2rpx solid #c8102e;
+}
+
+.day-marks {
+  height: 24rpx;
+  line-height: 24rpx;
+  margin-top: 2rpx;
+}
+
+.day-marks .mark {
+  font-size: 18rpx;
+  margin: 0 2rpx;
+}
+
+/* 图例 */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20rpx;
+  margin-top: 20rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f0e6d2;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  font-size: 20rpx;
+  color: #999;
+}
+
+.legend-item .mark {
+  font-size: 20rpx;
+  margin-right: 6rpx;
+}
+
+.legend-dot {
+  width: 20rpx;
+  height: 20rpx;
+  border-radius: 50%;
+  margin-right: 8rpx;
+}
+
+.legend-dot.lv-1 {
+  background: #f6e7c9;
+}
+
+.legend-dot.lv-2 {
+  background: #e8c76a;
+}
+
+.legend-dot.lv-3 {
+  background: #c8102e;
+}
+
+/* 当日详情弹层 */
+.detail-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.detail-card {
+  width: 600rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  padding: 40rpx;
+}
+
+.detail-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #5a1a1a;
+  text-align: center;
+}
+
+.detail-steps {
+  font-size: 52rpx;
+  font-weight: 700;
+  color: #c8102e;
+  text-align: center;
+  margin-top: 16rpx;
+}
+
+.detail-goal {
+  text-align: center;
+  font-size: 24rpx;
+  color: #999;
+  margin-top: 8rpx;
+}
+
+.detail-goal.done {
+  color: #d4a017;
+  font-weight: 600;
+}
+
+.detail-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 16rpx 0;
+  font-size: 26rpx;
+}
+
+.detail-label {
+  color: #666;
+}
+
+.detail-value {
+  color: #333;
+  font-weight: 500;
+  max-width: 400rpx;
+  text-align: right;
+}
+
+.detail-close {
+  margin-top: 24rpx;
+}

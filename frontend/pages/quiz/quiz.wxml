@@ -1,25 +1,26 @@
 <view class="quiz-page">
   <view wx:if="{{loading}}" class="empty-tip">加载中…</view>
 
-  <!-- 未完成：开始答题 -->
+  <!-- 未完成：开始破译 -->
   <block wx:elif="{{!completed}}">
     <view class="quiz-hero">
-      <view class="quiz-hero-icon anim-float">📝</view>
-      <view class="quiz-hero-title">每日答题</view>
-      <view class="quiz-hero-sub">每天 5 题 · 每题 20 分 · 满分 100 分</view>
+      <view class="quiz-hero-icon anim-float">📡</view>
+      <view class="quiz-hero-title">今日长征情报</view>
+      <view class="quiz-hero-issue">第 {{issueNo}} 期</view>
+      <view class="quiz-hero-sub">每期 5 题 · 每题 20 分 · 满分 100 分</view>
     </view>
 
     <view class="card rule-card anim-card" style="animation-delay: 120ms">
-      <view class="card-title">答题规则</view>
-      <view class="rule-line">· 每日随机 5 道红色文化/长征历史题目</view>
-      <view class="rule-line">· 每天只能完成一次正式答题</view>
-      <view class="rule-line">· 完成答题 +5 积分，满分额外 +10 积分</view>
+      <view class="card-title">破译规则</view>
+      <view class="rule-line">· 每期随机 5 道红色文化/长征历史情报题</view>
+      <view class="rule-line">· 每天只能完成一次情报破译</view>
+      <view class="rule-line">· 完成破译 +5 积分，满分额外 +10 积分</view>
     </view>
 
     <view wx:if="{{errorMsg}}" class="error-tip">{{errorMsg}}</view>
 
     <view class="quiz-actions">
-      <button class="btn-primary start-btn" disabled="{{!!errorMsg}}" bindtap="handleStart">开始答题</button>
+      <button class="btn-primary start-btn" disabled="{{!!errorMsg}}" bindtap="handleStart">开始破译</button>
     </view>
   </block>
 
@@ -27,8 +28,8 @@
   <block wx:else>
     <view class="quiz-hero">
       <view class="quiz-hero-icon anim-pop">✅</view>
-      <view class="quiz-hero-title">今日答题已完成</view>
-      <view class="quiz-hero-sub">{{record.date}}</view>
+      <view class="quiz-hero-title">本期情报已破译</view>
+      <view class="quiz-hero-issue">第 {{issueNo}} 期 · {{record.date}}</view>
     </view>
 
     <view class="card result-card anim-card" style="animation-delay: 120ms">
@@ -41,12 +42,29 @@
         <text>答错 {{record.totalCount - record.correctCount}} 题</text>
         <text>获得积分 {{record.points}}</text>
       </view>
-      <view class="done-tip">明天继续挑战</view>
+      <view class="done-tip">明天继续挑战新一期情报</view>
     </view>
 
     <view class="quiz-actions">
       <button class="btn-ghost" bindtap="handleTomorrow">明天再来</button>
-      <view class="dev-reset" bindtap="handleResetToday">开发调试：重置今日答题</view>
+      <view class="dev-reset" bindtap="handleResetToday">开发调试：重置本期情报</view>
     </view>
   </block>
+
+  <!-- 知识画像 -->
+  <view class="card knowledge-card anim-card" style="animation-delay: 200ms" wx:if="{{!loading && knowledge}}">
+    <view class="card-title">
+      <text>知识画像</text>
+      <text class="knowledge-overall">总正确率 {{knowledge.overallRate}}%</text>
+    </view>
+    <view class="knowledge-item" wx:for="{{knowledge.categories}}" wx:key="key">
+      <view class="knowledge-head">
+        <text class="knowledge-name">{{item.name}}</text>
+        <text class="knowledge-rate">{{item.rate}}%（错 {{item.wrong}} 题）</text>
+      </view>
+      <view class="knowledge-bar">
+        <view class="knowledge-bar-inner" style="width: {{item.rate}}%"></view>
+      </view>
+    </view>
+  </view>
 </view>

@@ -12,7 +12,9 @@
     "pages/quiz-records/quiz-records",
     "pages/medals/medals",
     "pages/org-select/org-select",
-    "pages/rank/rank"
+    "pages/rank/rank",
+    "pages/profile/profile",
+    "pages/calendar/calendar"
   ],
   "window": {
     "navigationBarBackgroundColor": "#C8102E",
@@ -37,11 +39,11 @@
       },
       {
         "pagePath": "pages/quiz/quiz",
-        "text": "答题"
+        "text": "情报"
       },
       {
         "pagePath": "pages/rank/rank",
-        "text": "排名"
+        "text": "排行"
       },
       {
         "pagePath": "pages/mine/mine",

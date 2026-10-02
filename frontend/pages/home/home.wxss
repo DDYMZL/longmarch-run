@@ -46,7 +46,7 @@
   margin-top: 4rpx;
 }
 
-/* 今日运动卡片 */
+/* 今日行军卡片 */
 .sport-card {
   margin-top: -30rpx;
   position: relative;
@@ -85,23 +85,6 @@
   margin-bottom: 20rpx;
 }
 
-.progress-bar {
-  position: relative;
-  height: 20rpx;
-  background: #F0E6D2;
-  border-radius: 10rpx;
-  overflow: hidden;
-}
-
-.progress-inner {
-  height: 100%;
-  background: linear-gradient(90deg, #D4A017, #E8C76A);
-  border-radius: 10rpx;
-  transition: width 0.4s ease;
-  position: relative;
-  overflow: hidden;
-}
-
 /* 进度条流光 */
 .progress-shine {
   position: absolute;
@@ -118,6 +101,16 @@
   font-size: 22rpx;
   color: #999999;
   margin-top: 8rpx;
+}
+
+.next-node-tip {
+  text-align: center;
+  font-size: 24rpx;
+  color: #B8860B;
+  background: rgba(212, 160, 23, 0.1);
+  border-radius: 16rpx;
+  padding: 10rpx 20rpx;
+  margin-top: 16rpx;
 }
 
 .sport-actions {
@@ -144,12 +137,6 @@
 }
 
 /* 长征进度 */
-.link-more {
-  font-size: 26rpx;
-  color: #C8102E;
-  font-weight: normal;
-}
-
 .march-summary {
   text-align: center;
 }
@@ -220,7 +207,57 @@
   white-space: nowrap;
 }
 
-/* 今日答题 */
+/* 连续行军卡 */
+.streak-row {
+  display: flex;
+  align-items: center;
+}
+
+.streak-main {
+  display: flex;
+  align-items: baseline;
+  margin-right: 40rpx;
+}
+
+.streak-fire {
+  font-size: 44rpx;
+  margin-right: 8rpx;
+}
+
+.streak-num {
+  font-size: 72rpx;
+  font-weight: 700;
+  color: #C8102E;
+  line-height: 1.1;
+}
+
+.streak-unit {
+  font-size: 26rpx;
+  color: #999999;
+  margin-left: 8rpx;
+}
+
+.streak-side {
+  flex: 1;
+}
+
+.streak-goal {
+  font-size: 24rpx;
+  color: #666666;
+}
+
+.streak-goal.done {
+  color: #D4A017;
+  font-weight: 600;
+}
+
+.streak-mile {
+  font-size: 22rpx;
+  color: #999999;
+  margin-top: 6rpx;
+}
+
+/* 今日长征情报卡 */
 .quiz-badge {
   font-size: 24rpx;
   color: #D4A017;
@@ -255,7 +292,61 @@
   margin-top: 8rpx;
 }
 
-/* ==================== �����ڵ���ף���� ==================== */
+/* 长征记忆卡 */
+.memory-card {
+  background: linear-gradient(150deg, #FFFDF6, #F7ECD2);
+  border: 1rpx solid #EFE0B8;
+}
+
+.memory-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #5A1A1A;
+}
+
+.memory-time {
+  font-size: 22rpx;
+  color: #B8860B;
+  margin-top: 6rpx;
+}
+
+.memory-brief {
+  font-size: 24rpx;
+  color: #666666;
+  margin-top: 10rpx;
+  line-height: 1.6;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 勋章行 */
+.medal-row {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.medal-item {
+  width: 16.6%;
+  text-align: center;
+  padding: 10rpx 0;
+}
+
+.medal-icon {
+  font-size: 48rpx;
+}
+
+.medal-name {
+  font-size: 18rpx;
+  color: #666666;
+  margin-top: 6rpx;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ==================== 抵达事件卡弹层 ==================== */
 .lit-overlay {
   position: fixed;
   top: 0;
@@ -277,7 +368,7 @@
 
 .lit-card {
   position: relative;
-  width: 460rpx;
+  width: 480rpx;
   background: linear-gradient(160deg, #FFFDF6, #FBF3DC);
   border-radius: 28rpx;
   padding: 70rpx 40rpx 56rpx;
@@ -294,7 +385,7 @@
   animation: spinIn 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.15s both;
 }
 
-/* ��ɫ���ӱ��� */
+/* 金色粒子爆发 */
 .lit-burst {
   position: absolute;
   top: 90rpx;
@@ -328,8 +419,9 @@
 
 .lit-title {
   margin-top: 36rpx;
-  font-size: 26rpx;
-  color: #A08050;
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #C8102E;
   letter-spacing: 4rpx;
 }
 
@@ -338,6 +430,12 @@
   font-size: 44rpx;
   font-weight: 700;
   color: #5A1A1A;
+}
+
+.lit-time {
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #B8860B;
 }
 
 .lit-points {
@@ -350,7 +448,14 @@
   padding: 8rpx 28rpx;
 }
 
-/* ��ǰ�ڵ����壨����·��ͼ�� */
+.lit-next {
+  margin-top: 18rpx;
+  font-size: 24rpx;
+  color: #8a6d3b;
+  line-height: 1.5;
+}
+
+/* 当前节点脉冲（迷你路线图） */
 .pulse-current {
   animation: pulseRed 1.6s ease-out infinite;
 }

@@ -2,7 +2,7 @@
   <block wx:if="{{current}}">
     <!-- 顶部进度 -->
     <view class="progress-header">
-      <view class="progress-count">今日答题 {{currentIndex + 1}} / {{total}}</view>
+      <view class="progress-count">情报破译 {{currentIndex + 1}} / {{total}}</view>
       <view class="progress-bar">
         <view class="progress-inner" style="width: {{(currentIndex + 1) / total * 100}}%"></view>
       </view>
@@ -38,7 +38,7 @@
         loading="{{submitting}}"
         disabled="{{submitting}}"
         bindtap="handleNext"
-      >{{currentIndex === total - 1 ? '提交答卷' : '下一题'}}</button>
+      >{{currentIndex === total - 1 ? '提交情报' : '下一题'}}</button>
     </view>
   </block>
 </view>

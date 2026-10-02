@@ -1,14 +1,15 @@
 /**
  * 首页
- * 核心体验：头像昵称 + 今日步数 + 长征进度 + 今日答题入口
- * 状态处理（需求文档 三十）：未登录 / 未授权运动 / 同步中 / 同步成功 / 同步失败
- *                           / 路线加载中 / 加载成功 / 加载失败 / 答题未完成 / 已完成
+ * 结构：用户信息 → 今日行军卡（步数/击败比例/距下一站）→ 迷你长征路线
+ *       → 连续行军卡 → 今日长征情报卡（第 N 期）→ 长征记忆卡 → 勋章行
+ * 点亮弹层升级为「抵达事件卡」：恭喜抵达 + 历史时间 + 积分 + 下一站距离。
  */
 const app = getApp();
 const sport = require('../../services/sport');
 const march = require('../../services/march');
 const quiz = require('../../services/quiz');
 const medal = require('../../services/medal');
+const broadcast = require('../../services/broadcast');
 
 Page({
   data: {
@@ -20,6 +21,10 @@ Page({
     totalSteps: 0,
     syncing: false,
     syncError: '',
+    // 今日播报（个人）
+    beatPercent: 0,
+    remainToNext: 0,
+    nextNodeName: '',
     // 长征路线
     routeLoading: true,
     routeError: '',
@@ -27,11 +32,25 @@ Page({
     totalCount: 10,
     nextNode: null,
     finished: false,
-    // 今日答题
+    routeNodesPreview: [],
+    // 连续行军
+    currentStreak: 0,
+    streakGoal: 5000,
+    todayGoalCompleted: false,
+    nextStreakMilestone: null,
+    streakRemain: 0,
+    // 今日长征情报
     quizCompleted: false,
     quizScore: 0,
     quizRemain: 5,
-    // 点亮节点庆祝弹层
+    issueNo: 1,
+    // 长征记忆
+    memory: null,
+    // 勋章行
+    medalPreview: [],
+    medalOwned: 0,
+    medalTotal: 0,
+    // 抵达事件卡弹层
     litPopup: null
   },
 
@@ -64,28 +83,53 @@ Page({
    * 刷新首页全部数据
    */
   refreshAll() {
-    // 1. 步数 + 2. 路线状态 + 3. 答题状态（并行请求后端）
-    Promise.all([sport.getToday(), march.getRoute(), quiz.getDaily()])
+    Promise.all([sport.getToday(), march.getRoute(), quiz.getDaily(), broadcast.getToday(), medal.getMedalList()])
       .then((results) => {
         const today = results[0];
         const route = results[1];
         const daily = results[2];
+        const cast = results[3];
+        const medals = results[4];
         const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
+
+        // 勋章行：已获得的排前面（按获得时间倒序取最近 6 枚展示）
+        const owned = medals
+          .filter((m) => m.owned)
+          .sort((a, b) => String(b.grantedAt || '').localeCompare(String(a.grantedAt || '')))
+          .slice(0, 6);
 
         this.setData({
           dailyTarget: today.target,
           stepPercent: percent,
           totalSteps: today.totalSteps,
+          // 连续行军
+          currentStreak: today.currentStreak,
+          streakGoal: today.streakGoal,
+          todayGoalCompleted: today.todayGoalCompleted,
+          nextStreakMilestone: today.nextStreakMilestone,
+          streakRemain: today.streakRemain,
+          // 播报
+          beatPercent: cast.personal.beatPercent,
+          remainToNext: cast.personal.remainToNext,
+          nextNodeName: cast.personal.nextNodeName,
+          memory: cast.memory,
+          // 路线
           routeLoading: false,
+          routeError: '',
           litCount: route.litCount,
           totalCount: route.totalCount,
           nextNode: route.nextNode,
           finished: route.finished,
-          // 迷你路线图（预览前 6 个节点）
           routeNodesPreview: route.nodes.slice(0, 6),
+          // 情报
           quizCompleted: daily.completed,
           quizScore: daily.record ? daily.record.score : 0,
-          quizRemain: quiz.DAILY_COUNT
+          quizRemain: quiz.DAILY_COUNT,
+          issueNo: daily.issueNo,
+          // 勋章
+          medalPreview: owned,
+          medalOwned: medals.filter((m) => m.owned).length,
+          medalTotal: medals.length
         });
 
         // 步数滚动动画
@@ -132,8 +176,8 @@ Page({
       })
       .then((res) => {
         if (res.newlyLit.length > 0) {
-          // 逐个播放点亮庆祝弹层
-          this.playLitPopup(res.newlyLit.map((n) => n.name));
+          // 逐个播放「抵达事件卡」
+          this.playLitPopup(res.newlyLit);
         } else if (res.newMedals.length > 0) {
           wx.showToast({ title: '获得新勋章！', icon: 'none' });
         } else if (res.result.synced) {
@@ -152,19 +196,30 @@ Page({
   },
 
   /**
-   * 点亮节点庆祝弹层（金色星星 + 粒子，逐个播放）
+   * 抵达事件卡（逐个播放）：恭喜抵达 + 历史时间 + 积分 + 下一站距离
    */
-  playLitPopup(names) {
+  playLitPopup(nodes) {
     let i = 0;
     const showNext = () => {
-      if (i >= names.length) {
+      if (i >= nodes.length) {
         this.setData({ litPopup: null });
         return;
       }
-      this.setData({ litPopup: { name: names[i], key: Date.now() } });
+      const n = nodes[i];
+      this.setData({
+        litPopup: {
+          key: Date.now(),
+          name: n.name,
+          icon: n.icon || '★',
+          historicalTime: n.historicalTime || '',
+          gainedPoints: n.gainedPoints || 0,
+          nextName: n.nextNode ? n.nextNode.name : '',
+          nextRemain: n.nextNode ? n.nextNode.remain : 0
+        }
+      });
       i++;
       if (this.popupTimer) clearTimeout(this.popupTimer);
-      this.popupTimer = setTimeout(showNext, 1600);
+      this.popupTimer = setTimeout(showNext, 2400);
     };
     showNext();
   },
@@ -180,7 +235,7 @@ Page({
         this.refreshAll();
 
         if (r[0].length > 0) {
-          this.playLitPopup(r[0].map((n) => n.name));
+          this.playLitPopup(r[0]);
         } else if (r[1].length > 0) {
           wx.showToast({ title: '获得新勋章！', icon: 'none' });
         } else {
@@ -204,5 +259,28 @@ Page({
    */
   goQuiz() {
     wx.switchTab({ url: '/pages/quiz/quiz' });
+  },
+
+  /**
+   * 勋章墙
+   */
+  goMedals() {
+    wx.navigateTo({ url: '/pages/medals/medals' });
+  },
+
+  /**
+   * 行军日历
+   */
+  goCalendar() {
+    wx.navigateTo({ url: '/pages/calendar/calendar' });
+  },
+
+  /**
+   * 长征记忆卡 -> 节点详情
+   */
+  goMemoryNode() {
+    const memory = this.data.memory;
+    if (!memory) return;
+    wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + memory.nodeId });
   }
 });
