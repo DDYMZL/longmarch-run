@@ -120,6 +120,46 @@
   display: block;
 }
 
+/* 成就总览（P1-7，需求 §18） */
+.ach-grid {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 8rpx;
+}
+
+.ach-cell {
+  width: 33.33%;
+  text-align: center;
+  padding: 22rpx 0;
+}
+
+.ach-icon {
+  font-size: 40rpx;
+  line-height: 1.2;
+}
+
+.ach-value {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #A00D26;
+  margin-top: 8rpx;
+  font-family: 'DIN Alternate', 'Helvetica Neue', sans-serif;
+}
+
+.ach-label {
+  font-size: 22rpx;
+  color: #999;
+  margin-top: 4rpx;
+}
+
+/* 数据画像雷达（P1-7，需求 §17） */
+.portrait-canvas {
+  width: 600rpx;
+  height: 600rpx;
+  margin: 10rpx auto 0;
+  display: block;
+}
+
 /* 长征进度 */
 .route-row {
   display: flex;

@@ -21,6 +21,51 @@ from app.models.models import (
 )
 from app.services import event_service, march_service, org_service, points_service, streak_service
 
+# 数据画像归一化配置（需求 §17.3：画像必须基于真实统计数据，各维度 0~100）。
+# 满分参照值集中在此，调整口径只改配置。
+PORTRAIT_DAYS_FULL = 30    # 行军：运动天数满分参照
+PORTRAIT_STREAK_FULL = 30  # 坚持：连续天数满分参照
+PORTRAIT_QUIZ_FULL = 50    # 知识：答题次数满分参照
+
+
+def _portrait(
+    total_steps: int,
+    sport_days: int,
+    current_streak: int,
+    max_streak: int,
+    route_total_steps: int,
+    progress: int,
+    quiz_total: int,
+    correct_rate: int,
+    owned_count: int,
+    medal_total: int,
+) -> Dict:
+    """数据画像五维评分（§17.2：行军/坚持/知识/路线/成就；§17.4 只展示数据）。
+
+    行军  = 累计步数（对路线全程目标）70% + 运动天数 30%
+    坚持  = 最长连续 60% + 当前连续 40%
+    知识  = 答题次数 50% + 正确率 50%
+    路线  = 节点完成比例
+    成就  = 勋章完成比例 70% + 连续行军里程碑达成档数（由最长连续推导）30%
+    """
+    steps_ref = route_total_steps if route_total_steps > 0 else 1
+    march_v = total_steps / steps_ref * 70 + min(sport_days, PORTRAIT_DAYS_FULL) / PORTRAIT_DAYS_FULL * 30
+    persistence_v = (
+        min(max_streak, PORTRAIT_STREAK_FULL) / PORTRAIT_STREAK_FULL * 60
+        + min(current_streak, PORTRAIT_STREAK_FULL) / PORTRAIT_STREAK_FULL * 40
+    )
+    knowledge_v = min(quiz_total, PORTRAIT_QUIZ_FULL) / PORTRAIT_QUIZ_FULL * 50 + correct_rate * 0.5
+    medal_ratio = owned_count / medal_total if medal_total else 0
+    streak_milestones = sum(1 for m in event_service.STREAK_MILESTONES if max_streak >= m)
+    achievement_v = medal_ratio * 70 + streak_milestones / len(event_service.STREAK_MILESTONES) * 30
+    return {
+        "march": min(100, round(march_v)),
+        "persistence": min(100, round(persistence_v)),
+        "knowledge": min(100, round(knowledge_v)),
+        "route": min(100, progress),
+        "achievement": min(100, round(achievement_v)),
+    }
+
 
 def _join_days(created_at: Optional[datetime]) -> int:
     """加入天数（注册当天为第 1 天）。created_at 为 UTC 存储，按本地日期计。"""
@@ -109,6 +154,18 @@ def get_summary(db: Session, user: User) -> Dict:
         },
         "medals": {"owned_count": owned_count, "total_count": medal_total},
         "points": {"total": points_service.get_total(db, user.id)},
+        "portrait": _portrait(
+            total_steps=total_steps,
+            sport_days=sport_days,
+            current_streak=current_streak,
+            max_streak=max_streak,
+            route_total_steps=route["total_steps"],
+            progress=progress,
+            quiz_total=quiz_total,
+            correct_rate=correct_rate,
+            owned_count=owned_count,
+            medal_total=medal_total,
+        ),
     }
 
 

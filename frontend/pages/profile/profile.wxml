@@ -67,6 +67,24 @@
       </view>
     </view>
 
+    <!-- 成就总览（P1-7，需求 §18：六格汇总，点击进入详情） -->
+    <view class="card anim-card" style="animation-delay: 100ms">
+      <view class="card-title">🏆 我的长征成就</view>
+      <view class="ach-grid">
+        <view class="ach-cell" wx:for="{{achievements}}" wx:key="key" data-key="{{item.key}}" bindtap="goAchievement">
+          <view class="ach-icon">{{item.icon}}</view>
+          <view class="ach-value">{{item.value}}</view>
+          <view class="ach-label">{{item.label}}</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 数据画像（P1-7，需求 §17：五维雷达，仅展示数据不做评价） -->
+    <view class="card anim-card" style="animation-delay: 120ms">
+      <view class="card-title">📊 我的长征数据画像</view>
+      <canvas type="2d" id="portraitCanvas" class="portrait-canvas"></canvas>
+    </view>
+
     <!-- 长征进度 -->
     <view class="card anim-card" style="animation-delay: 140ms">
       <view class="card-title">

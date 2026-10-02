@@ -423,12 +423,23 @@ class ProfilePointsStats(CamelModel):
     total: int = 0
 
 
+class ProfilePortrait(CamelModel):
+    """个人数据画像五维评分（需求 §17.2/§17.3，0~100，只展示数据不做评价）。"""
+
+    march: int = 0
+    persistence: int = 0
+    knowledge: int = 0
+    route: int = 0
+    achievement: int = 0
+
+
 class ProfileSummaryOut(CamelModel):
     user: ProfileUser
     stats: ProfileStats
     quiz: ProfileQuizStats
     medals: ProfileMedalStats
     points: ProfilePointsStats
+    portrait: ProfilePortrait = ProfilePortrait()
 
 
 class TimelineItem(CamelModel):
