@@ -45,6 +45,7 @@
       <text class="step-num">{{todaySteps}}</text>
       <text class="step-unit">步</text>
     </view>
+    <view class="march-status">{{marchStatus}}</view>
     <view class="step-target">今日目标：{{dailyTarget}} 步 · 击败 {{beatPercent}}% 的战友</view>
 
     <view class="progress-bar">
@@ -58,6 +59,8 @@
       距下一站「{{nextNodeName}}」还需 {{remainToNext}} 步
     </view>
     <view class="next-node-tip" wx:elif="{{finished}}">🏆 已完成全部长征路线</view>
+    <view class="streak-inline" wx:if="{{currentStreak > 0}}">🔥 连续行军 {{currentStreak}} 天</view>
+    <view class="streak-inline dim" wx:else>连续行军未开始，今天走起来</view>
 
     <view wx:if="{{syncError}}" class="error-tip">{{syncError}}</view>
 
