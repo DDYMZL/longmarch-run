@@ -97,6 +97,12 @@ def _normalize_route_node_data(data: Dict) -> None:
     data["icon"] = (data.get("icon") or "").strip()
     data["historical_time"] = (data.get("historical_time") or "").strip()
     data["description"] = (data.get("description") or "").strip()
+    for key in ("brief", "figures", "location", "audio", "keywords"):
+        data[key] = (data.get(key) or "").strip()
+    data["significance"] = (data.get("significance") or "").strip()
+    data["images"] = [
+        str(url).strip() for url in (data.get("images") or []) if str(url).strip()
+    ]
     if not data["name"]:
         raise ValueError("节点名称不能为空")
     if data.get("target_steps", 0) < 0:
@@ -133,9 +139,10 @@ def list_questions(db: Session) -> List[Question]:
 
 
 def create_question(db: Session, data: Dict) -> Question:
-    """新增题目，id 由数据库自增分配。"""
+    """新增题目；questions.id 无数据库自增（种子占用固定 id），显式取 max+1。"""
     _validate_question(data)
-    question = Question(**data)
+    max_id = db.query(func.max(Question.id)).scalar() or 0
+    question = Question(id=max_id + 1, **data)
     db.add(question)
     db.commit()
     db.refresh(question)
@@ -177,6 +184,10 @@ def _validate_question(data: Dict) -> None:
         raise ValueError("题目类型必须为 single（单选）或 judge（判断）")
     if not (data.get("question") or "").strip():
         raise ValueError("题干不能为空")
+    category = (data.get("category") or "").strip()
+    if category and category not in ("event", "route", "figure"):
+        raise ValueError("分类必须为 event（历史事件）/ route（长征路线）/ figure（历史人物）或留空")
+    data["category"] = category
     options = data.get("options") or []
     if len(options) < 2:
         raise ValueError("至少需要 2 个选项")

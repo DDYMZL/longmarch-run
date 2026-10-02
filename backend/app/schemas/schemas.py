@@ -475,7 +475,7 @@ class AdminQuestionOption(BaseModel):
 
 
 class AdminQuestionOut(BaseModel):
-    """题库条目（管理端可见正确答案 answer）。"""
+    """题库条目（管理端可见正确答案 answer）。category 为知识画像分类。"""
 
     id: int
     type: str
@@ -484,6 +484,12 @@ class AdminQuestionOut(BaseModel):
     answer: List[str] = []
     analysis: str = ""
     score: int = 20
+    category: str = ""
+
+    @field_validator("category", mode="before")
+    @classmethod
+    def none_category(cls, value: Optional[str]) -> str:
+        return value or ""
 
 
 class AdminQuestionListOut(BaseModel):
@@ -492,7 +498,7 @@ class AdminQuestionListOut(BaseModel):
 
 
 class AdminQuestionUpsert(BaseModel):
-    """新增/编辑题目请求体。type: single 单选 / judge 判断。"""
+    """新增/编辑题目请求体。type: single 单选 / judge 判断；category 可空。"""
 
     type: str
     question: str
@@ -500,6 +506,75 @@ class AdminQuestionUpsert(BaseModel):
     answer: List[str] = []
     analysis: str = ""
     score: int = 20
+    category: str = ""
+
+
+# ---------------- 管理端驾驶舱 / 数据大屏 ----------------
+class AdminDashboardMetrics(BaseModel):
+    """驾驶舱核心指标（组织维度已按需求取消，不含 org 统计）。"""
+
+    total_users: int = 0
+    today_users: int = 0
+    total_steps: int = 0
+    avg_steps: int = 0
+    completion_rate: int = 0
+    quiz_users: int = 0
+    medals_granted: int = 0
+
+
+class AdminRouteOverviewItem(BaseModel):
+    """路线总览：每个启用节点的达成人数与完成率。"""
+
+    node_id: int
+    name: str
+    target_steps: int
+    lit_count: int
+    completion_rate: int
+
+
+class AdminDashboardOut(BaseModel):
+    metrics: AdminDashboardMetrics
+    route_overview: List[AdminRouteOverviewItem] = []
+
+
+class AdminTrendPoint(BaseModel):
+    """运动趋势单日数据点（按本地日期分桶）。"""
+
+    date: str
+    total_steps: int = 0
+    active_users: int = 0
+    new_users: int = 0
+    new_lit: int = 0
+
+
+class AdminTrendOut(BaseModel):
+    days: int
+    points: List[AdminTrendPoint] = []
+
+
+class AdminActivityItem(BaseModel):
+    """实时动态条目（user_event 关联昵称，文案与小程序足迹同源）。"""
+
+    id: int
+    event_type: str
+    event_time: datetime
+    user_id: int
+    nickname: str = ""
+    text: str = ""
+    data: dict = {}
+
+
+class AdminActivityListOut(BaseModel):
+    items: List[AdminActivityItem] = []
+
+
+class AdminScreenOut(BaseModel):
+    """数据大屏聚合（单接口减少大屏请求数）：指标 + 路线总览 + 7 日趋势 + 实时动态。"""
+
+    metrics: AdminDashboardMetrics
+    route_overview: List[AdminRouteOverviewItem] = []
+    trend: List[AdminTrendPoint] = []
+    activities: List[AdminActivityItem] = []
 
 
 class AdminOrgNodeOut(BaseModel):
@@ -548,8 +623,28 @@ class AdminRouteNodeOut(BaseModel):
     longitude: float
     sort_order: int
     is_enabled: bool
+    brief: str = ""
+    significance: str = ""
+    figures: str = ""
+    location: str = ""
+    images: List[str] = []
+    audio: str = ""
+    keywords: str = ""
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator(
+        "brief", "significance", "figures", "location", "audio", "keywords", mode="before"
+    )
+    @classmethod
+    def none_to_empty(cls, value: Optional[str]) -> str:
+        """本库空串按 NULL 存储（Oracle 兼容），读出 None 归一为空串。"""
+        return value or ""
+
+    @field_validator("images", mode="before")
+    @classmethod
+    def none_images(cls, value: Optional[list]) -> list:
+        return value or []
 
 
 class AdminRouteNodeListOut(BaseModel):
@@ -567,6 +662,13 @@ class AdminRouteNodeUpsert(BaseModel):
     longitude: float = Field(ge=-180, le=180)
     sort_order: int = Field(ge=0)
     is_enabled: bool = True
+    brief: str = Field(default="", max_length=200)
+    significance: str = ""
+    figures: str = Field(default="", max_length=500)
+    location: str = Field(default="", max_length=100)
+    images: List[str] = []
+    audio: str = Field(default="", max_length=500)
+    keywords: str = Field(default="", max_length=200)
 
 
 class AdminRouteNodeEnabled(BaseModel):

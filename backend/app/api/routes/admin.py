@@ -5,7 +5,7 @@
 """
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_admin
@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.core.database import get_db
 from app.core.security import create_admin_token
 from app.schemas.schemas import (
+    AdminActivityListOut,
+    AdminDashboardOut,
     AdminLoginOut,
     AdminLoginRequest,
     AdminOrgNodeOut,
@@ -27,10 +29,12 @@ from app.schemas.schemas import (
     AdminRouteNodeListOut,
     AdminRouteNodeOut,
     AdminRouteNodeUpsert,
+    AdminScreenOut,
+    AdminTrendOut,
     AdminUserOverviewOut,
     MessageOut,
 )
-from app.services import admin_service
+from app.services import admin_service, dashboard_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -44,6 +48,51 @@ def login(payload: AdminLoginRequest):
     ):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     return {"token": create_admin_token(payload.username), "username": payload.username}
+
+
+# ---------------- 驾驶舱 / 数据大屏 ----------------
+@router.get(
+    "/dashboard",
+    response_model=AdminDashboardOut,
+    summary="驾驶舱聚合（核心指标 + 路线总览）",
+    dependencies=[Depends(get_current_admin)],
+)
+def dashboard(db: Session = Depends(get_db)):
+    return dashboard_service.get_dashboard(db)
+
+
+@router.get(
+    "/dashboard/trend",
+    response_model=AdminTrendOut,
+    summary="运动趋势（近 N 日）",
+    dependencies=[Depends(get_current_admin)],
+)
+def dashboard_trend(
+    days: int = Query(7, ge=1, le=90), db: Session = Depends(get_db)
+):
+    return dashboard_service.get_trend(db, days)
+
+
+@router.get(
+    "/activities",
+    response_model=AdminActivityListOut,
+    summary="实时动态（user_event 关联昵称，倒序）",
+    dependencies=[Depends(get_current_admin)],
+)
+def activities(
+    limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)
+):
+    return {"items": dashboard_service.get_activities(db, limit)}
+
+
+@router.get(
+    "/screen",
+    response_model=AdminScreenOut,
+    summary="数据大屏聚合（指标 + 路线总览 + 7 日趋势 + 动态）",
+    dependencies=[Depends(get_current_admin)],
+)
+def screen(db: Session = Depends(get_db)):
+    return dashboard_service.get_screen(db)
 
 
 # ---------------- 路线节点维护 ----------------
