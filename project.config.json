@@ -4,15 +4,15 @@
     "ignore": [
       {
         "type": "folder",
-        "value": "frontend/test"
+        "value": "test"
       },
       {
         "type": "file",
-        "value": "frontend/design.md"
+        "value": "design.md"
       },
       {
         "type": "file",
-        "value": "frontend/AGENTS.md"
+        "value": "AGENTS.md"
       }
     ],
     "include": []
