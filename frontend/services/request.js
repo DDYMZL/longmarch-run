@@ -17,7 +17,6 @@ function clearSession() {
   try {
     wx.removeStorageSync(TOKEN_KEY);
     wx.removeStorageSync(USER_KEY);
-    require('./store').clearCache();
   } catch (e) {
     // Storage 清理失败时仍重置当前会话
   }

@@ -26,8 +26,6 @@ App({
    */
   logout() {
     auth.clearLocalUser();
-    // 清理内存数据缓存，避免下个用户读到脏数据
-    require('./services/store').clearCache();
     this.globalData.user = null;
     this.globalData.loggedIn = false;
   }

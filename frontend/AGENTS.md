@@ -30,7 +30,7 @@ frontend/
 ├── services/                      # 服务层（真实后端封装，对应后端 services/*.py 与 api/routes/*.py）
 │   ├── request.js                 # 统一 wx.request 封装：JWT 注入、401 清理登录态
 │   ├── config.js                  # API_BASE_URL 集中配置
-│   ├── store.js                   # 遗留：仅登录数据迁移（migrateUserData）与缓存清理
+│   ├── store.js                   # 遗留：仅登录数据迁移（migrateUserData）
 │   ├── auth.js                    # 微信登录（头像昵称填写、头像持久化）
 │   ├── sport.js / march.js / quiz.js / points.js / medal.js / org.js / rank.js
 ├── utils/util.js                  # 日期格式化、随机等纯工具
@@ -53,7 +53,7 @@ services -> request.js / config.js；march.js 可读 mock/data.js 兜底
 ## 4. 架构不变量（改动时不得破坏）
 
 1. **数据展示页必须 `onShow` + `refresh()`**：所有展示页在 `onShow` 中重新读取最新数据（仅 `onLoad` 的页面在热重载、后台恢复、页面栈复用场景会显示旧数据）。
-2. **数据以后端为准**：业务数据一律通过后端接口读写（`request.js` 封装），前端禁止本地生成/持久化业务数据；`store.js` 仅保留登录迁移（`migrateUserData`）与缓存清理职责，新增服务不得读写 `lm_data_{userId}`。
+2. **数据以后端为准**：业务数据一律通过后端接口读写（`request.js` 封装），前端禁止本地生成/持久化业务数据；`store.js` 仅保留登录迁移（`migrateUserData`）职责，新增服务不得读写 `lm_data_{userId}`。
 3. **Storage 键与结构**：登录态键 `lm_login_user`（`{ id, nickname, avatar, orgId, loginAt }`）；JWT 键 `lm_auth_token`；路线节点缓存 `lm_route_nodes`（三级降级第二级）。`user` 与 `token` 同时存在才视为已登录。
 4. **头像持久化**：`chooseAvatar` 返回临时路径（工具 `http://tmp/`、真机 `wxfile://tmp_`），**必须**经 `auth.persistAvatar`（`FileSystemManager.saveFile`）转持久路径，否则重启丢头像；仅 `https://` 网络头像直接返回。
 5. **登录态守卫**：非 tab 页**没有**全局路由守卫，每个子页 `onShow/onLoad` 需自行判断 `app.globalData.loggedIn`，未登录跳转 login 页。
