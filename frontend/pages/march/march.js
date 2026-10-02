@@ -1,13 +1,12 @@
 /**
  * 长征路线页（地图版）
- * 双模式：实景地图（原生 <map>）/ 插画地图（Canvas 2D）。
- * 插画地图采用“星空远征”深空质感：
- *   渐变夜空 + 中心微光 + 经纬网格 + 程序化层叠山峦 + 金色装饰边框 + 罗盘
- *   闪烁星空（含十字光芒）/ 飘移薄雾
- *   发光长征路线（Catmull-Rom 平滑曲线 + 外发光 + 流光彗尾）
- *   节点三态（未解锁暗环 / 进行中红色信标脉冲 / 已点亮金色光晕呼吸）
- *   当前进度旗帜（沿路线插值定位 + 摆动 + 基座光晕）
- * 静态层离屏缓存、渐变与光晕精灵复用，保证 rAF 每帧低开销、点击不卡顿。
+ * 双模式：实景地图（原生 <map>）/ 星空长征（Canvas 2D，需求 §13 独立体验模式）。
+ * 星空长征视觉规则（§13.2）：
+ *   节点=星星（已点亮=发光金星呼吸 / 当前=红色呼吸星+脉冲环 / 未解锁=暗色星点）
+ *   路线=星河轨迹（发光金轨 + 沿线星尘闪烁 + 流光彗尾）
+ *   点亮动画（§13.3）：亮起 → 扩大 → 粒子扩散（数量上限+低端降级）→ 稳定发光
+ * 星空全景（§13.4）：单指拖动平移、双指捏合缩放、双击复位；
+ *   静态背景离屏缓存、星点数量固定、粒子限量、仅当前节点持续动画，保证 rAF 低开销。
  * 任意节点（含未解锁）均可点击查看历史详情。
  */
 const app = getApp();
@@ -80,7 +79,7 @@ Page({
     litCount: 0,
     totalCount: 0,
     finished: false,
-    // 地图模式：real = 实景地图（<map> 组件），canvas = 插画地图
+    // 地图模式：real = 实景地图（<map> 组件），canvas = 星空长征
     mode: 'real',
     mapLat: 34.5,
     mapLng: 108.5,
@@ -101,7 +100,7 @@ Page({
   },
 
   onReady() {
-    // 实景地图默认模式，插画地图切换到 canvas 时再初始化
+    // 实景地图默认模式，星空长征切换到 canvas 时再初始化
     if (this.data.mode === 'canvas') {
       this.initCanvas();
     }
@@ -203,7 +202,7 @@ Page({
 
   /**
    * 有新点亮节点或新完成章节时播放到达动画序列：
-   * 插画地图模式下节点发光扩散（轨迹推进由路线入场/增量描画承担），
+   * 星空长征模式下节点发光扩散（轨迹推进由路线入场/增量描画承担），
    * 随后按队列逐个弹「抵达事件卡 → 章节完成仪式卡」（需求 §4.5）。
    * 已点亮节点点击仅查看详情，不触发动画（动画只由 light-up 响应驱动）。
    */
@@ -217,9 +216,44 @@ Page({
     if (lit.length === 0 && chapters.length === 0) return;
 
     if (lit.length > 0 && this.data.mode === 'canvas') {
-      this.arriveFx = { ids: lit.map((n) => n.id), start: Date.now() };
+      this.arriveFx = {
+        ids: lit.map((n) => n.id),
+        start: Date.now(),
+        particles: this.makeArriveParticles(lit.map((n) => n.id))
+      };
     }
     arrivePopup.playArriveQueue(this, lit, chapters);
+  },
+
+  /**
+   * 点亮粒子（需求 §13.3「粒子扩散」）：在 fx 创建时一次性生成，
+   * 每节点固定数量（离屏精灵不可用的低端设备减半）、总量封顶，避免 rAF 帧内分配。
+   */
+  makeArriveParticles(ids) {
+    if (!this.nodePts || !this.routeData) return [];
+    const per = this.glowGold ? 14 : 6;
+    const CAP = 64; // 粒子总量上限（§13.4 性能约束）
+    const list = [];
+    for (const id of ids) {
+      let idx = -1;
+      for (let i = 0; i < this.routeData.nodes.length; i++) {
+        if (this.routeData.nodes[i].id === id) { idx = i; break; }
+      }
+      if (idx < 0) continue;
+      const p = this.nodePts[idx];
+      for (let k = 0; k < per && list.length < CAP; k++) {
+        const ang = Math.random() * Math.PI * 2;
+        const sp = 26 + Math.random() * 42;
+        list.push({
+          x: p.x, y: p.y,
+          vx: Math.cos(ang) * sp,
+          vy: Math.sin(ang) * sp - 14,
+          r: 1 + Math.random() * 1.6,
+          delay: 0.2 + Math.random() * 0.2
+        });
+      }
+    }
+    return list;
   },
 
   /**
@@ -321,7 +355,7 @@ Page({
   /* ---------------- 实景地图 ---------------- */
 
   /**
-   * 切换实景地图 / 插画地图
+   * 切换实景地图 / 星空长征
    */
   switchMode(e) {
     const mode = e.currentTarget.dataset.mode;
@@ -515,6 +549,8 @@ Page({
         this.cw = width;
         this.ch = height;
         this.dpr = dpr;
+        // 星空全景观景变换（§13.4：拖动/捏合缩放/双击复位）
+        this.view = { scale: 1, ox: 0, oy: 0 };
 
         this.buildMap();
         this.buildStaticLayer();
@@ -577,6 +613,18 @@ Page({
     this.nodePathIndex = [];
     for (let i = 0; i < n; i++) this.nodePathIndex.push(i * (segs + 1));
 
+    // 星河轨迹沿线星尘（§13.2「路线=星河轨迹」）：固定 22 颗采样点，
+    // 仅已完成段内闪烁（相位各异，数量固定不随帧分配）
+    this.trailDust = [];
+    for (let i = 0; i < 22 && path.length > 1; i++) {
+      this.trailDust.push({
+        idx: Math.floor((i + 0.5) / 22 * (path.length - 1)),
+        r: 0.7 + Math.random() * 0.9,
+        phase: Math.random() * Math.PI * 2,
+        freq: 1.2 + Math.random() * 2
+      });
+    }
+
     // 星空（大小星混合，部分大星带十字光芒；闪烁相位/频率各异）
     this.stars = [];
     for (let i = 0; i < 82; i++) {
@@ -629,12 +677,18 @@ Page({
     const route = this.routeData;
     if (!route) return;
 
+    // 星空全景观景变换（§13.4）：拖动/缩放作用于整个场景，命中测试做逆变换
+    const v = this.view || { scale: 1, ox: 0, oy: 0 };
+    ctx.save();
+    ctx.translate(v.ox, v.oy);
+    ctx.scale(v.scale, v.scale);
+
     // 静态 scenery（底色/山峦/河流）已缓存到离屏层：每帧仅贴图，
     // 避免重复创建渐变与重建路径，大幅降低主线程开销，保证点击交互不卡顿。
     if (this.staticLayer) {
       ctx.drawImage(this.staticLayer, 0, 0, cw, ch);
     } else {
-      ctx.clearRect(0, 0, cw, ch);
+      ctx.clearRect(-v.ox / v.scale, -v.oy / v.scale, cw / v.scale, ch / v.scale);
       this.paintScenery(ctx);
     }
     this.drawClouds(t);
@@ -643,21 +697,29 @@ Page({
     this.drawNodes(t);
     this.drawArriveFx();
     this.drawProgressFlag(t);
+
+    ctx.restore();
   },
 
   /**
-   * 到达动画：新点亮节点发光扩散（两层扩散金环 + 渐隐光晕，约 2.2s）
+   * 点亮动画（需求 §13.3）：亮起 → 扩大 → 粒子扩散 → 稳定发光（约 2.4s）。
+   * 星形 bump 先亮后扩、两层扩散金环、预生成粒子抛物扩散渐隐；
+   * 动画结束后节点回到「已点亮发光星星」常态呼吸，无跳变。
    */
   drawArriveFx() {
     const fx = this.arriveFx;
     if (!fx || !this.routeData || !this.nodePts) return;
-    const elapsed = (Date.now() - fx.start) / 2200;
+    const tSec = (Date.now() - fx.start) / 1000;
+    const elapsed = tSec / 2.4;
     if (elapsed >= 1) {
       this.arriveFx = null;
       return;
     }
     const ctx = this.ctx;
     const glow = easeOutCubic(Math.min(1, elapsed * 1.15));
+    // 亮起（前 25% 亮度渐入）→ 扩大（1.2s 内 bump 至 1.9 倍后回落）
+    const brighten = Math.min(1, tSec / 0.6);
+    const bump = Math.sin(Math.min(1, tSec / 1.2) * Math.PI);
 
     fx.ids.forEach((id) => {
       let idx = -1;
@@ -676,6 +738,11 @@ Page({
         ctx.globalAlpha = (1 - elapsed) * 0.9;
         ctx.drawImage(this.glowGold, p.x - s / 2, p.y - s / 2, s, s);
       }
+      // 亮起扩大的金色星形（§13.3 暗星→亮起→扩大）
+      ctx.globalAlpha = brighten * (0.35 + (1 - elapsed) * 0.65);
+      drawStar(ctx, p.x, p.y, 5, 9.5 * (1 + bump * 0.9), 4 * (1 + bump * 0.9), 0);
+      ctx.fillStyle = '#FFE9A8';
+      ctx.fill();
       // 两层扩散金环
       for (let k = 0; k < 2; k++) {
         const pr = Math.max(0, Math.min(1, elapsed * 1.3 - k * 0.22));
@@ -689,6 +756,22 @@ Page({
       }
       ctx.globalAlpha = 1;
     });
+
+    // 粒子扩散（§13.3）：delay 后抛物扩散、生命 0.9s 渐隐
+    const parts = fx.particles || [];
+    for (const pt of parts) {
+      const dt = tSec - pt.delay;
+      if (dt <= 0) continue;
+      const life = 0.9;
+      if (dt >= life) continue;
+      const k = dt / life;
+      ctx.globalAlpha = (1 - k) * 0.85;
+      ctx.fillStyle = '#FFE9A8';
+      ctx.beginPath();
+      ctx.arc(pt.x + pt.vx * dt, pt.y + pt.vy * dt + 20 * dt * dt, pt.r * (1 - k * 0.5), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
   },
 
   /**
@@ -1007,9 +1090,23 @@ Page({
         ctx.fill();
       }
     }
+
+    // 星河轨迹星尘（§13.2）：已完成段内固定采样点闪烁
+    if (this.trailDust && endIdx > 0) {
+      for (const d of this.trailDust) {
+        if (d.idx > endIdx) continue;
+        const p = path[d.idx];
+        ctx.globalAlpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * d.freq + d.phase));
+        ctx.fillStyle = '#FFF3C8';
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, d.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
   },
 
-  /** 节点三态徽章：已点亮金色光晕呼吸 / 进行中红色信标脉冲 / 未解锁暗环 */
+  /** 节点三态星形（§13.2）：已点亮=发光金星呼吸 / 当前=红色呼吸星+脉冲环 / 未解锁=暗色星点 */
   drawNodes(t) {
     const ctx = this.ctx;
     const route = this.routeData;
@@ -1018,26 +1115,18 @@ Page({
     route.nodes.forEach((node, i) => {
       const p = nodePts[i];
       if (node.status === 'completed') {
-        // 金色光晕呼吸（复用光晕精灵，缩放脉冲）
+        // 发光星星：金色光晕呼吸（复用光晕精灵）+ 双层五角星
         const pulse = 0.5 + 0.5 * Math.sin(t * 2 + i);
-        const s = 30 + pulse * 12;
+        const s = 32 + pulse * 13;
         if (this.glowGold) ctx.drawImage(this.glowGold, p.x - s / 2, p.y - s / 2, s, s);
-        // 金环
-        ctx.strokeStyle = 'rgba(255,231,168,0.9)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 8, 0, Math.PI * 2);
-        ctx.stroke();
-        // 金盘 + 旋转白星
+        drawStar(ctx, p.x, p.y, 5, 9.5, 4, t * 0.35);
         ctx.fillStyle = '#E8B84B';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 6.4, 0, Math.PI * 2);
         ctx.fill();
-        drawStar(ctx, p.x, p.y, 5, 4.6, 2, t * 0.6);
+        drawStar(ctx, p.x, p.y, 5, 4.6, 2, t * 0.35);
         ctx.fillStyle = '#FFF7DC';
         ctx.fill();
       } else if (node.status === 'current') {
-        // 扩散脉冲环
+        // 呼吸星星（§13.2 当前=呼吸动画）：扩散脉冲环 + 红色星形呼吸缩放
         const cyc = (t % 1.6) / 1.6;
         for (let k = 0; k < 2; k++) {
           const pr = (cyc + k * 0.5) % 1;
@@ -1049,28 +1138,21 @@ Page({
           ctx.stroke();
         }
         ctx.globalAlpha = 1;
-        // 红色信标（复用光晕精灵）
+        const breathe = 1 + 0.16 * Math.sin(t * 3);
         if (this.glowRed) {
-          const s = 36;
+          const s = 36 * breathe;
           ctx.drawImage(this.glowRed, p.x - s / 2, p.y - s / 2, s, s);
         }
+        drawStar(ctx, p.x, p.y, 5, 8.6 * breathe, 3.7 * breathe, 0);
         ctx.fillStyle = '#FF3D57';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
         ctx.fill();
-        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
+        drawStar(ctx, p.x, p.y, 5, 3.6 * breathe, 1.6 * breathe, 0);
+        ctx.fillStyle = '#FFD9DE';
+        ctx.fill();
       } else {
-        // 未解锁：暗色环 + 中心点
-        ctx.strokeStyle = 'rgba(150,175,205,0.45)';
-        ctx.lineWidth = 1.5;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 7, 0, Math.PI * 2);
-        ctx.stroke();
+        // 未解锁：暗色星点（§13.2）
+        drawStar(ctx, p.x, p.y, 5, 5.4, 2.3, 0);
         ctx.fillStyle = 'rgba(120,145,175,0.5)';
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
         ctx.fill();
       }
 
@@ -1188,17 +1270,108 @@ Page({
     return lo;
   },
 
-  /* ---------------- 交互 ---------------- */
+  /* ---------------- 交互（§13.4 星空全景：拖动/缩放/双击复位/点击命中） ---------------- */
+
+  /** 观景变换钳制：缩放 1~2.5 倍，平移不使场景离开画布 */
+  clampView() {
+    const v = this.view;
+    if (!v) return;
+    v.scale = Math.min(2.5, Math.max(1, v.scale));
+    v.ox = Math.min(0, Math.max(this.cw * (1 - v.scale), v.ox));
+    v.oy = Math.min(0, Math.max(this.ch * (1 - v.scale), v.oy));
+  },
+
+  resetView() {
+    this.view = { scale: 1, ox: 0, oy: 0 };
+  },
+
+  onMapTouchStart(e) {
+    const ts = e.touches || [];
+    if (ts.length === 1) {
+      this._gesture = {
+        mode: 'pan', startX: ts[0].x, startY: ts[0].y,
+        ox: this.view ? this.view.ox : 0, oy: this.view ? this.view.oy : 0,
+        moved: false, t0: Date.now()
+      };
+    } else if (ts.length >= 2) {
+      this._gesture = {
+        mode: 'pinch',
+        dist0: Math.hypot(ts[0].x - ts[1].x, ts[0].y - ts[1].y),
+        scale0: this.view ? this.view.scale : 1,
+        cx: (ts[0].x + ts[1].x) / 2, cy: (ts[0].y + ts[1].y) / 2,
+        moved: true
+      };
+    }
+  },
+
+  onMapTouchMove(e) {
+    const g = this._gesture;
+    const v = this.view;
+    if (!g || !v) return;
+    const ts = e.touches || [];
+    if (g.mode === 'pan' && ts.length === 1) {
+      const dx = ts[0].x - g.startX;
+      const dy = ts[0].y - g.startY;
+      if (Math.abs(dx) + Math.abs(dy) > 6) g.moved = true;
+      if (g.moved) {
+        v.ox = g.ox + dx;
+        v.oy = g.oy + dy;
+        this.clampView();
+      }
+    } else if (ts.length >= 2) {
+      const d = Math.hypot(ts[0].x - ts[1].x, ts[0].y - ts[1].y);
+      if (g.mode !== 'pinch') {
+        // 单指转双指：重新锚定捏合基准，避免缩放跳变
+        this._gesture = {
+          mode: 'pinch', dist0: d, scale0: v.scale,
+          cx: (ts[0].x + ts[1].x) / 2, cy: (ts[0].y + ts[1].y) / 2,
+          moved: true
+        };
+        return;
+      }
+      const ns = Math.min(2.5, Math.max(1, g.scale0 * d / (g.dist0 || 1)));
+      // 以双指中心为锚点缩放：保持锚点处场景坐标不动
+      const sx = (g.cx - v.ox) / v.scale;
+      const sy = (g.cy - v.oy) / v.scale;
+      v.scale = ns;
+      v.ox = g.cx - sx * ns;
+      v.oy = g.cy - sy * ns;
+      g.moved = true;
+      this.clampView();
+    }
+  },
+
+  onMapTouchEnd(e) {
+    const g = this._gesture;
+    this._gesture = null;
+    if (!g) return;
+    // 干净单指轻点（未移动、短促）→ 双击复位 / 单击命中节点
+    if (g.mode === 'pan' && !g.moved && Date.now() - g.t0 < 350) {
+      const ts = (e.changedTouches && e.changedTouches[0]) || null;
+      if (!ts) return;
+      const now = Date.now();
+      if (now - (this._lastTap || 0) < 300) {
+        this._lastTap = 0;
+        this.resetView();
+        return;
+      }
+      this._lastTap = now;
+      this.hitNode(ts.x, ts.y);
+    }
+  },
 
   /**
-   * 点击地图：命中节点则进详情（含未解锁节点，可查看历史）
+   * 节点命中（屏幕坐标逆变换到场景坐标；含未解锁节点，可查看历史）
    */
-  handleMapTap(e) {
-    const { x, y } = e.detail;
+  hitNode(sx, sy) {
     if (!this.nodePts) return;
+    const v = this.view || { scale: 1, ox: 0, oy: 0 };
+    const x = (sx - v.ox) / v.scale;
+    const y = (sy - v.oy) / v.scale;
+    const radius = 22 / v.scale; // 保持屏幕命中半径恒定
     for (let i = 0; i < this.nodePts.length; i++) {
       const p = this.nodePts[i];
-      if (Math.hypot(x - p.x, y - p.y) <= 22) {
+      if (Math.hypot(x - p.x, y - p.y) <= radius) {
         const node = this.routeData.nodes[i];
         wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + node.id });
         return;

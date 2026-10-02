@@ -61,7 +61,7 @@
       class="mode-btn {{mode === 'canvas' ? 'active' : ''}}"
       data-mode="canvas"
       bindtap="switchMode"
-    >插画地图</view>
+    >星空长征</view>
   </view>
 
   <!-- 地图 -->
@@ -86,9 +86,11 @@
       type="2d"
       id="routeMap"
       class="route-map"
-      bindtap="handleMapTap"
+      bindtouchstart="onMapTouchStart"
+      bindtouchmove="onMapTouchMove"
+      bindtouchend="onMapTouchEnd"
     ></canvas>
-    <view class="map-hint">{{mode === 'real' ? '点击地图节点查看信息，点气泡或「查看详情」看历史' : '点击地图上的节点查看历史详情'}}</view>
+    <view class="map-hint">{{mode === 'real' ? '点击地图节点查看信息，点气泡或「查看详情」看历史' : '拖动/双指缩放查看星图，点击星星看历史，双击复位'}}</view>
 
     <!-- 选中节点信息卡（实景地图）：点 marker 后展示，替代原错位浮动标签 -->
     <view class="node-card" wx:if="{{mode === 'real' && selectedNode}}">
