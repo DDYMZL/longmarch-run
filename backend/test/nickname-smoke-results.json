@@ -1,6 +1,6 @@
 {
-  "run_code": "e2e-nickname-1790844536",
-  "user_id": 101,
+  "run_code": "e2e-nickname-1790866324",
+  "user_id": 106,
   "results": [
     {
       "id": "N01",
@@ -24,7 +24,7 @@
       "id": "N04",
       "name": "首次修改昵称成功（返回修改时间）",
       "ok": true,
-      "detail": "st=200 nickname=长征小红军 changedAt=2026-10-01T08:48:56.883941"
+      "detail": "st=200 nickname=长征小红军 changedAt=2026-10-01T14:52:05.133358"
     },
     {
       "id": "N05",
@@ -36,13 +36,13 @@
       "id": "N06",
       "name": "已改名用户重复登录昵称保持改后值",
       "ok": true,
-      "detail": "nickname=长征小红军 changedAt=2026-10-01T08:48:56.883941"
+      "detail": "nickname=长征小红军 changedAt=2026-10-01T14:52:05.133358"
     },
     {
       "id": "N07",
       "name": "排名洞察返回曾用名与修改时间",
       "ok": true,
-      "detail": "st=200 item={'nickname': '长征小红军', 'original_nickname': '微信昵称测试员', 'nickname_changed_at': '2026-10-01T08:48:56.883941'}"
+      "detail": "st=200 item={'nickname': '长征小红军', 'original_nickname': '微信昵称测试员', 'nickname_changed_at': '2026-10-01T14:52:05.133358'}"
     },
     {
       "id": "N08",
