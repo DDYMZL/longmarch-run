@@ -33,6 +33,14 @@
   border-radius: 12rpx;
 }
 
+/* 真实姓名提示：放输入框旁侧，不占 placeholder */
+.nick-hint {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  font-size: 24rpx;
+  color: #C8102E;
+}
+
 .nick-tip {
   display: block;
   margin-top: 12rpx;

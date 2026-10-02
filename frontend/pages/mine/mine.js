@@ -100,8 +100,7 @@ Page({
     wx.showModal({
       title: '修改昵称',
       editable: true,
-      placeholderText: '请输入新昵称',
-      content: '昵称仅可修改一次，请确认无误后提交',
+      content: '请输入真实姓名。昵称仅可修改一次，请确认无误后提交',
       confirmColor: '#C8102E',
       success: (res) => {
         if (!res.confirm) return;

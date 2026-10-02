@@ -46,7 +46,7 @@
 | `pages/profile/profile` | 子页 | 我的长征档案：加入天数/阶段标签、运动/答题/积分统计、路线完成度、足迹时间轴 |
 | `pages/calendar/calendar` | 子页 | 行军日历：月视图（步数热力等级/答题/点亮标记）、月统计、当日详情弹层 |
 | `pages/login/login` | 子页 | 微信登录：`chooseAvatar` 头像（页面不采集昵称），登录后发每日登录积分；已选组织的用户直达首页，新用户转组织选择页 |
-| `pages/org-select/org-select` | 子页 | 组织选择（逐级下钻，任意层级可选）；首次登录（未改名）时顶部采集微信昵称（`input type="nickname"`，可跳过），选定组织后落库并进首页 |
+| `pages/org-select/org-select` | 子页 | 组织选择（逐级下钻，任意层级可选）；首次登录（未改名）时顶部采集姓名（`input type="nickname"`，可跳过，提示语「请输入真实姓名」放输入框旁侧、不占 placeholder），选定组织后落库并进首页 |
 | `pages/node-detail/node-detail` | 子页 | 节点历史详情：图片轮播/英雄图标、关键词、历史时间/地点、一句话简介、历史故事、历史意义、相关人物、路线位置小地图（任意状态可看，含未解锁） |
 | `pages/quiz-answer/quiz-answer` | 子页 | 情报破译过程（单选/判断、逐题作答） |
 | `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（得分、错题解析） |
@@ -113,7 +113,7 @@ login 页 → 点「微信授权登录」按钮(open-type="chooseAvatar")
 
 ### 4.2 组织选择（首次登录）
 
-org-select 页 → 首次登录且未改名时顶部展示昵称采集（`input type="nickname"`，可跳过）
+org-select 页 → 首次登录且未改名时顶部展示姓名采集（`input type="nickname"`，可跳过；「请输入真实姓名」提示在输入框旁侧，不写入 placeholder）
   → 逐级下钻 / 直接选定任一组织
   → 确认选定：先 `auth.setInitialNickname(昵称)`（PUT /api/auth/nickname/initial，不消耗改名机会，失败不阻塞）
     → `org.select(orgId)`（POST /api/org/select 后端落库）
@@ -121,7 +121,7 @@ org-select 页 → 首次登录且未改名时顶部展示昵称采集（`input 
 
 ### 4.3 昵称修改（每人仅一次）
 
-mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为空时展示，弹窗明确提示仅可修改一次）
+mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为空时展示；弹窗 content 提示「请输入真实姓名、仅可修改一次」，输入框内不放 placeholderText）
   → auth.updateNickname(name) → PUT /api/auth/nickname {nickname}
   → 成功：后端返回最新用户（含 nicknameChangedAt），更新本地登录态与全局 user
   → 已修改过的用户不再展示修改按钮（后端同样以 400 兜底）
