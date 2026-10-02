@@ -46,7 +46,14 @@ const form = reactive<RouteNodeUpsert>({
   latitude: 0,
   longitude: 0,
   sort_order: 1,
-  is_enabled: true
+  is_enabled: true,
+  brief: '',
+  significance: '',
+  figures: '',
+  location: '',
+  images: [],
+  audio: '',
+  keywords: ''
 })
 
 const rules: FormRules = {
@@ -77,7 +84,14 @@ function openCreate() {
     latitude: last ? last.latitude : 0,
     longitude: last ? last.longitude : 0,
     sort_order: last ? last.sort_order + 1 : 1,
-    is_enabled: true
+    is_enabled: true,
+    brief: '',
+    significance: '',
+    figures: '',
+    location: '',
+    images: [],
+    audio: '',
+    keywords: ''
   })
   dialogVisible.value = true
 }
@@ -93,7 +107,14 @@ function openEdit(row: RouteNode) {
     latitude: row.latitude,
     longitude: row.longitude,
     sort_order: row.sort_order,
-    is_enabled: row.is_enabled
+    is_enabled: row.is_enabled,
+    brief: row.brief,
+    significance: row.significance,
+    figures: row.figures,
+    location: row.location,
+    images: [...row.images],
+    audio: row.audio,
+    keywords: row.keywords
   })
   dialogVisible.value = true
 }
@@ -110,7 +131,14 @@ async function handleSave() {
     latitude: Number(form.latitude),
     longitude: Number(form.longitude),
     sort_order: Number(form.sort_order),
-    is_enabled: form.is_enabled
+    is_enabled: form.is_enabled,
+    brief: form.brief.trim(),
+    significance: form.significance.trim(),
+    figures: form.figures.trim(),
+    location: form.location.trim(),
+    images: form.images.map((url) => url.trim()).filter(Boolean),
+    audio: form.audio.trim(),
+    keywords: form.keywords.trim()
   }
   saving.value = true
   try {
@@ -126,6 +154,18 @@ async function handleSave() {
   } finally {
     saving.value = false
   }
+}
+
+function addImage() {
+  if (form.images.length >= 9) {
+    ElMessage.warning('最多 9 张图片')
+    return
+  }
+  form.images.push('')
+}
+
+function removeImage(index: number) {
+  form.images.splice(index, 1)
 }
 
 async function handleToggle(row: RouteNode) {
@@ -230,6 +270,36 @@ onMounted(loadNodes)
         <el-form-item label="历史介绍">
           <el-input v-model="form.description" type="textarea" :rows="5" maxlength="2000" show-word-limit />
         </el-form-item>
+        <el-divider content-position="left">节点详情内容（小程序节点详情页展示）</el-divider>
+        <el-form-item label="一句话简介">
+          <el-input v-model="form.brief" maxlength="100" show-word-limit placeholder="节点卡片上的一句话简介" />
+        </el-form-item>
+        <el-form-item label="历史意义">
+          <el-input v-model="form.significance" type="textarea" :rows="3" maxlength="1000" show-word-limit />
+        </el-form-item>
+        <el-form-item label="相关人物">
+          <el-input v-model="form.figures" type="textarea" :rows="2" maxlength="500" show-word-limit placeholder="多个人物用中文逗号分隔" />
+        </el-form-item>
+        <div class="form-grid">
+          <el-form-item label="地点">
+            <el-input v-model="form.location" maxlength="100" placeholder="如 江西省瑞金市" />
+          </el-form-item>
+          <el-form-item label="关键词">
+            <el-input v-model="form.keywords" maxlength="100" placeholder="英文逗号分隔，如 出发,集结" />
+          </el-form-item>
+        </div>
+        <el-form-item label="图片链接">
+          <div class="image-list">
+            <div v-for="(_url, index) in form.images" :key="index" class="image-row">
+              <el-input v-model="form.images[index]" placeholder="图片 URL" maxlength="500" />
+              <el-button link type="danger" :icon="'Delete'" @click="removeImage(index)" />
+            </div>
+            <el-button link type="primary" :icon="'Plus'" @click="addImage">添加图片</el-button>
+          </div>
+        </el-form-item>
+        <el-form-item label="音频链接">
+          <el-input v-model="form.audio" maxlength="500" placeholder="音频 URL（可空）" />
+        </el-form-item>
         <el-form-item label="启用状态">
           <el-switch v-model="form.is_enabled" active-text="启用" inactive-text="停用" />
         </el-form-item>
@@ -296,6 +366,17 @@ onMounted(loadNodes)
 
 .form-grid :deep(.el-input-number) {
   width: 100%;
+}
+
+.image-list {
+  width: 100%;
+}
+
+.image-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
 }
 
 @media (max-width: 760px) {

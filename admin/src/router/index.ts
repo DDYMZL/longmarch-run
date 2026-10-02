@@ -11,10 +11,22 @@ const routes: RouteRecordRaw[] = [
     meta: { title: '登录' }
   },
   {
+    path: '/screen',
+    name: 'screen',
+    component: () => import('../views/ScreenView.vue'),
+    meta: { title: '数据大屏' }
+  },
+  {
     path: '/',
     component: () => import('../layout/AdminLayout.vue'),
-    redirect: '/rankings',
+    redirect: '/dashboard',
     children: [
+      {
+        path: 'dashboard',
+        name: 'dashboard',
+        component: () => import('../views/DashboardView.vue'),
+        meta: { title: '驾驶舱' }
+      },
       {
         path: 'rankings',
         name: 'rankings',

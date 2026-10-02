@@ -12,15 +12,23 @@ import {
 import type { Question, QuestionOption } from '../api/admin'
 
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F']
+const CATEGORIES = [
+  { value: 'event', label: '历史事件' },
+  { value: 'route', label: '长征路线' },
+  { value: 'figure', label: '历史人物' }
+]
+const categoryLabel = (value: string) => CATEGORIES.find((c) => c.value === value)?.label || '未分类'
 
 const loading = ref(false)
 const questions = ref<Question[]>([])
 const filterType = ref('')
+const filterCategory = ref('')
 const keyword = ref('')
 
 const filtered = computed(() =>
   questions.value.filter((q) => {
     if (filterType.value && q.type !== filterType.value) return false
+    if (filterCategory.value && q.category !== filterCategory.value) return false
     if (keyword.value && !q.question.includes(keyword.value.trim())) return false
     return true
   })
@@ -44,6 +52,7 @@ const formRef = ref<FormInstance>()
 
 const form = reactive({
   type: 'single',
+  category: 'event',
   question: '',
   optionTexts: [] as string[],
   answer: '',
@@ -73,6 +82,7 @@ function switchType(type: string) {
 function openCreate() {
   editingId.value = null
   form.type = 'single'
+  form.category = 'event'
   form.question = ''
   form.optionTexts = ['', '', '', '']
   form.answer = ''
@@ -84,6 +94,7 @@ function openCreate() {
 function openEdit(row: Question) {
   editingId.value = row.id
   form.type = row.type
+  form.category = row.category || 'event'
   form.question = row.question
   form.optionTexts = row.options.map((o) => o.text)
   form.answer = row.answer[0] || ''
@@ -124,6 +135,7 @@ async function handleSave() {
   }
   const payload = {
     type: form.type,
+    category: form.category,
     question: form.question.trim(),
     options: form.optionTexts.map((text, i) => ({ label: LABELS[i], text: text.trim() })),
     answer: [form.answer],
@@ -174,6 +186,9 @@ onMounted(loadQuestions)
         <el-option label="单选题" value="single" />
         <el-option label="判断题" value="judge" />
       </el-select>
+      <el-select v-model="filterCategory" placeholder="全部分类" clearable style="width: 140px">
+        <el-option v-for="c in CATEGORIES" :key="c.value" :label="c.label" :value="c.value" />
+      </el-select>
       <el-input
         v-model="keyword"
         placeholder="按题干关键字搜索"
@@ -194,6 +209,11 @@ onMounted(loadQuestions)
           <el-tag :type="row.type === 'single' ? 'primary' : 'success'" size="small">
             {{ row.type === 'single' ? '单选题' : '判断题' }}
           </el-tag>
+        </template>
+      </el-table-column>
+      <el-table-column label="分类" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag size="small" :type="row.category ? 'warning' : 'info'" effect="plain">{{ categoryLabel(row.category) }}</el-tag>
         </template>
       </el-table-column>
       <el-table-column prop="question" label="题干" min-width="260" show-overflow-tooltip />
@@ -223,6 +243,11 @@ onMounted(loadQuestions)
             <el-radio-button value="single">单选题</el-radio-button>
             <el-radio-button value="judge">判断题</el-radio-button>
           </el-radio-group>
+        </el-form-item>
+        <el-form-item label="知识分类">
+          <el-select v-model="form.category" style="width: 200px">
+            <el-option v-for="c in CATEGORIES" :key="c.value" :label="c.label" :value="c.value" />
+          </el-select>
         </el-form-item>
         <el-form-item label="题干" prop="question">
           <el-input v-model="form.question" type="textarea" :rows="2" maxlength="200" show-word-limit

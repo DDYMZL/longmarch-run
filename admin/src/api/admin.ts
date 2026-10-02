@@ -20,6 +20,7 @@ export interface Question {
   answer: string[]
   analysis: string
   score: number
+  category: string
 }
 
 export interface QuestionListResult {
@@ -34,6 +35,7 @@ export interface QuestionUpsert {
   answer: string[]
   analysis: string
   score: number
+  category: string
 }
 
 export interface OrgNode {
@@ -76,6 +78,13 @@ export interface RouteNode {
   longitude: number
   sort_order: number
   is_enabled: boolean
+  brief: string
+  significance: string
+  figures: string
+  location: string
+  images: string[]
+  audio: string
+  keywords: string
 }
 
 export type RouteNodeUpsert = Omit<RouteNode, 'id'>
@@ -87,6 +96,64 @@ export interface RouteNodeListResult {
 
 export interface MessageResult {
   message: string
+}
+
+// ---------------- 驾驶舱 / 数据大屏 ----------------
+export interface DashboardMetrics {
+  total_users: number
+  today_users: number
+  total_steps: number
+  avg_steps: number
+  completion_rate: number
+  quiz_users: number
+  medals_granted: number
+}
+
+export interface RouteOverviewItem {
+  node_id: number
+  name: string
+  target_steps: number
+  lit_count: number
+  completion_rate: number
+}
+
+export interface DashboardResult {
+  metrics: DashboardMetrics
+  route_overview: RouteOverviewItem[]
+}
+
+export interface TrendPoint {
+  date: string
+  total_steps: number
+  active_users: number
+  new_users: number
+  new_lit: number
+}
+
+export interface TrendResult {
+  days: number
+  points: TrendPoint[]
+}
+
+export interface ActivityItem {
+  id: number
+  event_type: string
+  event_time: string
+  user_id: number
+  nickname: string
+  text: string
+  data: Record<string, unknown>
+}
+
+export interface ActivityListResult {
+  items: ActivityItem[]
+}
+
+export interface ScreenResult {
+  metrics: DashboardMetrics
+  route_overview: RouteOverviewItem[]
+  trend: TrendPoint[]
+  activities: ActivityItem[]
 }
 
 // ---------------- 人员详情聚合 ----------------
@@ -227,4 +294,21 @@ export function deleteOrg(id: number) {
 
 export function syncOrgs() {
   return request.post<OrgSyncResult>('/admin/orgs/sync')
+}
+
+// ---------------- 驾驶舱 / 数据大屏 ----------------
+export function fetchDashboard() {
+  return request.get<DashboardResult>('/admin/dashboard')
+}
+
+export function fetchDashboardTrend(days: number) {
+  return request.get<TrendResult>('/admin/dashboard/trend', { params: { days } })
+}
+
+export function fetchActivities(limit: number) {
+  return request.get<ActivityListResult>('/admin/activities', { params: { limit } })
+}
+
+export function fetchScreen() {
+  return request.get<ScreenResult>('/admin/screen')
 }

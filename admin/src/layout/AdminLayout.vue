@@ -24,6 +24,8 @@ async function handleLogout() {
         <span>长征管理后台</span>
       </div>
       <el-menu :default-active="activeMenu" router background-color="#111827" text-color="#94a3b8" active-text-color="#f8d477">
+        <el-menu-item index="/dashboard"><el-icon><Odometer /></el-icon><span>驾驶舱</span></el-menu-item>
+        <el-menu-item index="/screen"><el-icon><Monitor /></el-icon><span>数据大屏</span></el-menu-item>
         <el-menu-item index="/rankings"><el-icon><DataAnalysis /></el-icon><span>排名洞察</span></el-menu-item>
         <el-menu-item index="/route-nodes"><el-icon><Location /></el-icon><span>路线点位</span></el-menu-item>
         <el-menu-item index="/questions"><el-icon><EditPen /></el-icon><span>题库维护</span></el-menu-item>
