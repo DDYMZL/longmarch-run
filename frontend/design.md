@@ -152,6 +152,7 @@ quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 
 - **插画模式**：「星空远征」深色主题 Canvas 2D；节点画布坐标由 `getCanvasNodePositions()` 按经纬度边界归一化计算（非硬编码），兼容任意节点数量和排列；静态层经 `wx.createOffscreenCanvas` 烘焙一次；动态元素（云、星、光晕精灵、流光彗尾）每帧 rAF 绘制；渐变对象缓存复用；离屏调用包 try/catch 降级。
 - **行军轨迹（006 P0）**：绘制进度统一取后端 `routeProgress`（旧接口降级为步数比例，见 `calcRouteProgress`/`currentRatio`）；步数刷新只从旧进度插值推进到新进度（约 800ms，`progressAnim`），仅首次渲染播放完整入场描画；当前行军点为「呼吸光点（光晕缩放）+ 3 颗上升光尘 + 摆动红旗」。
 - **长征章节（006 P0-3）**：章节视图（状态/点亮数/进度/介绍）由后端 `GET /api/march/route` 随路线统一下发；地图上方固定展示当前章节卡（标题 + 已点亮/总数 + 进度条，`progressPct` 渲染前预计算）；章节完成仪式卡由 light-up 响应驱动，与节点抵达卡共用 `utils/arrivePopup.js` 队列播放器（章节卡含历史介绍停留 3400ms，节点卡 2400ms），home 页步数同步弹层同源。
+- **开场动画（006 P0-4，需求 §5）**：首次进入长征 Tab 播放完整开场（1934/瑞金 → 长征开始 → 你的长征旅程正式开始，纯 CSS 淡入叠加，无图片无 rAF，总时长约 3.35s），点击任意处跳过；播放标记写 Storage `lm_march_intro_played`；非首次仅 500ms 过渡纱幕（`pointer-events:none` 不拦截操作）。开场期间地图加载/refresh 并发不阻塞；实景镜头俯冲与抵达事件队列延至开场结束补播（`dismissIntro`）。
 
 ## 5. 核心业务规则（与后端完全一致，见 `../backend/design.md` §5）
 

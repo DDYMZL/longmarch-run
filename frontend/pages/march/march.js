@@ -93,6 +93,9 @@ Page({
     // 章节系统（后端统一下发）：各章状态与当前章节卡
     chapters: [],
     currentChapter: null,
+    // 开场动画（需求 §5）：showIntro 首次完整开场 / showVeil 非首次快速过渡纱幕
+    showIntro: false,
+    showVeil: false,
     // 抵达事件卡弹层（light-up 返回新点亮节点/新完成章节后按队列播放）
     litPopup: null
   },
@@ -114,7 +117,45 @@ Page({
       wx.redirectTo({ url: '/pages/org-select/org-select?from=login' });
       return;
     }
+    this.maybePlayIntro();
     this.refresh();
+  },
+
+  /**
+   * 开场动画（需求 §5）：首次进入长征 Tab 完整播放（1934/瑞金 → 长征开始，
+   * 纯 CSS 轻量动画、可点击跳过、播放标记写入 Storage 缓存）；非首次仅
+   * 300~800ms 快速过渡纱幕（不拦截操作）。地图加载与 refresh 并发进行不阻塞。
+   */
+  maybePlayIntro() {
+    if (this._introChecked) return;
+    this._introChecked = true;
+    let played = '';
+    try { played = wx.getStorageSync('lm_march_intro_played'); } catch (e) { /* ignore */ }
+    if (played) {
+      this.setData({ showVeil: true });
+      this._veilTimer = setTimeout(() => this.setData({ showVeil: false }), 560);
+      return;
+    }
+    this.setData({ showIntro: true });
+    this._introTimer = setTimeout(() => this.dismissIntro(), 3350);
+  },
+
+  /** 点击跳过开场动画 */
+  skipIntro() {
+    this.dismissIntro();
+  },
+
+  /** 结束开场动画：写缓存标记，补播被压后的地图入场镜头与抵达事件队列 */
+  dismissIntro() {
+    if (!this.data.showIntro) return;
+    if (this._introTimer) { clearTimeout(this._introTimer); this._introTimer = null; }
+    this.setData({ showIntro: false });
+    try { wx.setStorageSync('lm_march_intro_played', 1); } catch (e) { /* ignore */ }
+    if (!this._viewPlayed && this.data.mode === 'real' && this.routeData) {
+      this._viewPlayed = true;
+      this.playViewAnim();
+    }
+    this.playArriveIfNeeded();
   },
 
   onHide() {
@@ -128,6 +169,8 @@ Page({
     this._refreshRequestId = (this._refreshRequestId || 0) + 1;
     if (this._viewTimer) clearTimeout(this._viewTimer);
     if (this.popupTimer) clearTimeout(this.popupTimer);
+    if (this._introTimer) clearTimeout(this._introTimer);
+    if (this._veilTimer) clearTimeout(this._veilTimer);
     this.stopAnim();
   },
 
@@ -165,6 +208,8 @@ Page({
    * 已点亮节点点击仅查看详情，不触发动画（动画只由 light-up 响应驱动）。
    */
   playArriveIfNeeded() {
+    // 开场动画播放期间暂缓，待动画结束后由 dismissIntro 补播
+    if (this.data.showIntro) return;
     const lit = this._pendingLit || [];
     const chapters = this._pendingChapters || [];
     this._pendingLit = null;
@@ -217,8 +262,8 @@ Page({
         chapters: chapters,
         currentChapter: currentChapter
       });
-      // 镜头俯冲只在首次进入播放，后续刷新保持当前视野
-      if (!this._viewPlayed) {
+      // 镜头俯冲只在首次进入播放（开场动画期间延至其结束），后续刷新保持当前视野
+      if (!this._viewPlayed && !this.data.showIntro) {
         this._viewPlayed = true;
         this.playViewAnim();
       }

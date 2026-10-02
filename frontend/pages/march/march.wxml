@@ -1,4 +1,18 @@
 <view class="march-page">
+  <!-- 长征旅程开场动画（首次进入，需求 §5.1；点击任意处跳过） -->
+  <view wx:if="{{showIntro}}" class="intro-overlay" bindtap="skipIntro">
+    <view class="intro-stage">
+      <view class="intro-line intro-year">1934</view>
+      <view class="intro-line intro-place">🚩 瑞金 · 1934年10月</view>
+      <view class="intro-line intro-start">长征开始</view>
+      <view class="intro-line intro-go">你的长征旅程 正式开始</view>
+    </view>
+    <view class="intro-skip">点击任意处跳过 ›</view>
+  </view>
+
+  <!-- 非首次进入：快速过渡纱幕（需求 §5.2，纯视觉不拦截操作） -->
+  <view wx:if="{{showVeil}}" class="intro-veil"></view>
+
   <!-- 抵达事件卡 / 章节完成仪式弹层 -->
   <view wx:if="{{litPopup}}" class="lit-overlay" wx:key="{{litPopup.key}}">
     <view wx:if="{{litPopup.kind === 'chapter'}}" class="lit-card chapter-lit-card">

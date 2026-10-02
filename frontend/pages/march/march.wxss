@@ -438,3 +438,94 @@
   color: #8a6d3b;
   line-height: 1.5;
 }
+
+/* ===== 长征旅程开场动画（需求 §5） ===== */
+.intro-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 999;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(160deg, #7A0A1E 0%, #A00D26 55%, #C8102E 100%);
+  animation: introFadeOut 0.45s ease 2.85s both;
+}
+
+.intro-stage {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.intro-line {
+  opacity: 0;
+  animation: fadeUp 0.6s ease both;
+  color: #FFFFFF;
+  text-align: center;
+}
+
+.intro-year {
+  font-size: 128rpx;
+  font-weight: 700;
+  letter-spacing: 16rpx;
+  color: #F5D9A0;
+  animation-delay: 0.15s;
+}
+
+.intro-place {
+  margin-top: 28rpx;
+  font-size: 34rpx;
+  color: #F5D9A0;
+  animation-delay: 0.85s;
+}
+
+.intro-start {
+  margin-top: 44rpx;
+  font-size: 52rpx;
+  font-weight: 700;
+  letter-spacing: 10rpx;
+  animation-delay: 1.55s;
+}
+
+.intro-go {
+  margin-top: 30rpx;
+  font-size: 30rpx;
+  color: rgba(255, 255, 255, 0.85);
+  letter-spacing: 4rpx;
+  animation-delay: 2.25s;
+}
+
+.intro-skip {
+  position: absolute;
+  bottom: 60rpx;
+  right: 48rpx;
+  font-size: 24rpx;
+  color: rgba(255, 255, 255, 0.6);
+  padding: 12rpx 24rpx;
+}
+
+@keyframes introFadeOut {
+  to { opacity: 0; }
+}
+
+/* 非首次进入：300~800ms 快速过渡纱幕（pointer-events:none 不拦截操作） */
+.intro-veil {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 998;
+  pointer-events: none;
+  background: linear-gradient(160deg, #A00D26, #C8102E);
+  animation: veilOut 0.5s ease both;
+}
+
+@keyframes veilOut {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
