@@ -4,9 +4,11 @@
 """
 from typing import Dict, List, Optional
 
+from sqlalchemy import and_, func
 from sqlalchemy.orm import Session
 
-from app.models.models import Organization, User
+from app.core.helpers import today_str
+from app.models.models import DailySport, Organization, User
 
 
 def _child_counts(db: Session, parent_ids: List[int]) -> Dict[int, int]:
@@ -116,4 +118,66 @@ def get_user_org(db: Session, user: User) -> Dict:
         "org_name": path[-1]["name"] if path else "",
         "full_name": " / ".join(p["name"] for p in path),
         "path": path,
+    }
+
+
+def _subtree_org_ids(db: Session, root_id: int) -> List[int]:
+    """组织子树 id 集合（含自身）：整表一次加载内存 BFS，避免逐层查询。"""
+    rows = db.query(Organization.id, Organization.parent_id).all()
+    children: Dict[Optional[int], List[int]] = {}
+    for oid, pid in rows:
+        children.setdefault(pid, []).append(oid)
+    result: List[int] = []
+    stack = [root_id]
+    while stack:
+        oid = stack.pop()
+        result.append(oid)
+        stack.extend(children.get(oid, []))
+    return result
+
+
+def get_companions(db: Session, user: User, limit: int = 6) -> Dict:
+    """同组织同行者（需求 §9）：我的组织 + 同行人数 + 今日共同前进 + 同行者列表。
+
+    口径：同组织 = 用户所选组织的整棵子树（含下级）；今日共同前进 = 子树成员
+    当日步数之和。隐私（§9.4）：同行者只下发昵称/头像/今日步数与是否本人，
+    不含用户 id、openid 等敏感字段。
+    """
+    if not user.org_id:
+        return {"org": None, "member_count": 0, "today_total_steps": 0, "companions": []}
+    org_ids = _subtree_org_ids(db, user.org_id)
+    today = today_str()
+    member_count = (
+        db.query(func.count(User.id)).filter(User.org_id.in_(org_ids)).scalar() or 0
+    )
+    today_total = (
+        db.query(func.coalesce(func.sum(DailySport.steps), 0))
+        .join(User, DailySport.user_id == User.id)
+        .filter(User.org_id.in_(org_ids), DailySport.date == today)
+        .scalar()
+    )
+    rows = (
+        db.query(User.id, User.nickname, User.avatar, DailySport.steps)
+        .outerjoin(
+            DailySport,
+            and_(DailySport.user_id == User.id, DailySport.date == today),
+        )
+        .filter(User.org_id.in_(org_ids))
+        .order_by(func.coalesce(DailySport.steps, 0).desc(), User.id)
+        .limit(limit)
+        .all()
+    )
+    return {
+        "org": get_user_org(db, user),
+        "member_count": int(member_count),
+        "today_total_steps": int(today_total or 0),
+        "companions": [
+            {
+                "nickname": nickname or "",
+                "avatar": avatar,
+                "today_steps": int(steps or 0),
+                "is_self": uid == user.id,
+            }
+            for uid, nickname, avatar, steps in rows
+        ],
     }

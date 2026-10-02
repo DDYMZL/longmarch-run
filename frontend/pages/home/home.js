@@ -10,7 +10,9 @@ const march = require('../../services/march');
 const quiz = require('../../services/quiz');
 const medal = require('../../services/medal');
 const broadcast = require('../../services/broadcast');
+const org = require('../../services/org');
 const ws = require('../../services/ws');
+const util = require('../../utils/util');
 const arrivePopup = require('../../utils/arrivePopup');
 
 /**
@@ -69,6 +71,12 @@ Page({
     medalTotal: 0,
     // 实时行军动态（P1-1，需求 §8）
     activities: [],
+    // 组织同行（P1-2，需求 §9）
+    orgName: '',
+    orgFullName: '',
+    memberCount: 0,
+    orgTodayStepsText: '0',
+    companions: [],
     // 抵达事件卡弹层
     litPopup: null
   },
@@ -122,7 +130,8 @@ Page({
       quiz.getDaily(),
       broadcast.getToday(),
       medal.getMedalList(),
-      broadcast.getActivities(6).catch(() => null) // 动态流失败不阻塞首页主数据
+      broadcast.getActivities(6).catch(() => null), // 动态流失败不阻塞首页主数据
+      org.getCompanions(6).catch(() => null) // 组织同行失败同上
     ])
       .then((results) => {
         const today = results[0];
@@ -131,6 +140,7 @@ Page({
         const cast = results[3];
         const medals = results[4];
         const activities = results[5];
+        const orgData = results[6];
         const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
 
         // 勋章行：已获得的排前面（按获得时间倒序取最近 6 枚展示）
@@ -176,6 +186,22 @@ Page({
         // 实时行军动态：REST 为权威快照（WS 期间的事件已落库，快照自含）
         if (activities !== null) {
           this.setData({ activities: activities.slice(0, 6) });
+        }
+        // 组织同行（需求 §9：组织 + 同行人数 + 今日共同前进 + 同行者）
+        if (orgData !== null) {
+          this.setData({
+            orgName: orgData.org ? orgData.org.orgName : '',
+            orgFullName: orgData.org ? orgData.org.fullName : '',
+            memberCount: orgData.memberCount,
+            orgTodayStepsText: util.formatNumber(orgData.todayTotalSteps),
+            companions: (orgData.companions || []).map((c, i) => ({
+              rowKey: i + '_' + (c.nickname || ''),
+              nickname: c.nickname || '战友',
+              avatar: c.avatar || '',
+              isSelf: !!c.isSelf,
+              stepsText: util.formatNumber(c.todaySteps)
+            }))
+          });
         }
 
         // 步数滚动动画

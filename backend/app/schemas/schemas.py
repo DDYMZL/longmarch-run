@@ -472,6 +472,24 @@ class UserOrgOut(CamelModel):
     path: List[OrgPathItem] = []
 
 
+class CompanionItemOut(CamelModel):
+    """同组织同行者条目（需求 §9.4：仅昵称/头像/今日步数与是否本人，不含用户 id）。"""
+
+    nickname: str = ""
+    avatar: Optional[str] = None
+    today_steps: int = 0
+    is_self: bool = False
+
+
+class OrgCompanionsOut(CamelModel):
+    """同组织同行者（需求 §9）：组织信息 + 同行人数 + 今日共同前进 + 同行者列表。"""
+
+    org: Optional[UserOrgOut] = None
+    member_count: int = 0
+    today_total_steps: int = 0
+    companions: List[CompanionItemOut] = []
+
+
 class SelectOrgRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 

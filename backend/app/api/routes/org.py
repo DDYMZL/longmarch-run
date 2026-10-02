@@ -8,7 +8,7 @@ from app.api.deps import get_current_user
 from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
-from app.schemas.schemas import OrgChildrenOut, SelectOrgRequest, UserOrgOut
+from app.schemas.schemas import OrgChildrenOut, OrgCompanionsOut, SelectOrgRequest, UserOrgOut
 from app.services import org_service
 
 router = APIRouter(prefix="/org", tags=["org"])
@@ -26,6 +26,16 @@ def children(
 @router.get("/mine", response_model=UserOrgOut, summary="我的所属组织")
 def mine(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return org_service.get_user_org(db, current)
+
+
+@router.get("/companions", response_model=OrgCompanionsOut, summary="同组织同行者")
+def companions(
+    limit: int = Query(6, description="同行者列表条数（1~50）"),
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """我的组织同行概况（需求 §9）：同行人数 / 今日共同前进 / 同行者（今日步数倒序，限量）。"""
+    return org_service.get_companions(db, current, max(1, min(limit, 50)))
 
 
 @router.post("/select", response_model=UserOrgOut, summary="选定/修改所属组织")

@@ -195,4 +195,37 @@
       </view>
     </view>
   </view>
+
+  <!-- 组织同行（P1-2，需求 §9） -->
+  <view class="card anim-card" style="animation-delay: 500ms" wx:if="{{orgName}}">
+    <view class="card-title">
+      <text>🚩 组织同行</text>
+      <text class="org-tag">{{orgName}}</text>
+    </view>
+    <view class="org-full" wx:if="{{orgFullName}}">{{orgFullName}}</view>
+    <view class="org-stats">
+      <view class="org-stat">
+        <view class="org-stat-num">{{memberCount}}</view>
+        <view class="org-stat-label">同行人数（人）</view>
+      </view>
+      <view class="org-stat">
+        <view class="org-stat-num">{{orgTodayStepsText}}</view>
+        <view class="org-stat-label">今日共同前进（步）</view>
+      </view>
+    </view>
+    <view wx:if="{{companions.length === 0}}" class="empty-tip">还没有同伴动态，邀请战友一起走起来</view>
+    <view class="companion-list" wx:else>
+      <view class="companion-item {{item.isSelf ? 'self' : ''}}" wx:for="{{companions}}" wx:key="rowKey">
+        <view class="companion-avatar">
+          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" />
+          <text wx:else class="avatar-placeholder">👤</text>
+        </view>
+        <view class="companion-name">
+          {{item.nickname}}
+          <text class="companion-self" wx:if="{{item.isSelf}}">我</text>
+        </view>
+        <view class="companion-steps">{{item.stepsText}} 步</view>
+      </view>
+    </view>
+  </view>
 </view>

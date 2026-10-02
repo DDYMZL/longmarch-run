@@ -22,7 +22,16 @@ function select(orgId) {
   return requestService.request({ url: '/org/select', method: 'POST', data: { orgId } });
 }
 
+/**
+ * 同组织同行者（需求 §9）：我的组织 + 同行人数 + 今日共同前进 + 同行者（今日步数倒序）。
+ * @returns {Promise<{org:object|null, memberCount:number, todayTotalSteps:number, companions:Array}>}
+ */
+function getCompanions(limit) {
+  return requestService.request({ url: '/org/companions?limit=' + (limit || 6) });
+}
+
 module.exports = {
   getChildren,
-  select
+  select,
+  getCompanions
 };
