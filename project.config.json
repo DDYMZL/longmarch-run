@@ -1,7 +1,20 @@
 {
   "description": "长征主题运动与知识答题微信小程序",
   "packOptions": {
-    "ignore": [],
+    "ignore": [
+      {
+        "type": "folder",
+        "value": "frontend/test"
+      },
+      {
+        "type": "file",
+        "value": "frontend/design.md"
+      },
+      {
+        "type": "file",
+        "value": "frontend/AGENTS.md"
+      }
+    ],
     "include": []
   },
   "setting": {
