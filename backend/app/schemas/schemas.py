@@ -149,6 +149,10 @@ class RouteOut(CamelModel):
     total_count: int
     next_node: Optional[RouteNodeOut] = None
     finished: bool
+    # 行军轨迹（后端统一计算）：当前前往节点、区间段内进度、全程进度
+    current_node_id: Optional[int] = None
+    current_progress: float = 0
+    route_progress: float = 0
 
 
 class NodeDetailOut(CamelModel):

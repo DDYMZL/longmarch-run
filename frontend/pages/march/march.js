@@ -200,8 +200,14 @@ Page({
 
   /**
    * 用当前配置绘制路线；网络刷新与本地缓存共用同一渲染入口。
+   * 轨迹推进规则（需求 §3.5）：仅首次渲染播放入场/镜头动画；
+   * 步数刷新只从旧进度动画推进到新进度，不重播完整地图动画。
    */
   renderRoute(route) {
+    const prevProgress =
+      this.routeData && typeof this.routeData.routeProgress === 'number'
+        ? this.routeData.routeProgress
+        : null;
     this.routeData = route;
 
     if (this.data.mode === 'real') {
@@ -222,7 +228,11 @@ Page({
         polylines: mapData.polylines,
         selectedNode: selectedNode
       });
-      this.playViewAnim();
+      // 镜头俯冲只在首次进入播放，后续刷新保持当前视野
+      if (!this._viewPlayed) {
+        this._viewPlayed = true;
+        this.playViewAnim();
+      }
       return;
     }
 
@@ -235,12 +245,41 @@ Page({
       finished: route.finished
     });
     if (this.ctx) {
-      this.buildMap();
-      this.buildStaticLayer();
-      this.buildGlowSprites();
-      this.animStart = Date.now();
+      if (prevProgress === null || !this.path) {
+        // 首次渲染：重建静态层并播放完整入场描画
+        this.buildMap();
+        this.buildStaticLayer();
+        this.buildGlowSprites();
+        this.animStart = Date.now();
+      } else {
+        // 步数刷新：仅播放新增部分的轨迹推进（约 800ms）
+        this.progressAnim = { from: prevProgress, to: this.calcRouteProgress(route), start: Date.now() };
+      }
       this.startAnim();
     }
+  },
+
+  /**
+   * 全程行军进度（0~1）：优先取后端 routeProgress，旧接口降级为步数比例
+   */
+  calcRouteProgress(route) {
+    if (typeof route.routeProgress === 'number') return Math.min(1, Math.max(0, route.routeProgress));
+    return route.totalSteps > 0 ? Math.min(1, route.currentSteps / route.totalSteps) : 0;
+  },
+
+  /**
+   * 当前生效的绘制进度：增量推进动画期间按 easeOutCubic 插值
+   */
+  currentRatio() {
+    const base = this.calcRouteProgress(this.routeData);
+    const anim = this.progressAnim;
+    if (!anim) return base;
+    const p = Math.min(1, (Date.now() - anim.start) / 800);
+    if (p >= 1) {
+      this.progressAnim = null;
+      return base;
+    }
+    return anim.from + (base - anim.from) * easeOutCubic(p);
   },
 
   /* ---------------- 实景地图 ---------------- */
@@ -865,8 +904,8 @@ Page({
     const route = this.routeData;
     const path = this.path;
 
-    // 已完成段长度（按步数比例）+ 入场描画进度
-    const progressRatio = route.totalSteps > 0 ? Math.min(1, route.currentSteps / route.totalSteps) : 0;
+    // 已完成段长度（按行军进度比例，含增量推进动画）+ 入场描画进度
+    const progressRatio = this.currentRatio();
     const completedLen = this.pathLen * progressRatio;
     const intro = Math.min(1, (Date.now() - this.animStart) / 1400);
     const shownLen = completedLen * easeOutCubic(intro);
@@ -1026,24 +1065,38 @@ Page({
     ctx.fillText(node.name, labelX, labelY);
   },
 
-  /** 当前进度旗帜（基座光晕 + 摆动 + 沿路线插值） */
+  /** 当前进度旗帜：呼吸光点 + 轻微粒子（需求 §3.3）+ 基座光晕 + 摆动旗面 */
   drawProgressFlag(t) {
     const ctx = this.ctx;
     const route = this.routeData;
     if (route.currentSteps <= 0 || !this.path || this.path.length < 2) return;
 
-    const ratio = route.totalSteps > 0 ? Math.min(1, route.currentSteps / route.totalSteps) : 0;
+    const ratio = this.currentRatio();
     const len = this.pathLen * ratio;
     const idx = Math.min(this.dist2Index(len), this.path.length - 2);
     const p = this.path[idx];
     const pNext = this.path[Math.min(idx + 2, this.path.length - 1)];
     const ang = Math.atan2(pNext.y - p.y, pNext.x - p.x);
 
-    // 基座光晕（复用金色精灵）
+    // 呼吸光点（基座光晕随呼吸缩放，复用金色精灵）
+    const breathe = 0.5 + 0.5 * Math.sin(t * 2.4);
     if (this.glowGold) {
-      const s = 30;
+      const s = 26 + breathe * 16;
+      ctx.globalAlpha = 0.45 + breathe * 0.4;
       ctx.drawImage(this.glowGold, p.x - s / 2, p.y - s / 2, s, s);
+      ctx.globalAlpha = 1;
     }
+
+    // 轻微粒子（3 颗光尘循环上升，低端开销可忽略）
+    for (let k = 0; k < 3; k++) {
+      const ph = (t * 0.32 + k / 3) % 1;
+      ctx.globalAlpha = (1 - ph) * 0.65;
+      ctx.fillStyle = '#FFE9A8';
+      ctx.beginPath();
+      ctx.arc(p.x + Math.sin(t * 1.7 + k * 2.1) * 6, p.y - ph * 22, Math.max(0.6, 1.8 - ph * 1.2), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
 
     const sway = Math.sin(t * 3) * 0.14;
     const poleH = 24;

@@ -76,6 +76,24 @@ def get_route(db: Session, user_id: int) -> Dict:
     next_node = next((x for x in nodes if x["status"] != "completed"), None)
     total_steps_target = nodes_def[-1].target_steps if nodes_def else 0
 
+    # 行军轨迹进度（文档 §3.6：由后端统一计算，小程序只负责表现）
+    # route_progress   全程进度 0~1（累计步数 / 终点目标步数）
+    # current_node_id  正在前往的节点（即下一站）；全程完成时为 None
+    # current_progress 当前区间段内进度 0~1（(累计步数-上一节点目标) / 本段跨度）
+    route_progress = (
+        min(1.0, current_steps / total_steps_target) if total_steps_target > 0 else 0.0
+    )
+    current_node_id: Optional[int] = None
+    current_progress = 0.0
+    if next_node is not None:
+        current_node_id = next_node["id"]
+        idx = next(i for i, x in enumerate(nodes) if x["id"] == next_node["id"])
+        prev_target = nodes_def[idx - 1].target_steps if idx > 0 else 0
+        span = next_node["target_steps"] - prev_target
+        current_progress = (
+            min(1.0, max(0.0, (current_steps - prev_target) / span)) if span > 0 else 1.0
+        )
+
     return {
         "nodes": nodes,
         "current_steps": current_steps,
@@ -84,6 +102,9 @@ def get_route(db: Session, user_id: int) -> Dict:
         "total_count": total_count,
         "next_node": next_node,
         "finished": finished,
+        "current_node_id": current_node_id,
+        "current_progress": current_progress,
+        "route_progress": route_progress,
     }
 
 
