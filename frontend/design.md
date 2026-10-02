@@ -39,7 +39,7 @@
 
 | 页面 | 类型 | 职责 |
 | --- | --- | --- |
-| `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、抵达事件卡弹层 |
+| `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、抵达事件卡弹层 |
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空插画），节点点击进详情、点亮进度、到达动画（Canvas 金光扩散 + 抵达事件卡） |
 | `pages/quiz/quiz` | tab | 今日长征情报：期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（我的长征/行军日历/运动记录/答题记录） |
@@ -68,7 +68,8 @@
 | `points.js` | `grantDailyLogin()` / 总额与流水 | `/api/points`、登录副链路 | 积分发放（同日同 reason 去重） |
 | `medal.js` | `checkAndGrant()` / `getMedalList()` | `/api/medal/list, check` | 12 枚勋章判定与发放（分类/隐藏/排序由后端下发） |
 | `profile.js` | `getSummary()` / `getTimeline(limit)` | `/api/profile/summary, timeline` | 我的长征档案聚合与足迹时间轴 |
-| `broadcast.js` | `getToday()` | `/api/broadcast/today` | 今日长征播报（期号/全局汇总/彩蛋/个人状态） |
+| `broadcast.js` | `getToday()` / `getActivities(limit)` / `toActivityView(item)` | `/api/broadcast/today, activities` | 今日长征播报（期号/全局汇总/彩蛋/个人状态）；实时行军动态（REST 快照与 WS 消息共用视图模型：图标/昵称/相对时间） |
+| `ws.js` | `subscribe(fn)` | `WS /api/ws/updates?token=` | 实时推送客户端：单连接全局复用、断线指数退避重连（1s 起封顶 15s）；页面订阅 `activity` 等消息，退订即清理 |
 | `org.js` | 组织树下钻 / 我的组织 / 选定组织 | `/api/org/children, mine, select` | 组织树（任意层级可选） |
 | `rank.js` | `getStepsRank()` | `/api/rank/steps` | 全员工累计步数总榜 |
 | `store.js` | `migrateUserData()` | （后端无对应，落库到 DB） | 遗留：登录时 Mock→真实用户 ID 数据迁移 |
@@ -143,6 +144,15 @@ home/march 触发 → sport.syncToday()（POST /api/sport/sync 后端落库，�
 quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 题、按用户+日期固定）
   → quiz-answer 逐题作答 → quiz.submit(answers)（POST /api/quiz/submit 后端判分、记分、发积分；每日仅一次）
   → quiz-result 展示得分与错题解析 → 返回后 quiz 页 refresh() 显示已完成
+```
+
+### 4.5a 实时行军动态（P1-1，需求 §8）
+
+```
+首页 onShow → ws.subscribe 订阅 /api/ws/updates（onHide/onUnload 退订）
+  → refreshAll 拉 GET /api/broadcast/activities?limit=6 作权威快照（WS 期间的事件已落库，快照自含；失败不阻塞主数据）
+  → 停留期间收到 WS activity 消息 → toActivityView 转视图模型后置顶插入（最多 6 条，单条小 setData）
+卡片展示：⚡实时行军 + LIVE 呼吸灯；条目为 图标 + 昵称 + 行为文案 + 相对时间（util.formatRelative）
 ```
 
 ### 4.6 march 双模式地图

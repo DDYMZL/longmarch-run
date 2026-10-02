@@ -13,6 +13,7 @@ from typing import Dict, List, Optional
 from sqlalchemy.orm import Session
 
 from app.core import ws as ws_manager
+from app.core.config import get_settings
 from app.models.models import User, UserEvent
 
 # 连续行军里程碑（天）：达成时发放积分并写 STREAK_* 事件（一次性成就）
@@ -60,6 +61,49 @@ def has_event(db: Session, user_id: int, event_type: str) -> bool:
     )
 
 
+def mask_nickname(nickname: str) -> str:
+    """昵称脱敏（需求 §8.5：ACTIVITY_MASK_NICKNAME 开启时用于对外实时动态）。"""
+    n = (nickname or "").strip()
+    if not n:
+        return "战友"
+    if len(n) == 1:
+        return n
+    if len(n) == 2:
+        return n[0] + "*"
+    return n[0] + "*" + n[-1]
+
+
+def list_public_activities(db: Session, limit: int = 10) -> List[Dict]:
+    """小程序实时行军动态（user_event 倒序，关联昵称）。
+
+    隐私边界（需求 §8.5）：只下发昵称 / 行为文案 / 事件类型与时间，
+    不含 user_id、openid 与事件参数；ACTIVITY_MASK_NICKNAME 开启时昵称脱敏。
+    """
+    rows = (
+        db.query(UserEvent)
+        .order_by(UserEvent.event_time.desc(), UserEvent.id.desc())
+        .limit(limit)
+        .all()
+    )
+    user_ids = {r.user_id for r in rows}
+    nicknames = (
+        {u.id: (u.nickname or "") for u in db.query(User.id, User.nickname).filter(User.id.in_(user_ids)).all()}
+        if user_ids
+        else {}
+    )
+    mask = get_settings().ACTIVITY_MASK_NICKNAME
+    return [
+        {
+            "id": r.id,
+            "event_type": r.event_type,
+            "event_time": r.event_time,
+            "nickname": mask_nickname(nicknames.get(r.user_id, "")) if mask else nicknames.get(r.user_id, ""),
+            "text": build_text(r.event_type, r.event_data or {}),
+        }
+        for r in rows
+    ]
+
+
 def record(
     db: Session,
     user_id: int,
@@ -81,6 +125,8 @@ def record(
     user = db.query(User).filter(User.id == user_id).first()
     if user is not None:
         nickname = user.nickname or ""
+    if get_settings().ACTIVITY_MASK_NICKNAME:
+        nickname = mask_nickname(nickname)
     ws_manager.broadcast(
         ws_manager.build_activity(event_type, user_id, nickname, build_text(event_type, data))
     )

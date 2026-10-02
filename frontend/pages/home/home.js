@@ -10,6 +10,7 @@ const march = require('../../services/march');
 const quiz = require('../../services/quiz');
 const medal = require('../../services/medal');
 const broadcast = require('../../services/broadcast');
+const ws = require('../../services/ws');
 const arrivePopup = require('../../utils/arrivePopup');
 
 /**
@@ -66,6 +67,8 @@ Page({
     medalPreview: [],
     medalOwned: 0,
     medalTotal: 0,
+    // 实时行军动态（P1-1，需求 §8）
+    activities: [],
     // 抵达事件卡弹层
     litPopup: null
   },
@@ -82,30 +85,52 @@ Page({
       return;
     }
     this.setData({ user: app.globalData.user });
+    if (!this._wsUnsub) {
+      this._wsUnsub = ws.subscribe((msg) => this.handleWsMessage(msg));
+    }
     this.refreshAll();
   },
 
   onHide() {
     if (this.stepsTimer) clearInterval(this.stepsTimer);
     if (this.popupTimer) clearTimeout(this.popupTimer);
+    if (this._wsUnsub) { this._wsUnsub(); this._wsUnsub = null; }
   },
 
   onUnload() {
     if (this.stepsTimer) clearInterval(this.stepsTimer);
     if (this.popupTimer) clearTimeout(this.popupTimer);
+    if (this._wsUnsub) { this._wsUnsub(); this._wsUnsub = null; }
+  },
+
+  /**
+   * WS 推送：activity 消息实时插入动态流顶部（最多保留 6 条，单条小 setData）
+   */
+  handleWsMessage(msg) {
+    if (!msg || msg.type !== 'activity') return;
+    const item = broadcast.toActivityView(msg);
+    this.setData({ activities: [item].concat(this.data.activities).slice(0, 6) });
   },
 
   /**
    * 刷新首页全部数据
    */
   refreshAll() {
-    Promise.all([sport.getToday(), march.getRoute(), quiz.getDaily(), broadcast.getToday(), medal.getMedalList()])
+    Promise.all([
+      sport.getToday(),
+      march.getRoute(),
+      quiz.getDaily(),
+      broadcast.getToday(),
+      medal.getMedalList(),
+      broadcast.getActivities(6).catch(() => null) // 动态流失败不阻塞首页主数据
+    ])
       .then((results) => {
         const today = results[0];
         const route = results[1];
         const daily = results[2];
         const cast = results[3];
         const medals = results[4];
+        const activities = results[5];
         const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
 
         // 勋章行：已获得的排前面（按获得时间倒序取最近 6 枚展示）
@@ -148,6 +173,10 @@ Page({
           medalOwned: medals.filter((m) => m.owned).length,
           medalTotal: medals.length
         });
+        // 实时行军动态：REST 为权威快照（WS 期间的事件已落库，快照自含）
+        if (activities !== null) {
+          this.setData({ activities: activities.slice(0, 6) });
+        }
 
         // 步数滚动动画
         this.animateSteps(today.steps);

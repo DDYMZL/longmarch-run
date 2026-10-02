@@ -38,6 +38,7 @@ class Settings(BaseSettings):
     STRIDE_M: float = 0.7  # 平均步长（米），估算距离(km) = 步数 × 步长 / 1000
     STREAK_GOAL_STEPS: int = 5000  # 连续行军每日达标步数（当天达到即计入连续行军）
     ACTIVITY_START_DATE: str = "2026-09-01"  # 活动起始日（答题「第 N 期」等的基准）
+    ACTIVITY_MASK_NICKNAME: bool = False  # 实时行动态昵称脱敏（需求 §8.5，开启后对外动态展示如「王*明」）
 
     # 跨域来源
     CORS_ORIGINS: List[str] = ["*"]

@@ -427,6 +427,20 @@ class BroadcastTodayOut(CamelModel):
     memory: Optional[BroadcastMemory] = None
 
 
+class ActivityItemOut(CamelModel):
+    """实时行军动态条目（需求 §8.5：仅昵称/行为文案/类型/时间，不含 user_id 与事件参数）。"""
+
+    id: int
+    event_type: str
+    event_time: datetime
+    nickname: str = ""
+    text: str = ""
+
+
+class ActivitiesOut(CamelModel):
+    items: List[ActivityItemOut] = []
+
+
 # ---------------- 通用 ----------------
 class MessageOut(CamelModel):
     message: str

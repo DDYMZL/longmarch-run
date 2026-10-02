@@ -65,7 +65,7 @@
 | `medal_service` | `medal.js` | 12 枚勋章的判定与发放（`check_and_grant` 返回新获列表），含连续行军/步数里程碑/隐藏勋章 |
 | `org_service` | `org.js` | 组织树逐级下钻、用户组织查询/选定（任意层级） |
 | `rank_service` | `rank.js` | 全员工累计步数总榜（跨组织，降序，标记我的名次） |
-| `event_service` | —（足迹时间轴数据源） | 统一事件系统：`record` 写 `user_event` 并向 WS 广播 `activity`；`build_text` 生成与小程序足迹同源的中文文案；事件类型如 FIRST_STEP/DAILY_GOAL/STREAK_*/NODE_LIT/MEDAL_GRANTED/QUIZ_DONE 等 |
+| `event_service` | —（足迹时间轴/实时动态数据源） | 统一事件系统：`record` 写 `user_event` 并向 WS 广播 `activity`；`build_text` 生成与小程序足迹同源的中文文案；`list_public_activities` 提供小程序实时动态（脱敏由 `ACTIVITY_MASK_NICKNAME` 控制，`mask_nickname` 实现）；事件类型如 FIRST_STEP/DAILY_GOAL/STREAK_*/NODE_LIT/MEDAL_GRANTED/QUIZ_DONE 等 |
 | `streak_service` | —（内嵌于 sport 写入链） | 连续行军：写入侧 `on_sport_upsert` 在当日首次达标时维护 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件；读取侧 `compute_streaks` 以 `daily_sport.is_goal_completed` 重算 |
 | `profile_service` | `profile.js` | 个人档案聚合（用户/连续行军/勋章/长征进度/足迹时间轴） |
 | `broadcast_service` | `broadcast.js` | 今日长征播报（全局运动汇总 + 今日长征彩蛋 + 个人当日状态） |
@@ -124,6 +124,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | GET | `/api/profile/summary` | 是 | 个人档案聚合：用户信息、加入天数/阶段、运动/答题/积分统计、连续行军、路线完成度 |
 | GET | `/api/profile/timeline?limit=` | 是 | 我的长征足迹：`user_event` 倒序时间轴（文案与事件表同源） |
 | GET | `/api/broadcast/today` | 是 | 今日长征播报：期号、全局运动汇总、今日长征彩蛋（历史事件卡）、个人当日状态 |
+| GET | `/api/broadcast/activities?limit=` | 是 | 实时行军动态（小程序）：`user_event` 关联昵称倒序；隐私边界只下发昵称/文案/类型/时间（不含 user_id 与事件参数），`ACTIVITY_MASK_NICKNAME=true` 时昵称脱敏（如「王*明」）；实时增量经 WS `activity` 消息下发 |
 | GET | `/api/march/route` | 是 | 路线进度 `{nodes, currentSteps, totalSteps, litCount, totalCount, nextNode, finished, currentNodeId, currentProgress, routeProgress}`；仅统计启用节点；轨迹进度字段见下 |
 | GET | `/api/march/route-nodes` | 是 | 启用节点配置列表（含经纬度），小程序缓存使用 |
 | GET | `/api/march/node/{node_id}` | 是 | 节点详情（任意状态可看，含未解锁），不存在 404 |
@@ -236,7 +237,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | 积分 | 登录 +1；运动 5000 步 +5、10000 步 +10；答题 +5、满分额外 +10；点亮节点 +10；完成路线 +100；**同日同 reason 去重** |
 | 勋章 | 12 枚分四类：入门（first-step 首次运动 / learner 答题 10 次 / persistence 连续行军 7 天）、路线（luding 点亮泸定桥 / snow 点亮雪山）、挑战（day-10k 单日万步 / steps-100k / steps-500k / streak-30 连续 30 天 / master 积分≥500 / fearless 连续 7 天日万步，隐藏）、完成（victory 全部**启用**节点点亮）；隐藏勋章未获得时不公开条件 |
 | 连续行军 | 当日步数 ≥ `STREAK_GOAL_STEPS`（默认 5000）即完成当日行军；写入侧在 `is_goal_completed` 由 False 翻 True 时更新 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件（一次性成就按事件表去重）；读取侧以 `daily_sport.is_goal_completed` 重算为准 |
-| 事件 | 所有用户侧成就（首次运动/当日达标/连续里程碑/点亮节点/获得勋章/完成答题等）统一写 `user_event`，文案由 `event_service.build_text` 生成；写事件即向 WS 广播 `activity`，任何数据写入广播 `data_changed` |
+| 事件 | 所有用户侧成就（首次运动/当日达标/连续里程碑/点亮节点/获得勋章/完成答题等）统一写 `user_event`，文案由 `event_service.build_text` 生成；写事件即向 WS 广播 `activity`，任何数据写入广播 `data_changed`；小程序公开动态流（`/api/broadcast/activities` + WS）只暴露昵称/文案/类型/时间，`ACTIVITY_MASK_NICKNAME` 可开启昵称脱敏 |
 | 组织 | 树形逐级下钻；用户可选定任意层级节点；`/org/children` 不鉴权可浏览 |
 | 昵称 | 登录时以微信昵称建号（记为曾用名）；登录**不再覆盖**昵称（头像仍随登录更新）；首次引导可经 `PUT /auth/nickname/initial` 设置昵称（不消耗改名机会）；应用内 `PUT /auth/nickname` 修改，**每人仅一次**（改后 nickname_changed_at 记录时间，再改返回 400）；曾用名与修改时间在管理端排名洞察可见 |
 | 排名 | 跨组织员工个人总榜，按累计步数降序；小程序用 `isMe` 标记本人行，管理端返回全量人员及 `lit_nodes.lit_at` 节点到达时间 |

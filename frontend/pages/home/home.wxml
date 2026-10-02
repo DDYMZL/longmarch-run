@@ -176,4 +176,23 @@
       </view>
     </view>
   </view>
+
+  <!-- 实时行军动态（P1-1，需求 §8） -->
+  <view class="card anim-card" style="animation-delay: 440ms">
+    <view class="card-title">
+      <text>⚡ 实时行军</text>
+      <text class="live-badge"><text class="live-dot"></text>LIVE</text>
+    </view>
+    <view wx:if="{{activities.length === 0}}" class="empty-tip">还没有动态，等你迈出第一步</view>
+    <view class="feed-list" wx:else>
+      <view class="feed-item" wx:for="{{activities}}" wx:key="id">
+        <view class="feed-icon">{{item.icon}}</view>
+        <view class="feed-body">
+          <text class="feed-nick">{{item.nickname}}</text>
+          <text class="feed-text">{{item.text}}</text>
+        </view>
+        <view class="feed-time">{{item.timeText}}</view>
+      </view>
+    </view>
+  </view>
 </view>

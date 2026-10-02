@@ -488,3 +488,72 @@
 .pulse-current {
   animation: pulseRed 1.6s ease-out infinite;
 }
+
+/* ===== 实时行军动态（P1-1，需求 §8） ===== */
+.live-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 20rpx;
+  color: #2F9E44;
+  letter-spacing: 2rpx;
+}
+
+.live-dot {
+  width: 12rpx;
+  height: 12rpx;
+  border-radius: 50%;
+  background: #2F9E44;
+  margin-right: 8rpx;
+  animation: livePulse 1.6s ease-out infinite;
+}
+
+@keyframes livePulse {
+  0% { box-shadow: 0 0 0 0 rgba(47, 158, 68, 0.5); }
+  70% { box-shadow: 0 0 0 12rpx rgba(47, 158, 68, 0); }
+  100% { box-shadow: 0 0 0 0 rgba(47, 158, 68, 0); }
+}
+
+.feed-list {
+  margin-top: 6rpx;
+}
+
+.feed-item {
+  display: flex;
+  align-items: center;
+  padding: 16rpx 0;
+  border-bottom: 1rpx solid rgba(140, 30, 30, 0.06);
+}
+
+.feed-item:last-child {
+  border-bottom: none;
+}
+
+.feed-icon {
+  width: 56rpx;
+  font-size: 32rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.feed-body {
+  flex: 1;
+  font-size: 25rpx;
+  color: #4A3B2A;
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.feed-nick {
+  font-weight: 600;
+  color: #A00D26;
+  margin-right: 8rpx;
+}
+
+.feed-time {
+  flex-shrink: 0;
+  margin-left: 16rpx;
+  font-size: 22rpx;
+  color: #B3A488;
+}

@@ -34,9 +34,32 @@ function formatTime(iso) {
     ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
 
+/** 解析后端 UTC naive ISO 时间为时间戳（无效返回 NaN）。 */
+function parseUtc(iso) {
+  if (!iso) return NaN;
+  return new Date(String(iso) + (String(iso).indexOf('Z') >= 0 ? '' : 'Z')).getTime();
+}
+
+/**
+ * 相对时间（实时动态用）：刚刚 / N分钟前 / N小时前 / 昨天 / M-D。
+ * @param {string} iso 后端 UTC naive ISO
+ */
+function formatRelative(iso) {
+  const t = parseUtc(iso);
+  if (isNaN(t)) return '';
+  const diff = Date.now() - t;
+  if (diff < 60 * 1000) return '刚刚';
+  if (diff < 60 * 60 * 1000) return Math.floor(diff / 60000) + '分钟前';
+  if (diff < 24 * 60 * 60 * 1000) return Math.floor(diff / 3600000) + '小时前';
+  if (diff < 48 * 60 * 60 * 1000) return '昨天';
+  const d = new Date(t);
+  return (d.getMonth() + 1) + '-' + pad(d.getDate());
+}
+
 module.exports = {
   pad,
   formatDate,
   formatNumber,
-  formatTime
+  formatTime,
+  formatRelative
 };
