@@ -77,6 +77,21 @@ class PersonNode(Base):
     node_id: Mapped[int] = mapped_column(ForeignKey("route_nodes.id"), primary_key=True)
 
 
+class DailyQuote(Base):
+    """每日寄语（需求 §16）。内容为有明确出处的史料语录，由后台维护，可关联路线节点。
+
+    date 为 'YYYY-MM-DD' 字符串；同一日期仅一条。
+    """
+
+    __tablename__ = "daily_quotes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    date: Mapped[str] = mapped_column(String(10), unique=True)
+    content: Mapped[str] = mapped_column(Text)
+    source: Mapped[str] = mapped_column(String(200))
+    node_id: Mapped[Optional[int]] = mapped_column(ForeignKey("route_nodes.id"), nullable=True, default=None)
+
+
 class Question(Base):
     """题库（15 题）。type: single 单选 / judge 判断。
 

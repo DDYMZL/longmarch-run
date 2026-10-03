@@ -1,6 +1,6 @@
 /**
  * 首页
- * 结构：用户信息 → 今日行军卡（步数/击败比例/距下一站）→ 迷你长征路线
+ * 结构：用户信息 → 今日行军卡（步数/击败比例/距下一站）→ 今日寄语卡 → 迷你长征路线
  *       → 连续行军卡 → 今日长征情报卡（第 N 期）→ 长征记忆卡 → 勋章行
  * 点亮弹层升级为「抵达事件卡」：恭喜抵达 + 历史时间 + 积分 + 下一站距离。
  */
@@ -11,6 +11,7 @@ const quiz = require('../../services/quiz');
 const medal = require('../../services/medal');
 const broadcast = require('../../services/broadcast');
 const org = require('../../services/org');
+const quote = require('../../services/quote');
 const ws = require('../../services/ws');
 const util = require('../../utils/util');
 const arrivePopup = require('../../utils/arrivePopup');
@@ -65,6 +66,8 @@ Page({
     issueNo: 1,
     // 长征记忆
     memory: null,
+    // 今日寄语（P2-1，需求 §16）
+    quote: null,
     // 勋章行
     medalPreview: [],
     medalOwned: 0,
@@ -147,7 +150,8 @@ Page({
       broadcast.getActivities(6).catch(() => null), // 动态流失败不阻塞首页主数据
       org.getCompanions(6).catch(() => null), // 组织同行失败同上
       org.getOrgMarch().catch(() => null), // 集体长征失败同上
-      march.getGlobalGoal().catch(() => null) // 全员同行失败同上
+      march.getGlobalGoal().catch(() => null), // 全员同行失败同上
+      quote.getToday().catch(() => null) // 今日寄语失败同上
     ])
       .then((results) => {
         const today = results[0];
@@ -159,6 +163,7 @@ Page({
         const orgData = results[6];
         const orgMarch = results[7];
         const globalGoal = results[8];
+        const todayQuote = results[9];
         const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
 
         // 勋章行：已获得的排前面（按获得时间倒序取最近 6 枚展示）
@@ -254,6 +259,9 @@ Page({
             }))
           });
         }
+
+        // 今日寄语（需求 §16：无寄语时隐藏卡片）
+        this.setData({ quote: todayQuote && todayQuote.content ? todayQuote : null });
 
         // 步数滚动动画
         this.animateSteps(today.steps);
@@ -384,5 +392,14 @@ Page({
     const memory = this.data.memory;
     if (!memory) return;
     wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + memory.nodeId });
+  },
+
+  /**
+   * 今日寄语卡 -> 关联节点详情（需求 §16.3，无关联节点时不可点）
+   */
+  goQuoteNode() {
+    const q = this.data.quote;
+    if (!q || !q.node) return;
+    wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + q.node.id });
   }
 });

@@ -202,3 +202,8 @@
 .detail-actions .btn-primary {
   width: 100%;
 }
+
+.ticket-btn {
+  margin-bottom: 20rpx;
+  background: linear-gradient(135deg, #B8860B, #8C6D2F);
+}

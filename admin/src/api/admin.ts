@@ -96,6 +96,28 @@ export interface RouteNodeListResult {
   items: RouteNode[]
 }
 
+// ---------------- 每日寄语（需求 §16） ----------------
+export interface Quote {
+  id: number
+  date: string
+  content: string
+  source: string
+  node_id: number | null
+  node_name: string
+}
+
+export interface QuoteListResult {
+  total: number
+  items: Quote[]
+}
+
+export interface QuoteUpsert {
+  date: string
+  content: string
+  source: string
+  node_id: number | null
+}
+
 export interface MessageResult {
   message: string
 }
@@ -275,6 +297,23 @@ export function updateQuestion(id: number, data: QuestionUpsert) {
 
 export function deleteQuestion(id: number) {
   return request.delete<MessageResult>(`/admin/questions/${id}`)
+}
+
+// ---------------- 每日寄语 ----------------
+export function fetchQuotes(page: number, pageSize: number) {
+  return request.get<QuoteListResult>('/admin/quotes', { params: { page, page_size: pageSize } })
+}
+
+export function createQuote(data: QuoteUpsert) {
+  return request.post<Quote>('/admin/quotes', data)
+}
+
+export function updateQuote(id: number, data: QuoteUpsert) {
+  return request.put<Quote>(`/admin/quotes/${id}`, data)
+}
+
+export function deleteQuote(id: number) {
+  return request.delete<MessageResult>(`/admin/quotes/${id}`)
 }
 
 // ---------------- 组织架构 ----------------

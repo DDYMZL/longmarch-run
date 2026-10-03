@@ -10,6 +10,7 @@ import {
   ElCard,
   ElCheckbox,
   ElContainer,
+  ElDatePicker,
   ElDialog,
   ElDivider,
   ElDrawer,
@@ -49,6 +50,7 @@ import 'element-plus/es/components/button/style/css'
 import 'element-plus/es/components/card/style/css'
 import 'element-plus/es/components/checkbox/style/css'
 import 'element-plus/es/components/container/style/css'
+import 'element-plus/es/components/date-picker/style/css'
 import 'element-plus/es/components/dialog/style/css'
 import 'element-plus/es/components/divider/style/css'
 import 'element-plus/es/components/drawer/style/css'
@@ -89,6 +91,7 @@ const components = [
   ElCard,
   ElCheckbox,
   ElContainer,
+  ElDatePicker,
   ElDialog,
   ElDivider,
   ElDrawer,

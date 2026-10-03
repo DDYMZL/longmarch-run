@@ -78,6 +78,17 @@
     </view>
   </view>
 
+  <!-- 今日寄语卡（P2-1，需求 §16：后台维护的有出处语录，可跳转关联节点） -->
+  <view class="card quote-card anim-card" style="animation-delay: 100ms" wx:if="{{quote}}" bindtap="goQuoteNode">
+    <view class="card-title">
+      <text>今日寄语</text>
+      <text class="quote-date">{{quote.date}}</text>
+    </view>
+    <view class="quote-content">“{{quote.content}}”</view>
+    <view class="quote-source">—— {{quote.source}}</view>
+    <view class="quote-node" wx:if="{{quote.node}}">相关节点：{{quote.node.name}} ›</view>
+  </view>
+
   <!-- 长征进度（迷你路线） -->
   <view class="card anim-card" style="animation-delay: 140ms">
     <view class="card-title" bindtap="goMarch">

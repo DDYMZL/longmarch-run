@@ -8,7 +8,7 @@ init_seed 幂等：
 """
 from sqlalchemy.orm import Session
 
-from app.models.models import MedalDef, Organization, Person, PersonNode, Question, RouteNode
+from app.models.models import DailyQuote, MedalDef, Organization, Person, PersonNode, Question, RouteNode
 
 # ---------------- 长征人物志（需求 §14）----------------
 # 人物来源于节点 figures 字段中的真实历史人物（群体表述如「全体红军指战员」不单列）；
@@ -39,6 +39,42 @@ PERSON_NODES = [
     (10, 6), (11, 6), (12, 6),       # 飞夺泸定桥：王开湘、杨成武、廖大珠
     (1, 9), (13, 9),                 # 吴起镇：毛泽东、彭德怀
     (1, 10), (2, 10), (3, 10),       # 延安：毛泽东、朱德、周恩来
+]
+
+# ---------------- 每日寄语（需求 §16）----------------
+# 仅收录有明确出处的公开史料/著作语录，不虚构；node_id 关联到对应历史节点。
+# 寄语由后台维护（/admin/quotes），种子仅在建库空表时写入示例。
+QUOTES = [
+    {
+        "date": "2026-10-01",
+        "content": "红军不怕远征难，万水千山只等闲。",
+        "source": "毛泽东《七律·长征》",
+        "node_id": 10,
+    },
+    {
+        "date": "2026-10-02",
+        "content": "雄关漫道真如铁，而今迈步从头越。",
+        "source": "毛泽东《忆秦娥·娄山关》",
+        "node_id": 3,
+    },
+    {
+        "date": "2026-10-03",
+        "content": "不到长城非好汉，屈指行程二万。",
+        "source": "毛泽东《清平乐·六盘山》",
+        "node_id": 9,
+    },
+    {
+        "date": "2026-10-04",
+        "content": "长征是宣言书，长征是宣传队，长征是播种机。",
+        "source": "毛泽东《论反对日本帝国主义的策略》",
+        "node_id": 10,
+    },
+    {
+        "date": "2026-10-05",
+        "content": "更喜岷山千里雪，三军过后尽开颜。",
+        "source": "毛泽东《七律·长征》",
+        "node_id": 7,
+    },
 ]
 
 # ---------------- 长征路线节点（10 个）----------------
@@ -366,12 +402,23 @@ def _seed_persons(db: Session) -> None:
             db.add(PersonNode(person_id=person_id, node_id=node_id))
 
 
+def _seed_quotes(db: Session) -> None:
+    """每日寄语：仅空表时写入示例，之后完全交由后台维护（/admin/quotes）。"""
+    if db.query(DailyQuote).count() > 0:
+        return
+    node_ids = {n.id for n in db.query(RouteNode.id).all()}
+    for quote in QUOTES:
+        if quote["node_id"] is None or quote["node_id"] in node_ids:
+            db.add(DailyQuote(**quote))
+
+
 def init_seed(db: Session) -> None:
-    """幂等写入静态配置数据（路线 / 题库 / 勋章 / 组织架构 / 人物志）。"""
+    """幂等写入静态配置数据（路线 / 题库 / 勋章 / 组织架构 / 人物志 / 每日寄语）。"""
     _seed_route_nodes(db)
     _seed_questions(db)
     _seed_medals(db)
     _seed_persons(db)
+    _seed_quotes(db)
     if db.query(Organization).count() == 0:
         db.add_all([Organization(**o) for o in ORGANIZATIONS])
     db.commit()

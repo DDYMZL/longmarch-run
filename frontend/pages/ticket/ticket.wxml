@@ -1,0 +1,20 @@
+<view class="ticket-page">
+  <view wx:if="{{error}}" class="error-block">
+    <view class="error-icon">🎫</view>
+    <view class="error-text">{{error}}</view>
+  </view>
+
+  <block wx:elif="{{ready}}">
+    <!-- 纪念票画布（票面元素见 ticket.js paint） -->
+    <view class="ticket-stage">
+      <canvas type="2d" id="ticketCanvas" class="ticket-canvas"></canvas>
+    </view>
+
+    <view class="ticket-tip">长按或点击下方按钮，保存你的长征纪念票</view>
+    <button class="btn-primary save-btn" loading="{{saving}}" disabled="{{saving}}" bindtap="handleSave">
+      保存到相册
+    </button>
+  </block>
+
+  <view wx:else class="loading-tip">纪念票生成中…</view>
+</view>

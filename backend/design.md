@@ -68,10 +68,11 @@
 | `event_service` | —（足迹时间轴/实时动态数据源） | 统一事件系统：`record` 写 `user_event` 并向 WS 广播 `activity`；`build_text` 生成与小程序足迹同源的中文文案；`list_public_activities` 提供小程序实时动态（脱敏由 `ACTIVITY_MASK_NICKNAME` 控制，`mask_nickname` 实现）；事件类型如 FIRST_STEP/DAILY_GOAL/STREAK_*/NODE_LIT/MEDAL_GRANTED/QUIZ_DONE 等 |
 | `streak_service` | —（内嵌于 sport 写入链） | 连续行军：写入侧 `on_sport_upsert` 在当日首次达标时维护 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件；读取侧 `compute_streaks` 以 `daily_sport.is_goal_completed` 重算 |
 | `person_service` | `person.js` | 长征人物志（需求 §14）：`get_persons_by_node` 节点反查人物（节点详情 → 人物）；`get_person_detail` 人物详情（简介 + 关联节点即历史事件/历史时间，人物详情 → 节点） |
+| `quote_service` | `quote.js` | 每日寄语（需求 §16）：`get_today` 当天优先、否则回退最近一条 date<=今天（都没有返回 null）；管理端分页列表（节点名批量查询）与 CRUD、日期唯一/节点存在性校验 |
 | `profile_service` | `profile.js` | 个人档案聚合（用户/连续行军/勋章/长征进度/足迹时间轴/五维数据画像 _portrait：行军/坚持/知识/路线/成就，仅数据不评价 §17） |
 | `broadcast_service` | `broadcast.js` | 今日长征播报（全局运动汇总 + 今日长征彩蛋 + 个人当日状态） |
 | `dashboard_service` | —（管理端） | 驾驶舱指标、路线总览、运动趋势、实时动态、数据大屏聚合（整体口径，无组织维度） |
-| `admin_service` | —（管理端） | 管理员登录、路线节点/题库/组织架构 CRUD、全员排名、人员详情聚合 |
+| `admin_service` | —（管理端） | 管理员登录、路线节点/题库/组织架构 CRUD、全员排名、人员详情聚合（每日寄语 CRUD 在 `quote_service`） |
 
 ## 3. 核心数据模型（SQLAlchemy ORM）
 
@@ -85,6 +86,7 @@
 | `organizations` | id, name, parent_id(可空=顶级), level(≥1), sort_order | 多级树；用户可选定任意层级节点 |
 | `persons` | id, name, avatar(可空), brief(可空) | 长征人物志（006，需求 §14）：13 行真实历史人物；avatar 空时前端展示姓名首字占位（不伪造历史照片） |
 | `person_nodes` | person_id(FK), node_id(FK) | 复合主键 (person_id, node_id)：人物 ↔ 节点（历史事件）关联，22 对；idx_person_nodes_node 支撑节点反查 |
+| `daily_quotes` | id(自增), date(10,唯一), content, source, node_id(FK,可空) | 每日寄语（007，需求 §16）：有明确出处的语录，后台维护（/admin/quotes）；种子仅空表写入 5 条示例，非空表不动（不复活被删寄语） |
 
 ### 3.2 用户业务表
 
@@ -104,7 +106,7 @@
 
 ### 3.3 数据库部署与结构变更
 
-本地 openGauss 使用数据库 `longmarch`、用户 `gaussdb`、端口 `5118`。`../docker/init/init-db.sh` 创建数据库及 `schema_migrations`，再按文件名顺序执行尚未登记的 SQL。`001_schema.sql` 是当前基线；`002_route_node_config.sql` 增加路线节点经纬度、排序和启用字段；`003_optional_user_avatar.sql` 将 avatar 改为可空（适配 openGauss 空串→NULL）；`004_nickname_change.sql` 增加曾用名与改名时间；`005_upgrade.sql` 为高级化升级：users 连续行军字段、daily_sport 距离/达标/补签预留、lit_nodes 步数快照、route_nodes 历史事件卡 7 字段、questions 分类、medal_defs 分类/隐藏/排序、新建 user_event 表。`006_persons.sql` 新建 persons（长征人物志）与 person_nodes（人物-节点关联）两表。后续变更新增递增编号脚本，并同步修改 SQLAlchemy ORM，FastAPI 不自动建表。
+本地 openGauss 使用数据库 `longmarch`、用户 `gaussdb`、端口 `5118`。`../docker/init/init-db.sh` 创建数据库及 `schema_migrations`，再按文件名顺序执行尚未登记的 SQL。`001_schema.sql` 是当前基线；`002_route_node_config.sql` 增加路线节点经纬度、排序和启用字段；`003_optional_user_avatar.sql` 将 avatar 改为可空（适配 openGauss 空串→NULL）；`004_nickname_change.sql` 增加曾用名与改名时间；`005_upgrade.sql` 为高级化升级：users 连续行军字段、daily_sport 距离/达标/补签预留、lit_nodes 步数快照、route_nodes 历史事件卡 7 字段、questions 分类、medal_defs 分类/隐藏/排序、新建 user_event 表。`006_persons.sql` 新建 persons（长征人物志）与 person_nodes（人物-节点关联）两表。`007_daily_quotes.sql` 新建 daily_quotes（每日寄语）。后续变更新增递增编号脚本，并同步修改 SQLAlchemy ORM，FastAPI 不自动建表。
 
 ## 4. 关键接口定义
 
@@ -138,6 +140,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | POST | `/api/quiz/submit` | 是 | 提交答卷 `{answers: [{questionId, answer[]}]}` → 判分记录；重复提交 400 |
 | POST | `/api/quiz/check` | 是 | 单题即时判题（需求 §15 连胜反馈）`{questionId, answer[]}` → `{questionId, correct}`；无状态不写记录/不发积分，最终成绩以 submit 为准；题目不存在 404 |
 | GET | `/api/persons/{person_id}` | 是 | 长征人物志详情（需求 §14）：`{id, name, avatar, brief, nodes[{id,name,icon,historicalTime,brief}]}`（相关历史事件=关联节点，按路线顺序）；人物不存在 404 |
+| GET | `/api/quotes/today` | 是 | 今日寄语（需求 §16）：`{id, date, content, source, node{id,name}|null}`；当天优先，无当天则回退最近一条 date<=今天，一条都没有返回 null |
 | GET | `/api/quiz/records` | 是 | 答题记录列表 |
 | GET | `/api/quiz/knowledge` | 是 | 知识画像：总正确率 + 按题目分类（event/route/figure）的答题数与正确率 |
 | POST | `/api/quiz/reset` | 是 | 重置今日答题（调试用） |
@@ -163,6 +166,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | PUT | `/api/admin/route-nodes/{id}` | 管理员 | 编辑路线节点（含历史事件卡 7 字段） |
 | PATCH | `/api/admin/route-nodes/{id}/enabled` | 管理员 | 启用/停用节点 |
 | GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 管理员 | 题库 CRUD（含 category 分类） |
+| GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 管理员 | 每日寄语 CRUD（需求 §16；GET 分页 page/pageSize 日期倒序，日期唯一冲突/坏格式/坏节点 400，不存在 404） |
 | GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 管理员 | 组织架构树 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计，后序累加）；`POST /api/admin/orgs/sync` 从外部系统同步 |
 
 ### 4.2 关键请求/响应示例

@@ -342,6 +342,37 @@
   overflow: hidden;
 }
 
+/* 今日寄语卡（P2-1，需求 §16） */
+.quote-card {
+  background: linear-gradient(150deg, #FDF7EC, #F5E8CB);
+  border: 1rpx solid #EAD9AE;
+}
+
+.quote-date {
+  font-size: 22rpx;
+  color: #B8860B;
+}
+
+.quote-content {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #5A1A1A;
+  line-height: 1.6;
+}
+
+.quote-source {
+  font-size: 24rpx;
+  color: #8C6D2F;
+  margin-top: 10rpx;
+  text-align: right;
+}
+
+.quote-node {
+  font-size: 22rpx;
+  color: #A00D26;
+  margin-top: 12rpx;
+}
+
 /* 勋章行 */
 .medal-row {
   display: flex;

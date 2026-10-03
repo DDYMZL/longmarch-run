@@ -29,6 +29,7 @@ async function handleLogout() {
         <el-menu-item index="/rankings"><el-icon><DataAnalysis /></el-icon><span>排名洞察</span></el-menu-item>
         <el-menu-item index="/route-nodes"><el-icon><Location /></el-icon><span>路线点位</span></el-menu-item>
         <el-menu-item index="/questions"><el-icon><EditPen /></el-icon><span>题库维护</span></el-menu-item>
+        <el-menu-item index="/quotes"><el-icon><ChatLineSquare /></el-icon><span>每日寄语</span></el-menu-item>
         <el-menu-item index="/orgs"><el-icon><OfficeBuilding /></el-icon><span>组织架构</span></el-menu-item>
       </el-menu>
     </el-aside>

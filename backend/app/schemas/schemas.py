@@ -228,6 +228,23 @@ class PersonDetailOut(CamelModel):
     nodes: List[PersonNodeRefOut] = []
 
 
+class QuoteNodeRefOut(CamelModel):
+    """寄语关联节点引用。"""
+
+    id: int
+    name: str
+
+
+class QuoteTodayOut(CamelModel):
+    """今日寄语（需求 §16）：取当天寄语，无当天则取最近一条不晚于今天的寄语。"""
+
+    id: int
+    date: str
+    content: str
+    source: str
+    node: Optional[QuoteNodeRefOut] = None
+
+
 class LightUpNextNode(CamelModel):
     """点亮后距离下一站的提示（全部点亮时为 null）。"""
 
@@ -685,6 +702,31 @@ class AdminQuestionUpsert(BaseModel):
     analysis: str = ""
     score: int = 20
     category: str = ""
+
+
+class AdminQuoteOut(BaseModel):
+    """每日寄语条目（需求 §16 后台维护）。"""
+
+    id: int
+    date: str
+    content: str
+    source: str
+    node_id: Optional[int] = None
+    node_name: str = ""
+
+
+class AdminQuoteListOut(BaseModel):
+    total: int
+    items: List[AdminQuoteOut] = []
+
+
+class AdminQuoteUpsert(BaseModel):
+    """新增/编辑寄语请求体。date 为 'YYYY-MM-DD'，同一日期唯一；node_id 可空。"""
+
+    date: str
+    content: str
+    source: str
+    node_id: Optional[int] = None
 
 
 # ---------------- 管理端驾驶舱 / 数据大屏 ----------------

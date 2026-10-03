@@ -81,5 +81,12 @@ Page({
    */
   handleContinue() {
     wx.switchTab({ url: '/pages/home/home' });
+  },
+
+  /**
+   * 生成节点纪念票（需求 §19：仅已点亮节点可见入口）
+   */
+  goTicket() {
+    wx.navigateTo({ url: '/pages/ticket/ticket?id=' + this.data.node.id });
   }
 });

@@ -1,5 +1,6 @@
 import { createApp } from 'vue'
 import {
+  ChatLineSquare,
   Check,
   CircleCheck,
   DataAnalysis,
@@ -28,6 +29,7 @@ import './style.css'
 
 // 模板中实际用到的图标（含 :icon="'Refresh'" 这类字符串引用），按需全局注册
 const icons = {
+  ChatLineSquare,
   Check,
   CircleCheck,
   DataAnalysis,

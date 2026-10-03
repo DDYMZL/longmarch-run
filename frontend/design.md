@@ -39,7 +39,7 @@
 
 | 页面 | 类型 | 职责 |
 | --- | --- | --- |
-| `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、🌍全员同行卡（全员累计中文大数/进度/下一阶段/里程碑✓○芯片）、抵达事件卡弹层 |
+| `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、今日寄语卡（§16，有出处语录+可跳关联节点，当天优先回退最近一条）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、🌍全员同行卡（全员累计中文大数/进度/下一阶段/里程碑✓○芯片）、抵达事件卡弹层 |
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空长征），节点点击进详情、点亮进度、到达动画（金光扩散+粒子+抵达事件卡）；星空长征（§13）：节点三态星形、星河轨迹星尘、点亮四阶段动画、拖动/捏合缩放/双击复位（view 变换+命中逆变换+边界钳制） |
 | `pages/quiz/quiz` | tab | 今日长征情报：期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（我的长征/行军日历/运动记录/答题记录） |
@@ -47,7 +47,8 @@
 | `pages/calendar/calendar` | 子页 | 行军日历：月视图（步数热力等级/答题/点亮标记）、月统计、当日详情弹层 |
 | `pages/login/login` | 子页 | 微信登录：`chooseAvatar` 头像（页面不采集昵称），登录后发每日登录积分；已选组织的用户直达首页，新用户转组织选择页 |
 | `pages/org-select/org-select` | 子页 | 组织选择（逐级下钻，任意层级可选）；首次登录（未改名）时顶部采集姓名（`input type="nickname"`，可跳过，提示语「请输入真实姓名」放输入框旁侧、不占 placeholder），选定组织后落库并进首页 |
-| `pages/node-detail/node-detail` | 子页 | 节点历史详情：图片轮播/英雄图标、关键词、历史时间/地点、一句话简介、历史故事、历史意义、相关人物（figures 文本 + persons 人物志 chip，点击进人物详情 §14）、路线位置小地图（任意状态可看，含未解锁） |
+| `pages/node-detail/node-detail` | 子页 | 节点历史详情：图片轮播/英雄图标、关键词、历史时间/地点、一句话简介、历史故事、历史意义、相关人物（figures 文本 + persons 人物志 chip，点击进人物详情 §14）、路线位置小地图（任意状态可看，含未解锁）、「🎫 生成纪念票」入口（§19，仅已点亮节点可见） |
+| `pages/ticket/ticket` | 子页 | 节点纪念票（§19）：纯 Canvas 2d 绘制（米黄纸面/红头/虚线撕裂线/编号），数据取 `/march/node/{id}` + `/march/footprints`（点亮日期/当日步数/累计），未点亮节点显示提示；保存相册走 `canvasToTempFilePath`（传 canvas 节点）+ `saveImageToPhotosAlbum` |
 | `pages/person/person` | 子页 | 长征人物志详情（§14）：头像（无图姓名首字占位）/名称/简介、相关历史事件卡（节点事件+历史时间+简述），点击事件卡回跳节点详情（人物 → 节点双向） |
 | `pages/quiz-answer/quiz-answer` | 子页 | 情报破译过程（单选/判断、逐题作答）；连续答对反馈（§15：选项即判 `/quiz/check`，🔥连续N题徽章、对错即时提示、答错连胜清零；判题失败静默不影响作答） |
 | `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（得分、错题解析）；满分效果（§15.3：「🎉 今日情报完美通关」标题 + 5/5 · 100 分 + 彩带，积分/事件/勋章规则不变） |
@@ -70,6 +71,7 @@
 | `medal.js` | `checkAndGrant()` / `getMedalList()` | `/api/medal/list, check` | 12 枚勋章判定与发放（分类/隐藏/排序由后端下发） |
 | `profile.js` | `getSummary()` / `getTimeline(limit)` | `/api/profile/summary, timeline` | 我的长征档案聚合与足迹时间轴 |
 | `person.js` | `getPerson(id)` | `/api/persons/{id}` | 长征人物志详情（§14，含相关历史事件节点） |
+| `quote.js` | `getToday()` | `/api/quotes/today` | 今日寄语（§16）：当天优先、回退最近一条，无则 null（首页寄语卡隐藏） |
 | `broadcast.js` | `getToday()` / `getActivities(limit)` / `toActivityView(item)` | `/api/broadcast/today, activities` | 今日长征播报（期号/全局汇总/彩蛋/个人状态）；实时行军动态（REST 快照与 WS 消息共用视图模型：图标/昵称/相对时间） |
 | `ws.js` | `subscribe(fn)` | `WS /api/ws/updates?token=` | 实时推送客户端：单连接全局复用、断线指数退避重连（1s 起封顶 15s）；页面订阅 `activity` 等消息，退订即清理 |
 | `org.js` | 组织树下钻 / 我的组织 / 选定组织 / `getCompanions(limit)` / `getOrgMarch()` | `/api/org/children, mine, select, companions, march` | 组织树（任意层级可选）；同组织同行者（组织信息/同行人数/今日共同前进/同行者列表）；组织共同长征目标（组织累计步数/路线进度/节点pct） |

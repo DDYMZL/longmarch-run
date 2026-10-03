@@ -25,6 +25,9 @@ from app.schemas.schemas import (
     AdminQuestionListOut,
     AdminQuestionOut,
     AdminQuestionUpsert,
+    AdminQuoteListOut,
+    AdminQuoteOut,
+    AdminQuoteUpsert,
     AdminRouteNodeEnabled,
     AdminRouteNodeListOut,
     AdminRouteNodeOut,
@@ -34,7 +37,7 @@ from app.schemas.schemas import (
     AdminUserOverviewOut,
     MessageOut,
 )
-from app.services import admin_service, dashboard_service
+from app.services import admin_service, dashboard_service, quote_service
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -239,6 +242,68 @@ def update_question(
 )
 def delete_question(question_id: int, db: Session = Depends(get_db)):
     admin_service.delete_question(db, question_id)
+    return {"message": "已删除"}
+
+
+# ---------------- 每日寄语维护（需求 §16）----------------
+@router.get(
+    "/quotes",
+    response_model=AdminQuoteListOut,
+    summary="寄语列表（分页）",
+    dependencies=[Depends(get_current_admin)],
+)
+def list_quotes(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    total, items = quote_service.list_quotes(db, page, page_size)
+    return {"total": total, "items": items}
+
+
+@router.post(
+    "/quotes",
+    response_model=AdminQuoteOut,
+    summary="新增寄语",
+    dependencies=[Depends(get_current_admin)],
+)
+def create_quote(payload: AdminQuoteUpsert, db: Session = Depends(get_db)):
+    error = quote_service.validate_quote(db, payload.date, payload.content, payload.source, payload.node_id)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    if quote_service.date_taken(db, payload.date):
+        raise HTTPException(status_code=400, detail="该日期已有寄语")
+    row = quote_service.create_quote(db, payload.date, payload.content, payload.source, payload.node_id)
+    return quote_service.get_admin_out(db, row)
+
+
+@router.put(
+    "/quotes/{quote_id}",
+    response_model=AdminQuoteOut,
+    summary="编辑寄语",
+    dependencies=[Depends(get_current_admin)],
+)
+def update_quote(quote_id: int, payload: AdminQuoteUpsert, db: Session = Depends(get_db)):
+    error = quote_service.validate_quote(db, payload.date, payload.content, payload.source, payload.node_id)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
+    if quote_service.date_taken(db, payload.date, exclude_id=quote_id):
+        raise HTTPException(status_code=400, detail="该日期已有寄语")
+    row = quote_service.update_quote(db, quote_id, payload.date, payload.content, payload.source, payload.node_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="寄语不存在")
+    return quote_service.get_admin_out(db, row)
+
+
+@router.delete(
+    "/quotes/{quote_id}",
+    response_model=MessageOut,
+    summary="删除寄语",
+    dependencies=[Depends(get_current_admin)],
+)
+def delete_quote(quote_id: int, db: Session = Depends(get_db)):
+    if not quote_service.delete_quote(db, quote_id):
+        raise HTTPException(status_code=404, detail="寄语不存在")
     return {"message": "已删除"}
 
 
