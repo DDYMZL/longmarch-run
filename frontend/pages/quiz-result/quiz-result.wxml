@@ -11,8 +11,9 @@
 
   <!-- 得分 -->
   <view class="result-hero">
-    <view class="result-title">情报任务完成</view>
+    <view class="result-title">{{isPerfect ? '🎉 今日情报完美通关' : '情报任务完成'}}</view>
     <view class="result-score">{{displayScore}} 分</view>
+    <view wx:if="{{isPerfect}}" class="result-perfect-line">{{perfectLine}}</view>
     <view class="result-stars">
       <text wx:for="{{stars}}" wx:key="*this" class="star {{item ? 'on' : ''}}">★</text>
     </view>

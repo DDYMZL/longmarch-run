@@ -1,0 +1,114 @@
+/* 长征人物志详情页 */
+.person-page {
+  min-height: 100vh;
+  background: #f5f3ee;
+  padding-bottom: 60rpx;
+}
+
+.person-header {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 56rpx 32rpx 44rpx;
+  background: linear-gradient(135deg, #c8102e 0%, #a00d24 100%);
+}
+
+.person-avatar {
+  width: 144rpx;
+  height: 144rpx;
+  border-radius: 50%;
+  border: 4rpx solid rgba(255, 255, 255, 0.5);
+  overflow: hidden;
+  background: #f5d9a0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.person-avatar image {
+  width: 100%;
+  height: 100%;
+}
+
+.person-initial {
+  font-size: 64rpx;
+  font-weight: 700;
+  color: #a00d26;
+}
+
+.person-name {
+  margin-top: 20rpx;
+  font-size: 40rpx;
+  font-weight: 700;
+  color: #fff;
+}
+
+.person-sub {
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: 4rpx;
+}
+
+.person-brief {
+  font-size: 27rpx;
+  color: #333;
+  line-height: 1.7;
+}
+
+/* 相关历史事件 */
+.person-event {
+  display: flex;
+  align-items: center;
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #f5f3ee;
+}
+
+.person-event:last-child {
+  border-bottom: none;
+}
+
+.person-event-icon {
+  width: 56rpx;
+  font-size: 36rpx;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.person-event-main {
+  flex: 1;
+  margin-left: 18rpx;
+}
+
+.person-event-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.person-event-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.person-event-time {
+  font-size: 22rpx;
+  color: #a00d26;
+  flex-shrink: 0;
+  margin-left: 16rpx;
+}
+
+.person-event-brief {
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #777;
+  line-height: 1.5;
+}
+
+.person-event-arrow {
+  font-size: 36rpx;
+  color: #ccc;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}

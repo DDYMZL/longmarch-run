@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.helpers import to_local
 from app.models.models import DailySport, LitNode, RouteNode
-from app.services import event_service, points_service
+from app.services import event_service, person_service, points_service
 
 # 长征章节配置（node_ids 对应 route_nodes 主键；介绍为公开史实概述，供章节完成仪式展示）
 CHAPTERS: List[Dict] = [
@@ -332,6 +332,7 @@ def get_node_detail(db: Session, user_id: int, node_id: int) -> Optional[Dict]:
         "images": node_def.images or [],
         "audio": node_def.audio or "",
         "keywords": node_def.keywords or "",
+        "persons": person_service.get_persons_by_node(db, node_id),
     }
 
 

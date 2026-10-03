@@ -62,6 +62,15 @@ def _record_out(r: QuizRecord) -> Dict:
     }
 
 
+def check_answer(db: Session, question_id: int, answer: List[str]) -> Dict:
+    """单题即时判题（需求 §15 答题连胜反馈）。无状态：不发积分、不写记录，
+    最终成绩仍以 submit 判分为准（积分规则不变）。题目不存在返回 None。"""
+    q = db.query(Question).filter(Question.id == question_id).first()
+    if q is None:
+        return None
+    return {"question_id": q.id, "correct": sorted(answer or []) == sorted(q.answer or [])}
+
+
 def get_daily(db: Session, user_id: int) -> Dict:
     """获取今日题目。同一天内多次调用返回同一套题；已完成则返回记录。"""
     date = today_str()

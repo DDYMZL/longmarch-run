@@ -57,6 +57,26 @@ class RouteNode(Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class Person(Base):
+    """长征人物志（需求 §14）。avatar 为空时前端展示姓名首字占位。"""
+
+    __tablename__ = "persons"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(50))
+    avatar: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
+    brief: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+
+
+class PersonNode(Base):
+    """人物 ↔ 路线节点关联（人物相关的历史事件即节点事件，历史时间在 route_nodes）。"""
+
+    __tablename__ = "person_nodes"
+
+    person_id: Mapped[int] = mapped_column(ForeignKey("persons.id"), primary_key=True)
+    node_id: Mapped[int] = mapped_column(ForeignKey("route_nodes.id"), primary_key=True)
+
+
 class Question(Base):
     """题库（15 题）。type: single 单选 / judge 判断。
 

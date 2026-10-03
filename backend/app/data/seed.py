@@ -8,7 +8,38 @@ init_seed 幂等：
 """
 from sqlalchemy.orm import Session
 
-from app.models.models import MedalDef, Organization, Question, RouteNode
+from app.models.models import MedalDef, Organization, Person, PersonNode, Question, RouteNode
+
+# ---------------- 长征人物志（需求 §14）----------------
+# 人物来源于节点 figures 字段中的真实历史人物（群体表述如「全体红军指战员」不单列）；
+# 简介仅采用公开史料记载，不虚构；avatar 留空由前端展示姓名首字占位。
+PERSONS = [
+    {"id": 1, "name": "毛泽东", "brief": "中共中央领导人。遵义会议确立其在党中央和红军的领导地位，指挥四渡赤水、巧渡金沙江，率红军主力抵达陕北。"},
+    {"id": 2, "name": "朱德", "brief": "中革军委主席、红军总司令。与毛泽东等指挥中央红军战略转移，翻越雪山、走过草地，抵达陕北。"},
+    {"id": 3, "name": "周恩来", "brief": "中革军委副主席。遵义会议支持毛泽东的正确主张，会后参与三人军事指挥小组，共同指挥红军行动。"},
+    {"id": 4, "name": "张闻天", "brief": "遵义会议后代替博古在党中央负总责，支持毛泽东的军事指挥，为会议精神的贯彻发挥了重要作用。"},
+    {"id": 5, "name": "王稼祥", "brief": "遵义会议的关键支持者，第一个明确提出应让毛泽东指挥红军。会后与毛泽东、周恩来组成三人军事指挥小组。"},
+    {"id": 6, "name": "刘伯承", "brief": "红军总参谋长。指挥先遣队巧渡金沙江，途经大凉山与彝族首领小叶丹歃血为盟，又指挥强渡大渡河。"},
+    {"id": 7, "name": "陈赓", "brief": "中央纵队干部团团长。率干部团参加巧渡金沙江等战斗，屡建奇功。"},
+    {"id": 8, "name": "聂荣臻", "brief": "红一军团政治委员。与林彪率红一军团为前锋，参与指挥强渡大渡河、飞夺泸定桥等战斗。"},
+    {"id": 9, "name": "孙继先", "brief": "红一军团第一师第一团第一营营长。1935年5月亲自挑选并率领十七勇士强渡大渡河。"},
+    {"id": 10, "name": "王开湘", "brief": "红四团团长。与政委杨成武率部一昼夜奔袭240里，飞夺泸定桥。"},
+    {"id": 11, "name": "杨成武", "brief": "红四团政治委员。与团长王开湘率部飞夺泸定桥，后又率部突破腊子口。"},
+    {"id": 12, "name": "廖大珠", "brief": "红四团第一营第二连连长。飞夺泸定桥突击队队长，率22名突击队员攀踏铁索夺桥。"},
+    {"id": 13, "name": "彭德怀", "brief": "红三军团军团长。率部屡建战功，到达陕北后指挥吴起镇战役，击溃尾随的骑兵。"},
+]
+
+# 人物 ↔ 节点关联（与节点 figures 字段口径一致）
+PERSON_NODES = [
+    (1, 1), (2, 1), (3, 1),          # 瑞金：毛泽东、朱德、周恩来
+    (1, 2), (3, 2), (4, 2), (5, 2),  # 遵义：毛泽东、周恩来、张闻天、王稼祥
+    (1, 3), (2, 3),                  # 四渡赤水：毛泽东、朱德
+    (6, 4), (7, 4),                  # 巧渡金沙江：刘伯承、陈赓
+    (6, 5), (8, 5), (9, 5),          # 强渡大渡河：刘伯承、聂荣臻、孙继先
+    (10, 6), (11, 6), (12, 6),       # 飞夺泸定桥：王开湘、杨成武、廖大珠
+    (1, 9), (13, 9),                 # 吴起镇：毛泽东、彭德怀
+    (1, 10), (2, 10), (3, 10),       # 延安：毛泽东、朱德、周恩来
+]
 
 # ---------------- 长征路线节点（10 个）----------------
 # target_steps 为累计步数要求；节点一旦点亮永久保留。
@@ -316,11 +347,31 @@ def _seed_medals(db: Session) -> None:
             row.sort_order = medal["sort_order"]
 
 
+def _seed_persons(db: Session) -> None:
+    """人物志：空表全量写入；非空表补新增人物 id、为既有人物补空简介（不覆盖编辑）。
+
+    关联表只增不删：补齐缺失的 (person_id, node_id) 对，尊重手工调整过的关联。
+    """
+    existing = {p.id: p for p in db.query(Person).all()}
+    for person in PERSONS:
+        row = existing.get(person["id"])
+        if row is None:
+            db.add(Person(**person))
+            continue
+        _fill_empty(row, "brief", person["brief"])
+    node_ids = {n.id for n in db.query(RouteNode.id).all()}
+    existing_pairs = {(pn.person_id, pn.node_id) for pn in db.query(PersonNode).all()}
+    for person_id, node_id in PERSON_NODES:
+        if (person_id, node_id) not in existing_pairs and node_id in node_ids:
+            db.add(PersonNode(person_id=person_id, node_id=node_id))
+
+
 def init_seed(db: Session) -> None:
-    """幂等写入静态配置数据（路线 / 题库 / 勋章 / 组织架构）。"""
+    """幂等写入静态配置数据（路线 / 题库 / 勋章 / 组织架构 / 人物志）。"""
     _seed_route_nodes(db)
     _seed_questions(db)
     _seed_medals(db)
+    _seed_persons(db)
     if db.query(Organization).count() == 0:
         db.add_all([Organization(**o) for o in ORGANIZATIONS])
     db.commit()

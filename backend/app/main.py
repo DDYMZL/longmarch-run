@@ -19,6 +19,7 @@ from app.api.routes import (
     march,
     medal,
     org,
+    persons,
     points,
     profile,
     quiz,
@@ -69,6 +70,7 @@ app.include_router(medal.router, prefix=_prefix)
 app.include_router(org.router, prefix=_prefix)
 app.include_router(rank.router, prefix=_prefix)
 app.include_router(profile.router, prefix=_prefix)
+app.include_router(persons.router, prefix=_prefix)
 app.include_router(broadcast.router, prefix=_prefix)
 app.include_router(ws.router, prefix=_prefix)
 app.include_router(admin.router, prefix=_prefix)

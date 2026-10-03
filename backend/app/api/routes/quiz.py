@@ -9,7 +9,9 @@ from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
 from app.schemas.schemas import (
+    AnswerItem,
     MessageOut,
+    QuizCheckOut,
     QuizDailyOut,
     QuizKnowledgeOut,
     QuizRecordOut,
@@ -23,6 +25,20 @@ router = APIRouter(prefix="/quiz", tags=["quiz"])
 @router.get("/daily", response_model=QuizDailyOut, summary="今日题目")
 def daily(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """同一天多次调用返回同一套题；已完成则返回答题记录。"""
+    return quiz_service.get_daily(db, current.id)
+
+
+@router.post("/check", response_model=QuizCheckOut, summary="单题即时判题")
+def check(
+    payload: AnswerItem,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """答题过程中的连续答对反馈（需求 §15）；无状态，不影响提交判分与积分。"""
+    result = quiz_service.check_answer(db, payload.question_id, payload.answer)
+    if result is None:
+        raise HTTPException(status_code=404, detail="题目不存在")
+    return result
     return quiz_service.get_daily(db, current.id)
 
 

@@ -47,9 +47,10 @@
 | `pages/calendar/calendar` | 子页 | 行军日历：月视图（步数热力等级/答题/点亮标记）、月统计、当日详情弹层 |
 | `pages/login/login` | 子页 | 微信登录：`chooseAvatar` 头像（页面不采集昵称），登录后发每日登录积分；已选组织的用户直达首页，新用户转组织选择页 |
 | `pages/org-select/org-select` | 子页 | 组织选择（逐级下钻，任意层级可选）；首次登录（未改名）时顶部采集姓名（`input type="nickname"`，可跳过，提示语「请输入真实姓名」放输入框旁侧、不占 placeholder），选定组织后落库并进首页 |
-| `pages/node-detail/node-detail` | 子页 | 节点历史详情：图片轮播/英雄图标、关键词、历史时间/地点、一句话简介、历史故事、历史意义、相关人物、路线位置小地图（任意状态可看，含未解锁） |
-| `pages/quiz-answer/quiz-answer` | 子页 | 情报破译过程（单选/判断、逐题作答） |
-| `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（得分、错题解析） |
+| `pages/node-detail/node-detail` | 子页 | 节点历史详情：图片轮播/英雄图标、关键词、历史时间/地点、一句话简介、历史故事、历史意义、相关人物（figures 文本 + persons 人物志 chip，点击进人物详情 §14）、路线位置小地图（任意状态可看，含未解锁） |
+| `pages/person/person` | 子页 | 长征人物志详情（§14）：头像（无图姓名首字占位）/名称/简介、相关历史事件卡（节点事件+历史时间+简述），点击事件卡回跳节点详情（人物 → 节点双向） |
+| `pages/quiz-answer/quiz-answer` | 子页 | 情报破译过程（单选/判断、逐题作答）；连续答对反馈（§15：选项即判 `/quiz/check`，🔥连续N题徽章、对错即时提示、答错连胜清零；判题失败静默不影响作答） |
+| `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（得分、错题解析）；满分效果（§15.3：「🎉 今日情报完美通关」标题 + 5/5 · 100 分 + 彩带，积分/事件/勋章规则不变） |
 | `pages/sport-records/sport-records` | 子页 | 最近运动记录 |
 | `pages/quiz-records/quiz-records` | 子页 | 答题历史记录 |
 | `pages/medals/medals` | 子页 | 勋章墙：按入门/路线/挑战/完成分组，隐藏勋章未获得时显示「神秘勋章」，点击查看详情弹层 |
@@ -64,10 +65,11 @@
 | `auth.js` | `wxLogin(profile)` / `getLocalUser()` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
 | `sport.js` | 今日步数 / `syncToday()` / `addSteps()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, add, calendar` | 步数按「用户+日期」覆盖；模拟步数；行军日历月聚合 |
 | `march.js` | `refreshRouteNodes()` / `getRouteNodes()` / `getRoute()` / `getNodeDetail()` / `lightUpNodes()` / `getGlobalGoal()` | `/api/march/route-nodes, route, node/{id}, light-up, global, footprints` | 三级降级获取节点配置；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹 |
-| `quiz.js` | `getDaily()` / `submit()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, records, reset, knowledge` | 每日抽 5 题（同日同套）、判分、每日一次；知识画像分类正确率 |
+| `quiz.js` | `getDaily()` / `submit()` / `checkAnswer()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, check, records, reset, knowledge` | 每日抽 5 题（同日同套）、判分、每日一次；`checkAnswer` 单题即时判题（无状态，连胜反馈用）；知识画像分类正确率 |
 | `points.js` | `grantDailyLogin()` / 总额与流水 | `/api/points`、登录副链路 | 积分发放（同日同 reason 去重） |
 | `medal.js` | `checkAndGrant()` / `getMedalList()` | `/api/medal/list, check` | 12 枚勋章判定与发放（分类/隐藏/排序由后端下发） |
 | `profile.js` | `getSummary()` / `getTimeline(limit)` | `/api/profile/summary, timeline` | 我的长征档案聚合与足迹时间轴 |
+| `person.js` | `getPerson(id)` | `/api/persons/{id}` | 长征人物志详情（§14，含相关历史事件节点） |
 | `broadcast.js` | `getToday()` / `getActivities(limit)` / `toActivityView(item)` | `/api/broadcast/today, activities` | 今日长征播报（期号/全局汇总/彩蛋/个人状态）；实时行军动态（REST 快照与 WS 消息共用视图模型：图标/昵称/相对时间） |
 | `ws.js` | `subscribe(fn)` | `WS /api/ws/updates?token=` | 实时推送客户端：单连接全局复用、断线指数退避重连（1s 起封顶 15s）；页面订阅 `activity` 等消息，退订即清理 |
 | `org.js` | 组织树下钻 / 我的组织 / 选定组织 / `getCompanions(limit)` / `getOrgMarch()` | `/api/org/children, mine, select, companions, march` | 组织树（任意层级可选）；同组织同行者（组织信息/同行人数/今日共同前进/同行者列表）；组织共同长征目标（组织累计步数/路线进度/节点pct） |
@@ -142,7 +144,7 @@ home/march 触发 → sport.syncToday()（POST /api/sport/sync 后端落库，�
 
 ```
 quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 题、按用户+日期固定）
-  → quiz-answer 逐题作答 → quiz.submit(answers)（POST /api/quiz/submit 后端判分、记分、发积分；每日仅一次）
+  → quiz-answer 逐题作答（每题选择即 POST /api/quiz/check 即时判题，驱动 🔥 连胜反馈 §15）→ quiz.submit(answers)（POST /api/quiz/submit 后端判分、记分、发积分；每日仅一次）
   → quiz-result 展示得分与错题解析 → 返回后 quiz 页 refresh() 显示已完成
 ```
 

@@ -15,7 +15,9 @@ Page({
     stars: [false, false, false, false, false],
     wrongCount: 0,
     displayScore: 0,
-    confetti: []
+    confetti: [],
+    isPerfect: false,
+    perfectLine: ''
   },
 
   onLoad() {
@@ -32,7 +34,9 @@ Page({
 
         this.setData({
           record,
-          wrongCount: record.totalCount - record.correctCount
+          wrongCount: record.totalCount - record.correctCount,
+          isPerfect: record.score === 100,
+          perfectLine: record.correctCount + ' / ' + record.totalCount + ' · ' + record.score + ' 分'
         });
 
         // 1. 分数滚动动画

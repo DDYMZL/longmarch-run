@@ -31,6 +31,16 @@ function submit(answers) {
 }
 
 /**
+ * 单题即时判题（需求 §15 连续答对反馈；无状态，不影响提交判分与积分）。
+ * @param {number} questionId
+ * @param {Array<string>} answer
+ * @returns {Promise<{questionId:number, correct:boolean}>}
+ */
+function checkAnswer(questionId, answer) {
+  return requestService.request({ url: '/quiz/check', method: 'POST', data: { questionId, answer } });
+}
+
+/**
  * 答题记录（新到旧）。
  * @returns {Promise<Array>}
  */
@@ -51,6 +61,7 @@ module.exports = {
   getDaily,
   getKnowledge,
   submit,
+  checkAnswer,
   getRecords,
   resetToday
 };

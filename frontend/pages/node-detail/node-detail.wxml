@@ -72,10 +72,19 @@
     <view class="story-text">{{node.significance}}</view>
   </view>
 
-  <!-- 相关人物 -->
-  <view class="card anim-card" style="animation-delay: 320ms" wx:if="{{node.figures}}">
+  <!-- 相关人物（人物志 §14：点击人物进人物详情，人物详情回链节点） -->
+  <view class="card anim-card" style="animation-delay: 320ms" wx:if="{{node.figures || node.persons.length > 0}}">
     <view class="card-title">相关人物</view>
-    <view class="figures-text">{{node.figures}}</view>
+    <view class="figures-text" wx:if="{{node.figures}}">{{node.figures}}</view>
+    <view class="figures-chips" wx:if="{{node.persons.length > 0}}">
+      <view
+        class="figure-chip"
+        wx:for="{{node.persons}}"
+        wx:key="id"
+        data-id="{{item.id}}"
+        bindtap="goPerson"
+      >{{item.name}} ›</view>
+    </view>
   </view>
 
   <!-- 路线位置（小地图） -->

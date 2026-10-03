@@ -10,10 +10,16 @@
 
     <!-- 题目 -->
     <view class="card question-card {{questionAnim}}">
-      <view class="question-type {{current.type === 'judge' ? 'judge' : ''}}">
-        {{current.type === 'judge' ? '判断题' : '单选题'}}
+      <view class="question-head">
+        <view class="question-type {{current.type === 'judge' ? 'judge' : ''}}">
+          {{current.type === 'judge' ? '判断题' : '单选题'}}
+        </view>
+        <!-- 连续答对反馈（§15.2） -->
+        <view wx:if="{{streak > 0}}" class="streak-badge">🔥 连续{{streak}}题</view>
       </view>
       <view class="question-text">{{current.question}}</view>
+      <view wx:if="{{lastCheck === 'correct'}}" class="check-tip correct">✓ 回答正确</view>
+      <view wx:elif="{{lastCheck === 'wrong'}}" class="check-tip wrong">✗ 回答错误，连续答对重新开始</view>
     </view>
 
     <!-- 选项 -->
@@ -21,7 +27,7 @@
       <view
         wx:for="{{current.options}}"
         wx:key="label"
-        class="option {{selected === item.label ? 'selected' : ''}}"
+        class="option {{selected === item.label ? 'selected' : ''}} {{checkedLabel === item.label ? (lastCheck === 'correct' ? 'opt-correct' : 'opt-wrong') : ''}}"
         data-label="{{item.label}}"
         bindtap="handleSelect"
       >

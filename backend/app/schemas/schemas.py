@@ -181,6 +181,13 @@ class RouteOut(CamelModel):
     current_chapter_id: Optional[int] = None
 
 
+class PersonRefOut(CamelModel):
+    """人物引用（节点详情页相关人物入口）。"""
+
+    id: int
+    name: str
+
+
 class NodeDetailOut(CamelModel):
     id: int
     name: str
@@ -198,6 +205,27 @@ class NodeDetailOut(CamelModel):
     images: List[str] = []
     audio: str = ""
     keywords: str = ""
+    persons: List[PersonRefOut] = []
+
+
+class PersonNodeRefOut(CamelModel):
+    """人物详情中的相关节点（历史事件 = 节点事件，历史时间在节点上）。"""
+
+    id: int
+    name: str
+    icon: str
+    historical_time: str
+    brief: str = ""
+
+
+class PersonDetailOut(CamelModel):
+    """长征人物志详情（需求 §14.2）：头像/名称/简介/相关历史事件(节点)/历史时间。"""
+
+    id: int
+    name: str
+    avatar: str = ""
+    brief: str = ""
+    nodes: List[PersonNodeRefOut] = []
 
 
 class LightUpNextNode(CamelModel):
@@ -328,6 +356,13 @@ class AnswerItem(BaseModel):
 
 class SubmitRequest(BaseModel):
     answers: List[AnswerItem]
+
+
+class QuizCheckOut(CamelModel):
+    """单题即时判题结果（需求 §15 答题连胜反馈；不改动积分/提交规则）。"""
+
+    question_id: int
+    correct: bool
 
 
 # ---------------- 积分 ----------------

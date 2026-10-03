@@ -1,0 +1,45 @@
+<view class="person-page">
+  <view wx:if="{{loading}}" class="empty-tip">人物加载中…</view>
+  <view wx:elif="{{errorMsg}}" class="empty-tip">{{errorMsg}}</view>
+
+  <block wx:else>
+    <!-- 头部：头像 / 名称 -->
+    <view class="person-header">
+      <view class="person-avatar">
+        <image wx:if="{{person.avatar}}" src="{{person.avatar}}" mode="aspectFill" />
+        <text wx:else class="person-initial">{{initial}}</text>
+      </view>
+      <view class="person-name">{{person.name}}</view>
+      <view class="person-sub">长征人物志</view>
+    </view>
+
+    <!-- 人物简介 -->
+    <view class="card anim-card" style="animation-delay: 60ms" wx:if="{{person.brief}}">
+      <view class="card-title">人物简介</view>
+      <view class="person-brief">{{person.brief}}</view>
+    </view>
+
+    <!-- 相关历史事件（节点事件 + 历史时间，点击进节点详情） -->
+    <view class="card anim-card" style="animation-delay: 140ms">
+      <view class="card-title">相关历史事件</view>
+      <view wx:if="{{person.nodes.length === 0}}" class="empty-tip">暂无关联历史事件</view>
+      <view
+        class="person-event"
+        wx:for="{{person.nodes}}"
+        wx:key="id"
+        data-id="{{item.id}}"
+        bindtap="goNode"
+      >
+        <view class="person-event-icon">{{item.icon}}</view>
+        <view class="person-event-main">
+          <view class="person-event-row">
+            <text class="person-event-name">{{item.name}}</text>
+            <text class="person-event-time">{{item.historicalTime}}</text>
+          </view>
+          <view class="person-event-brief" wx:if="{{item.brief}}">{{item.brief}}</view>
+        </view>
+        <view class="person-event-arrow">›</view>
+      </view>
+    </view>
+  </block>
+</view>

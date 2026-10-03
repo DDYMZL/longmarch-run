@@ -51,6 +51,12 @@
   }
 }
 
+.question-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
 .question-type {
   display: inline-block;
   font-size: 22rpx;
@@ -63,6 +69,32 @@
 
 .question-type.judge {
   background: #D4A017;
+}
+
+/* 连续答对（§15.2） */
+.streak-badge {
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #D4A017;
+  background: #FFF6E0;
+  border: 1rpx solid #F0DCA8;
+  border-radius: 24rpx;
+  padding: 6rpx 18rpx;
+  animation: pickPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.check-tip {
+  margin-top: 14rpx;
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.check-tip.correct {
+  color: #2E7D32;
+}
+
+.check-tip.wrong {
+  color: #C8102E;
 }
 
 .question-text {
@@ -91,6 +123,16 @@
   border-color: #C8102E;
   background: #FFF6F7;
   animation: pickPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.option.opt-correct {
+  border-color: #2E7D32;
+  background: #F1F8F2;
+}
+
+.option.opt-wrong {
+  border-color: #C8102E;
+  background: #FDEDED;
 }
 
 @keyframes pickPop {

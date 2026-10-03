@@ -68,6 +68,15 @@ Page({
   },
 
   /**
+   * 相关人物 -> 长征人物志详情（§14.3 节点详情 → 人物）
+   */
+  goPerson(e) {
+    const id = e.currentTarget.dataset.id;
+    if (!id) return;
+    wx.navigateTo({ url: '/pages/person/person?id=' + id });
+  },
+
+  /**
    * 继续运动 -> 回首页同步步数
    */
   handleContinue() {

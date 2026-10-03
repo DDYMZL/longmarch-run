@@ -169,6 +169,23 @@
   line-height: 1.8;
 }
 
+/* 人物志入口（§14 节点详情 → 人物） */
+.figures-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  margin-top: 18rpx;
+}
+
+.figure-chip {
+  font-size: 24rpx;
+  color: #a00d26;
+  background: #fdf4f5;
+  border: 1rpx solid #f0d5d9;
+  border-radius: 28rpx;
+  padding: 10rpx 24rpx;
+}
+
 /* 路线位置小地图 */
 .mini-map {
   width: 100%;
