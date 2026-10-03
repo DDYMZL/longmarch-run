@@ -1,5 +1,11 @@
 const fs = require('fs');
-const files = ['pages/ticket/ticket.wxml', 'pages/node-detail/node-detail.wxml', 'pages/home/home.wxml'];
+const files = [
+  'pages/ticket/ticket.wxml',
+  'pages/node-detail/node-detail.wxml',
+  'pages/home/home.wxml',
+  'pages/ceremony/ceremony.wxml',
+  'pages/march/march.wxml'
+];
 const re = /<(\/?)(view|text|image|canvas|block|scroll-view|button|navigator|map|swiper|swiper-item)\b([^>]*)>/g;
 let bad = 0;
 for (const f of files) {

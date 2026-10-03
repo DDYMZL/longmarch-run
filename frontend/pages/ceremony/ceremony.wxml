@@ -1,0 +1,40 @@
+<view class="ceremony-page">
+  <!-- 动画收尾后画布快照为静态图并移除画布（原生 canvas 层不透明且 visibility 在开发者工具不生效），DOM 数据卡浮于快照上 -->
+  <canvas wx:if="{{!coverCanvas}}" type="2d" id="ceremonyCanvas" class="ceremony-canvas"></canvas>
+  <image wx:if="{{coverCanvas && sceneShot}}" class="ceremony-canvas" src="{{sceneShot}}" mode="aspectFill" />
+
+  <!-- 跳过（仅首次仪式动画期间） -->
+  <view wx:if="{{pending && phase === 'anim'}}" class="skip-btn" bindtap="skipAnim">跳过 ›</view>
+
+  <!-- 完成数据卡（§20.3）：动画收尾后升起；回顾态直接展示「已完成长征」 -->
+  <view wx:if="{{showStats && stats}}" class="stats-panel">
+    <view class="stats-title">{{pending ? '长征完成 · 我的征程' : '已完成长征'}}</view>
+    <view class="stats-grid">
+      <view class="stats-item">
+        <view class="stats-value">{{stats.totalStepsText}}</view>
+        <view class="stats-label">累计行军（步）</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.sportDays}}</view>
+        <view class="stats-label">运动天数（天）</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.quizCount}}</view>
+        <view class="stats-label">答题（次）</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.litCount}} / {{stats.totalCount}}</view>
+        <view class="stats-label">路线</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.medalOwned}} / {{stats.medalTotal}}</view>
+        <view class="stats-label">勋章</view>
+      </view>
+      <view class="stats-item">
+        <view class="stats-value">{{stats.pointsText}}</view>
+        <view class="stats-label">累计积分</view>
+      </view>
+    </view>
+    <button class="btn-primary confirm-btn" bindtap="handleConfirm">{{pending ? '收下这份荣光' : '返回'}}</button>
+  </view>
+</view>

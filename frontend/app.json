@@ -16,7 +16,8 @@
     "pages/profile/profile",
     "pages/calendar/calendar",
     "pages/person/person",
-    "pages/ticket/ticket"
+    "pages/ticket/ticket",
+    "pages/ceremony/ceremony"
   ],
   "window": {
     "navigationBarBackgroundColor": "#C8102E",

@@ -1,17 +1,21 @@
 <view wx:if="{{node}}" class="node-detail-page">
-  <!-- 历史图片（有图 swiper，无图插画占位） -->
-  <swiper wx:if="{{node.images.length > 0}}" class="hero-swiper" indicator-dots autoplay circular>
-    <swiper-item wx:for="{{node.images}}" wx:key="*this">
-      <image class="hero-image" src="{{item}}" mode="aspectFill" />
-    </swiper-item>
-  </swiper>
-  <view wx:else class="hero">
-    <view class="hero-icon">{{node.icon}}</view>
+  <!-- 历史图片（有图 swiper，无图插画占位）；hero-wrap 带区域氛围渐变 + 氛围粒子画布（§12） -->
+  <view class="hero-wrap" style="{{themeBgStyle}}">
+    <swiper wx:if="{{node.images.length > 0}}" class="hero-swiper" indicator-dots autoplay circular>
+      <swiper-item wx:for="{{node.images}}" wx:key="*this">
+        <image class="hero-image" src="{{item}}" mode="aspectFill" />
+      </swiper-item>
+    </swiper>
+    <view wx:else class="hero hero-themed">
+      <view class="hero-icon">{{node.icon}}</view>
+    </view>
+    <canvas type="2d" id="atmoCanvas" class="atmo-canvas"></canvas>
   </view>
 
   <!-- 标题 + 关键词 -->
   <view class="title-block">
     <view class="title-name">{{node.name}}</view>
+    <view class="theme-env" wx:if="{{themeEnv}}">区域氛围 · {{themeEnv}}</view>
     <view class="keyword-row" wx:if="{{keywordList.length > 0}}">
       <text class="keyword-chip" wx:for="{{keywordList}}" wx:key="*this">{{item}}</text>
     </view>

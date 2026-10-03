@@ -71,3 +71,11 @@ def light_up(current: User = Depends(get_current_user), db: Session = Depends(ge
     medal_service.check_and_grant(db, current.id)
     ws_manager.broadcast(ws_manager.build_event("march.light-up", current.id))
     return {"newly_lit": newly, "newly_completed_chapters": new_chapters}
+
+
+@router.post("/ceremony", summary="标记长征完成仪式已观看")
+def ceremony(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    """完成仪式（需求 §20.4）：仅第一次完成路线触发完整动画；观看后调用本接口标记，
+    之后 /march/route 不再下发 ceremony_pending，前端仅展示「已完成长征」。幂等。"""
+    march_service.mark_ceremony_seen(db, current.id)
+    return {"ok": True}

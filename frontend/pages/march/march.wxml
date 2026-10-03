@@ -36,7 +36,7 @@
   <view class="march-header">
     <view class="march-header-title">长征路线</view>
     <view class="march-header-sub">累计 {{currentSteps}} / {{totalSteps}} 步 · 已点亮 {{litCount}}/{{totalCount}}</view>
-    <view wx:if="{{finished}}" class="finish-banner">🎉 恭喜完成长征路线！</view>
+    <view wx:if="{{finished}}" class="finish-banner" bindtap="goCeremony">🎉 恭喜完成长征路线！查看完成仪式 ›</view>
   </view>
 
   <!-- 当前章节卡（需求 §4.4） -->
@@ -92,8 +92,8 @@
     ></canvas>
     <view class="map-hint">{{mode === 'real' ? '点击地图节点查看信息，点气泡或「查看详情」看历史' : '拖动/双指缩放查看星图，点击星星看历史，双击复位'}}</view>
 
-    <!-- 选中节点信息卡（实景地图）：点 marker 后展示，替代原错位浮动标签 -->
-    <view class="node-card" wx:if="{{mode === 'real' && selectedNode}}">
+    <!-- 选中节点信息卡（实景地图）：点 marker 后展示，替代原错位浮动标签；卡片带区域氛围主题色（§12） -->
+    <view class="node-card" wx:if="{{mode === 'real' && selectedNode}}" style="{{selectedThemeStyle}}">
       <view class="node-card-icon {{selectedNode.status}}">{{selectedNode.status === 'completed' ? '★' : selectedNode.icon}}</view>
       <view class="node-card-meta">
         <view class="node-card-name-row">
@@ -102,6 +102,7 @@
         </view>
         <view class="node-card-sub" wx:if="{{selectedNode.status === 'current'}}">当前 {{currentSteps}} / {{selectedNode.targetSteps}} 步 · 还需 {{selectedNode.remain}} 步</view>
         <view class="node-card-sub" wx:else>目标 {{selectedNode.targetSteps}} 步</view>
+        <view class="node-card-theme" wx:if="{{selectedThemeEnv}}">区域氛围 · {{selectedThemeEnv}}</view>
       </view>
       <view class="node-card-btn" bindtap="goSelectedDetail">查看详情 ›</view>
     </view>

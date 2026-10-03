@@ -179,6 +179,8 @@ class RouteOut(CamelModel):
     # 章节系统：各章状态与当前章节（全部完成时为 null）
     chapters: List[ChapterOut] = []
     current_chapter_id: Optional[int] = None
+    # 完成仪式（需求 §20.4）：全部点亮且未观看过仪式时为 true，前端播放后调 /march/ceremony
+    ceremony_pending: bool = False
 
 
 class PersonRefOut(CamelModel):

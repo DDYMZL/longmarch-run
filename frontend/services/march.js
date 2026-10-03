@@ -57,10 +57,19 @@ function getFootprints() {
   return requestService.request({ url: '/march/footprints' });
 }
 
+/**
+ * 标记长征完成仪式已观看（需求 §20.4：仅第一次完成路线触发完整动画）。
+ * @returns {Promise<{ok:boolean}>}
+ */
+function markCeremony() {
+  return requestService.request({ url: '/march/ceremony', method: 'POST' });
+}
+
 module.exports = {
   getRoute,
   getNodeDetail,
   lightUpNodes,
   getGlobalGoal,
-  getFootprints
+  getFootprints,
+  markCeremony
 };

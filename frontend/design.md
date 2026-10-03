@@ -16,7 +16,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  pages/（15 页，4 tab + 11 子页）                           │
+│  pages/（16 页，4 tab + 12 子页）                           │
 │  展示与交互；onShow + refresh() 刷新；未登录守卫            │
 └───────────────┬──────────────────────────────────────────┘
                 │ 调用服务层 API（只依赖返回值结构）
@@ -40,14 +40,15 @@
 | 页面 | 类型 | 职责 |
 | --- | --- | --- |
 | `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、今日寄语卡（§16，有出处语录+可跳关联节点，当天优先回退最近一条）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、🌍全员同行卡（全员累计中文大数/进度/下一阶段/里程碑✓○芯片）、抵达事件卡弹层 |
-| `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空长征），节点点击进详情、点亮进度、到达动画（金光扩散+粒子+抵达事件卡）；星空长征（§13）：节点三态星形、星河轨迹星尘、点亮四阶段动画、拖动/捏合缩放/双击复位（view 变换+命中逆变换+边界钳制） |
+| `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空长征），节点点击进详情、点亮进度、到达动画（金光扩散+粒子+抵达事件卡）；星空长征（§13）：节点三态星形、星河轨迹星尘、点亮四阶段动画、拖动/捏合缩放/双击复位（view 变换+命中逆变换+边界钳制）；区域氛围（§12）：星空画布按节点区域主题生成环境粒子（每节点 3 粒封顶 30，ember/mist/snow/star），实景选中卡套主题柔和高光+区域标签；完成仪式（§20）：`ceremonyPending` 时待抵达弹窗播完自动进仪式页，完成横幅为永久入口 |
 | `pages/quiz/quiz` | tab | 今日长征情报：期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（我的长征/行军日历/运动记录/答题记录） |
 | `pages/profile/profile` | 子页 | 我的长征档案：加入天数/阶段标签、运动/答题/积分统计、成就总览六格（§18 行军/路线/情报/连续/勋章/积分，点击直达详情）、数据画像雷达（§17 五维 canvas 雷达图，仅数据不评价）、路线完成度、足迹地图（§7 点亮节点链/点击展开抵达详情：日期+当日步数+累计步数）、足迹时间轴 |
 | `pages/calendar/calendar` | 子页 | 行军日历：月视图（步数热力等级/答题/点亮标记）、月统计、当日详情弹层 |
 | `pages/login/login` | 子页 | 微信登录：`chooseAvatar` 头像（页面不采集昵称），登录后发每日登录积分；已选组织的用户直达首页，新用户转组织选择页 |
 | `pages/org-select/org-select` | 子页 | 组织选择（逐级下钻，任意层级可选）；首次登录（未改名）时顶部采集姓名（`input type="nickname"`，可跳过，提示语「请输入真实姓名」放输入框旁侧、不占 placeholder），选定组织后落库并进首页 |
-| `pages/node-detail/node-detail` | 子页 | 节点历史详情：图片轮播/英雄图标、关键词、历史时间/地点、一句话简介、历史故事、历史意义、相关人物（figures 文本 + persons 人物志 chip，点击进人物详情 §14）、路线位置小地图（任意状态可看，含未解锁）、「🎫 生成纪念票」入口（§19，仅已点亮节点可见） |
+| `pages/node-detail/node-detail` | 子页 | 节点历史详情：图片轮播/英雄图标、关键词、历史时间/地点、一句话简介、历史故事、历史意义、相关人物（figures 文本 + persons 人物志 chip，点击进人物详情 §14）、路线位置小地图（任意状态可看，含未解锁）、「🎫 生成纪念票」入口（§19，仅已点亮节点可见）；区域氛围（§12）：hero 按节点区域主题渐变 + `#atmoCanvas` 氛围粒子（≤24 粒，onHide 停止），标题区显示区域标签 |
+| `pages/ceremony/ceremony` | 子页 | 长征完成仪式（§20）：约 8.1s 时间轴（逐段点亮 → 末节点辉光 → 金线扫过 → 全亮脉冲 → 星空展开 →「我的长征/完成了」→ 完成数据卡：行军/运动天数/答题/路线/勋章/积分，取 `/march/route` + `/profile/summary`）；可跳过；首次确认后 `POST /march/ceremony` 标记，再进为「已完成长征」静态回顾；收尾快照最终帧为静态图并移除画布，数据卡浮于快照上（原生 canvas 层会盖住 DOM） |
 | `pages/ticket/ticket` | 子页 | 节点纪念票（§19）：纯 Canvas 2d 绘制（米黄纸面/红头/虚线撕裂线/编号），数据取 `/march/node/{id}` + `/march/footprints`（点亮日期/当日步数/累计），未点亮节点显示提示；保存相册走 `canvasToTempFilePath`（传 canvas 节点）+ `saveImageToPhotosAlbum` |
 | `pages/person/person` | 子页 | 长征人物志详情（§14）：头像（无图姓名首字占位）/名称/简介、相关历史事件卡（节点事件+历史时间+简述），点击事件卡回跳节点详情（人物 → 节点双向） |
 | `pages/quiz-answer/quiz-answer` | 子页 | 情报破译过程（单选/判断、逐题作答）；连续答对反馈（§15：选项即判 `/quiz/check`，🔥连续N题徽章、对错即时提示、答错连胜清零；判题失败静默不影响作答） |
@@ -65,7 +66,7 @@
 | --- | --- | --- | --- |
 | `auth.js` | `wxLogin(profile)` / `getLocalUser()` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
 | `sport.js` | 今日步数 / `syncToday()` / `addSteps()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, add, calendar` | 步数按「用户+日期」覆盖；模拟步数；行军日历月聚合 |
-| `march.js` | `refreshRouteNodes()` / `getRouteNodes()` / `getRoute()` / `getNodeDetail()` / `lightUpNodes()` / `getGlobalGoal()` | `/api/march/route-nodes, route, node/{id}, light-up, global, footprints` | 三级降级获取节点配置；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹 |
+| `march.js` | `refreshRouteNodes()` / `getRouteNodes()` / `getRoute()` / `getNodeDetail()` / `lightUpNodes()` / `getGlobalGoal()` / `markCeremony()` | `/api/march/route-nodes, route, node/{id}, light-up, global, footprints, ceremony` | 三级降级获取节点配置；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4） |
 | `quiz.js` | `getDaily()` / `submit()` / `checkAnswer()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, check, records, reset, knowledge` | 每日抽 5 题（同日同套）、判分、每日一次；`checkAnswer` 单题即时判题（无状态，连胜反馈用）；知识画像分类正确率 |
 | `points.js` | `grantDailyLogin()` / 总额与流水 | `/api/points`、登录副链路 | 积分发放（同日同 reason 去重） |
 | `medal.js` | `checkAndGrant()` / `getMedalList()` | `/api/medal/list, check` | 12 枚勋章判定与发放（分类/隐藏/排序由后端下发） |
@@ -167,6 +168,8 @@ quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 
 - **行军轨迹（006 P0）**：绘制进度统一取后端 `routeProgress`（旧接口降级为步数比例，见 `calcRouteProgress`/`currentRatio`）；步数刷新只从旧进度插值推进到新进度（约 800ms，`progressAnim`），仅首次渲染播放完整入场描画；当前行军点为「呼吸光点（光晕缩放）+ 3 颗上升光尘 + 摆动红旗」。
 - **长征章节（006 P0-3）**：章节视图（状态/点亮数/进度/介绍）由后端 `GET /api/march/route` 随路线统一下发；地图上方固定展示当前章节卡（标题 + 已点亮/总数 + 进度条，`progressPct` 渲染前预计算）；章节完成仪式卡由 light-up 响应驱动，与节点抵达卡共用 `utils/arrivePopup.js` 队列播放器（章节卡含历史介绍停留 3400ms，节点卡 2400ms），home 页步数同步弹层同源。
 - **开场动画（006 P0-4，需求 §5）**：首次进入长征 Tab 播放完整开场（1934/瑞金 → 长征开始 → 你的长征旅程正式开始，纯 CSS 淡入叠加，无图片无 rAF，总时长约 3.35s），点击任意处跳过；播放标记写 Storage `lm_march_intro_played`；非首次仅 500ms 过渡纱幕（`pointer-events:none` 不拦截操作）。开场期间地图加载/refresh 并发不阻塞；实景镜头俯冲与抵达事件队列延至开场结束补播（`dismissIntro`）。
+- **区域氛围（P2-2，需求 §12）**：`data/node-themes.js` 为前端主题映射配置（§12.3 明确允许），10 节点 → 5 区域（瑞金/赤水/泸定/雪山/延安），每主题含渐变色三段与环境粒子配置（ember/mist/snow/star）；应用于节点详情 hero（渐变 + 氛围粒子画布）、星空长征画布（每节点 3 粒环境粒子封顶 30）、实景模式选中节点卡（柔和高光 + 区域标签）。
+- **完成仪式（P2-2，需求 §20）**：`GET /march/route` 返回 `ceremonyPending` 时，待抵达/章节弹窗队列播完（`_popupMs`）自动 `navigateTo` 仪式页；开场期间暂缓、离开页面清定时器可重试；仪式页复用 `utils/routeCanvas.js`（从 march.js 抽取的 Catmull-Rom 路线采样/星形/圆角矩形等纯函数，星空长征同源）；确认后 `POST /march/ceremony` 幂等标记，再进为静态回顾态。
 
 ## 5. 核心业务规则（与后端完全一致，见 `../backend/design.md` §5）
 

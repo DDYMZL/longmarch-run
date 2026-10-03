@@ -12,6 +12,8 @@
 const app = getApp();
 const march = require('../../services/march');
 const arrivePopup = require('../../utils/arrivePopup');
+const routeCanvas = require('../../utils/routeCanvas');
+const nodeThemes = require('../../data/node-themes');
 
 // 云朵 / 薄雾（相对坐标 + 尺度 + 速度）
 const CLOUDS = [
@@ -19,57 +21,6 @@ const CLOUDS = [
   { x: 0.52, y: 0.07, s: 0.7, v: 0.02 },
   { x: 0.88, y: 0.2, s: 0.85, v: 0.016 }
 ];
-
-/**
- * 将任意路线经纬度归一化到 Canvas 安全绘制区域。
- */
-function getCanvasNodePositions(nodes, width, height) {
-  if (!nodes.length) return [];
-  const latitudes = nodes.map((node) => node.latitude);
-  const longitudes = nodes.map((node) => node.longitude);
-  const minLat = Math.min.apply(null, latitudes);
-  const maxLat = Math.max.apply(null, latitudes);
-  const minLng = Math.min.apply(null, longitudes);
-  const maxLng = Math.max.apply(null, longitudes);
-  const latRange = maxLat - minLat;
-  const lngRange = maxLng - minLng;
-
-  return nodes.map((node) => ({
-    x: lngRange ? width * (0.12 + ((node.longitude - minLng) / lngRange) * 0.76) : width * 0.5,
-    y: latRange ? height * (0.12 + ((maxLat - node.latitude) / latRange) * 0.72) : height * 0.5
-  }));
-}
-
-/** 缓动函数 easeOutCubic */
-function easeOutCubic(t) {
-  return 1 - Math.pow(1 - t, 3);
-}
-
-/** 绘制五角星路径 */
-function drawStar(ctx, cx, cy, spikes, outerR, innerR, rot) {
-  ctx.beginPath();
-  for (let i = 0; i < spikes * 2; i++) {
-    const r = i % 2 === 0 ? outerR : innerR;
-    const a = rot + (i * Math.PI) / spikes - Math.PI / 2;
-    const x = cx + Math.cos(a) * r;
-    const y = cy + Math.sin(a) * r;
-    if (i === 0) ctx.moveTo(x, y);
-    else ctx.lineTo(x, y);
-  }
-  ctx.closePath();
-}
-
-/** 绘制圆角矩形路径 */
-function drawRoundRect(ctx, x, y, w, h, r) {
-  const rr = Math.min(r, w / 2, h / 2);
-  ctx.beginPath();
-  ctx.moveTo(x + rr, y);
-  ctx.arcTo(x + w, y, x + w, y + h, rr);
-  ctx.arcTo(x + w, y + h, x, y + h, rr);
-  ctx.arcTo(x, y + h, x, y, rr);
-  ctx.arcTo(x, y, x + w, y, rr);
-  ctx.closePath();
-}
 
 Page({
   data: {
@@ -89,6 +40,9 @@ Page({
     polylines: [],
     // 实景地图当前选中的节点（点 marker 后在底部信息卡展示）
     selectedNode: null,
+    // 选中节点区域氛围（§12：信息卡柔和主题色 + 环境描述）
+    selectedThemeStyle: '',
+    selectedThemeEnv: '',
     // 章节系统（后端统一下发）：各章状态与当前章节卡
     chapters: [],
     currentChapter: null,
@@ -155,12 +109,19 @@ Page({
       this.playViewAnim();
     }
     this.playArriveIfNeeded();
+    // 开场期间顺延的完成仪式（§20）
+    if (this._ceremonyRoute) {
+      const pendingRoute = this._ceremonyRoute;
+      this._ceremonyRoute = null;
+      this.maybeStartCeremony(pendingRoute);
+    }
   },
 
   onHide() {
     this._refreshRequestId = (this._refreshRequestId || 0) + 1;
     if (this._viewTimer) clearTimeout(this._viewTimer);
     if (this.popupTimer) clearTimeout(this.popupTimer);
+    if (this._ceremonyTimer) { clearTimeout(this._ceremonyTimer); this._ceremonyTimer = null; }
     this.stopAnim();
   },
 
@@ -170,6 +131,7 @@ Page({
     if (this.popupTimer) clearTimeout(this.popupTimer);
     if (this._introTimer) clearTimeout(this._introTimer);
     if (this._veilTimer) clearTimeout(this._veilTimer);
+    if (this._ceremonyTimer) { clearTimeout(this._ceremonyTimer); this._ceremonyTimer = null; }
     this.stopAnim();
   },
 
@@ -194,10 +156,42 @@ Page({
         if (!route || this._refreshRequestId !== requestId) return;
         this.renderRoute(route);
         this.playArriveIfNeeded();
+        this.maybeStartCeremony(route);
       })
       .catch(() => {
         // 网络失败时保留上一次渲染的路线
       });
+  },
+
+  /**
+   * 长征完成仪式（需求 §20）：路线全部点亮且后端下发 ceremonyPending 时跳转仪式页
+   * 播放完整动画（§20.4 仅第一次）。开场动画期间顺延；抵达事件卡队列播完再跳转；
+   * 页面生命周期内只自动触发一次（用户中途返回不循环跳转）。
+   */
+  maybeStartCeremony(route) {
+    if (!route || !route.ceremonyPending) return;
+    if (this.data.showIntro) {
+      this._ceremonyRoute = route;
+      return;
+    }
+    // 已跳转过（本页生命周期内）或已有待触发的定时器时不重复安排；
+    // 定时器被 onHide 取消（切 tab）时允许下次 onShow 重新安排
+    if (this._ceremonyStarted || this._ceremonyTimer) return;
+    const delay = this._popupMs || 0;
+    this._popupMs = 0;
+    this._ceremonyTimer = setTimeout(() => {
+      this._ceremonyTimer = null;
+      this._ceremonyStarted = true;
+      wx.navigateTo({ url: '/pages/ceremony/ceremony' });
+    }, delay);
+  },
+
+  /**
+   * 完成横幅入口：已完成路线的用户可随时进仪式页查看「已完成长征」与完成数据（§20.4）
+   */
+  goCeremony() {
+    if (!this.data.finished) return;
+    wx.navigateTo({ url: '/pages/ceremony/ceremony' });
   },
 
   /**
@@ -222,6 +216,9 @@ Page({
         particles: this.makeArriveParticles(lit.map((n) => n.id))
       };
     }
+    // 事件卡队列总时长（节点卡 2.4s / 章节卡 3.4s，与 arrivePopup 一致），
+    // 完成仪式跳转延迟到队列播完（§20.2：最后节点点亮后再进入仪式）
+    this._popupMs = lit.length * 2400 + chapters.length * 3400;
     arrivePopup.playArriveQueue(this, lit, chapters);
   },
 
@@ -283,6 +280,7 @@ Page({
         route.nodes.find((node) => node.status !== 'completed') ||
         route.nodes[0] ||
         null;
+      const selectedTheme = selectedNode ? nodeThemes.getNodeTheme(selectedNode.id) : null;
       this.setData({
         nodes: route.nodes,
         currentSteps: route.currentSteps,
@@ -293,6 +291,8 @@ Page({
         markers: mapData.markers,
         polylines: mapData.polylines,
         selectedNode: selectedNode,
+        selectedThemeStyle: selectedTheme ? nodeThemes.themeSoftStyle(selectedTheme) : '',
+        selectedThemeEnv: selectedTheme ? selectedTheme.environment : '',
         chapters: chapters,
         currentChapter: currentChapter
       });
@@ -349,7 +349,7 @@ Page({
       this.progressAnim = null;
       return base;
     }
-    return anim.from + (base - anim.from) * easeOutCubic(p);
+    return anim.from + (base - anim.from) * routeCanvas.easeOutCubic(p);
   },
 
   /* ---------------- 实景地图 ---------------- */
@@ -505,7 +505,12 @@ Page({
     if (!id || id === 999) return;
     const node = this.routeData.nodes.find((n) => n.id === id);
     if (!node) return;
-    this.setData({ selectedNode: node });
+    const theme = nodeThemes.getNodeTheme(node.id);
+    this.setData({
+      selectedNode: node,
+      selectedThemeStyle: nodeThemes.themeSoftStyle(theme),
+      selectedThemeEnv: theme.environment
+    });
   },
 
   /**
@@ -566,59 +571,23 @@ Page({
   buildMap() {
     const { cw, ch } = this;
     const nodes = (this.routeData && this.routeData.nodes) || [];
-    this.nodePts = getCanvasNodePositions(nodes, cw, ch);
+    this.nodePts = routeCanvas.getCanvasNodePositions(nodes, cw, ch);
 
     // Catmull-Rom 平滑路径采样
     const segs = 30;
-    const pts = this.nodePts;
-    const n = pts.length;
-    const path = [];
-    if (n === 1) path.push(pts[0]);
-    for (let i = 0; i < n - 1; i++) {
-      const p0 = pts[Math.max(0, i - 1)];
-      const p1 = pts[i];
-      const p2 = pts[i + 1];
-      const p3 = pts[Math.min(n - 1, i + 2)];
-      for (let j = 0; j <= segs; j++) {
-        const t = j / segs;
-        const t2 = t * t;
-        const t3 = t2 * t;
-        path.push({
-          x:
-            0.5 *
-            (2 * p1.x +
-              (-p0.x + p2.x) * t +
-              (2 * p0.x - 5 * p1.x + 4 * p2.x - p3.x) * t2 +
-              (-p0.x + 3 * p1.x - 3 * p2.x + p3.x) * t3),
-          y:
-            0.5 *
-            (2 * p1.y +
-              (-p0.y + p2.y) * t +
-              (2 * p0.y - 5 * p1.y + 4 * p2.y - p3.y) * t2 +
-              (-p0.y + 3 * p1.y - 3 * p2.y + p3.y) * t3)
-        });
-      }
-    }
-    this.path = path;
-
-    // 累计距离
-    const dist = [0];
-    for (let i = 1; i < path.length; i++) {
-      dist.push(dist[i - 1] + Math.hypot(path[i].x - path[i - 1].x, path[i].y - path[i - 1].y));
-    }
-    this.pathDist = dist;
-    this.pathLen = dist[dist.length - 1];
-
+    const sampled = routeCanvas.sampleRoutePath(this.nodePts, segs);
+    this.path = sampled.path;
+    this.pathDist = sampled.dist;
+    this.pathLen = sampled.len;
     // 节点在 path 上的采样索引（i * (segs+1)）
-    this.nodePathIndex = [];
-    for (let i = 0; i < n; i++) this.nodePathIndex.push(i * (segs + 1));
+    this.nodePathIndex = sampled.nodePathIndex;
 
     // 星河轨迹沿线星尘（§13.2「路线=星河轨迹」）：固定 22 颗采样点，
     // 仅已完成段内闪烁（相位各异，数量固定不随帧分配）
     this.trailDust = [];
-    for (let i = 0; i < 22 && path.length > 1; i++) {
+    for (let i = 0; i < 22 && this.path.length > 1; i++) {
       this.trailDust.push({
-        idx: Math.floor((i + 0.5) / 22 * (path.length - 1)),
+        idx: Math.floor((i + 0.5) / 22 * (this.path.length - 1)),
         r: 0.7 + Math.random() * 0.9,
         phase: Math.random() * Math.PI * 2,
         freq: 1.2 + Math.random() * 2
@@ -638,6 +607,28 @@ Page({
         glint: big
       });
     }
+
+    // 区域氛围（需求 §12）：每个节点按区域主题生成少量环境粒子
+    // （每节点 3 颗、总量 30 封顶、构建期一次性分配，帧内零分配）
+    this.regionMotes = [];
+    nodes.forEach((node, i) => {
+      const p = this.nodePts[i];
+      if (!p) return;
+      const cfg = nodeThemes.getNodeTheme(node.id).particleConfig;
+      for (let k = 0; k < 3; k++) {
+        this.regionMotes.push({
+          type: cfg.type,
+          color: cfg.color,
+          bx: p.x,
+          by: p.y,
+          ox: (Math.random() - 0.5) * 46,
+          oy: (Math.random() - 0.5) * 30,
+          r: 0.8 + Math.random() * 1.2,
+          phase: Math.random() * Math.PI * 2,
+          freq: 0.5 + Math.random() * 1.2
+        });
+      }
+    });
 
     // 节点名标签宽度缓存（避免每帧 measureText）
     this._labelW = {};
@@ -693,6 +684,7 @@ Page({
     }
     this.drawClouds(t);
     this.drawStars(t);
+    this.drawRegionMotes(t);
     this.drawRoute(t);
     this.drawNodes(t);
     this.drawArriveFx();
@@ -716,7 +708,7 @@ Page({
       return;
     }
     const ctx = this.ctx;
-    const glow = easeOutCubic(Math.min(1, elapsed * 1.15));
+    const glow = routeCanvas.easeOutCubic(Math.min(1, elapsed * 1.15));
     // 亮起（前 25% 亮度渐入）→ 扩大（1.2s 内 bump 至 1.9 倍后回落）
     const brighten = Math.min(1, tSec / 0.6);
     const bump = Math.sin(Math.min(1, tSec / 1.2) * Math.PI);
@@ -740,7 +732,7 @@ Page({
       }
       // 亮起扩大的金色星形（§13.3 暗星→亮起→扩大）
       ctx.globalAlpha = brighten * (0.35 + (1 - elapsed) * 0.65);
-      drawStar(ctx, p.x, p.y, 5, 9.5 * (1 + bump * 0.9), 4 * (1 + bump * 0.9), 0);
+      routeCanvas.drawStar(ctx, p.x, p.y, 5, 9.5 * (1 + bump * 0.9), 4 * (1 + bump * 0.9), 0);
       ctx.fillStyle = '#FFE9A8';
       ctx.fill();
       // 两层扩散金环
@@ -1017,6 +1009,50 @@ Page({
     ctx.globalAlpha = 1;
   },
 
+  /**
+   * 区域氛围粒子（需求 §12）：每个节点按区域主题（雪花/水雾/暖尘/星光）
+   * 在周边小范围循环运动，低透明度不抢主体；构建期固定 30 颗，帧内零分配。
+   */
+  drawRegionMotes(t) {
+    const motes = this.regionMotes;
+    if (!motes || !motes.length) return;
+    const ctx = this.ctx;
+    for (const m of motes) {
+      if (m.type === 'snow') {
+        // 雪花：循环下落 + 横向飘摆
+        const fall = (t * 7 + m.phase * 12) % 26;
+        ctx.globalAlpha = 0.3 + 0.2 * Math.sin(t * m.freq + m.phase);
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        ctx.arc(m.bx + m.ox + Math.sin(t * 1.1 + m.phase) * 4, m.by + m.oy - 13 + fall, m.r, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (m.type === 'ember') {
+        // 暖尘：循环上升 + 渐隐
+        const rise = (t * 6 + m.phase * 12) % 24;
+        ctx.globalAlpha = (1 - rise / 24) * 0.5;
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        ctx.arc(m.bx + m.ox + Math.sin(t * 1.4 + m.phase) * 3, m.by + m.oy + 12 - rise, m.r, 0, Math.PI * 2);
+        ctx.fill();
+      } else if (m.type === 'mist') {
+        // 水雾：横向缓慢漂移的柔光雾团
+        ctx.globalAlpha = 0.05 + 0.03 * Math.sin(t * 0.6 + m.phase);
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        ctx.ellipse(m.bx + m.ox + Math.sin(t * 0.25 + m.phase) * 10, m.by + m.oy, m.r * 9, m.r * 4, 0, 0, Math.PI * 2);
+        ctx.fill();
+      } else {
+        // 星光：原地闪烁（延安黄昏星空）
+        ctx.globalAlpha = 0.25 + 0.55 * (0.5 + 0.5 * Math.sin(t * m.freq + m.phase));
+        ctx.fillStyle = m.color;
+        ctx.beginPath();
+        ctx.arc(m.bx + m.ox, m.by + m.oy, m.r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+  },
+
   /** 路线：发光金色已完成段（外发光 + 内核亮线，渐变按 endIdx 缓存）+ 流光彗尾 */
   drawRoute(t) {
     const ctx = this.ctx;
@@ -1027,7 +1063,7 @@ Page({
     const progressRatio = this.currentRatio();
     const completedLen = this.pathLen * progressRatio;
     const intro = Math.min(1, (Date.now() - this.animStart) / 1400);
-    const shownLen = completedLen * easeOutCubic(intro);
+    const shownLen = completedLen * routeCanvas.easeOutCubic(intro);
     const endIdx = this.dist2Index(shownLen);
 
     if (endIdx > 0) {
@@ -1119,10 +1155,10 @@ Page({
         const pulse = 0.5 + 0.5 * Math.sin(t * 2 + i);
         const s = 32 + pulse * 13;
         if (this.glowGold) ctx.drawImage(this.glowGold, p.x - s / 2, p.y - s / 2, s, s);
-        drawStar(ctx, p.x, p.y, 5, 9.5, 4, t * 0.35);
+        routeCanvas.drawStar(ctx, p.x, p.y, 5, 9.5, 4, t * 0.35);
         ctx.fillStyle = '#E8B84B';
         ctx.fill();
-        drawStar(ctx, p.x, p.y, 5, 4.6, 2, t * 0.35);
+        routeCanvas.drawStar(ctx, p.x, p.y, 5, 4.6, 2, t * 0.35);
         ctx.fillStyle = '#FFF7DC';
         ctx.fill();
       } else if (node.status === 'current') {
@@ -1143,15 +1179,15 @@ Page({
           const s = 36 * breathe;
           ctx.drawImage(this.glowRed, p.x - s / 2, p.y - s / 2, s, s);
         }
-        drawStar(ctx, p.x, p.y, 5, 8.6 * breathe, 3.7 * breathe, 0);
+        routeCanvas.drawStar(ctx, p.x, p.y, 5, 8.6 * breathe, 3.7 * breathe, 0);
         ctx.fillStyle = '#FF3D57';
         ctx.fill();
-        drawStar(ctx, p.x, p.y, 5, 3.6 * breathe, 1.6 * breathe, 0);
+        routeCanvas.drawStar(ctx, p.x, p.y, 5, 3.6 * breathe, 1.6 * breathe, 0);
         ctx.fillStyle = '#FFD9DE';
         ctx.fill();
       } else {
         // 未解锁：暗色星点（§13.2）
-        drawStar(ctx, p.x, p.y, 5, 5.4, 2.3, 0);
+        routeCanvas.drawStar(ctx, p.x, p.y, 5, 5.4, 2.3, 0);
         ctx.fillStyle = 'rgba(120,145,175,0.5)';
         ctx.fill();
       }
@@ -1170,7 +1206,7 @@ Page({
     const w = this._labelW[node.name] || (this._labelW[node.name] = ctx.measureText(node.name).width);
     // 底衬
     ctx.fillStyle = 'rgba(6,13,24,0.6)';
-    drawRoundRect(ctx, labelX - w / 2 - 6, labelY - 10, w + 12, 15, 7.5);
+    routeCanvas.drawRoundRect(ctx, labelX - w / 2 - 6, labelY - 10, w + 12, 15, 7.5);
     ctx.fill();
     // 文字
     if (node.status === 'completed') {
@@ -1249,7 +1285,7 @@ Page({
     ctx.fillStyle = this._flagGrad;
     ctx.fill();
     // 旗上金星
-    drawStar(ctx, 10, 0, 5, 3.4, 1.5, 0);
+    routeCanvas.drawStar(ctx, 10, 0, 5, 3.4, 1.5, 0);
     ctx.fillStyle = '#FFE08A';
     ctx.fill();
     ctx.restore();
@@ -1259,15 +1295,7 @@ Page({
 
   /** 距离 -> 路径索引（二分） */
   dist2Index(len) {
-    const dist = this.pathDist;
-    let lo = 0;
-    let hi = dist.length - 1;
-    while (lo < hi) {
-      const mid = (lo + hi + 1) >> 1;
-      if (dist[mid] <= len) lo = mid;
-      else hi = mid - 1;
-    }
-    return lo;
+    return routeCanvas.distToIndex(this.pathDist, len);
   },
 
   /* ---------------- 交互（§13.4 星空全景：拖动/缩放/双击复位/点击命中） ---------------- */

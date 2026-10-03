@@ -235,6 +235,14 @@
   margin-top: 6rpx;
 }
 
+/* 区域氛围说明（§12：选中卡柔和主题色上的环境描述） */
+.node-card-theme {
+  font-size: 20rpx;
+  color: #8C6D2F;
+  margin-top: 8rpx;
+  letter-spacing: 1rpx;
+}
+
 .node-card-btn {
   flex-shrink: 0;
   margin-left: 16rpx;

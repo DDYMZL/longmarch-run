@@ -9,13 +9,14 @@
 CHAPTERS 配置（管理端可视化编辑为后续增强）；章节状态由后端统一下发，
 章节最后节点点亮写 CHAPTER_COMPLETE 事件（不改变原有节点点亮逻辑）。
 """
+from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.helpers import to_local
-from app.models.models import DailySport, LitNode, RouteNode
+from app.models.models import DailySport, LitNode, RouteNode, User
 from app.services import event_service, person_service, points_service
 
 # 长征章节配置（node_ids 对应 route_nodes 主键；介绍为公开史实概述，供章节完成仪式展示）
@@ -205,6 +206,13 @@ def get_route(db: Session, user_id: int) -> Dict:
     state = _route_state(nodes_def, lit, current_steps)
     chapters, current_chapter_id = _chapter_views(state["nodes"])
 
+    # 完成仪式触发（需求 §20.4）：全部点亮且未观看过仪式时下发 ceremony_pending，
+    # 前端播放完整仪式动画后调 POST /march/ceremony 标记；仅完成时查一次 users。
+    ceremony_pending = False
+    if state["finished"]:
+        row = db.query(User.route_ceremony_at).filter(User.id == user_id).first()
+        ceremony_pending = row is not None and row[0] is None
+
     return {
         "nodes": state["nodes"],
         "current_steps": current_steps,
@@ -218,7 +226,17 @@ def get_route(db: Session, user_id: int) -> Dict:
         "route_progress": state["route_progress"],
         "chapters": chapters,
         "current_chapter_id": current_chapter_id,
+        "ceremony_pending": ceremony_pending,
     }
+
+
+def mark_ceremony_seen(db: Session, user_id: int) -> None:
+    """标记长征完成仪式已观看（需求 §20.4：仅第一次完成触发完整动画）。幂等。"""
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None or user.route_ceremony_at is not None:
+        return
+    user.route_ceremony_at = datetime.utcnow()
+    db.commit()
 
 
 def get_global_goal(db: Session) -> Dict:

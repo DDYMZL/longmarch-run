@@ -2,7 +2,38 @@
   padding-bottom: 60rpx;
 }
 
-/* 头部图片区 */
+/* 头部图片区（hero-wrap 承载区域氛围渐变与粒子画布，§12） */
+.hero-wrap {
+  position: relative;
+}
+
+.hero-themed {
+  background: transparent;
+}
+
+/* .hero 默认红渐变在主题激活时让位于 hero-wrap 的区域氛围渐变（§12） */
+.hero.hero-themed {
+  background: transparent;
+}
+
+.atmo-canvas {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  z-index: 3;
+}
+
+/* 区域氛围说明（§12） */
+.theme-env {
+  font-size: 22rpx;
+  color: #8C6D2F;
+  margin-top: 14rpx;
+  letter-spacing: 1rpx;
+}
+
 .hero-swiper {
   width: 100%;
   height: 420rpx;

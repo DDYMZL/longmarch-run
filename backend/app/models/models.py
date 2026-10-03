@@ -165,6 +165,8 @@ class User(Base):
     continuous_days: Mapped[int] = mapped_column(Integer, default=0)
     max_continuous_days: Mapped[int] = mapped_column(Integer, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    # 长征完成仪式（需求 §20.4）：非空表示已观看首次完成仪式，之后仅展示「已完成长征」
+    route_ceremony_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
 
 
 class DailySport(Base):
