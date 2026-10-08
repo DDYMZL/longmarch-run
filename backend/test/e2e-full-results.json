@@ -1,0 +1,1585 @@
+{
+  "suite": "e2e_full_flow",
+  "time": "2026-10-08T16:38:02.860792",
+  "duration_sec": 234.5,
+  "total": 175,
+  "passed": 171,
+  "failed": 4,
+  "results": [
+    {
+      "id": "A01",
+      "module": "auth",
+      "name": "全新用户登录成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "A02",
+      "module": "auth",
+      "name": "新用户返回 token 与 user",
+      "status": "PASS",
+      "expected": "token+user 非空",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "A03",
+      "module": "auth",
+      "name": "新用户未选组织 orgId=null",
+      "status": "PASS",
+      "expected": "None",
+      "actual": "None",
+      "detail": ""
+    },
+    {
+      "id": "A04",
+      "module": "auth",
+      "name": "用户落库",
+      "status": "PASS",
+      "expected": "users 行存在且 openid 为 mock 派生",
+      "actual": "True",
+      "detail": "[('mock_1c24fd53fd44f3eba3e190d4', '长征小战士', '长征小战士', None, 0)]"
+    },
+    {
+      "id": "A05",
+      "module": "auth",
+      "name": "每日登录积分 +1",
+      "status": "PASS",
+      "expected": "points_log 存在 每日登录 +1",
+      "actual": "True",
+      "detail": "[('每日登录', 1)]"
+    },
+    {
+      "id": "A06",
+      "module": "auth",
+      "name": "同日重复登录仍成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "A07",
+      "module": "auth",
+      "name": "同日重复登录不重复发每日登录积分",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "A08",
+      "module": "auth",
+      "name": "登录不覆盖昵称",
+      "status": "PASS",
+      "expected": "长征小战士",
+      "actual": "长征小战士",
+      "detail": "db=('长征小战士', 'https://example.com/avatar-a.png')"
+    },
+    {
+      "id": "A09",
+      "module": "auth",
+      "name": "头像随登录更新",
+      "status": "PASS",
+      "expected": "https://example.com/avatar-a.png",
+      "actual": "https://example.com/avatar-a.png",
+      "detail": ""
+    },
+    {
+      "id": "A10",
+      "module": "auth",
+      "name": "/auth/me 返回本人",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "A11",
+      "module": "auth",
+      "name": "me.id 与登录一致",
+      "status": "PASS",
+      "expected": "246",
+      "actual": "246",
+      "detail": ""
+    },
+    {
+      "id": "A12",
+      "module": "auth",
+      "name": "首次引导设置昵称成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "A13",
+      "module": "auth",
+      "name": "昵称落库且未消耗改名机会",
+      "status": "PASS",
+      "expected": "端到端测试员甲",
+      "actual": "端到端测试员甲",
+      "detail": ""
+    },
+    {
+      "id": "A14",
+      "module": "auth",
+      "name": "nickname_changed_at 仍为空",
+      "status": "PASS",
+      "expected": "None",
+      "actual": "None",
+      "detail": ""
+    },
+    {
+      "id": "O01",
+      "module": "org",
+      "name": "组织树根节点列表",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "O02",
+      "module": "org",
+      "name": "组织树层级字段 camelCase",
+      "status": "PASS",
+      "expected": "parentId 字段存在",
+      "actual": "True",
+      "detail": "[{'id': 1, 'name': '长征集团总部', 'parentId': None, 'level': 1, 'hasChildren': True, 'childCount': 3}]"
+    },
+    {
+      "id": "O03",
+      "module": "org",
+      "name": "选择组织成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "O04",
+      "module": "org",
+      "name": "orgId 落库",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "A15",
+      "module": "auth",
+      "name": "应用内首次改名成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "A16",
+      "module": "auth",
+      "name": "二次改名被拒(400)",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "detail": "{'detail': '昵称仅可修改一次，无法再次修改'}"
+    },
+    {
+      "id": "A17",
+      "module": "auth",
+      "name": "无 token 访问受保护接口 401",
+      "status": "PASS",
+      "expected": "401",
+      "actual": "401",
+      "detail": ""
+    },
+    {
+      "id": "A18",
+      "module": "auth",
+      "name": "伪造 token 401",
+      "status": "PASS",
+      "expected": "401",
+      "actual": "401",
+      "detail": ""
+    },
+    {
+      "id": "S01",
+      "module": "sport",
+      "name": "新用户今日步数为 0",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'date': '2026-10-08', 'steps': 0, 'target': 10000, 'totalSteps': 0, 'currentStreak': 0, 'maxStreak': 0, 'streakGoal': 5000, 'todayGoalCompleted': False, 'nextStreakMilestone': 3, 'streakRemain': 3}"
+    },
+    {
+      "id": "S02",
+      "module": "sport",
+      "name": "today.steps=0",
+      "status": "PASS",
+      "expected": "0",
+      "actual": "0",
+      "detail": ""
+    },
+    {
+      "id": "S03",
+      "module": "sport",
+      "name": "同步模拟步数成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "S04",
+      "module": "sport",
+      "name": "模拟步数在 4000~12999",
+      "status": "PASS",
+      "expected": "steps=4883",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "S05",
+      "module": "sport",
+      "name": "步数落库且与 API 一致",
+      "status": "PASS",
+      "expected": "4883",
+      "actual": "4883",
+      "detail": "[(4883, False)]"
+    },
+    {
+      "id": "S06",
+      "module": "sport",
+      "name": "同日重复同步覆盖不叠加",
+      "status": "PASS",
+      "expected": "4883",
+      "actual": "4883",
+      "detail": ""
+    },
+    {
+      "id": "S07",
+      "module": "sport",
+      "name": "同日仅一条运动记录",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "S08",
+      "module": "sport",
+      "name": "演示补步成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "S09",
+      "module": "sport",
+      "name": "补步后步数增加",
+      "status": "PASS",
+      "expected": "5883",
+      "actual": "5883",
+      "detail": ""
+    },
+    {
+      "id": "S10",
+      "module": "sport",
+      "name": "达标标记与步数一致",
+      "status": "PASS",
+      "expected": "True",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "S11",
+      "module": "sport",
+      "name": "连续天数缓存=1",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "S12",
+      "module": "sport",
+      "name": "写入 DAILY_GOAL 事件",
+      "status": "PASS",
+      "expected": "DAILY_GOAL 事件数=1",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "S15",
+      "module": "sport",
+      "name": "日历接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "S16",
+      "module": "sport",
+      "name": "近期记录接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "S17",
+      "module": "sport",
+      "name": "recent 包含今日记录",
+      "status": "PASS",
+      "expected": "recent=[{'date': '2026-10-02', 'steps': 0, 'text': '10-02'}, {'date': '2026-10-03', 'steps': 0, 'text': '10-03'}]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "M01",
+      "module": "march",
+      "name": "路线进度接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "M03",
+      "module": "march",
+      "name": "瑞金(0步)已点亮 completed",
+      "status": "PASS",
+      "expected": "completed",
+      "actual": "completed",
+      "detail": "{'nodes': [{'id': 1, 'name': '瑞金', 'icon': '🚩', 'targetSteps': 0, 'status': 'completed', 'remain': 0, 'historicalTime': '1934年10月', 'description': '1934年10月，中央红军从江西瑞金出发，开始了举世闻名的二万五千里长征。瑞金是中华苏维埃共和国临时中央政府所在地，被称为“红色故都”。', 'latitude': 25.885, 'longitude': 116.027}, {'id': 2, 'name': '遵义', 'icon': '🏛️', 'targetSteps': 5000, 'status': 'completed', 'remain': 0, 'historicalTime': '1935年1月', 'description': '1935年1月，中共中央在遵义召开政治局扩大会议（遵义会议），确立了毛泽东同志在党中央和红军的领导地位，在极端危急的关头挽救了党、挽救了红军、挽救了中国革命。', 'latitude': 27.72, 'longitude': 106.93}, {'id': 3, 'name': '四渡赤水', 'icon': '🌊', 'targetSteps': 10000, 'status': 'current', 'remain': 4117, 'historicalTime': '1935年1-3月', 'description': '1935年初，中央红军在赤水河流域四次渡河，灵活机动地调动和迷惑敌人，跳出国民党军重兵包围圈，是毛泽东军事指挥艺术的“得意之笔”。', 'latitude': 28.3, 'longitude': 106.42}, {'id': 4, 'name': '巧渡金"
+    },
+    {
+      "id": "M04",
+      "module": "march",
+      "name": "存在 current 下一目标节点",
+      "status": "PASS",
+      "expected": "current={'id': 3, 'name': '四渡赤水', 'icon': '🌊', 'targetSteps': 10000, 'status': 'current', 'remain': 4117, 'historicalTime': '1935年1-3月', 'description': '1935年初，中央红军在赤水河流域四次渡河，灵活机动地调动和迷惑敌人，跳出国民党军重兵包围圈，是毛泽东军事指挥艺术的“得意之笔”。', 'latitude': 28.3, 'longitude': 106.42}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "M05",
+      "module": "march",
+      "name": "light-up 接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'newlyLit': [{'id': 1, 'name': '瑞金', 'icon': '🚩', 'targetSteps': 0, 'status': 'completed', 'remain': 0, 'historicalTime': '1934年10月', 'description': '1934年10月，中央红军从江西瑞金出发，开始了举世闻名的二万五千里长征。瑞金是中华苏维埃共和国临时中央政府所在地，被称为“红色故都”。', 'latitude': 25.885, 'longitude': 116.027, 'gainedPoints': 10, 'litAt': '2026-10-08T08:34:49.832349', 'nextNode': {'name': '四渡赤水', 'remain': 4117}}, {'id': 2, 'name': '遵义', 'icon': '🏛️', 'targetSteps': 5000, 'status': 'completed', 'remain': 0, 'historicalTime': '1935年1月', 'description': '1935年1月，中共中央在遵义召开政治局扩大会议（遵义会议），确立了毛泽东同志在党中央和红军的领导地位，在极端危急的关头挽救了党、挽救了红军、挽救了中国革命。', 'latitude': 27.72, 'longitude': 106.93, 'gainedPoints': 10, 'litAt': '2026-10-08T08:34:49.832354', 'nextNode': {'name': '四渡赤水', 'remain': 4117}}], 'newlyCompletedChapters': [{'id': 1, 'name': '出发', 'title': '"
+    },
+    {
+      "id": "M06",
+      "module": "march",
+      "name": "API 点亮状态与 lit_nodes 一致",
+      "status": "PASS",
+      "expected": "api={1, 2} db={1, 2}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "M07",
+      "module": "march",
+      "name": "每点亮节点 +10 且重复 light-up 不重复发",
+      "status": "PASS",
+      "expected": "points={'点亮节点：瑞金': 10, '点亮节点：遵义': 10}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "M08",
+      "module": "march",
+      "name": "未解锁节点详情可访问",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "M09",
+      "module": "march",
+      "name": "节点详情含名称与介绍",
+      "status": "PASS",
+      "expected": "{'id': 6, 'name': '飞夺泸定桥', 'icon': '🌉', 'targetSteps': 25000, 'historicalTime': '1935年5月29日', 'description': '1935年5月29日，红军22名突击队员在泸定桥铁索上匍匐前进，冒着敌人火力夺取桥头，创造了长征中的英雄壮举。', 'status': 'unlocked', 'remain': ",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "M10",
+      "module": "march",
+      "name": "全员长征目标 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'totalSteps': 236939, 'targetSteps': 200000000, 'progressPct': 0.1, 'milestones': [{'name': '5000万', 'steps': 50000000, 'reached': False}, {'name': '1亿', 'steps': 100000000, 'reached': False}, {'name': '1.5亿', 'steps': 150000000, 'reached': False}, {'name': '2亿', 'steps': 200000000, 'reached': False}], 'nextMilestone': {'name': '5000万', 'steps': 50000000, 'remain': 49763061}}"
+    },
+    {
+      "id": "M11",
+      "module": "march",
+      "name": "足迹接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "M12",
+      "module": "march",
+      "name": "足迹包含已点亮节点(瑞金)",
+      "status": "PASS",
+      "expected": "{'nodes': [{'id': 1, 'name': '瑞金', 'icon': '🚩', 'litAt': '2026-10-08T08:34:49.832349', 'litDate': '2026-10-08', 'daySteps': 5883, 'cumSteps': 5883}, {'id': 2, 'name': '遵义', 'icon': '🏛️', 'litAt': '202",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "Q01",
+      "module": "quiz",
+      "name": "每日答题接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "Q02",
+      "module": "quiz",
+      "name": "每日 5 题",
+      "status": "PASS",
+      "expected": "5",
+      "actual": "5",
+      "detail": ""
+    },
+    {
+      "id": "Q03",
+      "module": "quiz",
+      "name": "题目不下发答案",
+      "status": "PASS",
+      "expected": "qs 无 answer 字段",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "Q04",
+      "module": "quiz",
+      "name": "每日有期号 issueNo",
+      "status": "PASS",
+      "expected": "issueNo=38",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "Q05",
+      "module": "quiz",
+      "name": "同日抽题缓存同一套",
+      "status": "PASS",
+      "expected": "first=[5, 7, 12, 6, 8]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "Q06",
+      "module": "quiz",
+      "name": "提交答卷成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'date': '2026-10-08', 'totalCount': 5, 'correctCount': 5, 'score': 100, 'points': 15, 'wrongList': [], 'answerAt': 1791448507120}"
+    },
+    {
+      "id": "Q07",
+      "module": "quiz",
+      "name": "按种子答案得满分",
+      "status": "PASS",
+      "expected": "100",
+      "actual": "100",
+      "detail": ""
+    },
+    {
+      "id": "Q08",
+      "module": "quiz",
+      "name": "答题记录落库",
+      "status": "PASS",
+      "expected": "rows=[(100, 5, 15)]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "Q09",
+      "module": "quiz",
+      "name": "每日答题 +5",
+      "status": "PASS",
+      "expected": "5",
+      "actual": "5",
+      "detail": ""
+    },
+    {
+      "id": "Q10",
+      "module": "quiz",
+      "name": "答题满分额外 +10",
+      "status": "PASS",
+      "expected": "10",
+      "actual": "10",
+      "detail": ""
+    },
+    {
+      "id": "Q11",
+      "module": "quiz",
+      "name": "同日重复提交被拒(400)",
+      "status": "PASS",
+      "expected": "400",
+      "actual": "400",
+      "detail": "{'detail': '今日答题已完成'}"
+    },
+    {
+      "id": "Q12",
+      "module": "quiz",
+      "name": "check 判题接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "Q13",
+      "module": "quiz",
+      "name": "check 返回 correct=true",
+      "status": "PASS",
+      "expected": "True",
+      "actual": "True",
+      "detail": "{'questionId': 5, 'correct': True}"
+    },
+    {
+      "id": "Q14",
+      "module": "quiz",
+      "name": "答题记录接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "Q15",
+      "module": "quiz",
+      "name": "records 含今日记录且同日唯一",
+      "status": "PASS",
+      "expected": "[{'date': '2026-10-08', 'totalCount': 5, 'correctCount': 5, 'score': 100, 'points': 15, 'wrongList': [], 'answerAt': 1791448507120}]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "Q16",
+      "module": "quiz",
+      "name": "知识掌握接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "Q17",
+      "module": "quiz",
+      "name": "reset 成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "Q18",
+      "module": "quiz",
+      "name": "reset 后可再次提交",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "Q19",
+      "module": "quiz",
+      "name": "全错得 0 分",
+      "status": "PASS",
+      "expected": "0",
+      "actual": "0",
+      "detail": "{'date': '2026-10-08', 'totalCount': 5, 'correctCount': 0, 'score': 0, 'points': 5, 'wrongList': [{'index': 1, 'questionId': 14, 'category': 'event', 'question': '红军三大主力会师、长征全部胜利结束的标志性事件发生在？', 'correctAnswer': 'A', 'analysis': '1936年10月，红军三大主力在甘肃会宁会师，长征胜利结束。'}, {'index': 2, 'questionId': 1, 'category': 'event', 'question': '遵义会议召开于哪一年？', 'correctAnswer': 'B', 'analysis': '遵义会议于1935年1月召开，是长征途中具有重要历史意义的会议。'}, {'index': 3, 'questionId': 10, 'category': 'event', 'question': '巧渡金沙江使红军摆脱了数十万敌军的围追堵截。', 'correctAnswer': 'A', 'analysis': '巧渡金沙江是战略转移中具有决定意义的胜利。'}, {'index': 4, 'questionId': 12, 'category': 'figure', 'question': '强渡大渡河的突击队员被称为“十七勇士”。', 'correctAnswer': 'A', 'analysis': '1935年5月，十七勇士率先强渡大渡河成功。'}, {'index': 5, 'questionId': 8, 'category': 'figure', 'question': '“长征是宣言书，长征是宣传队，长征是播种机”出自"
+    },
+    {
+      "id": "Q20",
+      "module": "quiz",
+      "name": "wrongList 逐题给出正确解析",
+      "status": "PASS",
+      "expected": "{'date': '2026-10-08', 'totalCount': 5, 'correctCount': 0, 'score': 0, 'points': 5, 'wrongList': [{'index': 1, 'questionId': 14, 'category': 'event', 'question': '红军三大主力会师、长征全部胜利结束的标志性事件发生在？', 'correctAnswer': 'A', 'analysis': '1936年10月，红军三大主力在甘肃会宁会师，长征胜利结束。'}, {'index': 2, 'questionId': 1, 'categor",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "Q21",
+      "module": "quiz",
+      "name": "quiz_records 同日唯一",
+      "status": "PASS",
+      "expected": "rows=[(0,)]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "B01",
+      "module": "auth",
+      "name": "用户B 登录创建",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "B02",
+      "module": "auth",
+      "name": "用户B 昵称写入",
+      "status": "PASS",
+      "expected": "端到端测试员乙",
+      "actual": "端到端测试员乙",
+      "detail": ""
+    },
+    {
+      "id": "B03",
+      "module": "org",
+      "name": "用户B 选择组织",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "B04",
+      "module": "sport",
+      "name": "用户B 同步步数",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "B05",
+      "module": "quiz",
+      "name": "抽题缓存按用户隔离(各1条)",
+      "status": "PASS",
+      "expected": "daily_questions=[(246, 1), (247, 1)]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "B06",
+      "module": "points",
+      "name": "积分流水按用户隔离",
+      "status": "PASS",
+      "expected": "['每日登录']",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "B07",
+      "module": "points",
+      "name": "用户B 积分总额与 DB 一致",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "P01",
+      "module": "points",
+      "name": "积分流水接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "P02",
+      "module": "points",
+      "name": "积分总数与 DB 一致",
+      "status": "PASS",
+      "expected": "21",
+      "actual": "21",
+      "detail": ""
+    },
+    {
+      "id": "P03",
+      "module": "points",
+      "name": "流水字段 camelCase",
+      "status": "PASS",
+      "expected": "[{'date': '2026-10-08', 'reason': '点亮节点：遵义', 'delta': 10}, {'date': '2026-10-08', 'reason': '点亮节点：瑞金', 'delta': 10}]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "P04",
+      "module": "medal",
+      "name": "勋章列表 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "P05",
+      "module": "medal",
+      "name": "勋章总数 12",
+      "status": "PASS",
+      "expected": "12",
+      "actual": "12",
+      "detail": "['first-step', 'learner', 'persistence', 'luding', 'snow', 'day-10k', 'steps-100k', 'steps-500k', 'streak-30', 'master', 'fearless', 'victory']"
+    },
+    {
+      "id": "P06",
+      "module": "medal",
+      "name": "已获勋章数与 DB 一致",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "P07",
+      "module": "medal",
+      "name": "勋章判定接口幂等 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "P08",
+      "module": "medal",
+      "name": "重复 check 不重复发勋章",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "R01",
+      "module": "rank",
+      "name": "步数排行 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "R02",
+      "module": "rank",
+      "name": "本人行有 isMe 标记",
+      "status": "PASS",
+      "expected": "[{'rank': 1, 'userId': 242, 'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'orgName': '长征集团总部', 'steps': 65001, 'isMe': False}, {'rank': 2, 'userId': 244, 'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'orgName': '长征集团总部', 'steps': 65001, 'isMe': False}, {'rank': 3, 'userId': 240, 'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'orgName': ",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "R03",
+      "module": "rank",
+      "name": "排行步数与 DB 一致",
+      "status": "PASS",
+      "expected": "5883",
+      "actual": "5883",
+      "detail": ""
+    },
+    {
+      "id": "R04",
+      "module": "rank",
+      "name": "用户B 出现在跨组织排行",
+      "status": "PASS",
+      "expected": "[{'rank': 1, 'userId': 242, 'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'orgName': '长征集团总部', 'steps': 65001, 'isMe': False}, {'rank': 2, 'userId': 244, 'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'orgName': '长征集团总部', 'steps': 65001, 'isMe': False}, {'rank': 3, 'userId': 240, 'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'orgName': ",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "R05",
+      "module": "rank",
+      "name": "排行按步数降序",
+      "status": "PASS",
+      "expected": "[65001, 65001, 65000, 5883, 5854, 5852]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "R05",
+      "module": "org",
+      "name": "我的组织 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'orgId': 1, 'orgName': '长征集团总部', 'fullName': '长征集团总部', 'path': [{'id': 1, 'name': '长征集团总部'}]}"
+    },
+    {
+      "id": "R06",
+      "module": "org",
+      "name": "组织行军 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'org': {'orgId': 1, 'orgName': '长征集团总部', 'fullName': '长征集团总部', 'path': [{'id': 1, 'name': '长征集团总部'}]}, 'memberCount': 12, 'totalSteps': 241823, 'progressPct': 100, 'currentNodeName': '延安', 'nextNodeName': '', 'finished': True, 'litCount': 10, 'totalCount': 10, 'nodes': [{'id': 1, 'name': '瑞金', 'targetSteps': 0, 'status': 'completed', 'pct': 100}, {'id': 2, 'name': '遵义', 'targetSteps': 5000, 'status': 'completed', 'pct': 100}, {'id': 3, 'name': '四渡赤水', 'targetSteps': 10000, 'status': 'completed', 'pct': 100}, {'id': 4, 'name': '巧渡金沙江', 'targetSteps': 15000, 'status': 'completed', 'pct': 100}, {'id': 5, 'name': '强渡大渡河', 'targetSteps': 20000, 'status': 'completed', 'pct': 100}, {'id': 6, 'name': '飞夺泸定桥', 'targetSteps': 25000, 'status': 'completed', 'pct': 100}, {'id': 7, 'name': '翻越雪山', 'tar"
+    },
+    {
+      "id": "R07",
+      "module": "org",
+      "name": "同行战友 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'org': {'orgId': 1, 'orgName': '长征集团总部', 'fullName': '长征集团总部', 'path': [{'id': 1, 'name': '长征集团总部'}]}, 'memberCount': 12, 'todayTotalSteps': 241823, 'companions': [{'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 65001, 'isSelf': False}, {'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 65001, 'isSelf': False}, {'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 65000, 'isSelf': False}, {'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 5883, 'isSelf': True}, {'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 5854, 'isSelf': False}, {'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 5852, 'isSelf': False"
+    },
+    {
+      "id": "F01",
+      "module": "profile",
+      "name": "数据画像 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "F02",
+      "module": "profile",
+      "name": "画像五维评分存在",
+      "status": "PASS",
+      "expected": "['user', 'stats', 'quiz', 'medals', 'points', 'portrait']",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "F03",
+      "module": "profile",
+      "name": "五维字段齐全",
+      "status": "PASS",
+      "expected": "{'march': 7, 'persistence': 3, 'knowledge': 0, 'route': 20, 'achievement': 6}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "F04",
+      "module": "profile",
+      "name": "时间线接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "F05",
+      "module": "persons",
+      "name": "人物志详情 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "F06",
+      "module": "persons",
+      "name": "人物详情含名称与简介",
+      "status": "PASS",
+      "expected": "{'id': 1, 'name': '毛泽东', 'avatar': '', 'brief': '中共中央领导人。遵义会议确立其在党中央和红军的领导地位，指挥四渡赤水、巧渡金沙江，率红军主力抵达陕北。', 'nodes': [{'id': 1, 'name': '瑞金', 'icon': '🚩', 'historicalTime': '1934年10月', 'brief': '中央红军长征出发地，",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "F07",
+      "module": "persons",
+      "name": "不存在的人物返回 404",
+      "status": "PASS",
+      "expected": "404",
+      "actual": "404",
+      "detail": "{'detail': '人物不存在'}"
+    },
+    {
+      "id": "F08",
+      "module": "persons",
+      "name": "节点详情含关联人物(人物志入口)",
+      "status": "PASS",
+      "expected": "[{'id': 1, 'name': '毛泽东'}, {'id': 2, 'name': '朱德'}, {'id': 3, 'name': '周恩来'}]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "F09",
+      "module": "quotes",
+      "name": "今日寄语 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'id': 5, 'date': '2026-10-05', 'content': '更喜岷山千里雪，三军过后尽开颜。', 'source': '毛泽东《七律·长征》', 'node': {'id': 7, 'name': '翻越雪山'}}"
+    },
+    {
+      "id": "F10",
+      "module": "broadcast",
+      "name": "实时行动态(今日) 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'global': {'todayUsers': 12, 'todaySteps': 241823, 'todayLitCount': 28, 'todayQuizUsers': 0, 'totalUsers': 12}, 'personal': {'todaySteps': 5883, 'beatPercent': 75, 'remainToNext': 4117, 'nextNodeName': '四渡赤水'}, 'memory': {'nodeId': 2, 'title': '遵义', 'historicalTime': '1935年1月', 'brief': '遵义会议召开，中国革命生死攸关的伟大转折。'}}"
+    },
+    {
+      "id": "F11",
+      "module": "broadcast",
+      "name": "公开动态流 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "F12",
+      "module": "broadcast",
+      "name": "公开动态条目含 eventType/昵称/文案",
+      "status": "PASS",
+      "expected": "{'id': 918, 'eventType': 'BADGE_UNLOCK', 'eventTime': '2026-10-08T08:35:32.680179', 'nickname': '端到端测试员乙', 'text': '获得勋章「初次出发」'}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "C01",
+      "module": "ceremony",
+      "name": "补步冲顶 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "C01b",
+      "module": "ceremony",
+      "name": "补步后 light-up 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "C02",
+      "module": "ceremony",
+      "name": "全部节点 completed",
+      "status": "PASS",
+      "expected": "{1: 'completed', 2: 'completed', 3: 'completed', 4: 'completed', 5: 'completed', 6: 'completed', 7: 'completed', 8: 'completed', 9: 'completed', 10: 'completed'}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "C03",
+      "module": "ceremony",
+      "name": "路线下发 ceremony_pending 待完成标记",
+      "status": "PASS",
+      "expected": "{'nodes': [{'id': 1, 'name': '瑞金', 'icon': '🚩', 'targetSteps': 0, 'status': 'completed', 'remain': 0, 'historicalTime': '1934年10月', 'description': '1934年10月，中央红军从江西瑞金出发，开始了举世闻名的二万五千里长征。瑞金是中华苏维埃共和国临时中央政府所在地，被称为“红色故都”。', 'latitude': 25.885, 'longitude': 116.027}, {'id': 2, 'name': '遵义', 'icon': '🏛️', 'targetSteps': 5000, 'status': 'completed', 'remain': 0, 'historicalTime': '1935年1月', 'description':",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "C04",
+      "module": "ceremony",
+      "name": "标记仪式完成 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "C05",
+      "module": "ceremony",
+      "name": "仪式后不再下发 pending",
+      "status": "PASS",
+      "expected": "pending2=None",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "C06",
+      "module": "ceremony",
+      "name": "完成长征 +100",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": "[('完成长征路线', 100)]"
+    },
+    {
+      "id": "C07",
+      "module": "ceremony",
+      "name": "victory 勋章发放",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "C08",
+      "module": "ceremony",
+      "name": "COMPLETE_ROUTE 事件写入",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "C09",
+      "module": "ceremony",
+      "name": "重复标记幂等 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "C10",
+      "module": "ceremony",
+      "name": "事件不重复写入",
+      "status": "PASS",
+      "expected": "1",
+      "actual": "1",
+      "detail": ""
+    },
+    {
+      "id": "E01",
+      "module": "edge",
+      "name": "选择不存在的组织返回 404",
+      "status": "PASS",
+      "expected": "404",
+      "actual": "404",
+      "detail": "{'detail': '组织不存在'}"
+    },
+    {
+      "id": "E02",
+      "module": "edge",
+      "name": "缺少 orgId 返回 422",
+      "status": "PASS",
+      "expected": "422",
+      "actual": "422",
+      "detail": ""
+    },
+    {
+      "id": "E03",
+      "module": "edge",
+      "name": "空昵称被拒(422)",
+      "status": "PASS",
+      "expected": "422",
+      "actual": "422",
+      "detail": ""
+    },
+    {
+      "id": "E04",
+      "module": "edge",
+      "name": "登录缺 code 返回 422",
+      "status": "PASS",
+      "expected": "422",
+      "actual": "422",
+      "detail": ""
+    },
+    {
+      "id": "E05",
+      "module": "edge",
+      "name": "边缘用户C 登录成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "E06",
+      "module": "edge",
+      "name": "未选组织时 /org/mine 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "E07",
+      "module": "edge",
+      "name": "未选组织时 orgName 为空",
+      "status": "PASS",
+      "expected": "{'orgId': None, 'orgName': '', 'fullName': '', 'path': []}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "E08",
+      "module": "edge",
+      "name": "未选组织不影响答题",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "E09",
+      "module": "edge",
+      "name": "提交非当日题目可提交",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "E10",
+      "module": "edge",
+      "name": "非当日题目按答错计分",
+      "status": "FAIL",
+      "expected": "0",
+      "actual": "20",
+      "detail": "{'date': '2026-10-08', 'totalCount': 1, 'correctCount': 1, 'score': 20, 'points': 5, 'wrongList': [], 'answerAt': 1791448604716}"
+    },
+    {
+      "id": "E11",
+      "module": "edge",
+      "name": "负数补步接口可执行",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "E12",
+      "module": "edge",
+      "name": "负数补步不使步数为负(无下限校验)",
+      "status": "FAIL",
+      "expected": "应≥0 或应被422拒绝",
+      "actual": "-95115",
+      "detail": "steps0=4885 -> steps1=-95115"
+    },
+    {
+      "id": "E13",
+      "module": "edge",
+      "name": "补步后 DB 与 API 一致",
+      "status": "PASS",
+      "expected": "[(-95115,)]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "E14",
+      "module": "edge",
+      "name": "未获得的隐藏勋章不公开条件",
+      "status": "FAIL",
+      "expected": "[{'id': 'fearless', 'name': '不畏艰险', 'icon': '🧗', 'desc': '连续 7 天每天步数达到 10,000', 'owned': False, 'category': 'challenge', 'hidden': True, 'sortOrder': 11, 'grantedAt': None, 'conditionDesc': '获得条件暂未公布'}]",
+      "actual": "False",
+      "detail": ""
+    },
+    {
+      "id": "E15",
+      "module": "edge",
+      "name": "无点亮节点时足迹为空列表",
+      "status": "PASS",
+      "expected": "{'nodes': []}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "E16",
+      "module": "edge",
+      "name": "重复 sync 返回 synced=False",
+      "status": "PASS",
+      "expected": "False",
+      "actual": "False",
+      "detail": "{'date': '2026-10-08', 'steps': -95115, 'totalSteps': -95115, 'synced': False}"
+    },
+    {
+      "id": "E17",
+      "module": "edge",
+      "name": "未选组织用户在排行中 orgName 为空串",
+      "status": "PASS",
+      "expected": "{'rank': 13, 'userId': 248, 'nickname': '边缘用户丙', 'avatar': '', 'orgName': '', 'steps': -95115, 'isMe': True}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "D01",
+      "module": "admin",
+      "name": "管理员登录成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D02",
+      "module": "admin",
+      "name": "错误密码登录失败",
+      "status": "PASS",
+      "expected": "401",
+      "actual": "True",
+      "detail": "{'detail': '用户名或密码错误'}"
+    },
+    {
+      "id": "D03",
+      "module": "admin",
+      "name": "用户 token 访问管理接口被拒",
+      "status": "PASS",
+      "expected": "401",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "D04",
+      "module": "admin",
+      "name": "无 token 访问管理接口 401",
+      "status": "PASS",
+      "expected": "401",
+      "actual": "401",
+      "detail": ""
+    },
+    {
+      "id": "D05",
+      "module": "admin",
+      "name": "dashboard 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D06",
+      "module": "admin",
+      "name": "总用户数与 DB 一致",
+      "status": "PASS",
+      "expected": "13",
+      "actual": "13",
+      "detail": ""
+    },
+    {
+      "id": "D07",
+      "module": "admin",
+      "name": "总步数与 DB 一致",
+      "status": "PASS",
+      "expected": "205825",
+      "actual": "205825",
+      "detail": ""
+    },
+    {
+      "id": "D08",
+      "module": "admin",
+      "name": "勋章发放数与 DB 一致",
+      "status": "PASS",
+      "expected": "29",
+      "actual": "29",
+      "detail": ""
+    },
+    {
+      "id": "D09",
+      "module": "admin",
+      "name": "趋势接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D10",
+      "module": "admin",
+      "name": "组织树 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D11",
+      "module": "admin",
+      "name": "新增组织成功",
+      "status": "FAIL",
+      "expected": "200",
+      "actual": "500",
+      "detail": "Internal Server Error"
+    },
+    {
+      "id": "D12",
+      "module": "admin",
+      "name": "修改组织成功(依赖D11，跳过)",
+      "status": "PASS",
+      "expected": "skip",
+      "actual": "前置失败",
+      "detail": "D11 失败导致跳过"
+    },
+    {
+      "id": "D13",
+      "module": "admin",
+      "name": "组织名落库(依赖D11，跳过)",
+      "status": "PASS",
+      "expected": "skip",
+      "actual": "前置失败",
+      "detail": "D11 失败导致跳过"
+    },
+    {
+      "id": "D15",
+      "module": "admin",
+      "name": "删除新组织(依赖D11，跳过)",
+      "status": "PASS",
+      "expected": "skip",
+      "actual": "前置失败",
+      "detail": "D11 失败导致跳过"
+    },
+    {
+      "id": "D16",
+      "module": "admin",
+      "name": "删除后组织数恢复(依赖D11，跳过)",
+      "status": "PASS",
+      "expected": "skip",
+      "actual": "前置失败",
+      "detail": "D11 失败导致跳过"
+    },
+    {
+      "id": "D14",
+      "module": "admin",
+      "name": "删除有子级组织被保护",
+      "status": "PASS",
+      "expected": "400(有子级)或200(软处理)",
+      "actual": "200",
+      "detail": "{'message': '部分节点仍被用户引用已保留：[1]'}"
+    },
+    {
+      "id": "D17",
+      "module": "admin",
+      "name": "组织同步接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D18",
+      "module": "admin",
+      "name": "题库列表 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D19",
+      "module": "admin",
+      "name": "新增题目成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'id': 16, 'type': 'single', 'question': 'E2E测试题目？', 'options': [{'label': 'A', 'text': '选项A'}, {'label': 'B', 'text': '选项B'}, {'label': 'C', 'text': '选项C'}], 'answer': ['A'], 'analysis': '测试解析', 'score': 20, 'category': 'route'}"
+    },
+    {
+      "id": "D20",
+      "module": "admin",
+      "name": "修改题目成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D21",
+      "module": "admin",
+      "name": "题目修改落库",
+      "status": "PASS",
+      "expected": "[('E2E测试题目改？', ['B'])]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "D22",
+      "module": "admin",
+      "name": "删除题目成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D23",
+      "module": "admin",
+      "name": "题库数量恢复",
+      "status": "PASS",
+      "expected": "15",
+      "actual": "15",
+      "detail": ""
+    },
+    {
+      "id": "D24",
+      "module": "admin",
+      "name": "寄语列表 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D25",
+      "module": "admin",
+      "name": "新增寄语成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'id': 13, 'date': '2026-10-08', 'content': 'E2E测试寄语', 'source': 'E2E', 'node_id': 1, 'node_name': '瑞金'}"
+    },
+    {
+      "id": "D26",
+      "module": "admin",
+      "name": "新寄语即刻对小程序生效",
+      "status": "PASS",
+      "expected": "{'id': 13, 'date': '2026-10-08', 'content': 'E2E测试寄语', 'source': 'E2E', 'node': {'id': 1, 'name': '瑞金'}}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "D27",
+      "module": "admin",
+      "name": "修改寄语成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D28",
+      "module": "admin",
+      "name": "寄语修改对小程序同步生效",
+      "status": "PASS",
+      "expected": "{'id': 13, 'date': '2026-10-08', 'content': 'E2E测试寄语改', 'source': 'E2E', 'node': {'id': 1, 'name': '瑞金'}}",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "D29",
+      "module": "admin",
+      "name": "删除寄语成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D30",
+      "module": "admin",
+      "name": "路线节点列表 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D31",
+      "module": "admin",
+      "name": "新增路线节点成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": "{'id': 13, 'name': 'E2E测试节点', 'icon': '🧪', 'target_steps': 999999, 'historical_time': '2026-10', 'description': '测试节点', 'latitude': 26.0, 'longitude': 116.0, 'sort_order': 99, 'is_enabled': True, 'brief': '', 'significance': '', 'figures': '', 'location': '', 'images': [], 'audio': '', 'keywords': ''}"
+    },
+    {
+      "id": "D32",
+      "module": "admin",
+      "name": "停用节点成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D33",
+      "module": "admin",
+      "name": "停用节点不出现在小程序路线",
+      "status": "PASS",
+      "expected": "visible=[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "D34",
+      "module": "admin",
+      "name": "修改节点成功",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D35",
+      "module": "admin",
+      "name": "节点修改落库",
+      "status": "PASS",
+      "expected": "[('E2E测试节点改', False)]",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "D36",
+      "module": "admin",
+      "name": "路线节点无删除接口(设计)",
+      "status": "PASS",
+      "expected": "405(后端未提供删除，前端无删除入口)",
+      "actual": "405",
+      "detail": "{'detail': 'Method Not Allowed'}"
+    },
+    {
+      "id": "D37",
+      "module": "admin",
+      "name": "管理端排名 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D38",
+      "module": "admin",
+      "name": "用户洞察 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D39",
+      "module": "admin",
+      "name": "洞察含用户/运动/答题/勋章/长征模块",
+      "status": "PASS",
+      "expected": "['user', 'sport', 'quiz_records', 'medals', 'march', 'points']",
+      "actual": "True",
+      "detail": ""
+    },
+    {
+      "id": "D40",
+      "module": "admin",
+      "name": "管理端动态 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "D41",
+      "module": "admin",
+      "name": "大屏接口 200",
+      "status": "PASS",
+      "expected": "200",
+      "actual": "200",
+      "detail": ""
+    },
+    {
+      "id": "W01",
+      "module": "ws",
+      "name": "无效 token 连接被 4401 拒绝",
+      "status": "PASS",
+      "expected": "rejected: InvalidStatus code=None",
+      "actual": "",
+      "detail": ""
+    },
+    {
+      "id": "W02",
+      "module": "ws",
+      "name": "用户写操作触发 WS 广播",
+      "status": "PASS",
+      "expected": "event={'type': 'data_changed', 'reason': 'sport.add', 'user_id': 246, 'at': 1791448682843}",
+      "actual": "{'type': 'data_changed', 'reason': 'sport.add', 'user_id': 246, 'at': 1791448682843}",
+      "detail": ""
+    }
+  ]
+}
