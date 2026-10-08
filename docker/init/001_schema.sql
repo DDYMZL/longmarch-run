@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS medal_defs (
 );
 
 CREATE TABLE IF NOT EXISTS organizations (
-    id INTEGER PRIMARY KEY,
+    id SERIAL PRIMARY KEY,
     name VARCHAR(80) NOT NULL,
     parent_id INTEGER,
     level INTEGER NOT NULL,

@@ -6,7 +6,7 @@ run_coroutine_threadsafe 把发送任务投递到事件循环，不阻塞业务�
 """
 import asyncio
 import json
-import time
+from datetime import datetime
 from typing import Any, List, Optional
 
 from fastapi import WebSocket
@@ -15,14 +15,14 @@ _connections: List[WebSocket] = []
 _loop: Optional[asyncio.AbstractEventLoop] = None
 
 
-def _now_ms() -> int:
-    """当前毫秒时间戳。"""
-    return int(time.time() * 1000)
+def _now_iso() -> str:
+    """当前时间 ISO 字符串（UTC naive，与 REST 接口 event_time 格式一致）。"""
+    return datetime.utcnow().isoformat()
 
 
 def build_event(reason: str, user_id: int) -> dict:
     """构造数据变更事件（仅事件类型与元信息，不含业务数据）。"""
-    return {"type": "data_changed", "reason": reason, "user_id": user_id, "at": _now_ms()}
+    return {"type": "data_changed", "reason": reason, "user_id": user_id, "at": _now_iso()}
 
 
 def build_activity(event_type: str, user_id: int, nickname: str, text: str) -> dict:
@@ -33,7 +33,7 @@ def build_activity(event_type: str, user_id: int, nickname: str, text: str) -> d
         "userId": user_id,
         "nickname": nickname,
         "text": text,
-        "at": _now_ms(),
+        "at": _now_iso(),
     }
 
 

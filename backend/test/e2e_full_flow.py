@@ -1,12 +1,14 @@
-"""端到端全链路测试：全新用户旅程 + 管理端 API + WebSocket + 数据一致性核对。
+"""端到端全链路回归测试：全新用户旅程 + 管理端 API + WebSocket + 数据一致性核对。
 
 测试约定：所有业务数据写入一律通过 API（模拟真实客户端），数据库仅用于
-核对（SELECT 只读）；发现的问题只记录不修复。结果落盘 e2e-full-results.json。
+核对（SELECT 只读）。断言按产品预期行为编写（含 BUG-001~004 修复后的行为）。
+结果落盘 e2e-full-results.json。
 
 用法：python e2e_full_flow.py
 """
 import asyncio
 import json
+import re
 import time
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
@@ -497,6 +499,10 @@ def phase_ws(admin_token: str, token_a: str) -> None:
     dc = r.get("data_changed")
     ok = isinstance(dc, dict) and dc.get("type") in ("data_changed", "activity") or isinstance(dc, dict)
     rec("W02", "ws", "用户写操作触发 WS 广播", ok, f"event={dc}", str(dc)[:300])
+    at_ok = isinstance(dc, dict) and isinstance(dc.get("at"), str) and re.match(
+        r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", dc.get("at") or ""
+    )
+    rec("W03", "ws", "广播 at 为 ISO 字符串（与 REST event_time 一致）", bool(at_ok), "ISO 字符串", str(dc.get("at"))[:40])
 
 
 # ---------------------------------------------------------------- 边界与异常
@@ -522,23 +528,24 @@ def phase_edges(token_a: str) -> None:
     check_true("E07", "edge", "未选组织时 orgName 为空", (mine or {}).get("orgId") is None, str(mine)[:150])
     st, dq = api("GET", "/api/quiz/daily", token=token_c)
     check_eq("E08", "edge", "未选组织不影响答题", 200, st)
-    # 答题提交不属于当日题目的 question_id
+    # 答题提交不属于当日题目的 question_id（修复后应被 400 拒绝）
     st, dq2 = api("GET", "/api/quiz/daily", token=token_c)
     qs = (dq2 or {}).get("questions") or []
     other_id = next((i for i in range(1, 16) if i not in [q["id"] for q in qs]), 16)
     st, sub = api("POST", "/api/quiz/submit", token=token_c, json={"answers": [{"questionId": other_id, "answer": ["A"]}]})
-    check_eq("E09", "edge", "提交非当日题目可提交", 200, st)
-    check_eq("E10", "edge", "非当日题目按答错计分", 0, (sub or {}).get("score"), sub)
+    check_eq("E09", "edge", "提交非当日题目被 400 拒绝", 400, st, sub)
+    st, dq_after = api("GET", "/api/quiz/daily", token=token_c)
+    check_true("E10", "edge", "被拒绝的提交不占用当日答题机会", (dq_after or {}).get("completed") is False, dq_after)
     api("POST", "/api/quiz/reset", token=token_c)
-    # 补步边界：负数 delta
+    # 补步边界：负数 delta（修复后应被 422 拒绝且步数不变）
     st, s0 = api("POST", "/api/sport/sync", token=token_c)
     steps0 = (s0 or {}).get("steps")
     st, s1 = api("POST", "/api/sport/add", token=token_c, json={"delta": -100000})
-    check_eq("E11", "edge", "负数补步接口可执行", 200, st)
-    steps1 = (s1 or {}).get("steps")
-    rec("E12", "edge", "负数补步不使步数为负(无下限校验)", steps1 >= 0, f"应≥0 或应被422拒绝", steps1, f"steps0={steps0} -> steps1={steps1}")
+    check_eq("E11", "edge", "负数补步被 422 拒绝", 422, st, s1)
+    st, s_now = api("GET", "/api/sport/today", token=token_c)
+    check_eq("E12", "edge", "拒绝后步数保持不变", steps0, (s_now or {}).get("steps"))
     rows = db("SELECT steps FROM daily_sport WHERE user_id=%s AND date=%s", (int(_uid(token_c)), today()))
-    check_true("E13", "edge", "补步后 DB 与 API 一致", rows and rows[0][0] == steps1, rows)
+    check_true("E13", "edge", "补步拒绝后 DB 与 API 一致", rows and rows[0][0] == steps0, rows)
     # 隐藏勋章：未获得时不公开条件（占位文案即不公开）
     st, medals = api("GET", "/api/medal/list", token=token_c)
     hidden_items = [m for m in ((medals or {}).get("medals") or []) if m.get("hidden") and not m.get("owned")]

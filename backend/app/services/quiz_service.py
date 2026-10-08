@@ -129,6 +129,17 @@ def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
     if existing is not None:
         raise ValueError("今日答题已完成")
 
+    cache = (
+        db.query(DailyQuestion)
+        .filter(DailyQuestion.user_id == user_id, DailyQuestion.date == date)
+        .first()
+    )
+    if cache is None:
+        raise ValueError("今日题目尚未生成，请先获取题目")
+    allowed_ids = set(cache.question_ids or [])
+    if any(a.get("question_id") not in allowed_ids for a in answers):
+        raise ValueError("提交的答案包含不属于今日抽题的题目")
+
     qmap = {q.id: q for q in db.query(Question).all()}
     correct_count = 0
     wrong_list: List[Dict] = []

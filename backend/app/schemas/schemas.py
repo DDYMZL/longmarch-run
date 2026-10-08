@@ -107,7 +107,7 @@ class SportCalendarOut(CamelModel):
 class AddStepsRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
-    delta: int = 0
+    delta: int = Field(0, ge=0)
 
 
 # ---------------- 长征路线 ----------------

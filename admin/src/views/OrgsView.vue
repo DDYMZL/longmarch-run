@@ -126,6 +126,8 @@ async function handleSave() {
     }
     dialogVisible.value = false
     await loadTree()
+  } catch {
+    // 错误提示由 axios 拦截器统一弹出；保持弹窗打开便于修改后重试
   } finally {
     saving.value = false
   }
