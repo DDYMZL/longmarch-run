@@ -6,12 +6,12 @@
 """
 import base64
 from datetime import datetime
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import AdminPrincipal, get_current_admin
+from app.api.deps import AdminPrincipal, get_current_admin, require_menu
 from app.core import rate_limit
 from app.core.config import settings
 from app.core.database import get_db
@@ -19,6 +19,7 @@ from app.core.security import create_admin_token, create_admin_token_for_user
 from app.models.models import User
 from app.schemas.schemas import (
     AdminActivityListOut,
+    AdminAuditLogListOut,
     AdminDashboardOut,
     AdminLoginOut,
     AdminLoginRequest,
@@ -38,13 +39,19 @@ from app.schemas.schemas import (
     AdminQuoteListOut,
     AdminQuoteOut,
     AdminQuoteUpsert,
+    AdminRoleEnabledRequest,
+    AdminRoleListOut,
+    AdminRoleOut,
+    AdminRoleUpsert,
     AdminRouteNodeEnabled,
     AdminRouteNodeListOut,
     AdminRouteNodeOut,
     AdminRouteNodeUpsert,
     AdminScreenOut,
     AdminTrendOut,
+    AdminUserListOut,
     AdminUserOverviewOut,
+    AdminUserRolesRequest,
     MessageOut,
 )
 from app.services import (
@@ -161,7 +168,7 @@ def admin_me(
     "/dashboard",
     response_model=AdminDashboardOut,
     summary="驾驶舱聚合（核心指标 + 路线总览）",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("dashboard"))],
 )
 def dashboard(db: Session = Depends(get_db)):
     return dashboard_service.get_dashboard(db)
@@ -171,7 +178,7 @@ def dashboard(db: Session = Depends(get_db)):
     "/dashboard/trend",
     response_model=AdminTrendOut,
     summary="运动趋势（近 N 日）",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("dashboard"))],
 )
 def dashboard_trend(
     days: int = Query(7, ge=1, le=90), db: Session = Depends(get_db)
@@ -183,7 +190,7 @@ def dashboard_trend(
     "/activities",
     response_model=AdminActivityListOut,
     summary="实时动态（user_event 关联昵称，倒序）",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("dashboard"))],
 )
 def activities(
     limit: int = Query(50, ge=1, le=200), db: Session = Depends(get_db)
@@ -195,7 +202,7 @@ def activities(
     "/screen",
     response_model=AdminScreenOut,
     summary="数据大屏聚合（指标 + 路线总览 + 7 日趋势 + 动态）",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("screen"))],
 )
 def screen(db: Session = Depends(get_db)):
     return dashboard_service.get_screen(db)
@@ -206,7 +213,7 @@ def screen(db: Session = Depends(get_db)):
     "/route-nodes",
     response_model=AdminRouteNodeListOut,
     summary="路线节点列表",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("route_nodes"))],
 )
 def list_route_nodes(db: Session = Depends(get_db)):
     items = admin_service.list_route_nodes(db)
@@ -217,7 +224,7 @@ def list_route_nodes(db: Session = Depends(get_db)):
     "/route-nodes",
     response_model=AdminRouteNodeOut,
     summary="新增路线节点",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("route_nodes"))],
 )
 def create_route_node(
     payload: AdminRouteNodeUpsert, db: Session = Depends(get_db)
@@ -232,7 +239,7 @@ def create_route_node(
     "/route-nodes/{node_id}",
     response_model=AdminRouteNodeOut,
     summary="编辑路线节点",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("route_nodes"))],
 )
 def update_route_node(
     node_id: int,
@@ -252,7 +259,7 @@ def update_route_node(
     "/route-nodes/{node_id}/enabled",
     response_model=AdminRouteNodeOut,
     summary="启用或停用路线节点",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("route_nodes"))],
 )
 def set_route_node_enabled(
     node_id: int,
@@ -274,7 +281,7 @@ def set_route_node_enabled(
     "/rankings",
     response_model=AdminRankListOut,
     summary="全员排名与节点到达时间",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("rankings"))],
 )
 def rankings(db: Session = Depends(get_db)):
     return admin_service.get_rank_overview(db)
@@ -284,7 +291,7 @@ def rankings(db: Session = Depends(get_db)):
     "/users/{user_id}/overview",
     response_model=AdminUserOverviewOut,
     summary="人员详情聚合（运动/答题/勋章/长征/积分）",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("rankings"))],
 )
 def user_overview(user_id: int, db: Session = Depends(get_db)):
     """排名洞察点击人员后展示其全部业务数据；用户不存在返回 404。"""
@@ -299,7 +306,7 @@ def user_overview(user_id: int, db: Session = Depends(get_db)):
     "/questions",
     response_model=AdminQuestionListOut,
     summary="题目列表",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("questions"))],
 )
 def list_questions(db: Session = Depends(get_db)):
     items = admin_service.list_questions(db)
@@ -310,7 +317,7 @@ def list_questions(db: Session = Depends(get_db)):
     "/questions",
     response_model=AdminQuestionOut,
     summary="新增题目",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("questions"))],
 )
 def create_question(payload: AdminQuestionUpsert, db: Session = Depends(get_db)):
     try:
@@ -323,7 +330,7 @@ def create_question(payload: AdminQuestionUpsert, db: Session = Depends(get_db))
     "/questions/{question_id}",
     response_model=AdminQuestionOut,
     summary="编辑题目",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("questions"))],
 )
 def update_question(
     question_id: int, payload: AdminQuestionUpsert, db: Session = Depends(get_db)
@@ -341,7 +348,7 @@ def update_question(
     "/questions/{question_id}",
     response_model=MessageOut,
     summary="删除题目",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("questions"))],
 )
 def delete_question(question_id: int, db: Session = Depends(get_db)):
     admin_service.delete_question(db, question_id)
@@ -353,7 +360,7 @@ def delete_question(question_id: int, db: Session = Depends(get_db)):
     "/quotes",
     response_model=AdminQuoteListOut,
     summary="寄语列表（分页）",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("quotes"))],
 )
 def list_quotes(
     page: int = Query(1, ge=1),
@@ -368,7 +375,7 @@ def list_quotes(
     "/quotes",
     response_model=AdminQuoteOut,
     summary="新增寄语",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("quotes"))],
 )
 def create_quote(payload: AdminQuoteUpsert, db: Session = Depends(get_db)):
     error = quote_service.validate_quote(db, payload.date, payload.content, payload.source, payload.node_id)
@@ -384,7 +391,7 @@ def create_quote(payload: AdminQuoteUpsert, db: Session = Depends(get_db)):
     "/quotes/{quote_id}",
     response_model=AdminQuoteOut,
     summary="编辑寄语",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("quotes"))],
 )
 def update_quote(quote_id: int, payload: AdminQuoteUpsert, db: Session = Depends(get_db)):
     error = quote_service.validate_quote(db, payload.date, payload.content, payload.source, payload.node_id)
@@ -402,7 +409,7 @@ def update_quote(quote_id: int, payload: AdminQuoteUpsert, db: Session = Depends
     "/quotes/{quote_id}",
     response_model=MessageOut,
     summary="删除寄语",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("quotes"))],
 )
 def delete_quote(quote_id: int, db: Session = Depends(get_db)):
     if not quote_service.delete_quote(db, quote_id):
@@ -415,7 +422,7 @@ def delete_quote(quote_id: int, db: Session = Depends(get_db)):
     "/orgs",
     response_model=AdminOrgTreeOut,
     summary="组织架构树",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("orgs"))],
 )
 def org_tree(db: Session = Depends(get_db)):
     return admin_service.get_org_tree(db)
@@ -425,7 +432,7 @@ def org_tree(db: Session = Depends(get_db)):
     "/orgs/{org_id}/users",
     response_model=AdminOrgUserListOut,
     summary="组织人员明细（直属或含全部下级，分页）",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("orgs"))],
 )
 def org_users(
     org_id: int,
@@ -445,7 +452,7 @@ def org_users(
     "/orgs",
     response_model=AdminOrgNodeOut,
     summary="新增组织",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("orgs"))],
 )
 def create_org(payload: AdminOrgUpsert, db: Session = Depends(get_db)):
     try:
@@ -458,7 +465,7 @@ def create_org(payload: AdminOrgUpsert, db: Session = Depends(get_db)):
     "/orgs/{org_id}",
     response_model=AdminOrgNodeOut,
     summary="编辑组织",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("orgs"))],
 )
 def update_org(org_id: int, payload: AdminOrgUpsert, db: Session = Depends(get_db)):
     try:
@@ -473,7 +480,7 @@ def update_org(org_id: int, payload: AdminOrgUpsert, db: Session = Depends(get_d
 @router.delete(
     "/orgs/{org_id}",
     summary="删除组织（含子树）",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("orgs"))],
 )
 def delete_org(org_id: int, db: Session = Depends(get_db)) -> MessageOut:
     kept: List[int] = admin_service.delete_org(db, org_id)
@@ -486,7 +493,7 @@ def delete_org(org_id: int, db: Session = Depends(get_db)) -> MessageOut:
     "/orgs/sync",
     response_model=AdminOrgSyncOut,
     summary="从外部系统同步组织架构",
-    dependencies=[Depends(get_current_admin)],
+    dependencies=[Depends(require_menu("orgs"))],
 )
 def sync_orgs(db: Session = Depends(get_db)):
     """全量对齐外部组织架构；未配置 ORG_SYNC_API_URL 时降级使用内置种子数据。"""
@@ -494,3 +501,162 @@ def sync_orgs(db: Session = Depends(get_db)):
         return admin_service.sync_orgs(db)
     except ValueError as exc:
         raise HTTPException(status_code=502, detail=str(exc))
+
+
+# ---------------- 人员授权 / 角色管理 / 审计日志 ----------------
+def _actor(admin: AdminPrincipal):
+    """审计操作人：超管为 (super, None)，微信关联管理员为 (user, user_id)。"""
+    return ("super", None) if admin.is_super else ("user", admin.user_id)
+
+
+@router.get(
+    "/users",
+    response_model=AdminUserListOut,
+    summary="人员分页列表（含角色与后台授权状态）",
+)
+def list_admin_users(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str = Query("", max_length=64),
+    org_id: Optional[int] = Query(None),
+    has_access: Optional[bool] = Query(None),
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("access")),
+):
+    total, items = access_service.list_users(
+        db, page, page_size, keyword, org_id, has_access
+    )
+    return {"total": total, "items": items}
+
+
+@router.get(
+    "/roles",
+    response_model=AdminRoleListOut,
+    summary="角色列表（含菜单码与授权用户数）",
+)
+def list_roles(
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("access")),
+):
+    return {"items": access_service.list_roles(db)}
+
+
+@router.post(
+    "/roles",
+    response_model=AdminRoleOut,
+    summary="新建角色",
+)
+def create_role(
+    payload: AdminRoleUpsert,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("access")),
+):
+    try:
+        actor_type, actor_id = _actor(admin)
+        return access_service.create_role(
+            db, payload.name, payload.menus, actor_type, actor_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put(
+    "/roles/{role_id}",
+    response_model=AdminRoleOut,
+    summary="编辑角色（名称 + 全量覆盖菜单）",
+)
+def update_role(
+    role_id: int,
+    payload: AdminRoleUpsert,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("access")),
+):
+    try:
+        actor_type, actor_id = _actor(admin)
+        return access_service.update_role(
+            db, role_id, payload.name, payload.menus, actor_type, actor_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete(
+    "/roles/{role_id}",
+    response_model=MessageOut,
+    summary="删除角色",
+)
+def delete_role(
+    role_id: int,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("access")),
+):
+    try:
+        actor_type, actor_id = _actor(admin)
+        access_service.delete_role(db, role_id, actor_type, actor_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"message": "已删除"}
+
+
+@router.post(
+    "/users/{user_id}/roles",
+    response_model=MessageOut,
+    summary="全量覆盖用户角色授权（新增/移除/重新启用）",
+)
+def grant_user_roles(
+    user_id: int,
+    payload: AdminUserRolesRequest,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("access")),
+):
+    try:
+        actor_type, actor_id = _actor(admin)
+        access_service.grant_roles(
+            db, user_id, payload.role_ids, actor_type, actor_id, admin.username
+        )
+    except ValueError as exc:
+        status_code = 404 if str(exc) == "用户不存在" else 400
+        raise HTTPException(status_code=status_code, detail=str(exc))
+    return {"message": "已更新授权"}
+
+
+@router.patch(
+    "/users/{user_id}/roles/{role_id}/enabled",
+    response_model=MessageOut,
+    summary="启用或禁用用户角色（禁用即时生效）",
+)
+def set_user_role_enabled(
+    user_id: int,
+    role_id: int,
+    payload: AdminRoleEnabledRequest,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("access")),
+):
+    try:
+        actor_type, actor_id = _actor(admin)
+        access_service.set_role_enabled(
+            db, user_id, role_id, payload.is_enabled, actor_type, actor_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    return {"message": "已更新"}
+
+
+@router.get(
+    "/audit-logs",
+    response_model=AdminAuditLogListOut,
+    summary="审计日志（分页 + 日期/动作/操作人筛选）",
+)
+def audit_logs(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    action: str = Query("", max_length=64),
+    actor_type: str = Query("", pattern="^(|super|user)$"),
+    date: str = Query("", pattern="^(|\\d{4}-\\d{2}-\\d{2})$"),
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("audit")),
+):
+    total, items = access_service.list_audit_logs(
+        db, page, page_size, action, actor_type, date
+    )
+    return {"total": total, "items": items}

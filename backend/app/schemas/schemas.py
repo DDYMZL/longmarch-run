@@ -737,6 +737,72 @@ class AdminMeOut(BaseModel):
     roles: List[str] = []
 
 
+# ---------------- 人员授权 / 角色管理 / 审计日志（admin 契约） ----------------
+class AdminUserRoleItem(BaseModel):
+    id: int
+    code: str
+    name: str
+    enabled: bool
+
+
+class AdminUserItem(BaseModel):
+    id: int
+    nickname: str
+    avatar: Optional[str] = None
+    org_id: Optional[int] = None
+    org_name: Optional[str] = None
+    has_access: bool
+    roles: List[AdminUserRoleItem] = []
+
+
+class AdminUserListOut(BaseModel):
+    total: int
+    items: List[AdminUserItem]
+
+
+class AdminRoleOut(BaseModel):
+    id: int
+    code: str
+    name: str
+    is_builtin: bool
+    menus: List[str]
+    user_count: int
+
+
+class AdminRoleListOut(BaseModel):
+    items: List[AdminRoleOut]
+
+
+class AdminRoleUpsert(BaseModel):
+    name: str = Field(min_length=1, max_length=32)
+    menus: List[str] = []
+
+
+class AdminUserRolesRequest(BaseModel):
+    role_ids: List[int] = []
+
+
+class AdminRoleEnabledRequest(BaseModel):
+    is_enabled: bool
+
+
+class AdminAuditLogOut(BaseModel):
+    id: int
+    actor_type: str
+    actor_user_id: Optional[int] = None
+    actor_name: Optional[str] = None
+    action: str
+    target_user_id: Optional[int] = None
+    target_name: Optional[str] = None
+    detail: Optional[str] = None
+    created_at: datetime
+
+
+class AdminAuditLogListOut(BaseModel):
+    total: int
+    items: List[AdminAuditLogOut]
+
+
 class AdminQuestionOption(BaseModel):
     """题目选项：label 为 A/B/C/D，text 为选项内容。"""
 
