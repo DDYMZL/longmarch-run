@@ -1,13 +1,29 @@
 <script setup lang="ts">
+// 管理后台布局：侧边菜单按登录时保存的菜单权限渲染（超管全量），路由守卫兜底
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
-import { clearAuth, getUsername } from '../store/auth'
+import { clearAuth, getIsSuper, getUsername, hasMenu } from '../store/auth'
 
 const route = useRoute()
 const router = useRouter()
 const username = computed(() => getUsername() || 'admin')
+const isSuper = computed(() => getIsSuper())
 const activeMenu = computed(() => route.path)
+
+const MENU_ITEMS = [
+  { path: '/dashboard', code: 'dashboard', title: '驾驶舱', icon: 'Odometer' },
+  { path: '/screen', code: 'screen', title: '数据大屏', icon: 'Monitor' },
+  { path: '/rankings', code: 'rankings', title: '排名洞察', icon: 'DataAnalysis' },
+  { path: '/route-nodes', code: 'route_nodes', title: '路线点位', icon: 'Location' },
+  { path: '/questions', code: 'questions', title: '题库维护', icon: 'EditPen' },
+  { path: '/quotes', code: 'quotes', title: '每日寄语', icon: 'ChatLineSquare' },
+  { path: '/orgs', code: 'orgs', title: '组织架构', icon: 'OfficeBuilding' },
+  { path: '/access', code: 'access', title: '人员授权', icon: 'Setting' },
+  { path: '/audit', code: 'audit', title: '审计日志', icon: 'Document' }
+]
+
+const visibleMenus = computed(() => MENU_ITEMS.filter((item) => hasMenu(item.code)))
 
 async function handleLogout() {
   await ElMessageBox.confirm('确定退出登录吗？', '提示', { type: 'warning' })
@@ -24,19 +40,16 @@ async function handleLogout() {
         <span>长征管理后台</span>
       </div>
       <el-menu :default-active="activeMenu" router background-color="#111827" text-color="#94a3b8" active-text-color="#f8d477">
-        <el-menu-item index="/dashboard"><el-icon><Odometer /></el-icon><span>驾驶舱</span></el-menu-item>
-        <el-menu-item index="/screen"><el-icon><Monitor /></el-icon><span>数据大屏</span></el-menu-item>
-        <el-menu-item index="/rankings"><el-icon><DataAnalysis /></el-icon><span>排名洞察</span></el-menu-item>
-        <el-menu-item index="/route-nodes"><el-icon><Location /></el-icon><span>路线点位</span></el-menu-item>
-        <el-menu-item index="/questions"><el-icon><EditPen /></el-icon><span>题库维护</span></el-menu-item>
-        <el-menu-item index="/quotes"><el-icon><ChatLineSquare /></el-icon><span>每日寄语</span></el-menu-item>
-        <el-menu-item index="/orgs"><el-icon><OfficeBuilding /></el-icon><span>组织架构</span></el-menu-item>
+        <el-menu-item v-for="item in visibleMenus" :key="item.path" :index="item.path">
+          <el-icon><component :is="item.icon" /></el-icon><span>{{ item.title }}</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
       <el-header class="header">
         <span class="page-title">{{ route.meta.title }}</span>
         <div class="user-area">
+          <el-tag v-if="isSuper" size="small" type="warning" effect="plain">超级管理员</el-tag>
           <el-icon><UserFilled /></el-icon><span class="username">{{ username }}</span>
           <el-button link type="danger" @click="handleLogout">退出登录</el-button>
         </div>

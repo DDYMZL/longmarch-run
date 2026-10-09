@@ -9,6 +9,7 @@ import {
   ElButton,
   ElCard,
   ElCheckbox,
+  ElCheckboxGroup,
   ElContainer,
   ElDatePicker,
   ElDialog,
@@ -33,8 +34,10 @@ import {
   ElRadioGroup,
   ElSelect,
   ElSwitch,
+  ElTabPane,
   ElTable,
   ElTableColumn,
+  ElTabs,
   ElTag,
   ElTooltip,
   ElTreeSelect,
@@ -49,6 +52,7 @@ import 'element-plus/es/components/avatar/style/css'
 import 'element-plus/es/components/button/style/css'
 import 'element-plus/es/components/card/style/css'
 import 'element-plus/es/components/checkbox/style/css'
+import 'element-plus/es/components/checkbox-group/style/css'
 import 'element-plus/es/components/container/style/css'
 import 'element-plus/es/components/date-picker/style/css'
 import 'element-plus/es/components/dialog/style/css'
@@ -72,6 +76,8 @@ import 'element-plus/es/components/radio-button/style/css'
 import 'element-plus/es/components/radio-group/style/css'
 import 'element-plus/es/components/select/style/css'
 import 'element-plus/es/components/switch/style/css'
+import 'element-plus/es/components/tab-pane/style/css'
+import 'element-plus/es/components/tabs/style/css'
 import 'element-plus/es/components/table/style/css'
 import 'element-plus/es/components/table-column/style/css'
 import 'element-plus/es/components/tag/style/css'
@@ -90,6 +96,7 @@ const components = [
   ElButton,
   ElCard,
   ElCheckbox,
+  ElCheckboxGroup,
   ElContainer,
   ElDatePicker,
   ElDialog,
@@ -113,8 +120,10 @@ const components = [
   ElRadioGroup,
   ElSelect,
   ElSwitch,
+  ElTabPane,
   ElTable,
   ElTableColumn,
+  ElTabs,
   ElTag,
   ElTooltip,
   ElTreeSelect

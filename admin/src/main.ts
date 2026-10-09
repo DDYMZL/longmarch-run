@@ -5,6 +5,7 @@ import {
   CircleCheck,
   DataAnalysis,
   Delete,
+  Document,
   Download,
   EditPen,
   Location,
@@ -17,6 +18,7 @@ import {
   Promotion,
   Refresh,
   Search,
+  Setting,
   TrendCharts,
   User,
   UserFilled
@@ -34,6 +36,7 @@ const icons = {
   CircleCheck,
   DataAnalysis,
   Delete,
+  Document,
   Download,
   EditPen,
   Location,
@@ -46,6 +49,7 @@ const icons = {
   Promotion,
   Refresh,
   Search,
+  Setting,
   TrendCharts,
   User,
   UserFilled

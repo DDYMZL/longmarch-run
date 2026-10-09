@@ -276,6 +276,170 @@ export function login(username: string, password: string) {
   return request.post<LoginResult>('/admin/login', { username, password })
 }
 
+// ---------------- 微信扫码登录 ----------------
+export interface QrCreateResult {
+  qr_id: string
+  image: string | null
+  scene: string | null
+  mock: boolean
+  expires_in: number
+}
+
+export interface MenuItem {
+  code: string
+  name: string
+}
+
+export interface QrStatusResult {
+  status: string
+  fail_reason: string | null
+  expires_in: number | null
+  token: string | null
+  username: string | null
+  is_super: boolean | null
+  menus: MenuItem[]
+}
+
+export function createWechatQr() {
+  return request.post<QrCreateResult>('/admin/wechat/qr')
+}
+
+export function pollWechatQr(qrId: string) {
+  return request.get<QrStatusResult>(`/admin/wechat/qr/${qrId}/status`, { silent: true })
+}
+
+export interface MeResult {
+  username: string
+  is_super: boolean
+  menus: MenuItem[]
+  roles: string[]
+}
+
+export function fetchMe() {
+  return request.get<MeResult>('/admin/me')
+}
+
+// 菜单目录（与 docker/init/010_admin_identity.sql 种子一致）：角色编辑勾选与菜单名展示
+export const MENU_CATALOG: MenuItem[] = [
+  { code: 'dashboard', name: '驾驶舱' },
+  { code: 'screen', name: '数据大屏' },
+  { code: 'rankings', name: '排名洞察' },
+  { code: 'route_nodes', name: '路线点位' },
+  { code: 'questions', name: '题库维护' },
+  { code: 'quotes', name: '每日寄语' },
+  { code: 'orgs', name: '组织架构' },
+  { code: 'access', name: '人员授权' },
+  { code: 'audit', name: '审计日志' }
+]
+
+// ---------------- 人员授权 / 角色管理 / 审计日志 ----------------
+export interface UserRoleItem {
+  id: number
+  code: string
+  name: string
+  enabled: boolean
+}
+
+export interface AdminUserItem {
+  id: number
+  nickname: string
+  avatar: string | null
+  org_id: number | null
+  org_name: string | null
+  has_access: boolean
+  roles: UserRoleItem[]
+}
+
+export interface AdminUserListResult {
+  total: number
+  items: AdminUserItem[]
+}
+
+export interface AdminUserQuery {
+  page: number
+  page_size: number
+  keyword?: string
+  org_id?: number | null
+  has_access?: boolean | null
+}
+
+export function fetchAdminUsers(params: AdminUserQuery) {
+  return request.get<AdminUserListResult>('/admin/users', { params })
+}
+
+export interface RoleItem {
+  id: number
+  code: string
+  name: string
+  is_builtin: boolean
+  menus: string[]
+  user_count: number
+}
+
+export interface RoleListResult {
+  items: RoleItem[]
+}
+
+export function fetchRoles() {
+  return request.get<RoleListResult>('/admin/roles')
+}
+
+export interface RoleUpsert {
+  name: string
+  menus: string[]
+}
+
+export function createRole(data: RoleUpsert) {
+  return request.post<RoleItem>('/admin/roles', data)
+}
+
+export function updateRole(id: number, data: RoleUpsert) {
+  return request.put<RoleItem>(`/admin/roles/${id}`, data)
+}
+
+export function deleteRole(id: number) {
+  return request.delete<MessageResult>(`/admin/roles/${id}`)
+}
+
+export function grantUserRoles(userId: number, roleIds: number[]) {
+  return request.post<MessageResult>(`/admin/users/${userId}/roles`, { role_ids: roleIds })
+}
+
+export function setUserRoleEnabled(userId: number, roleId: number, isEnabled: boolean) {
+  return request.patch<MessageResult>(`/admin/users/${userId}/roles/${roleId}/enabled`, {
+    is_enabled: isEnabled
+  })
+}
+
+export interface AuditLogItem {
+  id: number
+  actor_type: string
+  actor_user_id: number | null
+  actor_name: string | null
+  action: string
+  target_user_id: number | null
+  target_name: string | null
+  detail: string | null
+  created_at: string
+}
+
+export interface AuditLogListResult {
+  total: number
+  items: AuditLogItem[]
+}
+
+export interface AuditQuery {
+  page: number
+  page_size: number
+  action?: string
+  actor_type?: string
+  date?: string
+}
+
+export function fetchAuditLogs(params: AuditQuery) {
+  return request.get<AuditLogListResult>('/admin/audit-logs', { params })
+}
+
 // ---------------- 路线节点 ----------------
 export function fetchRouteNodes() {
   return request.get<RouteNodeListResult>('/admin/route-nodes')
