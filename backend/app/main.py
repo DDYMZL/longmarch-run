@@ -16,6 +16,7 @@ from app.api.routes import (
     admin,
     auth,
     broadcast,
+    identity,
     march,
     medal,
     org,
@@ -63,6 +64,7 @@ app.add_middleware(
 
 _prefix = settings.API_PREFIX
 app.include_router(auth.router, prefix=_prefix)
+app.include_router(identity.router, prefix=_prefix)
 app.include_router(sport.router, prefix=_prefix)
 app.include_router(march.router, prefix=_prefix)
 app.include_router(quiz.router, prefix=_prefix)

@@ -20,13 +20,31 @@ def create_access_token(user_id: int, openid: str) -> str:
 
 
 def create_admin_token(username: str) -> str:
-    """签发管理后台令牌，role 固定为 admin，sub 存放用户名。"""
+    """签发超管令牌（账号登录），typ=super 区分微信关联管理员，sub 存用户名。"""
     now = datetime.now(timezone.utc)
     payload = {
         "sub": username,
         "role": "admin",
+        "typ": "super",
         "iat": now,
-        "exp": now + timedelta(minutes=settings.JWT_EXPIRE_MINUTES),
+        "exp": now + timedelta(minutes=settings.JWT_ADMIN_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
+
+
+def create_admin_token_for_user(user_id: int) -> str:
+    """签发微信关联管理员令牌，typ=user、sub 存用户主键。
+
+    权限不写入令牌：get_current_admin 每次请求查库校验，撤销即时生效；
+    12 小时有效期仅作兜底。
+    """
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": str(user_id),
+        "role": "admin",
+        "typ": "user",
+        "iat": now,
+        "exp": now + timedelta(minutes=settings.JWT_ADMIN_EXPIRE_MINUTES),
     }
     return jwt.encode(payload, settings.JWT_SECRET, algorithm=settings.JWT_ALGORITHM)
 

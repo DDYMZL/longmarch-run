@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.models.models import User
+from app.services import identity_service
 
 WX_CODE2SESSION = "https://api.weixin.qq.com/sns/jscode2session"
 DEFAULT_NICKNAME = "长征小战士"
@@ -24,8 +25,11 @@ def _mock_openid(code: str) -> str:
     return "mock_" + hashlib.md5(raw).hexdigest()[:24]
 
 
-def _code2session(code: str) -> Optional[str]:
-    """调用微信接口用 code 换 openid；未配置凭证或失败时返回 None。"""
+def _code2session(code: str) -> Optional[dict]:
+    """调用微信接口用 code 换 openid/unionid；未配置凭证或失败时返回 None。
+
+    session_key 不落库、不写日志，取到即弃（当前无 WeRun 解密需求）。
+    """
     if not settings.WX_APPID or not settings.WX_SECRET:
         return None
     try:
@@ -39,7 +43,10 @@ def _code2session(code: str) -> Optional[str]:
             },
             timeout=5.0,
         )
-        return resp.json().get("openid")
+        data = resp.json()
+        if not data.get("openid"):
+            return None
+        return {"openid": data["openid"], "unionid": data.get("unionid")}
     except Exception:
         return None
 
@@ -52,8 +59,10 @@ def wx_login(
     昵称仅在首次创建时写入（并记作曾用名 original_nickname），后续登录
     不再覆盖昵称——改名只能在应用内通过 update_nickname 完成且仅一次。
     头像允许随每次微信登录更新。
+    真实微信响应时同步写入身份关联行（user_identities，provider=wx_mini）。
     """
-    openid = _code2session(code) or _mock_openid(code)
+    session_info = _code2session(code)
+    openid = (session_info or {}).get("openid") or _mock_openid(code)
 
     user = db.query(User).filter(User.openid == openid).first()
     if user is None:
@@ -75,6 +84,11 @@ def wx_login(
         if changed:
             db.commit()
             db.refresh(user)
+
+    if session_info:
+        identity_service.ensure_wx_mini_identity(
+            db, user, session_info["openid"], session_info.get("unionid")
+        )
 
     token = create_access_token(user.id, user.openid)
     return token, user

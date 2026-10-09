@@ -1,24 +1,33 @@
-"""管理后台路由：管理员登录、题库维护、组织架构维护与同步。
+"""管理后台路由：管理员登录、扫码登录、题库维护、组织架构维护与同步。
 
-除 POST /api/admin/login 外，全部接口依赖 get_current_admin（role=admin 的 JWT）。
+除 POST /api/admin/login 与扫码登录相关接口外，全部接口依赖 get_current_admin
+（超管令牌或微信关联管理员令牌，后者每次请求查库校验授权）。
 契约面向根目录 admin 前端项目（Vue3 + TS），字段为 snake_case，独立于小程序 camelCase 契约。
 """
+import base64
+from datetime import datetime
 from typing import List
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_admin
+from app.api.deps import AdminPrincipal, get_current_admin
+from app.core import rate_limit
 from app.core.config import settings
 from app.core.database import get_db
-from app.core.security import create_admin_token
+from app.core.security import create_admin_token, create_admin_token_for_user
+from app.models.models import User
 from app.schemas.schemas import (
     AdminActivityListOut,
     AdminDashboardOut,
     AdminLoginOut,
     AdminLoginRequest,
+    AdminMeOut,
+    AdminMenuOut,
     AdminOrgNodeOut,
     AdminOrgUserListOut,
+    AdminQrCreateOut,
+    AdminQrStatusOut,
     AdminRankListOut,
     AdminOrgSyncOut,
     AdminOrgTreeOut,
@@ -38,17 +47,25 @@ from app.schemas.schemas import (
     AdminUserOverviewOut,
     MessageOut,
 )
-from app.services import admin_service, dashboard_service, quote_service
+from app.services import (
+    access_service,
+    admin_service,
+    dashboard_service,
+    identity_service,
+    quote_service,
+    wechat_service,
+)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
 
 @router.post("/login", response_model=AdminLoginOut, summary="管理后台登录")
-def login(payload: AdminLoginRequest):
-    """校验管理员账号密码（配置 ADMIN_USERNAME/ADMIN_PASSWORD），签发 role=admin 令牌。
+def login(payload: AdminLoginRequest, request: Request):
+    """校验管理员账号密码（配置 ADMIN_USERNAME/ADMIN_PASSWORD），签发超管令牌。
 
     未配置 ADMIN_PASSWORD 时账号登录禁用（不硬编码默认密码），仅允许微信扫码登录。
     """
+    rate_limit.require_rate(rate_limit.login_limiter, request, "登录尝试过于频繁，请稍后再试")
     if not settings.ADMIN_PASSWORD:
         raise HTTPException(status_code=403, detail="未配置管理账号密码，请使用微信扫码登录")
     if (
@@ -57,6 +74,86 @@ def login(payload: AdminLoginRequest):
     ):
         raise HTTPException(status_code=401, detail="用户名或密码错误")
     return {"token": create_admin_token(payload.username), "username": payload.username}
+
+
+# ---------------- 微信扫码登录 ----------------
+@router.post(
+    "/wechat/qr",
+    response_model=AdminQrCreateOut,
+    summary="创建微信扫码登录会话（返回小程序码）",
+)
+def create_wechat_qr(request: Request, db: Session = Depends(get_db)):
+    """生成 qrId + scene 凭证并调用微信接口出小程序码。
+
+    mock 模式（未配置 WX 凭证或调用失败）：image 为 None，返回 scene 明文供开发调试。
+    """
+    rate_limit.require_rate(rate_limit.qr_create_limiter, request, "操作过于频繁，请稍后再试")
+    session, scene_token = identity_service.create_login_session(db)
+    png = wechat_service.get_wxacode_png(scene_token)
+    mock = png is None
+    return {
+        "qr_id": session.id,
+        "image": None if mock else "data:image/png;base64," + base64.b64encode(png).decode("ascii"),
+        "scene": scene_token if mock else None,
+        "mock": mock,
+        "expires_in": settings.QR_LOGIN_TTL_SECONDS,
+    }
+
+
+@router.get(
+    "/wechat/qr/{qr_id}/status",
+    response_model=AdminQrStatusOut,
+    summary="轮询扫码登录状态",
+)
+def poll_wechat_qr(qr_id: str, request: Request, db: Session = Depends(get_db)):
+    """confirmed 时签发微信关联管理员令牌（单次签发，防重放）；未授权时 failed 带原因。"""
+    rate_limit.require_rate(rate_limit.qr_poll_limiter, request, "轮询过于频繁，请稍后再试")
+    session = identity_service.poll_login_session(db, qr_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="扫码会话不存在")
+    expires_in = max(0, int((session.expires_at - datetime.utcnow()).total_seconds()))
+    if session.status == "confirmed":
+        issued = identity_service.issue_admin_token(db, qr_id)
+        if issued is not None:
+            _, user = issued
+            principal = access_service.build_principal(db, user) or {
+                "username": user.nickname,
+                "menus": [],
+            }
+            menus = access_service.get_menu_items(db, principal["menus"])
+            return {
+                "status": session.status,
+                "expires_in": expires_in,
+                "token": create_admin_token_for_user(user.id),
+                "username": user.nickname,
+                "is_super": False,
+                "menus": menus,
+            }
+    return {
+        "status": session.status,
+        "fail_reason": session.fail_reason,
+        "expires_in": expires_in,
+    }
+
+
+@router.get("/me", response_model=AdminMeOut, summary="当前管理员信息与菜单权限")
+def admin_me(
+    admin: AdminPrincipal = Depends(get_current_admin), db: Session = Depends(get_db)
+):
+    """前端登录后据此渲染菜单；超管返回全部菜单，微信关联管理员返回角色菜单并集。"""
+    if admin.is_super:
+        return {
+            "username": admin.username,
+            "is_super": True,
+            "menus": access_service.get_all_menu_items(db),
+            "roles": [],
+        }
+    return {
+        "username": admin.username,
+        "is_super": False,
+        "menus": access_service.get_menu_items(db, admin.menus),
+        "roles": admin.roles,
+    }
 
 
 # ---------------- 驾驶舱 / 数据大屏 ----------------

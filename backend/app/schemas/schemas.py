@@ -53,6 +53,47 @@ class NicknameUpdateRequest(BaseModel):
     nickname: str = Field(min_length=1, max_length=64)
 
 
+# ---------------- 身份关联 / 扫码确认（小程序侧契约） ----------------
+class QrInfoRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    scene: str = Field(min_length=1, max_length=64)
+
+
+class QrInfoTarget(CamelModel):
+    """绑定目标身份（仅展示渠道信息，openid 不对外返回）。"""
+
+    provider: str
+    app_id: str
+    nickname: Optional[str] = None
+
+
+class QrInfoOut(CamelModel):
+    type: str  # login / bind
+    status: str
+    target: Optional[QrInfoTarget] = None
+    expires_at: Optional[datetime] = None
+    fail_reason: Optional[str] = None
+
+
+class QrConfirmRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    scene: str = Field(min_length=1, max_length=64)
+    action: str = Field(pattern="^(confirm|cancel)$")
+
+
+class IdentityOut(CamelModel):
+    """已绑定身份（对外不返回 openid）。"""
+
+    id: int
+    provider: str
+    app_id: str
+    unionid: Optional[str] = None
+    verified_at: Optional[datetime] = None
+    created_at: datetime
+
+
 # ---------------- 运动 ----------------
 class SportToday(CamelModel):
     date: str
@@ -662,6 +703,38 @@ class AdminLoginRequest(BaseModel):
 class AdminLoginOut(BaseModel):
     token: str
     username: str
+
+
+class AdminQrCreateOut(BaseModel):
+    """扫码登录会话创建结果；mock 模式（无微信凭证）image 为 None 并返回 scene 供开发直连。"""
+
+    qr_id: str
+    image: Optional[str] = None
+    scene: Optional[str] = None
+    mock: bool = False
+    expires_in: int
+
+
+class AdminMenuOut(BaseModel):
+    code: str
+    name: str
+
+
+class AdminQrStatusOut(BaseModel):
+    status: str
+    fail_reason: Optional[str] = None
+    expires_in: Optional[int] = None
+    token: Optional[str] = None
+    username: Optional[str] = None
+    is_super: Optional[bool] = None
+    menus: List[AdminMenuOut] = []
+
+
+class AdminMeOut(BaseModel):
+    username: str
+    is_super: bool
+    menus: List[AdminMenuOut]
+    roles: List[str] = []
 
 
 class AdminQuestionOption(BaseModel):
