@@ -83,6 +83,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | `ADMIN_PASSWORD` | 空 | 管理后台账号密码；**留空则账号登录禁用**，仅允许微信扫码登录（不设默认密码） |
 | `WX_APPID` / `WX_SECRET` | 空 | 留空时登录使用 mock openid，便于本地调试 |
 | `WX_WEB_APPID` / `WX_WEB_SECRET` | 空 | 微信网页授权渠道凭证（阶段2 门控，未配置不开放） |
+| `WXACODE_ENV_VERSION` | `trial` | 小程序码环境版本：开发期 `trial`（体验版码，扫码者须为体验成员）；生产发布后改 `release` |
 | `QR_LOGIN_TTL_SECONDS` | `300` | PC 扫码登录会话有效期 |
 | `BIND_REQUEST_TTL_SECONDS` | `600` | 身份绑定请求有效期 |
 | `CORS_ORIGINS` | `["*"]` | 跨域来源（JSON 数组） |

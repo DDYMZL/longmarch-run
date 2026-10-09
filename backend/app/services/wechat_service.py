@@ -14,8 +14,6 @@ WX_WXACODE_URL = "https://api.weixin.qq.com/wxa/getwxacodeunlimit"
 
 # 小程序码所在页面（scene 由后端生成，页面仅解析展示）
 WXACODE_PAGE = "pages/bind/bind"
-# 开发环境可改为 trial 生成体验版码；生产用 release
-WXACODE_ENV_VERSION = "release"
 
 _TOKEN_TTL_SECONDS = 7000  # 微信 access_token 有效期 7200s，提前 200s 刷新
 _token_cache: dict = {"token": "", "expires_at": 0.0}
@@ -60,7 +58,7 @@ def get_wxacode_png(scene: str) -> Optional[bytes]:
                 "scene": scene,
                 "page": WXACODE_PAGE,
                 "check_path": False,
-                "env_version": WXACODE_ENV_VERSION,
+                "env_version": settings.WXACODE_ENV_VERSION,
             },
             timeout=10.0,
         )

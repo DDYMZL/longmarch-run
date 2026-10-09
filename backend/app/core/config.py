@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     WX_WEB_APPID: str = ""
     WX_WEB_SECRET: str = ""
 
+    # 小程序码环境版本：开发期 trial（体验版，扫码者须为体验成员）；生产发布后改 release
+    WXACODE_ENV_VERSION: str = "trial"
+
     # 扫码登录会话 / 身份绑定请求有效期（秒）
     QR_LOGIN_TTL_SECONDS: int = 300
     BIND_REQUEST_TTL_SECONDS: int = 600
