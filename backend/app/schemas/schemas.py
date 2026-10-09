@@ -839,6 +839,28 @@ class AdminOrgSyncOut(BaseModel):
     skipped: List[int] = []
 
 
+class AdminOrgUserOut(BaseModel):
+    """组织人员明细条目（字段复用排名洞察的人员展示口径）。"""
+
+    user_id: int
+    nickname: str
+    avatar: str = ""
+    org_name: str = ""
+    created_at: Optional[datetime] = None
+
+    @field_validator("avatar", mode="before")
+    @classmethod
+    def empty_avatar(cls, value: Optional[str]) -> str:
+        return value or ""
+
+
+class AdminOrgUserListOut(BaseModel):
+    """组织人员明细分页结果（scope=direct 直属 / scope=all 含全部下级）。"""
+
+    total: int = 0
+    items: List[AdminOrgUserOut] = []
+
+
 class AdminRouteNodeOut(BaseModel):
     id: int
     name: str

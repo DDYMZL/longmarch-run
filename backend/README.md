@@ -136,6 +136,7 @@ Authorization: Bearer <登录返回的 token>
 | PATCH | `/api/admin/route-nodes/{id}/enabled` | 启用/停用路线节点 |
 | GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 题库 CRUD（含知识分类） |
 | GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 组织架构 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计）；`POST /api/admin/orgs/sync` 外部同步 |
+| GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 组织人员明细（分页）：`scope=direct` 仅直属成员，`scope=all` 含全部层级下级，与组织树两列统计口径一致 |
 
 ## 业务规则（与前端 Mock 完全一致）
 

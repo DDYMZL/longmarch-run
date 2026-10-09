@@ -454,6 +454,46 @@ def _fill_children(item: Dict, tree_map: Dict[Optional[int], List[Dict]]) -> Non
         item["children"].append(child)
 
 
+def get_org_users(
+    db: Session, org_id: int, scope: str, page: int, page_size: int
+) -> Optional[Dict]:
+    """组织人员明细分页查询。
+
+    口径与组织树统计一致：scope=direct 仅直属该组织的用户（对应
+    direct_user_count）；scope=all 含整棵子树全部用户（对应 total_user_count，
+    按子树组织 id 集合一次 in 查询，不重不漏）。组织不存在返回 None。
+    """
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if org is None:
+        return None
+    if scope == "all":
+        org_ids = _collect_subtree_ids(db, org_id)
+        base_query = db.query(User).filter(User.org_id.in_(org_ids))
+    else:
+        base_query = db.query(User).filter(User.org_id == org_id)
+    total = base_query.count()
+    users = (
+        base_query.order_by(User.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    org_names = org_service.get_full_name_map(db, [u.org_id for u in users])
+    return {
+        "total": total,
+        "items": [
+            {
+                "user_id": u.id,
+                "nickname": u.nickname,
+                "avatar": u.avatar,
+                "org_name": org_names.get(u.org_id, ""),
+                "created_at": u.created_at,
+            }
+            for u in users
+        ],
+    }
+
+
 def create_org(db: Session, data: Dict) -> Organization:
     """新增组织节点；level 根据父节点自动计算。"""
     level = _resolve_level(db, data.get("parent_id"))

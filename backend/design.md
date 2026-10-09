@@ -169,6 +169,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 管理员 | 题库 CRUD（含 category 分类） |
 | GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 管理员 | 每日寄语 CRUD（需求 §16；GET 分页 page/pageSize 日期倒序，日期唯一冲突/坏格式/坏节点 400，不存在 404） |
 | GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 管理员 | 组织架构树 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计，后序累加）；`POST /api/admin/orgs/sync` 从外部系统同步 |
+| GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 管理员 | 组织人员明细（分页）：`scope=direct` 仅直属成员（与 direct_user_count 同口径）、`scope=all` 含全部层级下级（与 total_user_count 同口径）；组织不存在 404 |
 
 ### 4.2 关键请求/响应示例
 

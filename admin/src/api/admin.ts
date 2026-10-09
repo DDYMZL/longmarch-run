@@ -69,6 +69,19 @@ export interface OrgSyncResult {
   skipped: number[]
 }
 
+export interface OrgUserItem {
+  user_id: number
+  nickname: string
+  avatar: string
+  org_name: string
+  created_at: string | null
+}
+
+export interface OrgUserListResult {
+  total: number
+  items: OrgUserItem[]
+}
+
 export interface RouteNode {
   id: number
   name: string
@@ -335,6 +348,12 @@ export function deleteOrg(id: number) {
 
 export function syncOrgs() {
   return request.post<OrgSyncResult>('/admin/orgs/sync')
+}
+
+export function fetchOrgUsers(orgId: number, scope: 'direct' | 'all', page: number, pageSize: number) {
+  return request.get<OrgUserListResult>(`/admin/orgs/${orgId}/users`, {
+    params: { scope, page, page_size: pageSize }
+  })
 }
 
 // ---------------- 驾驶舱 / 数据大屏 ----------------

@@ -18,6 +18,7 @@ from app.schemas.schemas import (
     AdminLoginOut,
     AdminLoginRequest,
     AdminOrgNodeOut,
+    AdminOrgUserListOut,
     AdminRankListOut,
     AdminOrgSyncOut,
     AdminOrgTreeOut,
@@ -316,6 +317,26 @@ def delete_quote(quote_id: int, db: Session = Depends(get_db)):
 )
 def org_tree(db: Session = Depends(get_db)):
     return admin_service.get_org_tree(db)
+
+
+@router.get(
+    "/orgs/{org_id}/users",
+    response_model=AdminOrgUserListOut,
+    summary="组织人员明细（直属或含全部下级，分页）",
+    dependencies=[Depends(get_current_admin)],
+)
+def org_users(
+    org_id: int,
+    scope: str = Query("direct", pattern="^(direct|all)$"),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """scope=direct 仅直属成员（与 direct_user_count 同口径）；scope=all 含全部层级下级（与 total_user_count 同口径）。"""
+    result = admin_service.get_org_users(db, org_id, scope, page, page_size)
+    if result is None:
+        raise HTTPException(status_code=404, detail="组织不存在")
+    return result
 
 
 @router.post(

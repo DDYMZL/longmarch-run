@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // 组织架构维护：树形表格展示、新增/编辑/删除节点、一键同步外部系统组织架构
+// 直属人数 / 成员总数（含下级）可点击查看对应口径的人员明细（分页弹窗）
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
-import { createOrg, deleteOrg, fetchOrgTree, syncOrgs, updateOrg } from '../api/admin'
-import type { OrgNode } from '../api/admin'
+import { createOrg, deleteOrg, fetchOrgTree, fetchOrgUsers, syncOrgs, updateOrg } from '../api/admin'
+import type { OrgNode, OrgUserItem } from '../api/admin'
 
 const loading = ref(false)
 const syncing = ref(false)
@@ -147,6 +148,66 @@ async function handleDelete(row: OrgNode) {
   await loadTree()
 }
 
+// ---------------- 人员明细弹窗 ----------------
+const memberDialogVisible = ref(false)
+const memberLoading = ref(false)
+const memberScope = ref<'direct' | 'all'>('direct')
+const memberOrgId = ref<number | null>(null)
+const memberOrgName = ref('')
+const memberTotal = ref(0)
+const memberItems = ref<OrgUserItem[]>([])
+const memberPage = ref(1)
+const memberPageSize = 20
+
+const memberDialogTitle = computed(() =>
+  memberScope.value === 'direct'
+    ? `直属人员明细 · ${memberOrgName.value}`
+    : `全部成员明细（含下级） · ${memberOrgName.value}`
+)
+
+async function openMemberDialog(row: OrgNode, scope: 'direct' | 'all') {
+  memberScope.value = scope
+  memberOrgId.value = row.id
+  memberOrgName.value = row.name
+  memberPage.value = 1
+  memberDialogVisible.value = true
+  await loadMembers()
+}
+
+async function loadMembers() {
+  if (memberOrgId.value === null) return
+  memberLoading.value = true
+  try {
+    const { data } = await fetchOrgUsers(
+      memberOrgId.value,
+      memberScope.value,
+      memberPage.value,
+      memberPageSize
+    )
+    memberTotal.value = data.total
+    memberItems.value = data.items
+  } finally {
+    memberLoading.value = false
+  }
+}
+
+function memberInitial(name: string) {
+  return name.trim().slice(0, 1) || '员'
+}
+
+function memberTime(value: string | null) {
+  if (!value) return '—'
+  const source = /Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(new Date(source))
+}
+
 onMounted(loadTree)
 </script>
 
@@ -192,14 +253,26 @@ onMounted(loadTree)
       <el-table-column prop="sort_order" label="排序" width="80" align="center" />
       <el-table-column label="直属人数" width="100" align="center">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.direct_user_count > 0 ? 'success' : 'info'">
+          <el-tag
+            size="small"
+            :type="row.direct_user_count > 0 ? 'success' : 'info'"
+            class="count-tag"
+            title="查看直属人员明细"
+            @click.stop="openMemberDialog(row, 'direct')"
+          >
             {{ row.direct_user_count }}
           </el-tag>
         </template>
       </el-table-column>
       <el-table-column label="成员总数（含下级）" width="140" align="center">
         <template #default="{ row }">
-          <el-tag size="small" :type="row.total_user_count > 0 ? 'warning' : 'info'">
+          <el-tag
+            size="small"
+            :type="row.total_user_count > 0 ? 'warning' : 'info'"
+            class="count-tag"
+            title="查看全部成员明细（含下级）"
+            @click.stop="openMemberDialog(row, 'all')"
+          >
             {{ row.total_user_count }}
           </el-tag>
         </template>
@@ -238,6 +311,42 @@ onMounted(loadTree)
         <el-button type="primary" :loading="saving" @click="handleSave">保存</el-button>
       </template>
     </el-dialog>
+
+    <el-dialog v-model="memberDialogVisible" :title="memberDialogTitle" width="680px" destroy-on-close>
+      <el-table v-loading="memberLoading" :data="memberItems" border>
+        <el-table-column prop="user_id" label="人员ID" width="90" align="center" />
+        <el-table-column label="昵称" min-width="160">
+          <template #default="{ row }">
+            <div class="member-cell">
+              <el-avatar :size="28" :src="row.avatar">{{ memberInitial(row.nickname) }}</el-avatar>
+              <span>{{ row.nickname }}</span>
+            </div>
+          </template>
+        </el-table-column>
+        <el-table-column prop="org_name" label="所属组织" min-width="200" show-overflow-tooltip />
+        <el-table-column label="注册时间" width="165" align="center">
+          <template #default="{ row }">
+            {{ memberTime(row.created_at) }}
+          </template>
+        </el-table-column>
+        <template #empty>
+          <el-empty description="该统计口径下暂无人员" :image-size="80" />
+        </template>
+      </el-table>
+      <div class="member-pagination">
+        <el-pagination
+          v-model:current-page="memberPage"
+          :page-size="memberPageSize"
+          :total="memberTotal"
+          layout="total, prev, pager, next"
+          background
+          @current-change="loadMembers"
+        />
+      </div>
+      <template #footer>
+        <el-button @click="memberDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </el-card>
 </template>
 
@@ -266,5 +375,26 @@ onMounted(loadTree)
   margin-left: 10px;
   color: #909399;
   font-size: 12px;
+}
+
+.count-tag {
+  cursor: pointer;
+}
+
+.count-tag:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.18);
+}
+
+.member-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.member-pagination {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 12px;
 }
 </style>
