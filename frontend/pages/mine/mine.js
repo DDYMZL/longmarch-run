@@ -86,6 +86,11 @@ Page({
     wx.navigateTo({ url: '/pages/org-select/org-select?from=mine' });
   },
 
+  /** 账号与绑定（身份列表 / 解绑） */
+  goAccount() {
+    wx.navigateTo({ url: '/pages/account/account' });
+  },
+
   /**
    * 修改昵称：每人仅一次（后端校验）。
    * 修改入口仅在未修改过时展示（wxml 按 nicknameChangedAt 隐藏），此处兜底拦截二次修改。

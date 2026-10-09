@@ -1,0 +1,104 @@
+.account-page {
+  min-height: 100vh;
+  padding: 30rpx 30rpx 60rpx;
+  box-sizing: border-box;
+  background: #F7F1E5;
+}
+
+.account-tip {
+  font-size: 24rpx;
+  color: #999999;
+  margin: 0 8rpx 24rpx;
+}
+
+.identity-card {
+  display: flex;
+  align-items: center;
+  background: #FFFFFF;
+  border-radius: 18rpx;
+  padding: 30rpx 30rpx;
+  margin-bottom: 20rpx;
+  box-shadow: 0 4rpx 16rpx rgba(140, 30, 30, 0.06);
+  border: 2rpx solid transparent;
+}
+
+.identity-main {
+  flex: 1;
+  overflow: hidden;
+}
+
+.identity-name-row {
+  display: flex;
+  align-items: center;
+}
+
+.identity-name {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333333;
+}
+
+.identity-tag {
+  margin-left: 14rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 20rpx;
+  font-size: 20rpx;
+  background: #FFF6E5;
+  color: #B8860B;
+  border: 1rpx solid #F0D9A8;
+}
+
+.identity-tag.verified {
+  background: #EFF8EF;
+  color: #3d8b40;
+  border-color: #cde5ce;
+}
+
+.identity-meta {
+  margin-top: 10rpx;
+  font-size: 24rpx;
+  color: #999999;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.identity-unbind {
+  flex-shrink: 0;
+  margin-left: 20rpx;
+  color: #C8102E;
+  border: 2rpx solid #C8102E;
+  font-size: 26rpx;
+  padding: 12rpx 30rpx;
+  border-radius: 40rpx;
+}
+
+.identity-lock {
+  flex-shrink: 0;
+  margin-left: 20rpx;
+  color: #C0C4CC;
+  font-size: 24rpx;
+}
+
+.account-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 120rpx 0;
+}
+
+.account-empty-icon {
+  font-size: 80rpx;
+  margin-bottom: 24rpx;
+}
+
+.account-empty-text {
+  font-size: 30rpx;
+  color: #8a7a6a;
+}
+
+.account-empty-sub {
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #BBBBBB;
+}

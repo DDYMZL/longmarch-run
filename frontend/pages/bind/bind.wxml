@@ -1,0 +1,35 @@
+<view class="bind-page">
+  <!-- 加载中 -->
+  <view wx:if="{{phase === 'loading'}}" class="state-card">
+    <view class="state-icon pulse">🔍</view>
+    <view class="state-title">正在查询扫码请求…</view>
+  </view>
+
+  <!-- 确认卡片 -->
+  <view wx:elif="{{phase === 'confirm'}}" class="confirm-card">
+    <view class="confirm-badge">🚩</view>
+    <view class="confirm-title">{{title}}</view>
+    <view class="confirm-desc">{{desc}}</view>
+    <view class="confirm-hint">{{hint}}</view>
+    <view class="confirm-actions">
+      <button class="btn-ghost" bindtap="handleCancel" disabled="{{submitting}}">取消</button>
+      <button class="btn-primary" bindtap="handleConfirm" loading="{{submitting}}" disabled="{{submitting}}">{{confirmText}}</button>
+    </view>
+  </view>
+
+  <!-- 结果态 -->
+  <view wx:elif="{{phase === 'done'}}" class="state-card">
+    <view class="state-icon">{{resultIcon}}</view>
+    <view class="state-title">{{resultTitle}}</view>
+    <view class="state-desc">{{resultDesc}}</view>
+    <button class="btn-primary state-btn" bindtap="handleClose">完成</button>
+  </view>
+
+  <!-- 错误态 -->
+  <view wx:else class="state-card">
+    <view class="state-icon">⚠️</view>
+    <view class="state-title">{{errorTitle}}</view>
+    <view class="state-desc">{{errorDesc}}</view>
+    <button class="btn-primary state-btn" bindtap="handleClose">知道了</button>
+  </view>
+</view>

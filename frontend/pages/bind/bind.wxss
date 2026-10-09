@@ -1,0 +1,136 @@
+.bind-page {
+  min-height: 100vh;
+  padding: 60rpx 40rpx;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  background: linear-gradient(180deg, #F7F1E5 0%, #FDF6EA 100%);
+}
+
+/* 状态卡（加载 / 结果 / 错误） */
+.state-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 80rpx 48rpx;
+  box-shadow: 0 8rpx 32rpx rgba(140, 30, 30, 0.08);
+  border: 2rpx solid #F0E6D2;
+}
+
+.state-icon {
+  font-size: 88rpx;
+  margin-bottom: 32rpx;
+}
+
+.pulse {
+  animation: bind-pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes bind-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(0.92); }
+}
+
+.state-title {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #5A1A1A;
+}
+
+.state-desc {
+  margin-top: 20rpx;
+  font-size: 28rpx;
+  color: #8a7a6a;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.state-btn {
+  margin-top: 56rpx;
+  min-width: 320rpx;
+}
+
+/* 确认卡片 */
+.confirm-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: #FFFFFF;
+  border-radius: 24rpx;
+  padding: 72rpx 48rpx 56rpx;
+  box-shadow: 0 8rpx 32rpx rgba(140, 30, 30, 0.08);
+  border: 2rpx solid #F0E6D2;
+}
+
+.confirm-badge {
+  width: 120rpx;
+  height: 120rpx;
+  border-radius: 28rpx;
+  background: linear-gradient(135deg, #C8102E, #8E0E00);
+  color: #FFFFFF;
+  font-size: 60rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 36rpx;
+}
+
+.confirm-title {
+  font-size: 38rpx;
+  font-weight: 700;
+  color: #5A1A1A;
+}
+
+.confirm-desc {
+  margin-top: 20rpx;
+  font-size: 28rpx;
+  color: #8a7a6a;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.confirm-hint {
+  margin-top: 24rpx;
+  padding: 18rpx 24rpx;
+  background: #FFF6E5;
+  border: 1rpx solid #F0D9A8;
+  border-radius: 14rpx;
+  font-size: 24rpx;
+  color: #B8860B;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.confirm-actions {
+  margin-top: 56rpx;
+  display: flex;
+  gap: 24rpx;
+}
+
+.btn-primary {
+  background: #C8102E;
+  color: #FFFFFF;
+  font-size: 30rpx;
+  font-weight: 600;
+  border-radius: 44rpx;
+  padding: 0 56rpx;
+  line-height: 84rpx;
+}
+
+.btn-primary[disabled] {
+  background: #d99aa5;
+  color: #FFFFFF;
+}
+
+.btn-ghost {
+  background: #FFFFFF;
+  color: #C8102E;
+  border: 2rpx solid #C8102E;
+  font-size: 30rpx;
+  border-radius: 44rpx;
+  padding: 0 56rpx;
+  line-height: 80rpx;
+}

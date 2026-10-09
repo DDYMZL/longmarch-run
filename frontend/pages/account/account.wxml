@@ -1,0 +1,29 @@
+<view class="account-page">
+  <view class="account-tip">已绑定的微信身份，可用于登录 PC 端管理后台</view>
+
+  <view class="identity-card" wx:for="{{identities}}" wx:key="id">
+    <view class="identity-main">
+      <view class="identity-name-row">
+        <text class="identity-name">{{item.providerName}}</text>
+        <text wx:if="{{item.isPrimary}}" class="identity-tag">登录凭证</text>
+        <text wx:elif="{{item.verifiedAt}}" class="identity-tag verified">已验证</text>
+      </view>
+      <view class="identity-meta">AppID：{{item.appId}}</view>
+      <view class="identity-meta">绑定时间：{{item.createdAt || '—'}}</view>
+    </view>
+    <view wx:if="{{item.isPrimary}}" class="identity-lock">不可解绑</view>
+    <view
+      wx:else
+      class="identity-unbind"
+      bindtap="handleUnbind"
+      data-id="{{item.id}}"
+      data-name="{{item.providerName}}"
+    >解绑</view>
+  </view>
+
+  <view wx:if="{{empty && !loading}}" class="account-empty">
+    <view class="account-empty-icon">🔐</view>
+    <view class="account-empty-text">暂无已绑定身份</view>
+    <view class="account-empty-sub">微信登录后会自动同步小程序登录身份</view>
+  </view>
+</view>

@@ -13,10 +13,15 @@ Page({
     errorMsg: ''
   },
 
-  onLoad() {
-    // 已登录则直接进入首页
+  onLoad(options) {
+    // 扫码确认等流程携带 redirect：登录后原路返回（默认进入首页）
+    this.redirect = decodeURIComponent((options && options.redirect) || '');
     if (app.globalData.loggedIn) {
-      wx.switchTab({ url: '/pages/home/home' });
+      if (this.redirect) {
+        wx.redirectTo({ url: this.redirect });
+      } else {
+        wx.switchTab({ url: '/pages/home/home' });
+      }
     }
   },
 
@@ -45,7 +50,10 @@ Page({
 
         wx.showToast({ title: '登录成功', icon: 'success' });
         setTimeout(() => {
-          if (!user.orgId) {
+          if (this.redirect) {
+            // 扫码确认流程：立即返回确认页（场景凭证有效期短，不打断）
+            wx.redirectTo({ url: this.redirect });
+          } else if (!user.orgId) {
             // 首次登录引导选择组织架构
             wx.redirectTo({ url: '/pages/org-select/org-select?from=login' });
           } else {
