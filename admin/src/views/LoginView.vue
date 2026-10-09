@@ -36,6 +36,7 @@ async function handleLogin() {
   loading.value = true
   try {
     const { data } = await login(form.username, form.password)
+    setAuth(data.token, data.username)
     const me = await fetchMe()
     setProfile(me.data.username, me.data.is_super, me.data.menus.map((m) => m.code))
     ElMessage.success('登录成功')
