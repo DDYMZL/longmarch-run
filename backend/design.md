@@ -45,11 +45,11 @@
 | 配置 | `app/core/config.py` | `Settings`（pydantic-settings）：APP/DB/JWT/WX/CORS/行军目标（`STREAK_GOAL_STEPS`，默认 5000）/步长（`STRIDE_M`），`lru_cache` 单例 |
 | 数据库 | `app/core/database.py` | `engine`、`SessionLocal`、`Base`、`get_db`；不负责建表 |
 | 数据库部署 | `../docker/` | openGauss Compose 配置、建库脚本、表结构和递增 SQL 变更 |
-| 安全 | `app/core/security.py` | `create_token`/`decode_token`（PyJWT HS256，`sub`=user_id） |
+| 安全 | `app/core/security.py` | `create_token`/`decode_token`（PyJWT HS256，`sub`=user_id）；`create_admin_token`（`typ=super`，`sub`=username）/`create_admin_token_for_user`（`typ=user`，`sub`=user_id） |
 | 工具 | `app/core/helpers.py` | 日期字符串、按「日期+用户」生成稳定模拟步数 |
-| 鉴权依赖 | `app/api/deps.py` | `get_current_user`：Bearer Token 缺失/无效/用户不存在统一 401；`get_current_admin` 校验管理员 token |
+| 鉴权依赖 | `app/api/deps.py` | `get_current_user`：Bearer Token 缺失/无效/用户不存在统一 401；`get_current_admin` 解析管理员令牌并**每请求查库**校验 RBAC（撤销/禁用即时生效）；`require_menu(code)` 菜单码依赖（超管全放行，角色缺菜单 403） |
 | 实时推送 | `app/api/routes/ws.py` | `/api/ws/updates` WebSocket 长连接；数据变更广播 `data_changed`，用户事件广播 `activity` |
-| 种子 | `app/data/seed.py` | 幂等写入：路线节点 10（含历史事件卡内容）、题库 15（含分类）、勋章 12（分类/隐藏/排序）、组织树 |
+| 种子 | `app/data/seed.py` | 幂等写入：路线节点 10（含历史事件卡内容）、题库 15（含分类）、勋章 12（分类/隐藏/排序）、组织树、后台菜单 9 项与内置角色（超管/运营） |
 | 业务 | `app/services/*.py` | 见 §2.3 |
 | 契约 | `app/schemas/schemas.py` | 请求/响应模型；小程序侧继承 `CamelModel`（to_camel 输出 camelCase），管理端 Admin* 模型为原生 snake_case |
 
@@ -73,6 +73,10 @@
 | `broadcast_service` | `broadcast.js` | 今日长征播报（全局运动汇总 + 今日长征彩蛋 + 个人当日状态） |
 | `dashboard_service` | —（管理端） | 驾驶舱指标、路线总览、运动趋势、实时动态、数据大屏聚合（整体口径，无组织维度） |
 | `admin_service` | —（管理端） | 管理员登录、路线节点/题库/组织架构 CRUD、全员排名、人员详情聚合（每日寄语 CRUD 在 `quote_service`） |
+| `identity_service` | `identity.js` | 微信身份关联：PC 扫码登录会话（创建/轮询/置 scanned/确认/取消/令牌单次签发）、B 场景绑定确认事务（unionid 冲突禁止自动合并）、身份列表与解绑（wx_mini 主身份禁解绑）、登录同步采集 unionid 身份行 |
+| `access_service` | —（管理端） | RBAC：`build_principal` 聚合用户启用角色与菜单（超管=全部菜单）、`get_enabled_roles`、`get_menu_items`、菜单/角色 CRUD 与授权校验 |
+| `audit_service` | —（管理端） | 审计日志：`record` 写 `audit_logs`（区分 super/user 操作人），分页/日期/动作/操作人筛选 |
+| `wechat_service` | — | 微信服务端对接：`get_wxacode_png`（小程序码）、code2Session 开放平台 code 换取（未配置凭证时 mock） |
 
 ## 3. 核心数据模型（SQLAlchemy ORM）
 
@@ -100,27 +104,37 @@
 | `points_log` | id, user_id, date, reason(50), delta | 无表级唯一（去重在 service 层） | 积分流水；**同日同 reason 去重** |
 | `user_medals` | id, user_id, medal_id(50), granted_at | `uq_user_medal`(user_id+medal_id) | 用户已获勋章 |
 | `user_event` | id, user_id, event_type(50), event_time, data(JSON) | 无（一次性事件靠 service 层 `has_event` 去重） | 统一事件流水：FIRST_STEP/DAILY_GOAL/STREAK_*/NODE_LIT/MEDAL_GRANTED/QUIZ_DONE 等；小程序足迹时间轴与管理端实时动态共用此表，`data` 存文案参数（节点名、连续天数等） |
+| `user_identities` | id, user_id, provider(wx_mini/wx_web), app_id, openid, unionid(可空), verified_at(可空), created_at, updated_at | `uq_identity_provider_openid`(provider+app_id+openid)、`uq_identity_user_channel`(user_id+provider+app_id) | 微信身份关联（010）：登录时采集；「一个 unionid 只属一个用户」无索引约束，由 identity_service 事务内校验，冲突身份禁止自动合并 |
+| `bind_requests` | id, token_hash(唯一), user_id(可空), provider, app_id, openid, unionid(可空), status(pending/confirmed/used/cancelled/expired), expires_at, used_at, confirmed_at, created_at | token_hash 唯一 | 身份绑定请求（010）：绑定凭证仅存 SHA-256 摘要，不存可重放明文；目标身份来自微信服务端而非前端提交 |
+| `qr_login_sessions` | id(qrId), scene_token_hash(唯一), status(pending/scanned/confirmed/failed/cancelled/expired), fail_reason, user_id, token_issued, created_at, expires_at, confirmed_at | scene_token_hash 唯一 | PC 扫码登录会话（010）：id 为轮询凭证，与小程序码内嵌 scene 凭证分离；token_issued 保证管理员 JWT 仅签发一次（防轮询重放） |
+| `admin_menus` | id, code(唯一), name, sort_order | code 唯一 | 后台菜单（010）：code 与 `require_menu` 依赖一一对应，共 9 项（dashboard/screen/rankings/route_nodes/questions/quotes/orgs/access/audit） |
+| `admin_roles` | id, code(唯一), name, is_builtin, created_at | code 唯一 | 后台角色（010）：内置角色不可删除 |
+| `admin_role_menus` | role_id(FK), menu_id(FK) | 复合主键 (role_id, menu_id) | 角色↔菜单关联（010） |
+| `admin_user_roles` | id, user_id, role_id, enabled, granted_by, granted_at, updated_at | `uq_admin_user_role`(user_id+role_id) | 用户角色授权（010）：enabled=False 即时生效（get_current_admin 每请求查库） |
+| `audit_logs` | id, actor_type(super/user), actor_user_id(可空), action, target_user_id(可空), detail(Text,可空), created_at | 无 | 管理后台审计（010）：授权/角色变更等操作逐项记录 |
 
 > 与前端 `services/store.js` 的数据结构对应关系：
 > `dailySport`→`daily_sport`、`litNodes`→`lit_nodes`、`quizRecords`→`quiz_records`、`pointsLog`→`points_log`、`medals`→`user_medals`。
 
 ### 3.3 数据库部署与结构变更
 
-本地 openGauss 使用数据库 `longmarch`、用户 `gaussdb`、端口 `5118`。`../docker/init/init-db.sh` 创建数据库及 `schema_migrations`，再按文件名顺序执行尚未登记的 SQL。`001_schema.sql` 是当前基线；`002_route_node_config.sql` 增加路线节点经纬度、排序和启用字段；`003_optional_user_avatar.sql` 将 avatar 改为可空（适配 openGauss 空串→NULL）；`004_nickname_change.sql` 增加曾用名与改名时间；`005_upgrade.sql` 为高级化升级：users 连续行军字段、daily_sport 距离/达标/补签预留、lit_nodes 步数快照、route_nodes 历史事件卡 7 字段、questions 分类、medal_defs 分类/隐藏/排序、新建 user_event 表。`006_persons.sql` 新建 persons（长征人物志）与 person_nodes（人物-节点关联）两表。`007_daily_quotes.sql` 新建 daily_quotes（每日寄语）。`008_route_ceremony.sql` 为 users 增加 route_ceremony_at（长征完成仪式标记）。后续变更新增递增编号脚本，并同步修改 SQLAlchemy ORM，FastAPI 不自动建表。
+本地 openGauss 使用数据库 `longmarch`、用户 `gaussdb`、端口 `5118`。`../docker/init/init-db.sh` 创建数据库及 `schema_migrations`，再按文件名顺序执行尚未登记的 SQL。`001_schema.sql` 是当前基线；`002_route_node_config.sql` 增加路线节点经纬度、排序和启用字段；`003_optional_user_avatar.sql` 将 avatar 改为可空（适配 openGauss 空串→NULL）；`004_nickname_change.sql` 增加曾用名与改名时间；`005_upgrade.sql` 为高级化升级：users 连续行军字段、daily_sport 距离/达标/补签预留、lit_nodes 步数快照、route_nodes 历史事件卡 7 字段、questions 分类、medal_defs 分类/隐藏/排序、新建 user_event 表。`006_persons.sql` 新建 persons（长征人物志）与 person_nodes（人物-节点关联）两表。`007_daily_quotes.sql` 新建 daily_quotes（每日寄语）。`008_route_ceremony.sql` 为 users 增加 route_ceremony_at（长征完成仪式标记）。`009_org_serial.sql` 组织主键自增。`010_admin_identity.sql` 新建 user_identities/bind_requests/qr_login_sessions/admin_menus/admin_roles/admin_role_menus/admin_user_roles/audit_logs 八表并种入菜单与内置角色。后续变更新增递增编号脚本，并同步修改 SQLAlchemy ORM，FastAPI 不自动建表。
 
 ## 4. 关键接口定义
 
-Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 与 `GET /api/org/children` 外，均需 `Authorization: Bearer <token>`。响应字段全部 camelCase。
+Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/auth/login` 与 `GET /api/org/children` 外，均需 `Authorization: Bearer <token>`（小程序令牌）。响应字段全部 camelCase。管理后台 `/api/admin/*` 使用管理员令牌（`typ=super` 超管 / `typ=user` 微信关联管理员），除 `POST /api/admin/login`、`POST /api/admin/wechat/qr`、`GET /api/admin/wechat/qr/{qr_id}/status` 外均需管理员令牌，且按菜单码校验权限（`require_menu`）。
 
 ### 4.1 接口总览
 
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/` | 否 | 健康检查 |
-| POST | `/api/auth/login` | 否 | 微信登录：`{code, nickname?, avatar?}` → `{token, user}`；顺带发放每日登录积分；昵称仅在首次创建时写入，后续登录不覆盖 |
+| POST | `/api/auth/login` | 否 | 微信登录：`{code, nickname?, avatar?}` → `{token, user}`；顺带发放每日登录积分与采集 unionid 身份行（幂等）；昵称仅在首次创建时写入，后续登录不覆盖 |
 | GET | `/api/auth/me` | 是 | 当前用户 `{id, nickname, avatar, orgId, nicknameChangedAt}` |
 | PUT | `/api/auth/nickname` | 是 | 修改昵称 `{nickname}`（每人仅一次，已修改过返回 400）→ 返回最新用户 |
 | PUT | `/api/auth/nickname/initial` | 是 | 首次引导设置昵称 `{nickname}`（不消耗改名机会；已改过名返回 400）→ 返回最新用户 |
+| POST | `/api/auth/qr/info` | 是 | 查询扫码场景 `{scene}`：L{token} 返回 `{type:"login", status}`（pending→置 scanned）；B{token} 返回 `{type:"bind", status, target:{provider, appId, nickname?}}`；凭证不存在/过期 404/400 |
+| POST | `/api/auth/qr/confirm` | 是 | 确认/取消扫码 `{scene, action:confirm|cancel}`：L 确认校验 RBAC——无启用角色会话置 failed（403 带原因），有角色置 confirmed；B 确认事务内写 user_identities（unionid 冲突禁止自动合并，凭证单次有效） |
 | GET | `/api/sport/today` | 是 | 今日步数概况 `{date, steps, target, totalSteps}` |
 | POST | `/api/sport/sync` | 是 | 同步今日步数（模拟），返回 `{date, steps, totalSteps, synced}` 并刷新勋章 |
 | GET | `/api/sport/recent?n=7` | 是 | 最近 n 天记录 `[{date, steps, text}]` |
@@ -154,22 +168,35 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | GET | `/api/org/march` | 是 | 组织共同长征目标（需求 §10）：`{org, memberCount, totalSteps, progressPct, currentNodeName, nextNodeName, finished, litCount, totalCount, nodes[]}`；组织累计步数=子树成员累计有效步数之和，`currentNodeName`=第一个未完成节点、`nextNodeName`=其后一个（§10.2），节点 pct 已完成100/当前按累计占目标比例/其余0（§10.3） |
 | POST | `/api/org/select` | 是 | 选定/修改组织 `{orgId}`；组织不存在 404 |
 | GET | `/api/rank/steps` | 是 | 全员工累计步数榜 `{list: [{rank, userId, nickname, avatar, orgName, steps, isMe}], myRank, mySteps, total}` |
+| GET | `/api/auth/identities` | 是 | 已绑定身份列表 `[{id, provider, appId, openid, verifiedAt, createdAt, isPrimary}]`（wx_mini 主身份 isPrimary=true） |
+| DELETE | `/api/auth/identities/{identity_id}` | 是 | 解绑身份：主身份（wx_mini）400「微信登录凭证不可解绑」，非本人身份 400「身份不存在」，成功写审计 |
 | WS | `/api/ws/updates?token=` | 是 | 实时推送长连接：数据写入广播 `data_changed`；`user_event` 写入广播 `activity`（含文案） |
-| POST | `/api/admin/login` | 否 | 管理后台登录 `{username, password}` → `{token, username}` |
-| GET | `/api/admin/dashboard` | 管理员 | 驾驶舱聚合：核心指标（参与人数/今日运动/总步数/人均/完赛率/答题人数/勋章发放）+ 路线总览 |
-| GET | `/api/admin/dashboard/trend?days=` | 管理员 | 运动趋势：近 N 日每日总步数/运动人数/新增用户/新点亮节点数 |
-| GET | `/api/admin/activities?limit=` | 管理员 | 实时动态：`user_event` 关联昵称倒序 |
-| GET | `/api/admin/screen` | 管理员 | 数据大屏单接口聚合：指标 + 路线总览 + 7 日趋势 + 实时动态（整体口径，无组织维度） |
-| GET | `/api/admin/rankings` | 管理员 | 全员排名统计；每人包含累计步数、组织、全部路线节点及实际到达时间 |
-| GET | `/api/admin/users/{id}/overview` | 管理员 | 人员详情聚合（运动/答题/勋章/长征/积分） |
-| GET | `/api/admin/route-nodes` | 管理员 | 全部路线节点列表（含停用） |
-| POST | `/api/admin/route-nodes` | 管理员 | 新增路线节点 |
-| PUT | `/api/admin/route-nodes/{id}` | 管理员 | 编辑路线节点（含历史事件卡 7 字段） |
-| PATCH | `/api/admin/route-nodes/{id}/enabled` | 管理员 | 启用/停用节点 |
-| GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 管理员 | 题库 CRUD（含 category 分类） |
-| GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 管理员 | 每日寄语 CRUD（需求 §16；GET 分页 page/pageSize 日期倒序，日期唯一冲突/坏格式/坏节点 400，不存在 404） |
-| GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 管理员 | 组织架构树 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计，后序累加）；`POST /api/admin/orgs/sync` 从外部系统同步 |
-| GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 管理员 | 组织人员明细（分页）：`scope=direct` 仅直属成员（与 direct_user_count 同口径）、`scope=all` 含全部层级下级（与 total_user_count 同口径）；组织不存在 404 |
+| POST | `/api/admin/login` | 否 | 管理后台账号登录 `{username, password}` → `{token, username}`；`ADMIN_PASSWORD` 未配置时禁用（403「未配置管理账号密码，请使用微信扫码登录」） |
+| POST | `/api/admin/wechat/qr` | 否 | 创建扫码登录会话 → `{qr_id, image?, scene, mock, expires_in}`；未配置微信凭证（mock 模式）image 为 None、scene 为明文供调试 |
+| GET | `/api/admin/wechat/qr/{qr_id}/status` | 否 | 轮询扫码状态（限流 2s 起）：pending/scanned 返回状态；confirmed 返回 `{token, username, is_super, menus}`（令牌单次签发防重放）；failed 带 `fail_reason` |
+| GET | `/api/admin/me` | 管理员 | 当前管理员信息与菜单权限 `{is_super, username, menus}` |
+| GET | `/api/admin/users` | 管理员(access) | 人员授权列表（昵称/组织筛选、分页）：每项含启用/禁用角色与授权人 |
+| GET | `/api/admin/roles` | 管理员(access) | 角色列表（含菜单勾选与是否内置） |
+| POST | `/api/admin/roles` | 管理员(access) | 新建角色 `{name, menu_ids}`（code 由拼音首字母生成，重名 400） |
+| PUT | `/api/admin/roles/{role_id}` | 管理员(access) | 编辑角色名称与菜单（内置角色 400） |
+| DELETE | `/api/admin/roles/{role_id}` | 管理员(access) | 删除角色（内置/已授权 400，删除同时清理菜单关联） |
+| POST | `/api/admin/users/{user_id}/roles` | 管理员(access) | 全量覆盖用户角色 `{role_ids}`（返回最新启用角色，逐项审计） |
+| PATCH | `/api/admin/users/{user_id}/roles/{role_id}/enabled` | 管理员(access) | 启用/禁用单个角色授权（即时生效，不改授权关系） |
+| GET | `/api/admin/audit-logs` | 管理员(audit) | 审计日志分页（日期/动作/操作人筛选，倒序） |
+| GET | `/api/admin/dashboard` | 管理员(dashboard) | 驾驶舱聚合：核心指标（参与人数/今日运动/总步数/人均/完赛率/答题人数/勋章发放）+ 路线总览 |
+| GET | `/api/admin/dashboard/trend?days=` | 管理员(dashboard) | 运动趋势：近 N 日每日总步数/运动人数/新增用户/新点亮节点数 |
+| GET | `/api/admin/activities?limit=` | 管理员(dashboard) | 实时动态：`user_event` 关联昵称倒序 |
+| GET | `/api/admin/screen` | 管理员(screen) | 数据大屏单接口聚合：指标 + 路线总览 + 7 日趋势 + 实时动态（整体口径，无组织维度） |
+| GET | `/api/admin/rankings` | 管理员(rankings) | 全员排名统计；每人包含累计步数、组织、全部路线节点及实际到达时间 |
+| GET | `/api/admin/users/{id}/overview` | 管理员(rankings) | 人员详情聚合（运动/答题/勋章/长征/积分） |
+| GET | `/api/admin/route-nodes` | 管理员(route_nodes) | 全部路线节点列表（含停用） |
+| POST | `/api/admin/route-nodes` | 管理员(route_nodes) | 新增路线节点 |
+| PUT | `/api/admin/route-nodes/{id}` | 管理员(route_nodes) | 编辑路线节点（含历史事件卡 7 字段） |
+| PATCH | `/api/admin/route-nodes/{id}/enabled` | 管理员(route_nodes) | 启用/停用节点 |
+| GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 管理员(questions) | 题库 CRUD（含 category 分类） |
+| GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 管理员(quotes) | 每日寄语 CRUD（需求 §16；GET 分页 page/pageSize 日期倒序，日期唯一冲突/坏格式/坏节点 400，不存在 404） |
+| GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 管理员(orgs) | 组织架构树 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计，后序累加）；`POST /api/admin/orgs/sync` 从外部系统同步 |
+| GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 管理员(orgs) | 组织人员明细（分页）：`scope=direct` 仅直属成员（与 direct_user_count 同口径）、`scope=all` 含全部层级下级（与 total_user_count 同口径）；组织不存在 404 |
 
 ### 4.2 关键请求/响应示例
 
@@ -256,6 +283,9 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 | 组织 | 树形逐级下钻；用户可选定任意层级节点；`/org/children` 不鉴权可浏览 |
 | 昵称 | 登录时以微信昵称建号（记为曾用名）；登录**不再覆盖**昵称（头像仍随登录更新）；首次引导可经 `PUT /auth/nickname/initial` 设置昵称（不消耗改名机会）；应用内 `PUT /auth/nickname` 修改，**每人仅一次**（改后 nickname_changed_at 记录时间，再改返回 400）；曾用名与修改时间在管理端排名洞察可见 |
 | 排名 | 跨组织员工个人总榜，按累计步数降序；小程序用 `isMe` 标记本人行，管理端返回全量人员及 `lit_nodes.lit_at` 节点到达时间 |
+| 身份关联 | 认证（JWT）、身份关联（user_identities）、后台授权（RBAC）三层分离——绑定身份成功**不等于**拥有后台权限；`wx_mini` 登录凭证身份不可解绑；同一 `provider+app_id+openid` 全局唯一，unionid 冲突**禁止自动合并**（事务内校验，冲突时不写入不合并）；绑定凭证只存 SHA-256 摘要，确认后单次有效 |
+| 扫码登录 | L 场景：创建→轮询→小程序确认（无启用角色时会话置 failed 并返回原因，有角色置 confirmed）→PC 轮询到 confirmed 后**单次签发**管理员 JWT（token_issued 原子标记防重放）；B 场景：确认后事务写 user_identities（provider 目标身份来自微信服务端） |
+| RBAC 授权 | 超管（`typ=super`）全菜单放行；微信关联管理员（`typ=user`）按启用角色的菜单并集校验，`get_current_admin` **每请求查库**——角色撤销/禁用即时生效（WS 管理端分支建连查库校验，失效 4403 关闭）；授权/角色变更逐项写审计（区分 super/user 操作人） |
 
 ## 6. 关键设计决策与权衡
 
@@ -263,3 +293,6 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。除 `POST /api/auth/login` 
 2. **openGauss + SQL 版本表**：数据库由根目录 Docker Compose 承载，SQLAlchemy 通过 `psycopg2` 连接 PostgreSQL 兼容协议；`schema_migrations` 保证结构脚本只执行一次，业务种子仍由后端幂等写入。
 3. **勋章检查挂在副作用链尾**：运动/点亮/答题/登录后统一触发 `medal_service.check_and_grant`，避免遗漏判定时机；判定本身幂等（已拥有即跳过）。
 4. **`daily_questions` 抽题缓存表**：保证「同一天同一套题」的体验与幂等语义，避免每次请求重新随机导致前后端不一致。
+5. **认证/身份/授权三层分离**：JWT 只证明「是谁」，user_identities 只记录「哪些微信身份属于谁」，RBAC 才决定「能进后台做什么」；扫码确认同时校验三层，身份绑定成功不授予后台权限。
+6. **扫码令牌单次签发（token_issued 原子标记）**：confirmed 后并发轮询只会签出一枚管理员 JWT，防重放；轮询接口本身不鉴权但限流，避免撞库。
+7. **RBAC 每请求查库**：管理员令牌 12 小时长时效与「撤销即时生效」矛盾，靠每次请求查询启用角色/菜单解决；代价是每次管理员请求多一次数据库查询（单表索引，可接受）。

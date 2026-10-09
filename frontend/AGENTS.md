@@ -33,8 +33,9 @@ frontend/
 │   ├── store.js                   # 遗留：仅登录数据迁移（migrateUserData）
 │   ├── auth.js                    # 微信登录（头像昵称填写、头像持久化）
 │   ├── sport.js / march.js / quiz.js / points.js / medal.js / org.js / rank.js
+│   ├── profile.js / person.js / quote.js / broadcast.js / ws.js / identity.js
 ├── utils/util.js                  # 日期格式化、随机等纯工具
-└── pages/                         # 11 个页面（4 tab + 7 子页），每个页面 4 件套 js/json/wxml/wxss
+└── pages/                         # 20 个页面（5 tab + 15 子页），每个页面 4 件套 js/json/wxml/wxss
 ```
 
 ### 3.1 分层依赖规则（单向，禁止反向）
@@ -107,6 +108,6 @@ services -> request.js / config.js；march.js 可读 mock/data.js 兜底
 
 ## 7. 背景知识速查
 
-- 4 个 tab：首页 `home` / 长征 `march` / 答题 `quiz` / 我的 `mine`；7 个子页：login、node-detail、quiz-answer、quiz-result、sport-records、quiz-records、medals。
+- 5 个 tab：首页 `home` / 长征 `march` / 答题 `quiz` / 排行 `rank` / 我的 `mine`；15 个子页：login、org-select、node-detail、quiz-answer、quiz-result、sport-records、quiz-records、medals、profile、calendar、person、ticket、ceremony、bind、account。
 - 登录态：`app.globalData.user / loggedIn`；登录成功调 `app.setLoginUser(user)`；登出调 `app.logout()`。
 - 服务层请求示例：`const res = await request({ url: '/quiz/daily' });`（JWT 由 request.js 自动注入，401 自动清理登录态并回登录页）。

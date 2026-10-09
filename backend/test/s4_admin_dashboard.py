@@ -6,12 +6,17 @@ S4 管理端接口 冒烟脚本（后端黑盒）
 用法：cd backend && python test/s4_admin_dashboard.py（需后端已在 8010 运行）
 """
 import json
+import os
 import sys
 import urllib.error
 import urllib.request
 from datetime import datetime
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.core.security import create_admin_token  # noqa: E402
 
 BASE = "http://127.0.0.1:8010/api"
 RESULTS = []
@@ -44,10 +49,8 @@ def http(path, token=None, method="GET", data=None):
 
 
 def admin_login():
-    status, body = http("/admin/login", method="POST",
-                        data={"username": "admin", "password": "112233"})
-    assert status == 200 and body and "token" in body, f"admin login failed: {status}"
-    return body["token"]
+    # 超管令牌直接铸造（与账号登录等价签发）；未配置 ADMIN_PASSWORD 时账号密码登录被禁用
+    return create_admin_token("admin")
 
 
 def main():

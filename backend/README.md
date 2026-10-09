@@ -23,7 +23,8 @@ docker/
     ├── 002_route_node_config.sql  # 路线节点增加经纬度/排序/启用
     ├── 003_optional_user_avatar.sql  # avatar 改为可空
     ├── 004_nickname_change.sql  # 曾用名与改名时间
-    └── 005_upgrade.sql       # 高级化升级：连续行军/事件表/历史事件卡/题目分类/勋章分类
+    ├── 005_upgrade.sql       # 高级化升级：连续行军/事件表/历史事件卡/题目分类/勋章分类
+    └── 010_admin_identity.sql  # 身份关联/RBAC/审计八表 + 菜单与内置角色种子
 backend/
 ├── requirements.txt          # 依赖
 ├── .env.example              # 环境变量样例（复制为 .env）
@@ -33,13 +34,13 @@ backend/
     ├── core/                 # 基础设施
     │   ├── config.py         # 配置（pydantic-settings）
     │   ├── database.py       # 引擎 / 会话 / Base
-    │   ├── security.py       # JWT 签发与校验
+    │   ├── security.py       # JWT 签发与校验（小程序 + 超管/关联管理员）
     │   └── helpers.py        # 日期、Mock 步数工具
-    ├── models/models.py      # ORM 模型（静态配置表 + 用户业务表 + 事件表）
-    ├── data/seed.py          # 种子数据：路线10（含历史内容）/ 题库15（含分类）/ 勋章12
+    ├── models/models.py      # ORM 模型（静态配置表 + 用户业务表 + 事件表 + 身份/RBAC/审计表）
+    ├── data/seed.py          # 种子数据：路线10（含历史内容）/ 题库15（含分类）/ 勋章12 / 菜单9 / 内置角色
     ├── schemas/schemas.py    # Pydantic 请求/响应模型
-    ├── services/             # 业务逻辑（含 event/streak/profile/broadcast/dashboard）
-    └── api/                  # 依赖与路由（含 ws/updates 实时推送）
+    ├── services/             # 业务逻辑（含 identity/access/audit/wechat）
+    └── api/                  # 依赖与路由（含 ws/updates 实时推送与管理后台 RBAC 接口）
 ```
 
 ## 快速开始
@@ -77,17 +78,22 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | --- | --- | --- |
 | `DATABASE_URL` | `postgresql+psycopg2://gaussdb:LongMarch%40123@127.0.0.1:5118/longmarch` | 本地 Docker openGauss 连接串 |
 | `JWT_SECRET` | 开发默认值 | **生产务必修改** |
-| `JWT_EXPIRE_MINUTES` | `10080`（7天） | 令牌有效期 |
+| `JWT_EXPIRE_MINUTES` | `10080`（7天） | 小程序令牌有效期 |
+| `JWT_ADMIN_EXPIRE_MINUTES` | `720`（12小时） | 管理员令牌有效期（RBAC 每请求查库，长时效兜底） |
+| `ADMIN_PASSWORD` | 空 | 管理后台账号密码；**留空则账号登录禁用**，仅允许微信扫码登录（不设默认密码） |
 | `WX_APPID` / `WX_SECRET` | 空 | 留空时登录使用 mock openid，便于本地调试 |
+| `WX_WEB_APPID` / `WX_WEB_SECRET` | 空 | 微信网页授权渠道凭证（阶段2 门控，未配置不开放） |
+| `QR_LOGIN_TTL_SECONDS` | `300` | PC 扫码登录会话有效期 |
+| `BIND_REQUEST_TTL_SECONDS` | `600` | 身份绑定请求有效期 |
 | `CORS_ORIGINS` | `["*"]` | 跨域来源（JSON 数组） |
 
 ## 鉴权
 
-除 `POST /api/auth/login` 外，所有接口都需要请求头：
-
-```
-Authorization: Bearer <登录返回的 token>
-```
+- **小程序令牌**（`typ=user`，`sub`=user_id）：除 `POST /api/auth/login`、`GET /api/org/children` 外，所有小程序接口都需要请求头：
+  ```
+  Authorization: Bearer <登录返回的 token>
+  ```
+- **管理员令牌**：`typ=super`（配置超管，`sub`=username，账号登录签发）/ `typ=user`（微信关联管理员，`sub`=user_id，扫码确认后由 PC 轮询接口**单次签发**）。`/api/admin/*` 除 `POST /api/admin/login`、`POST /api/admin/wechat/qr`、`GET /api/admin/wechat/qr/{qr_id}/status` 外均需管理员令牌，并按菜单码校验（超管全放行；角色缺菜单 403）。`get_current_admin` **每请求查库**，角色撤销/禁用即时生效。
 
 ## API 一览
 
@@ -122,8 +128,15 @@ Authorization: Bearer <登录返回的 token>
 | GET | `/api/org/mine` | 我的所属组织（含全路径） |
 | POST | `/api/org/select` | 选定/修改所属组织（body: `orgId`，可选任意层级） |
 | GET | `/api/rank/steps` | 全员工累计步数总榜（跨所有组织，标记我的名次） |
+| POST | `/api/auth/qr/info` | 查询扫码场景 `{scene}`：L 登录确认 / B 绑定确认（含目标渠道信息），pending 置 scanned |
+| POST | `/api/auth/qr/confirm` | 确认/取消扫码 `{scene, action}`：L 无后台角色 403（会话置 failed），有角色置 confirmed；B 事务写身份（unionid 冲突不合并） |
+| GET | `/api/auth/identities` | 当前用户已绑定身份列表（wx_mini 主身份不可解绑） |
+| DELETE | `/api/auth/identities/{id}` | 解绑身份（主身份 400，写审计） |
 | WS | `/api/ws/updates?token=` | 实时推送：数据变更 `data_changed`、用户事件 `activity` |
-| POST | `/api/admin/login` | 管理后台登录（body: `username`/`password`） |
+| POST | `/api/admin/login` | 管理后台账号登录（body: `username`/`password`；`ADMIN_PASSWORD` 未配置时 403，仅扫码登录） |
+| POST | `/api/admin/wechat/qr` | 创建扫码登录会话（无需鉴权）：mock 模式返回明文 scene 供调试 |
+| GET | `/api/admin/wechat/qr/{qr_id}/status` | 轮询扫码状态（无需鉴权，限流）：confirmed 时单次签发管理员令牌与菜单 |
+| GET | `/api/admin/me` | 当前管理员信息与菜单权限 |
 | GET | `/api/admin/dashboard` | 驾驶舱聚合（核心指标 + 路线总览） |
 | GET | `/api/admin/dashboard/trend?days=` | 运动趋势（近 N 日） |
 | GET | `/api/admin/activities?limit=` | 实时动态（user_event 倒序） |
@@ -137,6 +150,11 @@ Authorization: Bearer <登录返回的 token>
 | GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 题库 CRUD（含知识分类） |
 | GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 组织架构 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计）；`POST /api/admin/orgs/sync` 外部同步 |
 | GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 组织人员明细（分页）：`scope=direct` 仅直属成员，`scope=all` 含全部层级下级，与组织树两列统计口径一致 |
+| GET | `/api/admin/users?keyword=&org_id=&page=` | 人员授权列表（昵称/组织筛选、分页），每项含启用/禁用角色 |
+| GET/POST | `/api/admin/roles[/{id}]` | 角色列表/新建（含菜单勾选）；PUT 编辑名称与菜单、DELETE 删除（内置/已授权 400） |
+| POST | `/api/admin/users/{uid}/roles` | 全量覆盖用户角色 `{role_ids}`（逐项审计） |
+| PATCH | `/api/admin/users/{uid}/roles/{rid}/enabled` | 启用/禁用单个角色授权（即时生效，不改授权关系） |
+| GET | `/api/admin/audit-logs?date=&action=&actor=` | 审计日志分页（日期/动作/操作人筛选，倒序） |
 
 ## 业务规则（与前端 Mock 完全一致）
 
@@ -149,6 +167,9 @@ Authorization: Bearer <登录返回的 token>
 - **事件系统**：用户成就（首次运动/当日达标/连续里程碑/点亮/勋章/答题等）统一落 `user_event` 并生成中文文案，小程序足迹时间轴与管理端实时动态共用此数据源。
 - **组织架构**：多级树（种子 13 个节点，4 级），用户可选定**任意层级**节点作为所属组织，登录后可随时修改；管理端组织树按节点统计直属人数与含下级累计人数。
 - **排名**：**员工个人**总榜（非组织间排名），按累计步数（`DailySport.steps` 求和）降序，跨所有组织；同分按 `user_id` 升序保证名次稳定；返回前 `TOP_LIMIT`（默认 100）条并始终包含当前用户。
+- **身份关联**：认证（JWT）/ 身份关联（user_identities）/ 后台授权（RBAC）三层分离，绑定身份成功**不等于**拥有后台权限；`wx_mini` 登录凭证身份不可解绑；同一 `provider+app_id+openid` 全局唯一，unionid 冲突**禁止自动合并**；绑定凭证只存 SHA-256 摘要，确认后单次有效。
+- **扫码登录**：L 场景创建→轮询→小程序确认（无启用角色会话置 failed 并返回原因）→PC 轮询 confirmed 后**单次签发**管理员 JWT（token_issued 原子标记防重放）。
+- **RBAC**：超管全菜单放行；微信关联管理员按启用角色的菜单并集校验，每请求查库——撤销/禁用即时生效；授权/角色变更逐项写审计。
 
 ## 数据库结构维护
 

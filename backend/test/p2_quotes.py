@@ -18,6 +18,8 @@ from datetime import date
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
+from app.core.security import create_admin_token  # noqa: E402
+
 BASE = "http://127.0.0.1:8010/api"
 TODAY = date.today().isoformat()
 
@@ -56,9 +58,8 @@ def new_user(nickname):
 
 
 def admin_token():
-    st, body = req("/admin/login", method="POST", data={"username": "admin", "password": "112233"})
-    assert st == 200 and body.get("token"), "admin login failed: %s" % st
-    return body["token"]
+    # 超管令牌直接铸造（与账号登录等价签发）；未配置 ADMIN_PASSWORD 时账号密码登录被禁用
+    return create_admin_token("admin")
 
 
 def main():

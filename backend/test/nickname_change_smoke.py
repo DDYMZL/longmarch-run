@@ -16,6 +16,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from app.core.security import create_admin_token  # noqa: E402
+
 BASE = "http://127.0.0.1:8010/api"
 
 RESULTS = []
@@ -53,10 +55,10 @@ def http(path, token=None, method="GET", data=None):
 def main():
     print("== 昵称修改（每人仅一次）冒烟验收 ==")
 
-    # 管理端令牌
-    st, admin = http("/admin/login", method="POST", data={"username": "admin", "password": "112233"})
-    record("N01", "管理端登录", st == 200 and bool(admin.get("token")), "st=%d" % st)
-    admin_token = admin.get("token") if st == 200 else None
+    # 管理端令牌：超管令牌直接铸造（与账号登录等价签发；未配置 ADMIN_PASSWORD 时账号密码登录被禁用）
+    admin_token = create_admin_token("admin")
+    st, _ = http("/admin/dashboard", admin_token)
+    record("N01", "管理端超管令牌可用（dashboard 200）", st == 200, "st=%d" % st)
 
     # 1. 首次登录：直接用微信名称建号
     st, res = http("/auth/login", method="POST", data={

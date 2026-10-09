@@ -8,13 +8,22 @@
 """
 import asyncio
 import json
+import os
 import re
+import sys
 import time
 from datetime import datetime
 from typing import Dict, List, Optional, Tuple
 
 import httpx
 import psycopg2
+
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from app.core.config import settings  # noqa: E402
+from app.core.security import create_admin_token  # noqa: E402
 
 BASE = "http://127.0.0.1:8010"
 DB_DSN = dict(
@@ -176,14 +185,20 @@ def phase_sport(token: str) -> int:
         check_true("S12", "sport", "写入 DAILY_GOAL 事件", len(ev) >= 1, f"DAILY_GOAL 事件数={len(ev)}")
     else:
         rec("S11", "sport", "步数未达标(跳过连续天数断言)", True, "goal=False 跳过", u, "模拟步数未达 5000")
-    # 积分：sync 5000/10000 档 +5/+10 且同日同 reason 去重（add 补步不发达标积分）
+    # 积分：sync 达标积分取最高档（≥10000 得 +10 不再叠发 +5，≥5000 得 +5），
+    # 同日同 reason 去重；add 补步不发达标积分
     pts = db("SELECT reason, delta FROM points_log WHERE user_id=%s", (uid,))
-    if sync_steps >= 5000:
-        p5000 = [p for p in pts if p[0] == "每日运动达到5000步"]
-        check_eq("S13", "sport", "5000 步奖励 +5 且不重复", 1, len(p5000), p5000)
+    p5000 = [p for p in pts if p[0] == "每日运动达到5000步"]
+    p10000 = [p for p in pts if p[0] == "每日运动达到10000步"]
     if sync_steps >= 10000:
-        p10000 = [p for p in pts if p[0] == "每日运动达到10000步"]
+        check_eq("S13", "sport", "万步档取最高不叠发 5000 档", 0, len(p5000), p5000)
         check_eq("S14", "sport", "10000 步奖励 +10 且不重复", 1, len(p10000), p10000)
+    elif sync_steps >= 5000:
+        check_eq("S13", "sport", "5000 步奖励 +5 且不重复", 1, len(p5000), p5000)
+        check_eq("S14", "sport", "未达万步不发放 +10", 0, len(p10000), p10000)
+    else:
+        check_eq("S13", "sport", "未达 5000 不发放运动积分", 0, len(p5000), p5000)
+        check_eq("S14", "sport", "未达万步不发放 +10", 0, len(p10000), p10000)
     # calendar / recent
     st, cal = api("GET", "/api/sport/calendar", token=token, params={"month": today()[:7]})
     check_eq("S15", "sport", "日历接口 200", 200, st)
@@ -565,12 +580,21 @@ def phase_edges(token_a: str) -> None:
 
 # ---------------------------------------------------------------- 管理端 API
 def phase_admin_api() -> str:
-    # 登录
-    st, body = api("POST", "/api/admin/login", json={"username": "admin", "password": "112233"})
-    check_eq("D01", "admin", "管理员登录成功", 200, st)
-    admin_token = body.get("token", "")
-    st, bad = api("POST", "/api/admin/login", json={"username": "admin", "password": "wrong"})
-    check_true("D02", "admin", "错误密码登录失败", st in (401, 400), st, bad)
+    # 登录：ADMIN_PASSWORD 未配置时账号登录禁用（任意凭证 403），
+    # 配置时用环境变量中的密码验证（测试不硬编码密码）
+    if settings.ADMIN_PASSWORD:
+        st, body = api("POST", "/api/admin/login",
+                       json={"username": settings.ADMIN_USERNAME, "password": settings.ADMIN_PASSWORD})
+        check_eq("D01", "admin", "管理员账号登录成功（已配置密码）", 200, st)
+        admin_token = (body or {}).get("token", "")
+        st, bad = api("POST", "/api/admin/login", json={"username": "admin", "password": "not-the-password"})
+        check_true("D02", "admin", "错误密码登录失败", st in (401, 400), st, bad)
+    else:
+        st, body = api("POST", "/api/admin/login", json={"username": "admin", "password": "not-the-password"})
+        check_eq("D01", "admin", "未配置 ADMIN_PASSWORD 时账号登录禁用 403", 403, st)
+        admin_token = create_admin_token("admin")
+        rec("D02", "admin", "错误密码登录失败（账号登录已禁用）", True, "skip", "账号登录禁用",
+            "未配置 ADMIN_PASSWORD，任意账号密码均被拒绝，D01 已覆盖")
     # 权限：用户 token 访问管理接口
     st, _ = api("GET", "/api/admin/dashboard", token=_login_user_token())
     check_true("D03", "admin", "用户 token 访问管理接口被拒", st in (401, 403), st)

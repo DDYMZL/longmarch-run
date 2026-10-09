@@ -126,9 +126,14 @@ def main():
            "ds=%s dc=%s" % (b3["totalSteps"] - b9["totalSteps"], b3["memberCount"] - b9["memberCount"]))
 
     # P1M-05 完成态边界：b9 未走完全程（finished 与 litCount 自洽）；
-    # b3 累计 84000 ≥ 延安 65000 → 全程完成（finished=true / pct=100 / 当前到达=延安 / 下一站空）
+    # 显式把子树累计推过延安目标（不依赖历史测试数据累积，DB 重建后仍可复现），
+    # 再验证全程完成态字段（finished=true / pct=100 / 当前到达=延安 / 下一站空）
     ok_b9 = (b9["finished"] == (b9["litCount"] == b9["totalCount"] and b9["totalCount"] > 0)
              and b9["litCount"] == sum(1 for n in b9["nodes"] if b9["totalSteps"] >= n["targetSteps"]))
+    if b3["totalSteps"] < 65000:
+        st, _ = req("/sport/add", me, "POST", {"delta": 65000 + 1000 - b3["totalSteps"]})
+        assert st == 200
+        b3 = get_org_march(me)
     ok_b3 = (b3["totalSteps"] >= 65000 and b3["finished"] is True
              and b3["litCount"] == b3["totalCount"] and b3["progressPct"] == 100
              and b3["currentNodeName"] == "延安" and b3["nextNodeName"] == "")

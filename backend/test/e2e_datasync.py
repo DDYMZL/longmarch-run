@@ -15,9 +15,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from app.core.database import SessionLocal  # noqa: E402
-from app.core.security import create_access_token, create_admin_token  # noqa: E402
-from app.models.models import User  # noqa: E402
+from app.core.security import create_admin_token  # noqa: E402
 
 BASE = "http://127.0.0.1:8010/api"
 WS_BASE = "ws://127.0.0.1:8010/api/ws/updates"
@@ -27,7 +25,7 @@ ANSWERS = {1: "B", 2: "A", 3: "A", 4: "A", 5: "A", 6: "A", 7: "A", 8: "A",
            9: "B", 10: "A", 11: "C", 12: "A", 13: "A", 14: "A", 15: "A"}
 
 RESULTS = []
-TEST_USER_ID = 5  # 孙三：无今日答题记录，作为变更类用例对象
+ORG_TEST = 8  # 市场部（华北分公司下，任一稳定叶子组织即可）
 
 
 def record(case_id, name, ok, detail=""):
@@ -61,8 +59,12 @@ def http(path, token=None, method="GET", data=None):
 def main():
     print("== 数据联动后端端到端验收 ==")
 
-    # ---------- 0. 令牌准备（并重置今日答题，保证脚本可重复执行） ----------
-    user_token = create_access_token(TEST_USER_ID, "e2e-datasync")
+    # ---------- 0. 自建测试用户（不依赖库内既有种子用户，DB 重建后仍可复现） ----------
+    st, login = http("/auth/login", method="POST",
+                     data={"code": "e2e-datasync-%d" % int(time.time()), "nickname": "数据联动冒烟"})
+    assert st == 200 and login.get("token"), "login failed: %s" % st
+    user_token = login["token"]
+    test_user_id = login["user"]["id"]
     admin_token = create_admin_token("admin")
     http("/quiz/reset", user_token, "POST")
 
@@ -71,7 +73,7 @@ def main():
     record("B01", "管理端排名总览", st == 200 and len(data.get("items", [])) >= 5,
            "users=%d totalSteps=%d" % (len(data.get("items", [])), data.get("total_steps", -1)))
 
-    st, ov = http("/admin/users/%d/overview" % TEST_USER_ID, admin_token)
+    st, ov = http("/admin/users/%d/overview" % test_user_id, admin_token)
     ok = st == 200 and all(k in ov for k in ("user", "sport", "quiz_records", "medals", "march", "points"))
     record("B02", "人员详情聚合（五模块齐全）", ok,
            "keys=%s march.nodes=%d medals=%d points.total=%d" % (
@@ -83,7 +85,7 @@ def main():
 
     # ---------- 2. 小程序数据接口 ----------
     st, data = http("/sport/today", user_token)
-    record("M01", "运动-今日步数", st == 200 and set(data) == {"date", "steps", "target", "totalSteps"},
+    record("M01", "运动-今日步数", st == 200 and {"date", "steps", "target", "totalSteps"} <= set(data),
            json.dumps(data, ensure_ascii=False))
 
     st, data = http("/sport/recent?n=30", user_token)
@@ -107,8 +109,8 @@ def main():
            "questions=%d completed=%s" % (len(data.get("questions") or []), data.get("completed")))
 
     st, data = http("/medal/list", user_token)
-    record("M06", "勋章-列表自动评估", st == 200 and len(data.get("medals", [])) == 6 and "ownedCount" in data,
-           "owned=%d/6" % data.get("ownedCount", -1))
+    record("M06", "勋章-列表自动评估", st == 200 and len(data.get("medals", [])) == 12 and "ownedCount" in data,
+           "owned=%d/12" % data.get("ownedCount", -1))
 
     st, data = http("/points", user_token)
     record("M07", "积分-总额与流水", st == 200 and "total" in data and isinstance(data.get("logs"), list),
@@ -122,20 +124,17 @@ def main():
     record("M09", "组织-顶级列表", st == 200 and data.get("nodes") and all({"hasChildren", "childCount"} <= set(n) for n in data["nodes"]),
            "nodes=%d" % len(data.get("nodes", [])))
 
-    # 组织选择：读当前组织后原样回选（无副作用变更）
-    with SessionLocal() as db:
-        u = db.query(User).filter(User.id == TEST_USER_ID).first()
-        org_id = u.org_id if u else None
-    if org_id:
-        st, data = http("/org/select", user_token, "POST", {"orgId": org_id})
-        record("M10", "组织-选定回写", st == 200 and data.get("orgId") == org_id,
-               "orgId=%s fullName=%s" % (data.get("orgId"), data.get("fullName")))
-    else:
-        record("M10", "组织-选定回写", False, "测试用户无组织")
+    # 组织选择：新用户选定稳定叶子组织后回读验证
+    st, data = http("/org/select", user_token, "POST", {"orgId": ORG_TEST})
+    ok_sel = st == 200 and data.get("orgId") == ORG_TEST
+    st2, mine = http("/org/mine", user_token)
+    record("M10", "组织-选定回写", ok_sel and st2 == 200 and mine.get("orgId") == ORG_TEST,
+           "orgId=%s fullName=%s" % (mine.get("orgId"), mine.get("fullName")))
 
     # ---------- 3. 变更链路（运动同步 + 点亮 + 勋章刷新） ----------
+    st, before = http("/sport/today", user_token)
     st, data = http("/sport/add", user_token, "POST", {"delta": 1500})
-    record("M11", "运动-补充步数", st == 200 and data.get("steps", 0) >= 38000 + 1500,
+    record("M11", "运动-补充步数（增量自洽）", st == 200 and data.get("steps") == before.get("steps", 0) + 1500,
            "steps=%d" % data.get("steps", -1))
 
     st, data = http("/march/light-up", user_token, "POST")
@@ -168,14 +167,14 @@ def main():
     record("M16", "积分-答题积分入账", has_quiz, "logs=%s" % json.dumps(pts.get("logs"), ensure_ascii=False)[:200])
 
     # ---------- 5. WebSocket 实时推送 ----------
-    asyncio.run(ws_tests(user_token, admin_token))
+    asyncio.run(ws_tests(user_token, admin_token, test_user_id))
 
     # ---------- 落盘 ----------
     out = Path(__file__).parent / "e2e-results.json"
     out.write_text(json.dumps({
         "date": time.strftime("%Y-%m-%d %H:%M:%S"),
         "backend": BASE,
-        "testUser": TEST_USER_ID,
+        "testUser": test_user_id,
         "results": RESULTS,
         "passed": sum(1 for r in RESULTS if r["ok"]),
         "failed": sum(1 for r in RESULTS if not r["ok"]),
@@ -184,7 +183,7 @@ def main():
         sum(1 for r in RESULTS if r["ok"]), sum(1 for r in RESULTS if not r["ok"]), out))
 
 
-async def ws_tests(user_token, admin_token):
+async def ws_tests(user_token, admin_token, test_user_id):
     import websockets
 
     # 5.1 有效用户令牌可连接，数据变更后收到广播
@@ -193,7 +192,7 @@ async def ws_tests(user_token, admin_token):
             st, _ = http("/sport/add", user_token, "POST", {"delta": 100})
             evt = await asyncio.wait_for(ws.recv(), timeout=8)
             evt = json.loads(evt)
-            ok = evt.get("type") == "data_changed" and evt.get("reason") == "sport.add" and evt.get("user_id") == TEST_USER_ID
+            ok = evt.get("type") == "data_changed" and evt.get("reason") == "sport.add" and evt.get("user_id") == test_user_id
             record("W01", "WS-用户令牌连接并接收运动变更广播", ok, json.dumps(evt, ensure_ascii=False))
     except Exception as e:
         record("W01", "WS-用户令牌连接并接收运动变更广播", False, repr(e)[:200])

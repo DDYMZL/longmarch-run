@@ -1,10 +1,10 @@
 {
-  "run_code": "e2e-nickname-1790866324",
-  "user_id": 106,
+  "run_code": "e2e-nickname-1791522337",
+  "user_id": 337,
   "results": [
     {
       "id": "N01",
-      "name": "管理端登录",
+      "name": "管理端超管令牌可用（dashboard 200）",
       "ok": true,
       "detail": "st=200"
     },
@@ -24,7 +24,7 @@
       "id": "N04",
       "name": "首次修改昵称成功（返回修改时间）",
       "ok": true,
-      "detail": "st=200 nickname=长征小红军 changedAt=2026-10-01T14:52:05.133358"
+      "detail": "st=200 nickname=长征小红军 changedAt=2026-10-09T05:05:37.695681"
     },
     {
       "id": "N05",
@@ -36,13 +36,13 @@
       "id": "N06",
       "name": "已改名用户重复登录昵称保持改后值",
       "ok": true,
-      "detail": "nickname=长征小红军 changedAt=2026-10-01T14:52:05.133358"
+      "detail": "nickname=长征小红军 changedAt=2026-10-09T05:05:37.695681"
     },
     {
       "id": "N07",
       "name": "排名洞察返回曾用名与修改时间",
       "ok": true,
-      "detail": "st=200 item={'nickname': '长征小红军', 'original_nickname': '微信昵称测试员', 'nickname_changed_at': '2026-10-01T14:52:05.133358'}"
+      "detail": "st=200 item={'nickname': '长征小红军', 'original_nickname': '微信昵称测试员', 'nickname_changed_at': '2026-10-09T05:05:37.695681'}"
     },
     {
       "id": "N08",

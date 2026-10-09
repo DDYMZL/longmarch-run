@@ -33,7 +33,9 @@
   super 令牌调用 RBAC API 完成（被测功能本身），未在测试中直接插入授权行冒充管理员；
 - 撤销/禁用即时生效由 A7/A10 双路径验证（REST 每请求查库 + WS 建连查库）；
 - 未硬编码任何微信密钥或管理员密码；`ADMIN_PASSWORD` 默认空，账号登录需显式配置
-  （旧测试 s5/s6/e2e_full_flow 依赖 `admin/112233` 登录，将在批次 6 全链路回归时统一适配）。
+  （批次 6 全链路回归已统一适配：s4/s5/s6/s7/p2_quotes/nickname_change_smoke/e2e_full_flow
+  均改为 `create_admin_token("admin")` 铸造超管令牌；e2e_full_flow 的 D01/D02 按
+  `ADMIN_PASSWORD` 是否配置分别断言「403 禁用」或「环境密码登录成功/错误密码 401」）。
 
 ## 残留数据清理
 

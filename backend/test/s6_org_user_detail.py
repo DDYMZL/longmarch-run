@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from fastapi.testclient import TestClient
 
 from app.core.database import SessionLocal
+from app.core.security import create_admin_token
 from app.main import app
 from app.models.models import (
     DailySport,
@@ -84,9 +85,8 @@ def cleanup_smoke_user():
 def main():
     cleanup_smoke_user()
     with TestClient(app) as client:
-        r = client.post("/api/admin/login", json={"username": "admin", "password": "112233"})
-        assert r.status_code == 200, r.text
-        admin_headers = {"Authorization": "Bearer " + r.json()["token"]}
+        # 超管令牌直接铸造（与账号登录等价签发；ADMIN_PASSWORD 未配置时账号登录禁用）
+        admin_headers = {"Authorization": "Bearer " + create_admin_token("admin")}
 
         # A1 鉴权
         r = client.get("/api/admin/orgs/1/users")
