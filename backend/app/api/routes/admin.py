@@ -45,7 +45,12 @@ router = APIRouter(prefix="/admin", tags=["admin"])
 
 @router.post("/login", response_model=AdminLoginOut, summary="管理后台登录")
 def login(payload: AdminLoginRequest):
-    """校验管理员账号密码（配置 ADMIN_USERNAME/ADMIN_PASSWORD），签发 role=admin 令牌。"""
+    """校验管理员账号密码（配置 ADMIN_USERNAME/ADMIN_PASSWORD），签发 role=admin 令牌。
+
+    未配置 ADMIN_PASSWORD 时账号登录禁用（不硬编码默认密码），仅允许微信扫码登录。
+    """
+    if not settings.ADMIN_PASSWORD:
+        raise HTTPException(status_code=403, detail="未配置管理账号密码，请使用微信扫码登录")
     if (
         payload.username != settings.ADMIN_USERNAME
         or payload.password != settings.ADMIN_PASSWORD

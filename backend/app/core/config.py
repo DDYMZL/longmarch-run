@@ -21,15 +21,24 @@ class Settings(BaseSettings):
     # JWT
     JWT_SECRET: str = "longmarch-dev-secret-change-me-please"
     JWT_ALGORITHM: str = "HS256"
-    JWT_EXPIRE_MINUTES: int = 10080  # 7 天
+    JWT_EXPIRE_MINUTES: int = 10080  # 用户令牌 7 天
+    JWT_ADMIN_EXPIRE_MINUTES: int = 720  # 管理员令牌 12 小时（权限每次请求查库，短时效兜底）
 
     # 微信小程序凭证（留空则登录使用 mock openid，便于本地开发调试）
     WX_APPID: str = ""
     WX_SECRET: str = ""
 
-    # 管理后台（admin 前端项目）登录账号
+    # 微信开放平台网站应用凭证（扫码登录渠道阶段2；留空则该渠道禁用）
+    WX_WEB_APPID: str = ""
+    WX_WEB_SECRET: str = ""
+
+    # 扫码登录会话 / 身份绑定请求有效期（秒）
+    QR_LOGIN_TTL_SECONDS: int = 300
+    BIND_REQUEST_TTL_SECONDS: int = 600
+
+    # 管理后台（admin 前端项目）登录账号；密码未配置时账号登录禁用，仅允许微信扫码登录
     ADMIN_USERNAME: str = "admin"
-    ADMIN_PASSWORD: str = "112233"
+    ADMIN_PASSWORD: str = ""
 
     # 组织架构外部同步接口地址（留空时同步使用内置种子数据，便于开发调试）
     ORG_SYNC_API_URL: str = ""

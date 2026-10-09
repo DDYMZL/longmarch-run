@@ -274,3 +274,138 @@ class UserEvent(Base):
     event_type: Mapped[str] = mapped_column(String(30))
     event_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     event_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)
+
+
+# ---------------- 微信身份关联与管理后台 RBAC（docs/identity-binding-design.md） ----------------
+class UserIdentity(Base):
+    """微信身份关联表。provider: wx_mini / wx_web（开放平台渠道，阶段2）。
+
+    「一个 unionid 只属一个用户」规则无法用索引表达（同一用户多渠道会持有
+    相同 unionid），由 identity_service 在事务内校验，冲突身份禁止自动合并。
+    """
+
+    __tablename__ = "user_identities"
+    __table_args__ = (
+        UniqueConstraint("provider", "app_id", "openid", name="uq_identity_provider_openid"),
+        UniqueConstraint("user_id", "provider", "app_id", name="uq_identity_user_channel"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    provider: Mapped[str] = mapped_column(String(32))
+    app_id: Mapped[str] = mapped_column(String(64))
+    openid: Mapped[str] = mapped_column(String(64))
+    unionid: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    verified_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class BindRequest(Base):
+    """身份绑定请求记录。绑定凭证仅存 SHA-256 摘要，不存可重放的明文。
+
+    status: pending / confirmed / used / cancelled / expired；
+    目标身份（provider/app_id/openid/unionid）来自微信服务端，非前端提交。
+    """
+
+    __tablename__ = "bind_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True, default=None
+    )
+    provider: Mapped[str] = mapped_column(String(32))
+    app_id: Mapped[str] = mapped_column(String(64))
+    openid: Mapped[str] = mapped_column(String(64))
+    unionid: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    used_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class QrLoginSession(Base):
+    """PC 扫码登录会话。id（qrId）为轮询凭证，与小程序码内嵌 scene 凭证分离。
+
+    status: pending / scanned / confirmed / failed / cancelled / expired；
+    token_issued 保证管理员 JWT 仅签发一次，防轮询重放。
+    """
+
+    __tablename__ = "qr_login_sessions"
+
+    id: Mapped[str] = mapped_column(String(24), primary_key=True)
+    scene_token_hash: Mapped[str] = mapped_column(String(64), unique=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    fail_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, default=None)
+    user_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True, default=None
+    )
+    token_issued: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+
+
+class AdminMenu(Base):
+    """后台菜单。code 与 require_menu 依赖一一对应。"""
+
+    __tablename__ = "admin_menus"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True)
+    name: Mapped[str] = mapped_column(String(32))
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
+class AdminRole(Base):
+    """后台角色。is_builtin 的内置角色不可删除。"""
+
+    __tablename__ = "admin_roles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True)
+    name: Mapped[str] = mapped_column(String(32))
+    is_builtin: Mapped[bool] = mapped_column(Boolean, default=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AdminRoleMenu(Base):
+    """角色 ↔ 菜单关联。"""
+
+    __tablename__ = "admin_role_menus"
+
+    role_id: Mapped[int] = mapped_column(ForeignKey("admin_roles.id"), primary_key=True)
+    menu_id: Mapped[int] = mapped_column(ForeignKey("admin_menus.id"), primary_key=True)
+
+
+class AdminUserRole(Base):
+    """用户角色授权。enabled=False 即时生效（get_current_admin 每请求查库）。"""
+
+    __tablename__ = "admin_user_roles"
+    __table_args__ = (UniqueConstraint("user_id", "role_id", name="uq_admin_user_role"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    role_id: Mapped[int] = mapped_column(ForeignKey("admin_roles.id"))
+    enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    granted_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    granted_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AuditLog(Base):
+    """管理后台审计日志。actor_type: super（配置超管）/ user（微信关联管理员）。"""
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    actor_type: Mapped[str] = mapped_column(String(16))
+    actor_user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    action: Mapped[str] = mapped_column(String(50))
+    target_user_id: Mapped[Optional[int]] = mapped_column(
+        Integer, nullable=True, default=None, index=True
+    )
+    detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
