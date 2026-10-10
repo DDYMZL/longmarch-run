@@ -69,7 +69,7 @@
 | 前端 service | 主要方法 | 对应后端接口 | 核心业务 |
 | --- | --- | --- | --- |
 | `auth.js` | `wxLogin(profile)` / `getLocalUser()` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
-| `sport.js` | 今日步数 / `syncToday()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, calendar` | 步数按「用户+日期」覆盖；模拟步数；行军日历月聚合 |
+| `sport.js` | 今日步数 / `syncToday()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, calendar` | 步数按「用户+日期」覆盖；同步走 wx.getWeRunData 加密数据后端解密取真实步数；行军日历月聚合 |
 | `march.js` | `getRoute()` / `getNodeDetail(id)` / `lightUpNodes()` / `getGlobalGoal()` / `getFootprints()` / `markCeremony()` | `/api/march/route, node/{id}, light-up, global, footprints, ceremony` | 路线进度与节点配置由 `/march/route` 统一下发；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4） |
 | `quiz.js` | `getDaily()` / `submit()` / `checkAnswer()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, check, records, reset, knowledge` | 每日抽 5 题（同日同套）、判分、每日一次；`checkAnswer` 单题即时判题（无状态，连胜反馈用）；知识画像分类正确率 |
 | `points.js` | `grantDailyLogin()` / 总额与流水 | `/api/points`、登录副链路 | 积分发放（同日同 reason 去重） |
@@ -142,7 +142,7 @@ mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为
 ### 4.4 步数同步与点亮链路
 
 ```
-home/march 触发 → sport.syncToday()（POST /api/sport/sync 后端落库，维护连续行军）
+home/march 触发 → sport.syncToday()（授权 scope.werun → wx.login 取 code → wx.getWeRunData 取加密数据，POST /api/sport/sync {code, encryptedData, iv} 后端解密落库并维护连续行军；授权/取数失败即报错不发请求）
   → march.lightUpNodes()（POST /api/march/light-up，后端点亮并发放积分，返回 newlyLit + newlyCompletedChapters）
   → medal.checkAndGrant()（POST /api/medal/check，后端判定发放）
   → 有新点亮/新完成章节时按队列播放「节点抵达事件卡 → 章节完成仪式卡」（utils/arrivePopup.js 共用播放器；march 页另有 Canvas 金光扩散动画）
@@ -204,7 +204,7 @@ PC 管理后台登录页生成小程序码（POST /api/admin/wechat/qr，mock �
 
 | 域 | 规则 |
 | --- | --- |
-| 步数 | 「用户+日期」唯一，同日同步**覆盖**；模拟步数按「日期+用户」稳定生成（4000~12999） |
+| 步数 | 「用户+日期」唯一，同日同步**覆盖**；步数来源为 wx.getWeRunData 加密数据后端解密取当日真实步数，仅开发模式（mock 用户或未配置微信凭证）由后端按「日期+用户」稳定模拟（4000~12999） |
 | 路线 | 累计步数 ≥ `targetSteps` 即点亮，**永久保留**；节点状态 `completed / current / unlocked`；后台可启停节点，停用节点不可见但已有 `LitNode` 记录保留 |
 | 章节 | 5 章配置于后端 `march_service.CHAPTERS`（每章 2 节点，划分可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`；完成写 `CHAPTER_COMPLETE` 事件并触发前端章节完成仪式，不改变既有节点点亮与积分规则 |
 | 答题 | 每日随机 5 题、每题 20 分、满分 100；同用户同日仅一次提交；题目按 event/route/figure 分类支撑知识画像 |

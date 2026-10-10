@@ -1,0 +1,28 @@
+{
+  "results": [
+    {
+      "id": "T1",
+      "name": "演示+2000步按钮已移除且同步按钮保留",
+      "ok": true,
+      "detail": "demoBtn=false syncBtn=true"
+    },
+    {
+      "id": "T2",
+      "name": "取数失败时友好报错且零写入（无假数据）",
+      "ok": true,
+      "detail": "syncError=\"请先在微信中开通「微信运动」后再同步\" page=0 api=0"
+    },
+    {
+      "id": "T3",
+      "name": "同步步数非「日期+用户」模拟值（本环境无写入，按通过计）",
+      "ok": true,
+      "detail": "devtools 环境 getWeRunData 不可用，未产生任何步数"
+    },
+    {
+      "id": "T4",
+      "name": "后端 /sport/today 与页面一致",
+      "ok": true,
+      "detail": "api=0 page=0"
+    }
+  ]
+}

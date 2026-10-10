@@ -5,8 +5,8 @@
  *   按「用户 + 日期」保存每日步数；同一天多次同步时，
  *   以当天最新数据覆盖，绝不执行 累计 += 当前步数。
  *
- * 正式版步数来源：wx.getWeRunData 返回加密数据，需后端解密；
- * 当前后端同步接口未接入真实数据时按日期模拟。
+ * 步数来源：wx.getWeRunData 加密数据 → 后端用 session_key 解密取当日真实步数；
+ * 仅开发模式（mock 登录用户或未配置微信凭证）由后端按日期模拟，真实用户绝不编造步数。
  */
 const requestService = require('./request');
 
@@ -27,13 +27,59 @@ function authorizeWeRun() {
 }
 
 /**
- * 同步今日步数（后端返回同步结果并刷新勋章）。
+ * wx.login Promise 化：换取 code（后端据此换 session_key 解密运动数据）
+ * @returns {Promise<string>}
+ */
+function wxLoginCode() {
+  return new Promise((resolve, reject) => {
+    wx.login({
+      success: (res) => (res.code ? resolve(res.code) : reject(new Error('微信登录失败，请重试'))),
+      fail: () => reject(new Error('微信登录失败，请重试'))
+    });
+  });
+}
+
+/**
+ * wx.getWeRunData Promise 化：获取加密的微信运动数据
+ * @returns {Promise<{encryptedData:string, iv:string}>}
+ */
+function getWeRunData() {
+  return new Promise((resolve, reject) => {
+    wx.getWeRunData({
+      success: (res) => resolve({ encryptedData: res.encryptedData, iv: res.iv }),
+      fail: (e) => {
+        // 微信侧明确原因（如未开通微信运动）直接透传，便于用户自助解决
+        const errMsg = (e && e.errMsg) || '';
+        if (errMsg.indexOf('开通微信运动') > -1) {
+          reject(new Error('请先在微信中开通「微信运动」后再同步'));
+        } else {
+          reject(new Error('获取微信运动数据失败，请稍后重试'));
+        }
+      }
+    });
+  });
+}
+
+/**
+ * 同步今日步数（后端解密微信运动数据落库并刷新勋章）。
+ * 授权/登录/取数任一失败即抛错，不向服务端发请求，避免写入非真实步数。
  * @returns {Promise<{date:string, steps:number, totalSteps:number, synced:boolean}>}
  */
 function syncToday() {
-  return authorizeWeRun().then(() =>
-    requestService.request({ url: '/sport/sync', method: 'POST' })
-  );
+  return authorizeWeRun()
+    .then((granted) => {
+      if (!granted) throw new Error('未授权微信运动，无法同步步数');
+      return wxLoginCode().then((code) =>
+        getWeRunData().then((wd) => ({
+          code: code,
+          encryptedData: wd.encryptedData,
+          iv: wd.iv
+        }))
+      );
+    })
+    .then((payload) =>
+      requestService.request({ url: '/sport/sync', method: 'POST', data: payload })
+    );
 }
 
 /**
@@ -66,7 +112,6 @@ function getRecent(n) {
 
 module.exports = {
   DAILY_TARGET,
-  authorizeWeRun,
   syncToday,
   getToday,
   getCalendar,

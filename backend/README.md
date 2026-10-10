@@ -106,7 +106,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | PUT | `/api/auth/nickname` | 修改昵称（body: `nickname`），每人仅一次，已修改过返回 400 |
 | PUT | `/api/auth/nickname/initial` | 首次引导设置昵称（body: `nickname`），不消耗改名机会，已改过名返回 400 |
 | GET | `/api/sport/today` | 今日步数概况 |
-| POST | `/api/sport/sync` | 同步今日步数（同日覆盖，非累加） |
+| POST | `/api/sport/sync` | 同步今日步数（同日覆盖，非累加；wx.getWeRunData 加密数据后端解密取真实步数，开发模式回退模拟） |
 | GET | `/api/sport/recent?n=7` | 最近 n 天运动记录 |
 | GET | `/api/sport/calendar?month=YYYY-MM` | 行军日历（当月每日步数/达标/答题/点亮 + 月统计） |
 | POST | `/api/sport/add` | 手动补充步数（演示用，body: `delta`） |
@@ -159,7 +159,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 
 ## 业务规则（与前端 Mock 完全一致）
 
-- **步数**：按 `用户 + 日期` 唯一，同日同步为覆盖而非累加；未接入真实微信运动时按「日期+用户」生成稳定模拟步数（4000~12999）。
+- **步数**：按 `用户 + 日期` 唯一，同日同步为覆盖而非累加；步数来源为 `wx.getWeRunData` 加密数据后端解密取当日真实步数，仅 mock 用户（开发模式）或未配置微信凭证时回退按「日期+用户」稳定模拟（4000~12999），真实用户缺数据/解密失败返回 400 不写库。
 - **路线**：累计步数达到节点 `targetSteps` 即点亮，**点亮后永久保留**；节点状态分 `completed / current / unlocked`。管理后台可启停节点，停用节点不在小程序可见路线中，不参与完成判定和排名，但已有点亮记录保留。
 - **答题**：每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可完成一次；题目接口**不返回答案**。
 - **积分**：登录 +1、运动 5000/10000 步 +5/+10、答题 +5 满分额外 +10、点亮节点 +10、完成路线 +100；**同日同原因去重**。
@@ -193,6 +193,6 @@ backend 所需的建库、建表、索引和结构变更统一维护在根目录
 ## 待完善（生产化 TODO）
 
 - **微信登录**：配置真实 `WX_APPID`/`WX_SECRET`，`code2Session` 走真实接口。
-- **微信运动步数**：`wx.getWeRunData` 返回加密数据，需在后端用 `session_key` 解密后落库（当前为模拟步数）。
+- **微信运动步数**：前端 `wx.getWeRunData` 取加密数据连同 `wx.login` code 上送 `POST /api/sport/sync`，后端 code2Session 换 `session_key` 解密（AES-128-CBC + watermark.appid 校验，`app/core/wx.py`）取当日步数落库。
 - **头像存储**：`chooseAvatar` 得到的是小程序本地临时路径，对后端无意义；生产需前端上传头像文件到后端/对象存储，`avatar` 存可访问 URL。
 - **数据库迁移**：引入 Alembic 管理表结构变更。

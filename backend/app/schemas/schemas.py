@@ -115,6 +115,14 @@ class SportSync(CamelModel):
     synced: bool
 
 
+class SportSyncRequest(CamelModel):
+    """同步步数请求体（可选）：微信运动加密数据；缺省时仅开发模式回退模拟。"""
+
+    code: Optional[str] = None
+    encrypted_data: Optional[str] = None
+    iv: Optional[str] = None
+
+
 class RecentItem(CamelModel):
     date: str
     steps: int

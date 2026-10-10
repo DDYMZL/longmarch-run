@@ -1,0 +1,53 @@
+{
+  "results": [
+    {
+      "id": "W01",
+      "name": "mock 用户无 payload 同步走开发模拟",
+      "ok": true,
+      "detail": "status=200 steps=9854"
+    },
+    {
+      "id": "W02",
+      "name": "同日重复同步 synced=False 且步数不变",
+      "ok": true,
+      "detail": "steps=9854 synced=False"
+    },
+    {
+      "id": "W03",
+      "name": "已配置凭证：真实用户无 payload 拒绝且不写库",
+      "ok": true,
+      "detail": "status=400 detail=未获取到微信运动数据，请在小程序内重新同步 rows=0"
+    },
+    {
+      "id": "W04",
+      "name": "真实用户伪造加密数据 400 且 DB 无记录",
+      "ok": true,
+      "detail": "status=400 detail=微信会话换取失败，请重新同步 rows=0"
+    },
+    {
+      "id": "W05",
+      "name": "decrypt_werun 加解密往返一致",
+      "ok": true,
+      "detail": "step=6543"
+    },
+    {
+      "id": "W06",
+      "name": "watermark.appid 不匹配拒绝",
+      "ok": true,
+      "detail": "微信运动数据校验失败，请重新同步"
+    },
+    {
+      "id": "W07",
+      "name": "解密数据缺当日步数抛错",
+      "ok": true,
+      "detail": "微信运动数据中缺少今日步数，请稍后重试"
+    },
+    {
+      "id": "W08",
+      "name": "_resolve_steps 取当日真实步数",
+      "ok": true,
+      "detail": "steps=6543"
+    }
+  ],
+  "hasCreds": true
+}

@@ -1,7 +1,8 @@
 """运动数据服务（迁移自前端 services/sport.js）。
 
 规则：按 user+date 保存每日步数，同日覆盖而非累加。
-步数来源：正式版为微信运动 wx.getWeRunData 后端解密；未接入时用 seeded_steps 模拟。
+步数来源：前端 wx.getWeRunData 加密数据，后端 code2Session 换 session_key 解密取当日步数；
+仅 mock 登录用户（开发模式）或未配置微信凭证时回退 seeded_steps 模拟，真实用户绝不编造步数。
 
 写入副作用：
 - distance 按步长估算同步更新；is_goal_completed 与连续行军由 streak_service 维护；
@@ -15,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.helpers import local_to_utc, recent_dates, seeded_steps, to_local, today_str
+from app.core.wx import code2session, decrypt_werun
 from app.models.models import DailySport, LitNode, QuizRecord, RouteNode
 from app.services import event_service, points_service, streak_service
 
@@ -57,7 +59,45 @@ def _after_written(
             event_service.record(db, user_id, event_type, {"totalSteps": total})
 
 
-def sync_today(db: Session, user_id: int, steps: Optional[int] = None) -> Dict:
+def _resolve_steps(
+    openid: str,
+    code: Optional[str],
+    encrypted_data: Optional[str],
+    iv: Optional[str],
+    date: str,
+    user_id: int,
+) -> int:
+    """确定本次同步写入的步数。
+
+    - 已配置微信凭证且携带加密数据：code 换 session_key 解密，取当日步数；任何环节失败抛 ValueError；
+    - 其余情况：仅 mock 登录用户（开发模式）或未配置微信凭证时回退 seeded_steps 模拟；
+    - 真实用户未携带数据：抛 ValueError，绝不写入编造步数。
+    """
+    has_creds = bool(settings.WX_APPID and settings.WX_SECRET)
+    if has_creds and code and encrypted_data and iv:
+        session_info = code2session(code)
+        if not session_info or not session_info.get("session_key"):
+            raise ValueError("微信会话换取失败，请重新同步")
+        payload = decrypt_werun(session_info["session_key"], encrypted_data, iv)
+        today = today_str()
+        for item in payload.get("stepInfoList") or []:
+            ts = item.get("timestamp")
+            if ts and datetime.fromtimestamp(int(ts)).strftime("%Y-%m-%d") == today:
+                return int(item.get("step") or 0)
+        raise ValueError("微信运动数据中缺少今日步数，请稍后重试")
+    if openid.startswith("mock_") or not has_creds:
+        return seeded_steps(date, user_id)
+    raise ValueError("未获取到微信运动数据，请在小程序内重新同步")
+
+
+def sync_today(
+    db: Session,
+    user_id: int,
+    openid: str = "",
+    code: Optional[str] = None,
+    encrypted_data: Optional[str] = None,
+    iv: Optional[str] = None,
+) -> Dict:
     """同步今日步数。当天已有记录则保持不变（synced=False）；否则写入并发放达标积分。"""
     date = today_str()
     record = (
@@ -77,7 +117,7 @@ def sync_today(db: Session, user_id: int, steps: Optional[int] = None) -> Dict:
     is_first_record = (
         db.query(DailySport.id).filter(DailySport.user_id == user_id).first() is None
     )
-    value = steps if steps is not None else seeded_steps(date, user_id)
+    value = _resolve_steps(openid, code, encrypted_data, iv, date, user_id)
     record = DailySport(user_id=user_id, date=date, steps=value, distance=_distance_of(value))
     db.add(record)
     db.commit()

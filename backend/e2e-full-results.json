@@ -1,7 +1,7 @@
 {
   "suite": "e2e_full_flow",
-  "time": "2026-10-09T13:16:11.042372",
-  "duration_sec": 231.1,
+  "time": "2026-10-10T11:49:19.133298",
+  "duration_sec": 781.5,
   "total": 178,
   "passed": 178,
   "failed": 0,
@@ -40,7 +40,7 @@
       "status": "PASS",
       "expected": "users 行存在且 openid 为 mock 派生",
       "actual": "True",
-      "detail": "[('mock_dfeef6e55b5d87ae9e1cb09b', '长征小战士', '长征小战士', None, 0)]"
+      "detail": "[('mock_9c18154d443acaaff60ef339', '长征小战士', '长征小战士', None, 0)]"
     },
     {
       "id": "A05",
@@ -101,8 +101,8 @@
       "module": "auth",
       "name": "me.id 与登录一致",
       "status": "PASS",
-      "expected": "342",
-      "actual": "342",
+      "expected": "354",
+      "actual": "354",
       "detail": ""
     },
     {
@@ -211,7 +211,7 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'date': '2026-10-09', 'steps': 0, 'target': 10000, 'totalSteps': 0, 'currentStreak': 0, 'maxStreak': 0, 'streakGoal': 5000, 'todayGoalCompleted': False, 'nextStreakMilestone': 3, 'streakRemain': 3}"
+      "detail": "{'date': '2026-10-10', 'steps': 0, 'target': 10000, 'totalSteps': 0, 'currentStreak': 0, 'maxStreak': 0, 'streakGoal': 5000, 'todayGoalCompleted': False, 'nextStreakMilestone': 3, 'streakRemain': 3}"
     },
     {
       "id": "S02",
@@ -236,7 +236,7 @@
       "module": "sport",
       "name": "模拟步数在 4000~12999",
       "status": "PASS",
-      "expected": "steps=10361",
+      "expected": "steps=9856",
       "actual": "True",
       "detail": ""
     },
@@ -245,17 +245,17 @@
       "module": "sport",
       "name": "步数落库且与 API 一致",
       "status": "PASS",
-      "expected": "10361",
-      "actual": "10361",
-      "detail": "[(10361, True)]"
+      "expected": "9856",
+      "actual": "9856",
+      "detail": "[(9856, True)]"
     },
     {
       "id": "S06",
       "module": "sport",
       "name": "同日重复同步覆盖不叠加",
       "status": "PASS",
-      "expected": "10361",
-      "actual": "10361",
+      "expected": "9856",
+      "actual": "9856",
       "detail": ""
     },
     {
@@ -281,8 +281,8 @@
       "module": "sport",
       "name": "补步后步数增加",
       "status": "PASS",
-      "expected": "11361",
-      "actual": "11361",
+      "expected": "10856",
+      "actual": "10856",
       "detail": ""
     },
     {
@@ -315,20 +315,20 @@
     {
       "id": "S13",
       "module": "sport",
-      "name": "万步档取最高不叠发 5000 档",
+      "name": "5000 步奖励 +5 且不重复",
       "status": "PASS",
-      "expected": "0",
-      "actual": "0",
-      "detail": "[]"
+      "expected": "1",
+      "actual": "1",
+      "detail": "[('每日运动达到5000步', 5)]"
     },
     {
       "id": "S14",
       "module": "sport",
-      "name": "10000 步奖励 +10 且不重复",
+      "name": "未达万步不发放 +10",
       "status": "PASS",
-      "expected": "1",
-      "actual": "1",
-      "detail": "[('每日运动达到10000步', 10)]"
+      "expected": "0",
+      "actual": "0",
+      "detail": "[]"
     },
     {
       "id": "S15",
@@ -353,7 +353,7 @@
       "module": "sport",
       "name": "recent 包含今日记录",
       "status": "PASS",
-      "expected": "recent=[{'date': '2026-10-03', 'steps': 0, 'text': '10-03'}, {'date': '2026-10-04', 'steps': 0, 'text': '10-04'}]",
+      "expected": "recent=[{'date': '2026-10-04', 'steps': 0, 'text': '10-04'}, {'date': '2026-10-05', 'steps': 0, 'text': '10-05'}]",
       "actual": "True",
       "detail": ""
     },
@@ -380,7 +380,7 @@
       "module": "march",
       "name": "存在 current 下一目标节点",
       "status": "PASS",
-      "expected": "current={'id': 4, 'name': '巧渡金沙江', 'icon': '⛵', 'targetSteps': 15000, 'status': 'current', 'remain': 3639, 'historicalTime': '1935年5月', 'description': '1935年5月，红军仅凭7条小船，在皎平渡用七天七夜巧渡金沙江，摆脱了数十万敌军的围追堵截，取得了战略转移中具有决定意义的胜利。', 'latitude': 26.28, 'longitude': 102.47}",
+      "expected": "current={'id': 4, 'name': '巧渡金沙江', 'icon': '⛵', 'targetSteps': 15000, 'status': 'current', 'remain': 4144, 'historicalTime': '1935年5月', 'description': '1935年5月，红军仅凭7条小船，在皎平渡用七天七夜巧渡金沙江，摆脱了数十万敌军的围追堵截，取得了战略转移中具有决定意义的胜利。', 'latitude': 26.28, 'longitude': 102.47}",
       "actual": "True",
       "detail": ""
     },
@@ -391,7 +391,7 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'newlyLit': [{'id': 1, 'name': '瑞金', 'icon': '🚩', 'targetSteps': 0, 'status': 'completed', 'remain': 0, 'historicalTime': '1934年10月', 'description': '1934年10月，中央红军从江西瑞金出发，开始了举世闻名的二万五千里长征。瑞金是中华苏维埃共和国临时中央政府所在地，被称为“红色故都”。', 'latitude': 25.885, 'longitude': 116.027, 'gainedPoints': 10, 'litAt': '2026-10-09T05:12:54.008512', 'nextNode': {'name': '巧渡金沙江', 'remain': 3639}}, {'id': 2, 'name': '遵义', 'icon': '🏛️', 'targetSteps': 5000, 'status': 'completed', 'remain': 0, 'historicalTime': '1935年1月', 'description': '1935年1月，中共中央在遵义召开政治局扩大会议（遵义会议），确立了毛泽东同志在党中央和红军的领导地位，在极端危急的关头挽救了党、挽救了红军、挽救了中国革命。', 'latitude': 27.72, 'longitude': 106.93, 'gainedPoints': 10, 'litAt': '2026-10-09T05:12:54.008515', 'nextNode': {'name': '巧渡金沙江', 'remain': 3639}}, {'id': 3, 'name': '四渡赤水', 'icon': '🌊', 'targetSteps': 10000,"
+      "detail": "{'newlyLit': [{'id': 1, 'name': '瑞金', 'icon': '🚩', 'targetSteps': 0, 'status': 'completed', 'remain': 0, 'historicalTime': '1934年10月', 'description': '1934年10月，中央红军从江西瑞金出发，开始了举世闻名的二万五千里长征。瑞金是中华苏维埃共和国临时中央政府所在地，被称为“红色故都”。', 'latitude': 25.885, 'longitude': 116.027, 'gainedPoints': 10, 'litAt': '2026-10-10T03:38:37.442797', 'nextNode': {'name': '巧渡金沙江', 'remain': 4144}}, {'id': 2, 'name': '遵义', 'icon': '🏛️', 'targetSteps': 5000, 'status': 'completed', 'remain': 0, 'historicalTime': '1935年1月', 'description': '1935年1月，中共中央在遵义召开政治局扩大会议（遵义会议），确立了毛泽东同志在党中央和红军的领导地位，在极端危急的关头挽救了党、挽救了红军、挽救了中国革命。', 'latitude': 27.72, 'longitude': 106.93, 'gainedPoints': 10, 'litAt': '2026-10-10T03:38:37.442808', 'nextNode': {'name': '巧渡金沙江', 'remain': 4144}}, {'id': 3, 'name': '四渡赤水', 'icon': '🌊', 'targetSteps': 10000,"
     },
     {
       "id": "M06",
@@ -436,7 +436,7 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'totalSteps': 571698, 'targetSteps': 200000000, 'progressPct': 0.3, 'milestones': [{'name': '5000万', 'steps': 50000000, 'reached': False}, {'name': '1亿', 'steps': 100000000, 'reached': False}, {'name': '1.5亿', 'steps': 150000000, 'reached': False}, {'name': '2亿', 'steps': 200000000, 'reached': False}], 'nextMilestone': {'name': '5000万', 'steps': 50000000, 'remain': 49428302}}"
+      "detail": "{'totalSteps': 686937, 'targetSteps': 200000000, 'progressPct': 0.3, 'milestones': [{'name': '5000万', 'steps': 50000000, 'reached': False}, {'name': '1亿', 'steps': 100000000, 'reached': False}, {'name': '1.5亿', 'steps': 150000000, 'reached': False}, {'name': '2亿', 'steps': 200000000, 'reached': False}], 'nextMilestone': {'name': '5000万', 'steps': 50000000, 'remain': 49313063}}"
     },
     {
       "id": "M11",
@@ -452,7 +452,7 @@
       "module": "march",
       "name": "足迹包含已点亮节点(瑞金)",
       "status": "PASS",
-      "expected": "{'nodes': [{'id': 1, 'name': '瑞金', 'icon': '🚩', 'litAt': '2026-10-09T05:12:54.008512', 'litDate': '2026-10-09', 'daySteps': 11361, 'cumSteps': 11361}, {'id': 2, 'name': '遵义', 'icon': '🏛️', 'litAt': '2",
+      "expected": "{'nodes': [{'id': 1, 'name': '瑞金', 'icon': '🚩', 'litAt': '2026-10-10T03:38:37.442797', 'litDate': '2026-10-10', 'daySteps': 10856, 'cumSteps': 10856}, {'id': 2, 'name': '遵义', 'icon': '🏛️', 'litAt': '2",
       "actual": "True",
       "detail": ""
     },
@@ -488,7 +488,7 @@
       "module": "quiz",
       "name": "每日有期号 issueNo",
       "status": "PASS",
-      "expected": "issueNo=39",
+      "expected": "issueNo=40",
       "actual": "True",
       "detail": ""
     },
@@ -497,7 +497,7 @@
       "module": "quiz",
       "name": "同日抽题缓存同一套",
       "status": "PASS",
-      "expected": "first=[3, 10, 1, 8, 15]",
+      "expected": "first=[15, 9, 10, 2, 8]",
       "actual": "True",
       "detail": ""
     },
@@ -508,7 +508,7 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'date': '2026-10-09', 'totalCount': 5, 'correctCount': 5, 'score': 100, 'points': 15, 'wrongList': [], 'answerAt': 1791522789162}"
+      "detail": "{'date': '2026-10-10', 'totalCount': 5, 'correctCount': 5, 'score': 100, 'points': 15, 'wrongList': [], 'answerAt': 1791603565412}"
     },
     {
       "id": "Q07",
@@ -571,7 +571,7 @@
       "status": "PASS",
       "expected": "True",
       "actual": "True",
-      "detail": "{'questionId': 3, 'correct': True}"
+      "detail": "{'questionId': 15, 'correct': True}"
     },
     {
       "id": "Q14",
@@ -587,7 +587,7 @@
       "module": "quiz",
       "name": "records 含今日记录且同日唯一",
       "status": "PASS",
-      "expected": "[{'date': '2026-10-09', 'totalCount': 5, 'correctCount': 5, 'score': 100, 'points': 15, 'wrongList': [], 'answerAt': 1791522789162}]",
+      "expected": "[{'date': '2026-10-10', 'totalCount': 5, 'correctCount': 5, 'score': 100, 'points': 15, 'wrongList': [], 'answerAt': 1791603565412}]",
       "actual": "True",
       "detail": ""
     },
@@ -625,14 +625,14 @@
       "status": "PASS",
       "expected": "0",
       "actual": "0",
-      "detail": "{'date': '2026-10-09', 'totalCount': 5, 'correctCount': 0, 'score': 0, 'points': 5, 'wrongList': [{'index': 1, 'questionId': 4, 'category': 'event', 'question': '飞夺泸定桥发生在红军长征途中。', 'correctAnswer': 'A', 'analysis': '飞夺泸定桥是红军长征中的重要历史事件。'}, {'index': 2, 'questionId': 3, 'category': 'event', 'question': '下列哪一项属于红军长征中的著名战役？', 'correctAnswer': 'A', 'analysis': '四渡赤水是中央红军长征途中进行的重要战役行动。'}, {'index': 3, 'questionId': 15, 'category': 'event', 'question': '遵义会议确立了毛泽东同志在党中央和红军的领导地位。', 'correctAnswer': 'A', 'analysis': '遵义会议事实上确立了毛泽东同志在党中央和红军的领导地位。'}, {'index': 4, 'questionId': 11, 'category': 'route', 'question': '以下哪个地点被称为中国革命的圣地？', 'correctAnswer': 'C', 'analysis': '延安是中共中央所在地和中国革命的圣地。'}, {'index': 5, 'questionId': 12, 'category': 'figure', 'question': '强渡大渡河的突击队员被称为“十七勇士”。', 'correctAnswer': 'A', '"
+      "detail": "{'date': '2026-10-10', 'totalCount': 5, 'correctCount': 0, 'score': 0, 'points': 5, 'wrongList': [{'index': 1, 'questionId': 7, 'category': 'route', 'question': '红军长征翻越的第一座大雪山是夹金山。', 'correctAnswer': 'A', 'analysis': '1935年6月，红军翻越的第一座大雪山是海拔4000多米的夹金山。'}, {'index': 2, 'questionId': 3, 'category': 'event', 'question': '下列哪一项属于红军长征中的著名战役？', 'correctAnswer': 'A', 'analysis': '四渡赤水是中央红军长征途中进行的重要战役行动。'}, {'index': 3, 'questionId': 9, 'category': 'route', 'question': '中央红军长征的起止时间大致是？', 'correctAnswer': 'B', 'analysis': '中央红军1934年10月从江西出发，1935年10月到达陕北吴起镇。'}, {'index': 4, 'questionId': 6, 'category': 'event', 'question': '长征途中具有转折意义、被称为“中国革命生死攸关的转折点”的会议是？', 'correctAnswer': 'A', 'analysis': '遵义会议在极其危急的历史关头挽救了党、挽救了红军、挽救了中国革命。'}, {'index': 5, 'questionId': 1, 'category': 'event', 'question': '遵义会议召开于"
     },
     {
       "id": "Q20",
       "module": "quiz",
       "name": "wrongList 逐题给出正确解析",
       "status": "PASS",
-      "expected": "{'date': '2026-10-09', 'totalCount': 5, 'correctCount': 0, 'score': 0, 'points': 5, 'wrongList': [{'index': 1, 'questionId': 4, 'category': 'event', 'question': '飞夺泸定桥发生在红军长征途中。', 'correctAnswer': 'A', 'analysis': '飞夺泸定桥是红军长征中的重要历史事件。'}, {'index': 2, 'questionId': 3, 'category': 'event', 'question':",
+      "expected": "{'date': '2026-10-10', 'totalCount': 5, 'correctCount': 0, 'score': 0, 'points': 5, 'wrongList': [{'index': 1, 'questionId': 7, 'category': 'route', 'question': '红军长征翻越的第一座大雪山是夹金山。', 'correctAnswer': 'A', 'analysis': '1935年6月，红军翻越的第一座大雪山是海拔4000多米的夹金山。'}, {'index': 2, 'questionId': 3, 'category': 'ev",
       "actual": "True",
       "detail": ""
     },
@@ -686,7 +686,7 @@
       "module": "quiz",
       "name": "抽题缓存按用户隔离(各1条)",
       "status": "PASS",
-      "expected": "daily_questions=[(342, 1), (343, 1)]",
+      "expected": "daily_questions=[(354, 1), (355, 1)]",
       "actual": "True",
       "detail": ""
     },
@@ -695,7 +695,7 @@
       "module": "points",
       "name": "积分流水按用户隔离",
       "status": "PASS",
-      "expected": "['每日登录', '每日运动达到10000步']",
+      "expected": "['每日运动达到5000步', '每日登录']",
       "actual": "True",
       "detail": ""
     },
@@ -704,8 +704,8 @@
       "module": "points",
       "name": "用户B 积分总额与 DB 一致",
       "status": "PASS",
-      "expected": "11",
-      "actual": "11",
+      "expected": "6",
+      "actual": "6",
       "detail": ""
     },
     {
@@ -722,8 +722,8 @@
       "module": "points",
       "name": "积分总数与 DB 一致",
       "status": "PASS",
-      "expected": "41",
-      "actual": "41",
+      "expected": "36",
+      "actual": "36",
       "detail": ""
     },
     {
@@ -731,7 +731,7 @@
       "module": "points",
       "name": "流水字段 camelCase",
       "status": "PASS",
-      "expected": "[{'date': '2026-10-09', 'reason': '点亮节点：四渡赤水', 'delta': 10}, {'date': '2026-10-09', 'reason': '点亮节点：遵义', 'delta': 10}]",
+      "expected": "[{'date': '2026-10-10', 'reason': '点亮节点：四渡赤水', 'delta': 10}, {'date': '2026-10-10', 'reason': '点亮节点：遵义', 'delta': 10}]",
       "actual": "True",
       "detail": ""
     },
@@ -803,8 +803,8 @@
       "module": "rank",
       "name": "排行步数与 DB 一致",
       "status": "PASS",
-      "expected": "11361",
-      "actual": "11361",
+      "expected": "10856",
+      "actual": "10856",
       "detail": ""
     },
     {
@@ -821,7 +821,7 @@
       "module": "rank",
       "name": "排行按步数降序",
       "status": "PASS",
-      "expected": "[72500, 70000, 65001, 65001, 65000, 30000]",
+      "expected": "[72500, 70000, 65001, 65001, 65001, 65000]",
       "actual": "True",
       "detail": ""
     },
@@ -841,7 +841,7 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'org': {'orgId': 1, 'orgName': '长征集团总部', 'fullName': '长征集团总部', 'path': [{'id': 1, 'name': '长征集团总部'}]}, 'memberCount': 23, 'totalSteps': 256295, 'progressPct': 100, 'currentNodeName': '延安', 'nextNodeName': '', 'finished': True, 'litCount': 10, 'totalCount': 10, 'nodes': [{'id': 1, 'name': '瑞金', 'targetSteps': 0, 'status': 'completed', 'pct': 100}, {'id': 2, 'name': '遵义', 'targetSteps': 5000, 'status': 'completed', 'pct': 100}, {'id': 3, 'name': '四渡赤水', 'targetSteps': 10000, 'status': 'completed', 'pct': 100}, {'id': 4, 'name': '巧渡金沙江', 'targetSteps': 15000, 'status': 'completed', 'pct': 100}, {'id': 5, 'name': '强渡大渡河', 'targetSteps': 20000, 'status': 'completed', 'pct': 100}, {'id': 6, 'name': '飞夺泸定桥', 'targetSteps': 25000, 'status': 'completed', 'pct': 100}, {'id': 7, 'name': '翻越雪山', 'tar"
+      "detail": "{'org': {'orgId': 1, 'orgName': '长征集团总部', 'fullName': '长征集团总部', 'path': [{'id': 1, 'name': '长征集团总部'}]}, 'memberCount': 27, 'totalSteps': 360666, 'progressPct': 100, 'currentNodeName': '延安', 'nextNodeName': '', 'finished': True, 'litCount': 10, 'totalCount': 10, 'nodes': [{'id': 1, 'name': '瑞金', 'targetSteps': 0, 'status': 'completed', 'pct': 100}, {'id': 2, 'name': '遵义', 'targetSteps': 5000, 'status': 'completed', 'pct': 100}, {'id': 3, 'name': '四渡赤水', 'targetSteps': 10000, 'status': 'completed', 'pct': 100}, {'id': 4, 'name': '巧渡金沙江', 'targetSteps': 15000, 'status': 'completed', 'pct': 100}, {'id': 5, 'name': '强渡大渡河', 'targetSteps': 20000, 'status': 'completed', 'pct': 100}, {'id': 6, 'name': '飞夺泸定桥', 'targetSteps': 25000, 'status': 'completed', 'pct': 100}, {'id': 7, 'name': '翻越雪山', 'tar"
     },
     {
       "id": "R07",
@@ -850,7 +850,7 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'org': {'orgId': 1, 'orgName': '长征集团总部', 'fullName': '长征集团总部', 'path': [{'id': 1, 'name': '长征集团总部'}]}, 'memberCount': 23, 'todayTotalSteps': 102483, 'companions': [{'nickname': 'P1M本人', 'avatar': None, 'todaySteps': 23000, 'isSelf': False}, {'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 11361, 'isSelf': True}, {'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 11360, 'isSelf': False}, {'nickname': '端到端测试员乙', 'avatar': None, 'todaySteps': 10362, 'isSelf': False}, {'nickname': 'P1M本人', 'avatar': None, 'todaySteps': 8000, 'isSelf': False}, {'nickname': 'P1M本人', 'avatar': None, 'todaySteps': 8000, 'isSelf': False}]}"
+      "detail": "{'org': {'orgId': 1, 'orgName': '长征集团总部', 'fullName': '长征集团总部', 'path': [{'id': 1, 'name': '长征集团总部'}]}, 'memberCount': 27, 'todayTotalSteps': 40367, 'companions': [{'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 10856, 'isSelf': True}, {'nickname': '端到端测试员乙', 'avatar': None, 'todaySteps': 9857, 'isSelf': False}, {'nickname': '长征小战士', 'avatar': 'wxfile://store_8b675298b635471213b647e1e1677adedb1e3d94e7b75473.jpg', 'todaySteps': 9828, 'isSelf': False}, {'nickname': '李尤', 'avatar': 'wxfile://store_b62bb91d5b2386e7c2123beee246d10d.jpg', 'todaySteps': 9826, 'isSelf': False}, {'nickname': '改过一次名', 'avatar': 'https://example.com/avatar-a.png', 'todaySteps': 0, 'isSelf': False}, {'nickname': '端到端测试员乙', 'avatar': None, 'todaySteps': 0, 'isSelf': False}]}"
     },
     {
       "id": "F01",
@@ -940,7 +940,7 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'global': {'todayUsers': 27, 'todaySteps': 401283, 'todayLitCount': 46, 'todayQuizUsers': 3, 'totalUsers': 58}, 'personal': {'todaySteps': 11361, 'beatPercent': 78, 'remainToNext': 3639, 'nextNodeName': '巧渡金沙江'}, 'memory': {'nodeId': 3, 'title': '四渡赤水', 'historicalTime': '1935年1-3月', 'brief': '红军四渡赤水河，跳出数十万重兵包围圈。'}}"
+      "detail": "{'global': {'todayUsers': 4, 'todaySteps': 40367, 'todayLitCount': 7, 'todayQuizUsers': 1, 'totalUsers': 64}, 'personal': {'todaySteps': 10856, 'beatPercent': 100, 'remainToNext': 4144, 'nextNodeName': '巧渡金沙江'}, 'memory': {'nodeId': 4, 'title': '巧渡金沙江', 'historicalTime': '1935年5月', 'brief': '仅凭 7 条小船，七天七夜巧渡金沙江。'}}"
     },
     {
       "id": "F11",
@@ -956,7 +956,7 @@
       "module": "broadcast",
       "name": "公开动态条目含 eventType/昵称/文案",
       "status": "PASS",
-      "expected": "{'id': 1232, 'eventType': 'BADGE_UNLOCK', 'eventTime': '2026-10-09T05:13:31.588368', 'nickname': '端到端测试员乙', 'text': '获得勋章「日行万步」'}",
+      "expected": "{'id': 1296, 'eventType': 'BADGE_UNLOCK', 'eventTime': '2026-10-10T03:40:41.772768', 'nickname': '端到端测试员乙', 'text': '获得勋章「初次出发」'}",
       "actual": "True",
       "detail": ""
     },
@@ -1145,7 +1145,7 @@
       "module": "edge",
       "name": "被拒绝的提交不占用当日答题机会",
       "status": "PASS",
-      "expected": "{'date': '2026-10-09', 'issueNo': 39, 'completed': False, 'questions': [{'id': 11, 'type': 'single', 'question': '以下哪个地点被称为中国革命的圣地？', 'options': [{'label': 'A', 'text': '瑞金'}, {'label': 'B', 'text': '遵义'}, {'label': 'C', 'text': '延安'}, {'label': 'D', 'text': '井冈山'}], 'analysis': '延安是中共中央所在地和中国革命的圣地。', 'score': 20}, {'id': 3, 'type': 'single', 'question': '下列哪一项属于红军长征中的著名战役？', 'options': [{'label':",
+      "expected": "{'date': '2026-10-10', 'issueNo': 40, 'completed': False, 'questions': [{'id': 13, 'type': 'single', 'question': '红军长征途中穿越的“死亡之地”松潘草地，其主要危险是？', 'options': [{'label': 'A', 'text': '沼泽遍布、气候恶劣'}, {'label': 'B', 'text': '高山缺氧'}, {'label': 'C', 'text': '沙漠干旱'}, {'label': 'D', 'text': '原始森林猛兽'}], 'analysis': '松潘草地沼泽遍布、天气变化无常，行军极为艰难。', 'score': 20}, {'id': 12, 'type': 'judge', 'question': '强渡大渡河的突击队员被称为“",
       "actual": "True",
       "detail": ""
     },
@@ -1163,8 +1163,8 @@
       "module": "edge",
       "name": "拒绝后步数保持不变",
       "status": "PASS",
-      "expected": "10363",
-      "actual": "10363",
+      "expected": "9858",
+      "actual": "9858",
       "detail": ""
     },
     {
@@ -1172,7 +1172,7 @@
       "module": "edge",
       "name": "补步拒绝后 DB 与 API 一致",
       "status": "PASS",
-      "expected": "[(10363,)]",
+      "expected": "[(9858,)]",
       "actual": "True",
       "detail": ""
     },
@@ -1201,34 +1201,34 @@
       "status": "PASS",
       "expected": "False",
       "actual": "False",
-      "detail": "{'date': '2026-10-09', 'steps': 10363, 'totalSteps': 10363, 'synced': False}"
+      "detail": "{'date': '2026-10-10', 'steps': 9858, 'totalSteps': 9858, 'synced': False}"
     },
     {
       "id": "E17",
       "module": "edge",
       "name": "未选组织用户在排行中 orgName 为空串",
       "status": "PASS",
-      "expected": "{'rank': 13, 'userId': 344, 'nickname': '边缘用户丙', 'avatar': '', 'orgName': '', 'steps': 10363, 'isMe': True}",
+      "expected": "{'rank': 17, 'userId': 356, 'nickname': '边缘用户丙', 'avatar': '', 'orgName': '', 'steps': 9858, 'isMe': True}",
       "actual": "True",
       "detail": ""
     },
     {
       "id": "D01",
       "module": "admin",
-      "name": "未配置 ADMIN_PASSWORD 时账号登录禁用 403",
+      "name": "管理员账号登录成功（已配置密码）",
       "status": "PASS",
-      "expected": "403",
-      "actual": "403",
+      "expected": "200",
+      "actual": "200",
       "detail": ""
     },
     {
       "id": "D02",
       "module": "admin",
-      "name": "错误密码登录失败（账号登录已禁用）",
+      "name": "错误密码登录失败",
       "status": "PASS",
-      "expected": "skip",
-      "actual": "账号登录禁用",
-      "detail": "未配置 ADMIN_PASSWORD，任意账号密码均被拒绝，D01 已覆盖"
+      "expected": "401",
+      "actual": "True",
+      "detail": "{'detail': '用户名或密码错误'}"
     },
     {
       "id": "D03",
@@ -1262,8 +1262,8 @@
       "module": "admin",
       "name": "总用户数与 DB 一致",
       "status": "PASS",
-      "expected": "59",
-      "actual": "59",
+      "expected": "65",
+      "actual": "65",
       "detail": ""
     },
     {
@@ -1271,8 +1271,8 @@
       "module": "admin",
       "name": "总步数与 DB 一致",
       "status": "PASS",
-      "expected": "646062",
-      "actual": "646062",
+      "expected": "760796",
+      "actual": "760796",
       "detail": ""
     },
     {
@@ -1280,8 +1280,8 @@
       "module": "admin",
       "name": "勋章发放数与 DB 一致",
       "status": "PASS",
-      "expected": "70",
-      "actual": "70",
+      "expected": "80",
+      "actual": "80",
       "detail": ""
     },
     {
@@ -1309,7 +1309,7 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'id': 23, 'name': 'E2E测试组织', 'parent_id': None, 'level': 1, 'sort_order': 99, 'direct_user_count': 0, 'total_user_count': 0, 'children': []}"
+      "detail": "{'id': 24, 'name': 'E2E测试组织', 'parent_id': None, 'level': 1, 'sort_order': 99, 'direct_user_count': 0, 'total_user_count': 0, 'children': []}"
     },
     {
       "id": "D12",
@@ -1354,7 +1354,7 @@
       "status": "PASS",
       "expected": "400(有子级)或200(软处理)",
       "actual": "200",
-      "detail": "{'message': '部分节点仍被用户引用已保留：[1, 2, 3, 5, 6, 8, 9, 12, 13]'}"
+      "detail": "{'message': '部分节点仍被用户引用已保留：[1, 2, 3, 4, 5, 6, 8, 9, 12, 13]'}"
     },
     {
       "id": "D17",
@@ -1435,14 +1435,14 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'id': 17, 'date': '2026-10-09', 'content': 'E2E测试寄语', 'source': 'E2E', 'node_id': 1, 'node_name': '瑞金'}"
+      "detail": "{'id': 18, 'date': '2026-10-10', 'content': 'E2E测试寄语', 'source': 'E2E', 'node_id': 1, 'node_name': '瑞金'}"
     },
     {
       "id": "D26",
       "module": "admin",
       "name": "新寄语即刻对小程序生效",
       "status": "PASS",
-      "expected": "{'id': 17, 'date': '2026-10-09', 'content': 'E2E测试寄语', 'source': 'E2E', 'node': {'id': 1, 'name': '瑞金'}}",
+      "expected": "{'id': 18, 'date': '2026-10-10', 'content': 'E2E测试寄语', 'source': 'E2E', 'node': {'id': 1, 'name': '瑞金'}}",
       "actual": "True",
       "detail": ""
     },
@@ -1460,7 +1460,7 @@
       "module": "admin",
       "name": "寄语修改对小程序同步生效",
       "status": "PASS",
-      "expected": "{'id': 17, 'date': '2026-10-09', 'content': 'E2E测试寄语改', 'source': 'E2E', 'node': {'id': 1, 'name': '瑞金'}}",
+      "expected": "{'id': 18, 'date': '2026-10-10', 'content': 'E2E测试寄语改', 'source': 'E2E', 'node': {'id': 1, 'name': '瑞金'}}",
       "actual": "True",
       "detail": ""
     },
@@ -1489,7 +1489,7 @@
       "status": "PASS",
       "expected": "200",
       "actual": "200",
-      "detail": "{'id': 16, 'name': 'E2E测试节点', 'icon': '🧪', 'target_steps': 999999, 'historical_time': '2026-10', 'description': '测试节点', 'latitude': 26.0, 'longitude': 116.0, 'sort_order': 99, 'is_enabled': True, 'brief': '', 'significance': '', 'figures': '', 'location': '', 'images': [], 'audio': '', 'keywords': ''}"
+      "detail": "{'id': 17, 'name': 'E2E测试节点', 'icon': '🧪', 'target_steps': 999999, 'historical_time': '2026-10', 'description': '测试节点', 'latitude': 26.0, 'longitude': 116.0, 'sort_order': 99, 'is_enabled': True, 'brief': '', 'significance': '', 'figures': '', 'location': '', 'images': [], 'audio': '', 'keywords': ''}"
     },
     {
       "id": "D32",
@@ -1595,8 +1595,8 @@
       "module": "ws",
       "name": "用户写操作触发 WS 广播",
       "status": "PASS",
-      "expected": "event={'type': 'data_changed', 'reason': 'sport.add', 'user_id': 342, 'at': '2026-10-09T05:16:11.026774'}",
-      "actual": "{'type': 'data_changed', 'reason': 'sport.add', 'user_id': 342, 'at': '2026-10-09T05:16:11.026774'}",
+      "expected": "event={'type': 'data_changed', 'reason': 'sport.add', 'user_id': 354, 'at': '2026-10-10T03:49:19.080939'}",
+      "actual": "{'type': 'data_changed', 'reason': 'sport.add', 'user_id': 354, 'at': '2026-10-10T03:49:19.080939'}",
       "detail": ""
     },
     {
@@ -1605,7 +1605,7 @@
       "name": "广播 at 为 ISO 字符串（与 REST event_time 一致）",
       "status": "PASS",
       "expected": "ISO 字符串",
-      "actual": "2026-10-09T05:16:11.026774",
+      "actual": "2026-10-10T03:49:19.080939",
       "detail": ""
     }
   ]

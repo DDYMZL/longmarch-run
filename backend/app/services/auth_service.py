@@ -5,17 +5,15 @@
 """
 import hashlib
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Tuple
 
-import httpx
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.security import create_access_token
+from app.core.wx import code2session
 from app.models.models import User
 from app.services import identity_service
 
-WX_CODE2SESSION = "https://api.weixin.qq.com/sns/jscode2session"
 DEFAULT_NICKNAME = "长征小战士"
 
 
@@ -23,32 +21,6 @@ def _mock_openid(code: str) -> str:
     """开发模式：由 code 派生稳定 mock openid。"""
     raw = (code or "dev").encode("utf-8")
     return "mock_" + hashlib.md5(raw).hexdigest()[:24]
-
-
-def _code2session(code: str) -> Optional[dict]:
-    """调用微信接口用 code 换 openid/unionid；未配置凭证或失败时返回 None。
-
-    session_key 不落库、不写日志，取到即弃（当前无 WeRun 解密需求）。
-    """
-    if not settings.WX_APPID or not settings.WX_SECRET:
-        return None
-    try:
-        resp = httpx.get(
-            WX_CODE2SESSION,
-            params={
-                "appid": settings.WX_APPID,
-                "secret": settings.WX_SECRET,
-                "js_code": code,
-                "grant_type": "authorization_code",
-            },
-            timeout=5.0,
-        )
-        data = resp.json()
-        if not data.get("openid"):
-            return None
-        return {"openid": data["openid"], "unionid": data.get("unionid")}
-    except Exception:
-        return None
 
 
 def wx_login(
@@ -61,7 +33,7 @@ def wx_login(
     头像允许随每次微信登录更新。
     真实微信响应时同步写入身份关联行（user_identities，provider=wx_mini）。
     """
-    session_info = _code2session(code)
+    session_info = code2session(code)
     openid = (session_info or {}).get("openid") or _mock_openid(code)
 
     user = db.query(User).filter(User.openid == openid).first()

@@ -46,7 +46,7 @@
 | 数据库 | `app/core/database.py` | `engine`、`SessionLocal`、`Base`、`get_db`；不负责建表 |
 | 数据库部署 | `../docker/` | openGauss Compose 配置、建库脚本、表结构和递增 SQL 变更 |
 | 安全 | `app/core/security.py` | `create_token`/`decode_token`（PyJWT HS256，`sub`=user_id）；`create_admin_token`（`typ=super`，`sub`=username）/`create_admin_token_for_user`（`typ=user`，`sub`=user_id） |
-| 工具 | `app/core/helpers.py` | 日期字符串、按「日期+用户」生成稳定模拟步数 |
+| 工具 | `app/core/helpers.py`、`app/core/wx.py` | 日期字符串、按「日期+用户」生成稳定模拟步数；微信 code2Session 与 wx.getWeRunData 加密数据 AES 解密（watermark 校验） |
 | 鉴权依赖 | `app/api/deps.py` | `get_current_user`：Bearer Token 缺失/无效/用户不存在统一 401；`get_current_admin` 解析管理员令牌并**每请求查库**校验 RBAC（撤销/禁用即时生效）；`require_menu(code)` 菜单码依赖（超管全放行，角色缺菜单 403） |
 | 实时推送 | `app/api/routes/ws.py` | `/api/ws/updates` WebSocket 长连接；数据变更广播 `data_changed`，用户事件广播 `activity` |
 | 种子 | `app/data/seed.py` | 幂等写入：路线节点 10（含历史事件卡内容）、题库 15（含分类）、勋章 12（分类/隐藏/排序）、组织树、后台菜单 9 项与内置角色（超管/运营） |
@@ -136,7 +136,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | POST | `/api/auth/qr/info` | 是 | 查询扫码场景 `{scene}`：L{token} 返回 `{type:"login", status}`（pending→置 scanned）；B{token} 返回 `{type:"bind", status, target:{provider, appId, nickname?}}`；凭证不存在/过期 404/400 |
 | POST | `/api/auth/qr/confirm` | 是 | 确认/取消扫码 `{scene, action:confirm|cancel}`：L 确认校验 RBAC——无启用角色会话置 failed（403 带原因），有角色置 confirmed；B 确认事务内写 user_identities（unionid 冲突禁止自动合并，凭证单次有效） |
 | GET | `/api/sport/today` | 是 | 今日步数概况 `{date, steps, target, totalSteps}` |
-| POST | `/api/sport/sync` | 是 | 同步今日步数（模拟），返回 `{date, steps, totalSteps, synced}` 并刷新勋章 |
+| POST | `/api/sport/sync` | 是 | 同步今日步数：请求体（可选）携带 `{code, encryptedData, iv}`（wx.getWeRunData 加密数据），后端 code2Session 换 session_key 解密取当日真实步数；仅 mock 用户或未配置微信凭证时回退模拟，真实用户缺数据/解密失败 400 不写库。返回 `{date, steps, totalSteps, synced}` 并刷新勋章 |
 | GET | `/api/sport/recent?n=7` | 是 | 最近 n 天记录 `[{date, steps, text}]` |
 | GET | `/api/sport/calendar?month=YYYY-MM` | 是 | 行军日历：当月每日步数/达标/答题/点亮节点 + 月统计（总步数/运动天数/日均/最高/当前连续） |
 | POST | `/api/sport/add` | 是 | 手动补步（演示）：`{delta}` → 今日概况，刷新勋章 |
@@ -272,7 +272,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 
 | 域 | 规则 |
 | --- | --- |
-| 步数 | 按「用户+日期」唯一，同日同步**覆盖**；未接真实微信运动时按「日期+用户」生成稳定模拟步数（4000~12999）；`/sport/add` 演示补步 |
+| 步数 | 按「用户+日期」唯一，同日同步**覆盖**；步数来源为 wx.getWeRunData 加密数据后端解密取当日真实步数，仅 mock 用户（开发模式）或未配置微信凭证时回退按「日期+用户」稳定模拟（4000~12999），真实用户绝不编造步数；`/sport/add` 演示补步 |
 | 路线 | 累计步数 ≥ 节点 `targetSteps` 即点亮，点亮**永久保留**；节点状态 `completed`（已点亮）/ `current`（下一目标）/ `unlocked`（未解锁）；停用节点不在小程序可见路线中，不参与完成判定和排名，已有 lit_nodes 记录保留 |
 | 章节 | 5 章配置于 `march_service.CHAPTERS`（每章 2 个 route_nodes 主键，划分与介绍可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`（全部停用的章节不下发）；`light_up_nodes` 对比点亮前后完成集，新完成章写 `CHAPTER_COMPLETE` 事件并随响应返回（含 title/intro 供前端仪式展示），不改变节点点亮与积分规则 |
 | 答题 | 每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可提交一次；题目接口**不下发答案**；`/quiz/reset` 仅供调试 |

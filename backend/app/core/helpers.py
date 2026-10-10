@@ -32,8 +32,9 @@ def local_to_utc(dt: datetime) -> datetime:
 def seeded_steps(date_str: str, user_id: int) -> int:
     """基于「日期 + 用户」生成稳定伪随机步数（4000~12999）。
 
-    迁移自前端 util.seededSteps：同一天同一用户结果一致，
-    用于未接入真实微信运动数据时模拟每日步数。
+    迁移自前端 util.seededSteps：同一天同一用户结果一致。
+    仅开发模式兜底：mock 登录用户或未配置微信凭证时由 /sport/sync 回退使用；
+    真实微信用户步数一律来自 wx.getWeRunData 解密，不得使用本函数编造。
     """
     key = f"{date_str}|{user_id}"
     seed = 0

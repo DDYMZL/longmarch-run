@@ -1,5 +1,5 @@
 """运动路由：今日步数、同步、最近记录、行军日历、手动补充。"""
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -13,6 +13,7 @@ from app.schemas.schemas import (
     RecentItem,
     SportCalendarOut,
     SportSync,
+    SportSyncRequest,
     SportToday,
 )
 from app.services import medal_service, sport_service
@@ -26,9 +27,24 @@ def today(current: User = Depends(get_current_user), db: Session = Depends(get_d
 
 
 @router.post("/sync", response_model=SportSync, summary="同步今日步数")
-def sync(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    """同步微信运动步数（未接入真实数据时按日期模拟），并刷新勋章。"""
-    result = sport_service.sync_today(db, current.id)
+def sync(
+    payload: Optional[SportSyncRequest] = None,
+    current: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """同步微信运动步数（前端 wx.getWeRunData 加密数据后端解密），并刷新勋章。"""
+    body = payload or SportSyncRequest()
+    try:
+        result = sport_service.sync_today(
+            db,
+            current.id,
+            openid=current.openid,
+            code=body.code,
+            encrypted_data=body.encrypted_data,
+            iv=body.iv,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     medal_service.check_and_grant(db, current.id)
     ws_manager.broadcast(ws_manager.build_event("sport.sync", current.id))
     return result
