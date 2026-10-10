@@ -264,7 +264,7 @@ def main():
 
         # L12 入驻二维码
         set_wx("", "")
-        wechat_service._onboard_png_cache.clear()
+        wechat_service._onboard_image_cache.clear()
         admin_headers = {"Authorization": "Bearer " + create_admin_token("s13-admin")}
         r_admin = client.get("/api/admin/onboarding-qrcode", headers=admin_headers)
         r_anon = client.get("/api/admin/onboarding-qrcode")

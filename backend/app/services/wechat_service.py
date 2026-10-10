@@ -2,6 +2,7 @@
 
 凭证（access_token）仅存进程内存、过期前 200 秒刷新，不落库、不写日志。
 """
+import base64
 import time
 from typing import Optional
 
@@ -20,7 +21,7 @@ ONBOARD_SCENE = "src=onboard"
 
 _TOKEN_TTL_SECONDS = 7000  # 微信 access_token 有效期 7200s，提前 200s 刷新
 _token_cache: dict = {"token": "", "expires_at": 0.0}
-_onboard_png_cache: dict = {}
+_onboard_image_cache: dict = {}
 
 
 def _fetch_access_token() -> Optional[str]:
@@ -73,12 +74,18 @@ def get_wxacode_png(scene: str, page: str = WXACODE_PAGE) -> Optional[bytes]:
     return None
 
 
-def get_onboarding_png() -> Optional[bytes]:
+def get_onboarding_image() -> Optional[bytes]:
     """通用入驻小程序码（内容固定，成功结果按版本进程内缓存）。"""
     key = settings.WXACODE_ENV_VERSION
-    png = _onboard_png_cache.get(key)
-    if png is None:
-        png = get_wxacode_png(ONBOARD_SCENE, ONBOARD_PAGE)
-        if png is not None:
-            _onboard_png_cache[key] = png
-    return png
+    image = _onboard_image_cache.get(key)
+    if image is None:
+        image = get_wxacode_png(ONBOARD_SCENE, ONBOARD_PAGE)
+        if image is not None:
+            _onboard_image_cache[key] = image
+    return image
+
+
+def to_data_url(image: bytes) -> str:
+    """按文件头识别格式（微信默认返回 JPEG，is_hyaline 时为 PNG）转 data URL。"""
+    mime = "image/png" if image.startswith(b"\x89PNG") else "image/jpeg"
+    return f"data:{mime};base64," + base64.b64encode(image).decode("ascii")

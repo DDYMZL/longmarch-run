@@ -4,7 +4,6 @@
 （超管令牌或微信关联管理员令牌，后者每次请求查库校验授权）。
 契约面向根目录 admin 前端项目（Vue3 + TS），字段为 snake_case，独立于小程序 camelCase 契约。
 """
-import base64
 from datetime import datetime
 from typing import List, Optional
 from urllib.parse import quote
@@ -106,7 +105,7 @@ def create_wechat_qr(request: Request, db: Session = Depends(get_db)):
     mock = png is None
     return {
         "qr_id": session.id,
-        "image": None if mock else "data:image/png;base64," + base64.b64encode(png).decode("ascii"),
+        "image": None if mock else wechat_service.to_data_url(png),
         "scene": scene_token if mock else None,
         "mock": mock,
         "expires_in": settings.QR_LOGIN_TTL_SECONDS,
@@ -120,13 +119,13 @@ def create_wechat_qr(request: Request, db: Session = Depends(get_db)):
 )
 def get_onboarding_qrcode(_: AdminPrincipal = Depends(get_current_admin)):
     """码内仅含启动页路径与固定渠道标记，不含任何个人信息、OpenID 或 Token。"""
-    png = wechat_service.get_onboarding_png()
+    image = wechat_service.get_onboarding_image()
     return {
-        "image": None if png is None else "data:image/png;base64," + base64.b64encode(png).decode("ascii"),
+        "image": None if image is None else wechat_service.to_data_url(image),
         "page": wechat_service.ONBOARD_PAGE,
         "scene": wechat_service.ONBOARD_SCENE,
         "env_version": settings.WXACODE_ENV_VERSION,
-        "mock": png is None,
+        "mock": image is None,
     }
 
 

@@ -308,6 +308,18 @@ export function pollWechatQr(qrId: string) {
   return request.get<QrStatusResult>(`/admin/wechat/qr/${qrId}/status`, { silent: true })
 }
 
+export interface OnboardingQrResult {
+  image: string | null
+  page: string
+  scene: string
+  env_version: string
+  mock: boolean
+}
+
+export function fetchOnboardingQr() {
+  return request.get<OnboardingQrResult>('/admin/onboarding-qrcode')
+}
+
 export interface MeResult {
   username: string
   is_super: boolean
