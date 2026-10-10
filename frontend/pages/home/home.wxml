@@ -74,7 +74,6 @@
       <button class="btn-primary sync-btn" loading="{{syncing}}" disabled="{{syncing}}" bindtap="handleSyncSteps">
         {{todaySteps > 0 ? '重新同步' : '同步微信步数'}}
       </button>
-      <button class="btn-ghost demo-btn" bindtap="handleAddSteps">演示 +2000步</button>
     </view>
   </view>
 

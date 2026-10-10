@@ -328,29 +328,6 @@ Page({
   },
 
   /**
-   * 演示用：手动补步数（无真机环境模拟微信运动数据变化）
-   */
-  handleAddSteps() {
-    sport
-      .addSteps(2000)
-      .then(() => Promise.all([march.lightUpNodes(), medal.checkAndGrant()]))
-      .then((r) => {
-        this.refreshAll();
-
-        if (r[0].newlyLit.length > 0 || r[0].newlyCompletedChapters.length > 0) {
-          this.playLitPopup(r[0].newlyLit, r[0].newlyCompletedChapters);
-        } else if (r[1].length > 0) {
-          wx.showToast({ title: '获得新勋章！', icon: 'none' });
-        } else {
-          wx.showToast({ title: '模拟 +2000 步', icon: 'none' });
-        }
-      })
-      .catch((err) => {
-        wx.showToast({ title: (err && err.message) || '操作失败', icon: 'none' });
-      });
-  },
-
-  /**
    * 抵达事件队列（逐个播放）：先节点抵达卡，后章节完成仪式卡（需求 §4.5）
    */
   playLitPopup(newlyLit, newChapters) {

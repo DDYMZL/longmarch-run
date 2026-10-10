@@ -64,22 +64,11 @@ function getRecent(n) {
   return requestService.request({ url: '/sport/recent?n=' + (n || 7) });
 }
 
-/**
- * 手动补充步数（开发/演示用，模拟用户当天多走了一些）。
- * 实际产品中步数由微信运动返回，此方法用于无真机环境演示。
- * @param {number} delta
- * @returns {Promise<{date:string, steps:number, target:number, totalSteps:number}>}
- */
-function addSteps(delta) {
-  return requestService.request({ url: '/sport/add', method: 'POST', data: { delta } });
-}
-
 module.exports = {
   DAILY_TARGET,
   authorizeWeRun,
   syncToday,
   getToday,
   getCalendar,
-  getRecent,
-  addSteps
+  getRecent
 };

@@ -144,12 +144,6 @@
   flex: 1;
 }
 
-.demo-btn {
-  flex: 1;
-  font-size: 24rpx;
-  padding: 16rpx 20rpx;
-}
-
 .error-tip {
   color: #C8102E;
   font-size: 24rpx;
