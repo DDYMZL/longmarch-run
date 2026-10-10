@@ -1,0 +1,70 @@
+{
+  "results": [
+    {
+      "id": "Q01",
+      "name": "模板下载：xlsx 双工作表且表头正确",
+      "ok": true,
+      "detail": "sheets=['题目数据', '填写说明'] header_ok=True"
+    },
+    {
+      "id": "Q02",
+      "name": "合法文件预览统计正确",
+      "ok": true,
+      "detail": "status=200 body={\"preview_token\": \"89fc478500844bdeaea11e27048ae8b4\", \"total\": 3, \"valid_count\": 3, \"invalid_count\": 0, \"errors\": []}"
+    },
+    {
+      "id": "Q03",
+      "name": "确认导入写库成功且内容正确",
+      "ok": true,
+      "detail": "status=200 imported=3 ids=[1, 2, 3]"
+    },
+    {
+      "id": "Q09",
+      "name": "判断题正确答案映射与选项自动生成",
+      "ok": true,
+      "detail": "answer=['A'] options=[{'label': 'A', 'text': '正确'}, {'label': 'B', 'text': '错误'}]"
+    },
+    {
+      "id": "Q04",
+      "name": "同一 token 重复确认被拒绝",
+      "ok": true,
+      "detail": "status=400 detail=该导入已确认，请勿重复提交"
+    },
+    {
+      "id": "Q05",
+      "name": "错误行定位（题型/答案/公式/库内重复/文件内重复）",
+      "ok": true,
+      "detail": "rows=[2, 3, 4, 5, 7] valid=1 errors=[{\"row\": 2, \"field\": \"\", \"reason\": \"题型必须为「单选」或「判断」\"}, {\"row\": 3, \"field\": \"\", \"reason\": \"正确答案 ['C'] 不在选项标签中\"}, {\"row\": 4, \"field\": \"题目内容\", \"reason\": \"不允许包含公式或以 + = @ 开头的内容\"}, {\"row\": 5, \"field\": \"题目内容\", \"reason\": \"与题库中已有题目重复\"}, {\"row\": 7, \"field\": \"题"
+    },
+    {
+      "id": "Q06",
+      "name": "含错误批次确认被禁止",
+      "ok": true,
+      "detail": "status=400 detail=存在校验失败的数据行，本批次禁止导入"
+    },
+    {
+      "id": "Q07",
+      "name": "非 .xlsx 文件拒绝",
+      "ok": true,
+      "detail": "status=400"
+    },
+    {
+      "id": "Q08",
+      "name": "表头不符拒绝",
+      "ok": true,
+      "detail": "status=400 detail=表头与模板不一致，请下载最新模板填写"
+    },
+    {
+      "id": "Q10",
+      "name": "分值浮点单元格解析为整数 20",
+      "ok": true,
+      "detail": "preview=1"
+    },
+    {
+      "id": "Q11",
+      "name": "列表分页与筛选（keyword/qtype/category）",
+      "ok": true,
+      "detail": "total=4 p1=2 p2=2 judge=1"
+    }
+  ]
+}

@@ -409,3 +409,23 @@ class AuditLog(Base):
     )
     detail: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ImportPreview(Base):
+    """Excel 批量导入预览暂存（V1.1 题库/寄语/人员导入）。
+
+    上传解析后的整批数据（有效行 + 错误行）存 payload；确认导入时在同一事务
+    写入正式表并置 confirmed。token 一次性使用且会过期，防止重复提交重复导入。
+    status: pending / confirmed。biz_type: question / quote / staff。
+    """
+
+    __tablename__ = "import_previews"
+
+    token: Mapped[str] = mapped_column(String(36), primary_key=True)
+    biz_type: Mapped[str] = mapped_column(String(20))
+    payload: Mapped[dict] = mapped_column(JSON, default=dict)
+    status: Mapped[str] = mapped_column(String(10), default="pending")
+    created_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime)
+    confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)

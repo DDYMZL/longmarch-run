@@ -7,8 +7,9 @@
 import base64
 from datetime import datetime
 from typing import List, Optional
+from urllib.parse import quote
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.deps import AdminPrincipal, get_current_admin, require_menu
@@ -33,6 +34,9 @@ from app.schemas.schemas import (
     AdminOrgSyncOut,
     AdminOrgTreeOut,
     AdminOrgUpsert,
+    AdminImportConfirmOut,
+    AdminImportConfirmRequest,
+    AdminImportPreviewOut,
     AdminQuestionListOut,
     AdminQuestionOut,
     AdminQuestionUpsert,
@@ -59,6 +63,7 @@ from app.services import (
     admin_service,
     dashboard_service,
     identity_service,
+    import_service,
     quote_service,
     wechat_service,
 )
@@ -305,12 +310,19 @@ def user_overview(user_id: int, db: Session = Depends(get_db)):
 @router.get(
     "/questions",
     response_model=AdminQuestionListOut,
-    summary="题目列表",
+    summary="题目列表（分页/筛选）",
     dependencies=[Depends(require_menu("questions"))],
 )
-def list_questions(db: Session = Depends(get_db)):
-    items = admin_service.list_questions(db)
-    return {"total": len(items), "items": items}
+def list_questions(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str = Query(""),
+    qtype: str = Query(""),
+    category: str = Query(""),
+    db: Session = Depends(get_db),
+):
+    total, items = admin_service.list_questions(db, page, page_size, keyword, qtype, category)
+    return {"total": total, "items": items}
 
 
 @router.post(
@@ -324,6 +336,56 @@ def create_question(payload: AdminQuestionUpsert, db: Session = Depends(get_db))
         return admin_service.create_question(db, payload.model_dump())
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.get(
+    "/questions/import-template",
+    summary="下载题库导入模板（Excel）",
+    dependencies=[Depends(require_menu("questions"))],
+)
+def download_question_import_template():
+    content = import_service.build_question_template()
+    filename = quote("长征步迹_题库导入模板.xlsx")
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )
+
+
+@router.post(
+    "/questions/import-preview",
+    response_model=AdminImportPreviewOut,
+    summary="题库导入预览（上传 Excel 整批校验）",
+)
+def preview_question_import(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("questions")),
+):
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="仅支持 .xlsx 文件，请使用下载的模板")
+    content = file.file.read(import_service.MAX_FILE_SIZE + 1)
+    if len(content) > import_service.MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="文件大小超过 2MB 限制")
+    try:
+        return import_service.preview_question_import(db, content, admin.username)
+    except import_service.ImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/questions/import-confirm",
+    response_model=AdminImportConfirmOut,
+    summary="确认题库导入（事务写入，令牌一次性）",
+    dependencies=[Depends(require_menu("questions"))],
+)
+def confirm_question_import(payload: AdminImportConfirmRequest, db: Session = Depends(get_db)):
+    try:
+        imported = import_service.confirm_question_import(db, payload.preview_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"imported": imported}
 
 
 @router.put(

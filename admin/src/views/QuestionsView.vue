@@ -1,15 +1,18 @@
 <script setup lang="ts">
-// 题库维护：列表（类型筛选 + 关键字搜索）、新增、编辑、删除
-import { computed, onMounted, reactive, ref } from 'vue'
+// 题库维护：列表（服务端分页 + 类型/分类/关键字筛选）、新增、编辑、删除、Excel 批量导入
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 import {
+  confirmQuestionImport,
   createQuestion,
   deleteQuestion,
+  downloadQuestionImportTemplate,
   fetchQuestions,
+  previewQuestionImport,
   updateQuestion
 } from '../api/admin'
-import type { Question, QuestionOption } from '../api/admin'
+import type { ImportPreviewResult, Question, QuestionOption } from '../api/admin'
 
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F']
 const CATEGORIES = [
@@ -21,28 +24,44 @@ const categoryLabel = (value: string) => CATEGORIES.find((c) => c.value === valu
 
 const loading = ref(false)
 const questions = ref<Question[]>([])
+const total = ref(0)
+const page = ref(1)
+const pageSize = ref(20)
 const filterType = ref('')
 const filterCategory = ref('')
 const keyword = ref('')
 
-const filtered = computed(() =>
-  questions.value.filter((q) => {
-    if (filterType.value && q.type !== filterType.value) return false
-    if (filterCategory.value && q.category !== filterCategory.value) return false
-    if (keyword.value && !q.question.includes(keyword.value.trim())) return false
-    return true
-  })
-)
-
 async function loadQuestions() {
   loading.value = true
   try {
-    const { data } = await fetchQuestions()
+    const { data } = await fetchQuestions({
+      page: page.value,
+      page_size: pageSize.value,
+      keyword: keyword.value.trim() || undefined,
+      qtype: filterType.value || undefined,
+      category: filterCategory.value || undefined
+    })
     questions.value = data.items
+    total.value = data.total
   } finally {
     loading.value = false
   }
 }
+
+// 筛选条件变化回到第一页重新查询
+watch([filterType, filterCategory], () => {
+  page.value = 1
+  loadQuestions()
+})
+
+let searchTimer: ReturnType<typeof setTimeout> | null = null
+watch(keyword, () => {
+  if (searchTimer) clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => {
+    page.value = 1
+    loadQuestions()
+  }, 400)
+})
 
 // ---------------- 新增 / 编辑弹窗 ----------------
 const dialogVisible = ref(false)
@@ -176,6 +195,87 @@ function answerText(row: Question): string {
     .join('；')
 }
 
+// ---------------- Excel 批量导入 ----------------
+const importVisible = ref(false)
+const importFile = ref<File | null>(null)
+const previewing = ref(false)
+const confirming = ref(false)
+const preview = ref<ImportPreviewResult | null>(null)
+
+function openImport() {
+  importFile.value = null
+  preview.value = null
+  importVisible.value = true
+}
+
+function handleFileChange(file: UploadFile) {
+  importFile.value = file.raw ?? null
+  preview.value = null
+}
+
+async function handlePreview() {
+  if (!importFile.value) {
+    ElMessage.warning('请先选择填写好的 .xlsx 文件')
+    return
+  }
+  previewing.value = true
+  try {
+    const { data } = await previewQuestionImport(importFile.value)
+    preview.value = data
+    if (data.invalid_count === 0) {
+      ElMessage.success(`校验通过：${data.valid_count} 行可导入`)
+    } else {
+      ElMessage.warning(`发现 ${data.invalid_count} 行错误，修正后请重新上传`)
+    }
+  } finally {
+    previewing.value = false
+  }
+}
+
+async function handleConfirmImport() {
+  if (!preview.value || confirming.value) return
+  confirming.value = true
+  try {
+    const { data } = await confirmQuestionImport(preview.value.preview_token)
+    ElMessage.success(`成功导入 ${data.imported} 道题目`)
+    importVisible.value = false
+    page.value = 1
+    await loadQuestions()
+  } finally {
+    confirming.value = false
+  }
+}
+
+async function handleDownloadTemplate() {
+  const { data } = await downloadQuestionImportTemplate()
+  const url = URL.createObjectURL(new Blob([data]))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = '长征步迹_题库导入模板.xlsx'
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
+// CSV 单元格防公式注入：以 = + - @ 开头的文本加前导单引号
+function csvCell(value: unknown) {
+  let text = value == null ? '' : String(value)
+  if (/^[=+\-@]/.test(text)) text = `'${text}`
+  return `"${text.replace(/"/g, '""')}"`
+}
+
+function downloadErrorReport() {
+  if (!preview.value?.errors.length) return
+  const header = ['Excel行号', '出错字段', '错误原因']
+  const rows = preview.value.errors.map((e) => [e.row, e.field || '整行', e.reason])
+  const content = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')
+  const url = URL.createObjectURL(new Blob([`﻿${content}`], { type: 'text/csv;charset=utf-8' }))
+  const link = document.createElement('a')
+  link.href = url
+  link.download = `题库导入错误报告_${new Date().toISOString().slice(0, 10)}.csv`
+  link.click()
+  URL.revokeObjectURL(url)
+}
+
 onMounted(loadQuestions)
 </script>
 
@@ -197,12 +297,14 @@ onMounted(loadQuestions)
         :prefix-icon="'Search'"
       />
       <div class="spacer" />
-      <span class="total">共 {{ questions.length }} 题</span>
+      <span class="total">共 {{ total }} 题</span>
+      <el-button :icon="'Download'" @click="handleDownloadTemplate">下载导入模板</el-button>
+      <el-button :icon="'Upload'" @click="openImport">批量导入</el-button>
       <el-button type="primary" :icon="'Plus'" @click="openCreate">新增题目</el-button>
       <el-button :icon="'Refresh'" @click="loadQuestions">刷新</el-button>
     </div>
 
-    <el-table v-loading="loading" :data="filtered" border stripe row-key="id">
+    <el-table v-loading="loading" :data="questions" border stripe row-key="id">
       <el-table-column prop="id" label="ID" width="64" align="center" />
       <el-table-column label="题型" width="90" align="center">
         <template #default="{ row }">
@@ -235,6 +337,79 @@ onMounted(loadQuestions)
         </template>
       </el-table-column>
     </el-table>
+
+    <el-pagination
+      v-model:current-page="page"
+      v-model:page-size="pageSize"
+      :total="total"
+      :page-sizes="[10, 20, 50, 100]"
+      layout="total, sizes, prev, pager, next"
+      class="pagination"
+      @current-change="loadQuestions"
+      @size-change="page = 1; loadQuestions()"
+    />
+
+    <el-dialog v-model="importVisible" title="批量导入题目" width="720px" destroy-on-close>
+      <el-alert type="info" :closable="false" class="import-tip">
+        <p>1. 先下载导入模板，按「填写说明」工作表的要求填写题目数据；</p>
+        <p>2. 上传文件后系统逐行校验，任意一行失败则整批禁止导入；</p>
+        <p>3. 校验通过后点击「确认导入」一次性写入，与库内已有题目重复的行会判错（不覆盖）。</p>
+      </el-alert>
+      <div class="import-actions">
+        <el-button :icon="'Download'" @click="handleDownloadTemplate">下载导入模板</el-button>
+        <el-upload
+          :auto-upload="false"
+          :show-file-list="false"
+          accept=".xlsx"
+          :limit="1"
+          :on-change="handleFileChange"
+        >
+          <el-button type="primary" plain :icon="'FolderOpened'">
+            {{ importFile ? importFile.name : '选择 .xlsx 文件' }}
+          </el-button>
+        </el-upload>
+        <el-button type="primary" :loading="previewing" :disabled="!importFile" @click="handlePreview">
+          上传校验
+        </el-button>
+      </div>
+
+      <template v-if="preview">
+        <el-alert
+          :type="preview.invalid_count === 0 ? 'success' : 'error'"
+          :closable="false"
+          class="import-tip"
+        >
+          共 {{ preview.total }} 行：有效 {{ preview.valid_count }} 行，错误 {{ preview.invalid_count }} 行
+        </el-alert>
+        <template v-if="preview.errors.length">
+          <div class="error-header">
+            <span class="error-title">错误明细</span>
+            <el-button link type="primary" :icon="'Download'" @click="downloadErrorReport">
+              下载错误报告
+            </el-button>
+          </div>
+          <el-table :data="preview.errors" border size="small" max-height="280">
+            <el-table-column prop="row" label="Excel行号" width="90" align="center" />
+            <el-table-column label="出错字段" width="110" align="center">
+              <template #default="{ row }">{{ row.field || '整行' }}</template>
+            </el-table-column>
+            <el-table-column prop="reason" label="错误原因" min-width="260" show-overflow-tooltip />
+          </el-table>
+        </template>
+      </template>
+
+      <template #footer>
+        <el-button @click="importVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="confirming"
+          :disabled="!preview || preview.invalid_count > 0 || preview.valid_count === 0"
+          @click="handleConfirmImport"
+        >
+          确认导入{{ preview && preview.valid_count ? ` ${preview.valid_count} 题` : '' }}
+        </el-button>
+      </template>
+    </el-dialog>
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="640px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
@@ -309,6 +484,34 @@ onMounted(loadQuestions)
 
 .answer {
   color: #67c23a;
+}
+
+.pagination {
+  margin-top: 14px;
+  justify-content: flex-end;
+}
+
+.import-tip {
+  margin-bottom: 14px;
+}
+
+.import-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.error-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 10px 0 6px;
+}
+
+.error-title {
+  font-weight: 600;
+  color: #f56c6c;
 }
 
 .option-list {

@@ -4,7 +4,7 @@
 组织架构同步：配置 ORG_SYNC_API_URL 时从外部系统拉取；留空时降级使用
 内置种子数据（data/seed.ORGANIZATIONS），便于开发调试。
 """
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 import httpx
 from sqlalchemy import func
@@ -133,9 +133,34 @@ def _validate_enabled_route(db: Session) -> None:
 
 
 # ---------------- 题库维护 ----------------
-def list_questions(db: Session) -> List[Question]:
-    """按 id 升序返回全部题目（管理端可见正确答案）。"""
-    return db.query(Question).order_by(Question.id).all()
+def list_questions(
+    db: Session,
+    page: int = 1,
+    page_size: int = 20,
+    keyword: str = "",
+    qtype: str = "",
+    category: str = "",
+) -> Tuple[int, List[Question]]:
+    """分页返回题目（管理端可见正确答案）。
+
+    keyword 模糊匹配题干；qtype（single/judge）与 category（event/route/figure）
+    精确过滤；按 id 升序。
+    """
+    query = db.query(Question)
+    if keyword.strip():
+        query = query.filter(Question.question.contains(keyword.strip()))
+    if qtype:
+        query = query.filter(Question.type == qtype)
+    if category:
+        query = query.filter(Question.category == category)
+    total = query.count()
+    items = (
+        query.order_by(Question.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return total, items
 
 
 def create_question(db: Session, data: Dict) -> Question:

@@ -460,8 +460,30 @@ export function setRouteNodeEnabled(id: number, isEnabled: boolean) {
 }
 
 // ---------------- 题库 ----------------
-export function fetchQuestions() {
-  return request.get<QuestionListResult>('/admin/questions')
+export interface QuestionQuery {
+  page: number
+  page_size: number
+  keyword?: string
+  qtype?: string
+  category?: string
+}
+
+export interface ImportErrorRow {
+  row: number
+  field: string
+  reason: string
+}
+
+export interface ImportPreviewResult {
+  preview_token: string
+  total: number
+  valid_count: number
+  invalid_count: number
+  errors: ImportErrorRow[]
+}
+
+export function fetchQuestions(query: QuestionQuery) {
+  return request.get<QuestionListResult>('/admin/questions', { params: query })
 }
 
 export function createQuestion(data: QuestionUpsert) {
@@ -474,6 +496,22 @@ export function updateQuestion(id: number, data: QuestionUpsert) {
 
 export function deleteQuestion(id: number) {
   return request.delete<MessageResult>(`/admin/questions/${id}`)
+}
+
+export function downloadQuestionImportTemplate() {
+  return request.get('/admin/questions/import-template', { responseType: 'blob' })
+}
+
+export function previewQuestionImport(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return request.post<ImportPreviewResult>('/admin/questions/import-preview', form)
+}
+
+export function confirmQuestionImport(previewToken: string) {
+  return request.post<{ imported: number }>('/admin/questions/import-confirm', {
+    preview_token: previewToken
+  })
 }
 
 // ---------------- 每日寄语 ----------------

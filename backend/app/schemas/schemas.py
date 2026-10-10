@@ -878,6 +878,33 @@ class AdminQuoteUpsert(BaseModel):
     node_id: Optional[int] = None
 
 
+# ---------------- 管理端 Excel 批量导入（V1.1）----------------
+class AdminImportErrorRow(BaseModel):
+    """单条校验错误：row 为 Excel 行号；field 为出错列名，空串表示整行错误。"""
+
+    row: int
+    field: str = ""
+    reason: str
+
+
+class AdminImportPreviewOut(BaseModel):
+    """导入预览结果。任意一行校验失败时本批次禁止确认导入。"""
+
+    preview_token: str
+    total: int
+    valid_count: int
+    invalid_count: int
+    errors: List[AdminImportErrorRow] = []
+
+
+class AdminImportConfirmRequest(BaseModel):
+    preview_token: str
+
+
+class AdminImportConfirmOut(BaseModel):
+    imported: int
+
+
 # ---------------- 管理端驾驶舱 / 数据大屏 ----------------
 class AdminDashboardMetrics(BaseModel):
     """驾驶舱核心指标（组织维度已按需求取消，不含 org 统计）。"""
