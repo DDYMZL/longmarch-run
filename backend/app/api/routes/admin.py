@@ -26,6 +26,7 @@ from app.schemas.schemas import (
     AdminLoginRequest,
     AdminMeOut,
     AdminMenuOut,
+    AdminOnboardingQrOut,
     AdminOrgNodeOut,
     AdminOrgUserListOut,
     AdminQrCreateOut,
@@ -109,6 +110,23 @@ def create_wechat_qr(request: Request, db: Session = Depends(get_db)):
         "scene": scene_token if mock else None,
         "mock": mock,
         "expires_in": settings.QR_LOGIN_TTL_SECONDS,
+    }
+
+
+@router.get(
+    "/onboarding-qrcode",
+    response_model=AdminOnboardingQrOut,
+    summary="通用入驻小程序码（员工扫码进入小程序自动登录）",
+)
+def get_onboarding_qrcode(_: AdminPrincipal = Depends(get_current_admin)):
+    """码内仅含启动页路径与固定渠道标记，不含任何个人信息、OpenID 或 Token。"""
+    png = wechat_service.get_onboarding_png()
+    return {
+        "image": None if png is None else "data:image/png;base64," + base64.b64encode(png).decode("ascii"),
+        "page": wechat_service.ONBOARD_PAGE,
+        "scene": wechat_service.ONBOARD_SCENE,
+        "env_version": settings.WXACODE_ENV_VERSION,
+        "mock": png is None,
     }
 
 

@@ -12,11 +12,15 @@ from app.core.config import settings
 WX_TOKEN_URL = "https://api.weixin.qq.com/cgi-bin/token"
 WX_WXACODE_URL = "https://api.weixin.qq.com/wxa/getwxacodeunlimit"
 
-# 小程序码所在页面（scene 由后端生成，页面仅解析展示）
+# PC 扫码登录/绑定确认页（scene 由后端生成，页面仅解析展示）
 WXACODE_PAGE = "pages/bind/bind"
+# 通用入驻码：落地启动页自动登录；scene 仅为渠道标记，不含任何身份信息
+ONBOARD_PAGE = "pages/launch/launch"
+ONBOARD_SCENE = "src=onboard"
 
 _TOKEN_TTL_SECONDS = 7000  # 微信 access_token 有效期 7200s，提前 200s 刷新
 _token_cache: dict = {"token": "", "expires_at": 0.0}
+_onboard_png_cache: dict = {}
 
 
 def _fetch_access_token() -> Optional[str]:
@@ -46,7 +50,7 @@ def _fetch_access_token() -> Optional[str]:
         return None
 
 
-def get_wxacode_png(scene: str) -> Optional[bytes]:
+def get_wxacode_png(scene: str, page: str = WXACODE_PAGE) -> Optional[bytes]:
     """生成携带 scene 的小程序码 PNG；未配置凭证或调用失败返回 None（调用方降级 mock）。"""
     token = _fetch_access_token()
     if not token:
@@ -56,7 +60,7 @@ def get_wxacode_png(scene: str) -> Optional[bytes]:
             f"{WX_WXACODE_URL}?access_token={token}",
             json={
                 "scene": scene,
-                "page": WXACODE_PAGE,
+                "page": page,
                 "check_path": False,
                 "env_version": settings.WXACODE_ENV_VERSION,
             },
@@ -67,3 +71,14 @@ def get_wxacode_png(scene: str) -> Optional[bytes]:
     if resp.headers.get("content-type", "").startswith("image"):
         return resp.content
     return None
+
+
+def get_onboarding_png() -> Optional[bytes]:
+    """通用入驻小程序码（内容固定，成功结果按版本进程内缓存）。"""
+    key = settings.WXACODE_ENV_VERSION
+    png = _onboard_png_cache.get(key)
+    if png is None:
+        png = get_wxacode_png(ONBOARD_SCENE, ONBOARD_PAGE)
+        if png is not None:
+            _onboard_png_cache[key] = png
+    return png

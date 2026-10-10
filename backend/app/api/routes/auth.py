@@ -19,10 +19,16 @@ router = APIRouter(tags=["auth"])
 
 @router.post("/auth/login", response_model=LoginResponse, summary="微信登录")
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
-    """用 wx.login 的 code 换取用户与 JWT，并顺带发放每日登录积分（同日去重）。"""
-    token, user = auth_service.wx_login(
-        db, payload.code, payload.nickname or "", payload.avatar or ""
-    )
+    """用 wx.login 的 code 换取用户与 JWT，并顺带发放每日登录积分（同日去重）。
+
+    同一 openid 重复/并发登录复用同一用户；微信换取失败返回 502，不签发 Token。
+    """
+    try:
+        token, user = auth_service.wx_login(
+            db, payload.code, payload.nickname or "", payload.avatar or ""
+        )
+    except auth_service.WxLoginError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
     points_service.grant_daily_login(db, user.id)
     ws_manager.broadcast(ws_manager.build_event("auth.login", user.id))
     return LoginResponse(token=token, user=UserOut.model_validate(user))

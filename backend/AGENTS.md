@@ -17,7 +17,7 @@
 | ORM / 数据库 | SQLAlchemy 2.0（`Mapped`/`mapped_column` 风格）+ openGauss | 根目录 `docker/compose.yml` 承载；建库、建表及结构变更统一维护在 `../docker/init/`，后端禁止调用 `create_all` |
 | 数据校验 | Pydantic v2 | 响应模型统一继承 `CamelModel` |
 | 鉴权 | PyJWT（HS256） | Bearer Token，由 `app.core.security` 签发/校验 |
-| 微信对接 | httpx（`code2Session`） | `WX_APPID`/`WX_SECRET` 为空时降级 mock openid |
+| 微信对接 | httpx（`code2Session`） | `WX_APPID`/`WX_SECRET` 为空时降级 mock openid；已配置时换取失败 502（`WX_LOGIN_ALLOW_MOCK` 仅本地测试） |
 | 配置 | pydantic-settings | 从环境变量 / `.env` 读取，`.env` 不入库 |
 
 ## 3. 目录结构与分层约定

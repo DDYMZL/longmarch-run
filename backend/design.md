@@ -57,7 +57,7 @@
 
 | 后端 service | 前端 services/*.js | 核心职责 |
 | --- | --- | --- |
-| `auth_service` | `auth.js` | `wx_login`：code→微信 code2Session→openid→建/查用户→签发 JWT；凭证为空时 mock openid；`update_nickname`：昵称仅可修改一次 |
+| `auth_service` | `auth.js` | `wx_login`：code→微信 code2Session→openid→建/查用户→签发 JWT；凭证为空时 mock openid，已配置凭证时微信换取失败抛 `WxLoginError`（不回退 mock，`WX_LOGIN_ALLOW_MOCK` 仅本地测试例外）；并发首登撞 openid 唯一约束回滚复用；`update_nickname`：昵称仅可修改一次 |
 | `sport_service` | `sport.js` | 今日步数查询/同步（同日覆盖）、最近 n 天记录、手动补步、行军日历聚合（按月） |
 | `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段 + persons 关联人物）、按累计步数点亮；`_route_state` 为节点状态/进度计算共用内核（个人路线与组织路线复用）；`get_global_goal` 全员共同长征目标（全员累计步数对 GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES 配置，里程碑实时计算）；`get_footprints` 我的长征足迹（lit_nodes 点亮日期/快照 + daily_sport 当日步数，无冗余存储）；`mark_ceremony_seen` 长征完成仪式标记（§20.4，幂等写入 users.route_ceremony_at） |
 | `quiz_service` | `quiz.js` | 每日抽 5 题（同用户同日同套，缓存于 `daily_questions`）、判分提交（每日一次）、记录、重置、知识画像（按题目分类统计正确率） |
@@ -129,7 +129,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/` | 否 | 健康检查 |
-| POST | `/api/auth/login` | 否 | 微信登录：`{code, nickname?, avatar?}` → `{token, user}`；顺带发放每日登录积分与采集 unionid 身份行（幂等）；昵称仅在首次创建时写入，后续登录不覆盖 |
+| POST | `/api/auth/login` | 否 | 微信登录：`{code, nickname?, avatar?}` → `{token, user}`；顺带发放每日登录积分与采集 unionid 身份行（幂等）；昵称仅在首次创建时写入，后续登录不覆盖；同一 openid 重复/并发登录复用同一用户；微信换取失败 502 不签发 Token |
 | GET | `/api/auth/me` | 是 | 当前用户 `{id, nickname, avatar, orgId, nicknameChangedAt}` |
 | PUT | `/api/auth/nickname` | 是 | 修改昵称 `{nickname}`（每人仅一次，已修改过返回 400）→ 返回最新用户 |
 | PUT | `/api/auth/nickname/initial` | 是 | 首次引导设置昵称 `{nickname}`（不消耗改名机会；已改过名返回 400）→ 返回最新用户 |
@@ -174,6 +174,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | POST | `/api/admin/login` | 否 | 管理后台账号登录 `{username, password}` → `{token, username}`；`ADMIN_PASSWORD` 未配置时禁用（403「未配置管理账号密码，请使用微信扫码登录」） |
 | POST | `/api/admin/wechat/qr` | 否 | 创建扫码登录会话 → `{qr_id, image?, scene, mock, expires_in}`；未配置微信凭证（mock 模式）image 为 None、scene 为明文供调试 |
 | GET | `/api/admin/wechat/qr/{qr_id}/status` | 否 | 轮询扫码状态（限流 2s 起）：pending/scanned 返回状态；confirmed 返回 `{token, username, is_super, menus}`（令牌单次签发防重放）；failed 带 `fail_reason` |
+| GET | `/api/admin/onboarding-qrcode` | 管理员 | 通用入驻小程序码 `{image?, page, scene, env_version, mock}`：页面 `pages/launch/launch`、scene 固定 `src=onboard`（不含个人信息/OpenID/Token），成功结果进程内缓存；mock 模式 image 为 None |
 | GET | `/api/admin/me` | 管理员 | 当前管理员信息与菜单权限 `{is_super, username, menus}` |
 | GET | `/api/admin/users` | 管理员(access) | 人员授权列表（昵称/组织筛选、分页）：每项含启用/禁用角色与授权人 |
 | GET | `/api/admin/roles` | 管理员(access) | 角色列表（含菜单勾选与是否内置） |

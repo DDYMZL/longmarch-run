@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     # 微信小程序凭证（留空则登录使用 mock openid，便于本地开发调试）
     WX_APPID: str = ""
     WX_SECRET: str = ""
+    # 仅限本地自动化测试：已配置凭证时微信换取失败仍回退 mock openid；生产必须为 false
+    WX_LOGIN_ALLOW_MOCK: bool = False
 
     # 微信开放平台网站应用凭证（扫码登录渠道阶段2；留空则该渠道禁用）
     WX_WEB_APPID: str = ""

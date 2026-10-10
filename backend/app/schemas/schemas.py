@@ -723,6 +723,16 @@ class AdminQrCreateOut(BaseModel):
     expires_in: int
 
 
+class AdminOnboardingQrOut(BaseModel):
+    """通用入驻小程序码；mock 模式（未配置微信凭证或生成失败）image 为 None。"""
+
+    image: Optional[str] = None
+    page: str
+    scene: str
+    env_version: str
+    mock: bool = False
+
+
 class AdminMenuOut(BaseModel):
     code: str
     name: str

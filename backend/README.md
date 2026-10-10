@@ -81,7 +81,8 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | `JWT_EXPIRE_MINUTES` | `10080`（7天） | 小程序令牌有效期 |
 | `JWT_ADMIN_EXPIRE_MINUTES` | `720`（12小时） | 管理员令牌有效期（RBAC 每请求查库，长时效兜底） |
 | `ADMIN_PASSWORD` | 空 | 管理后台账号密码；**留空则账号登录禁用**，仅允许微信扫码登录（不设默认密码） |
-| `WX_APPID` / `WX_SECRET` | 空 | 留空时登录使用 mock openid，便于本地调试 |
+| `WX_APPID` / `WX_SECRET` | 空 | 留空时登录使用 mock openid，便于本地调试；已配置时微信换取失败返回 502 |
+| `WX_LOGIN_ALLOW_MOCK` | `false` | 仅本地 automator 测试：已配置凭证时换取失败仍回退 mock openid；**生产必须为 false** |
 | `WX_WEB_APPID` / `WX_WEB_SECRET` | 空 | 微信网页授权渠道凭证（阶段2 门控，未配置不开放） |
 | `WXACODE_ENV_VERSION` | `trial` | 小程序码环境版本：开发期 `trial`（体验版码，扫码者须为体验成员）；生产发布后改 `release` |
 | `QR_LOGIN_TTL_SECONDS` | `300` | PC 扫码登录会话有效期 |
@@ -137,6 +138,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | POST | `/api/admin/login` | 管理后台账号登录（body: `username`/`password`；`ADMIN_PASSWORD` 未配置时 403，仅扫码登录） |
 | POST | `/api/admin/wechat/qr` | 创建扫码登录会话（无需鉴权）：mock 模式返回明文 scene 供调试 |
 | GET | `/api/admin/wechat/qr/{qr_id}/status` | 轮询扫码状态（无需鉴权，限流）：confirmed 时单次签发管理员令牌与菜单 |
+| GET | `/api/admin/onboarding-qrcode` | 通用入驻小程序码（管理员）：落地 `pages/launch/launch`，scene 固定 `src=onboard` |
 | GET | `/api/admin/me` | 当前管理员信息与菜单权限 |
 | GET | `/api/admin/dashboard` | 驾驶舱聚合（核心指标 + 路线总览） |
 | GET | `/api/admin/dashboard/trend?days=` | 运动趋势（近 N 日） |
@@ -187,7 +189,7 @@ backend 所需的建库、建表、索引和结构变更统一维护在根目录
 
 1. 前端 `frontend/services/auth.js` 已对接真实后端登录（`wx.login` → `POST /api/auth/login` → JWT）；`march.js` 已对接路线数据（`GET /api/march/route`，节点配置随路线统一下发）。
 2. 其余业务（sport/quiz/points/medal/org/rank）也已全量切换为真实接口（`wx.request` + JWT）；**响应字段为 camelCase，与原 Mock 返回结构一致**，前端页面层零改动。
-3. 登录流程：前端 `wx.login()` 拿 `code` → `POST /api/auth/login` → 保存 `token` 到 `lm_auth_token` → 后续请求带 `Authorization: Bearer <token>`。401 时自动清理登录态并跳转登录页。
+3. 登录流程：前端 `wx.login()` 拿 `code` → `POST /api/auth/login` → 保存 `token` 到 `lm_auth_token` → 后续请求带 `Authorization: Bearer <token>`。启动页先 `GET /api/auth/me` 后端校验 Token；401 时静默 `wx.login` 重新登录并重试原请求一次，重登失败才回到启动页。
 4. 管理端实时推送：`GET /api/ws/updates?token=<JWT>` 建立 WebSocket 长连接（admin 与用户 token 均可），小程序侧任何用户数据写入（步数/答题/点亮/组织/登录/勋章）成功后广播 `data_changed` 事件，`user_event` 写入时额外广播 `activity`（含昵称与文案）；管理端驾驶舱/数据大屏据此自动刷新并滚动实时动态。
 
 ## 待完善（生产化 TODO）
