@@ -7,7 +7,7 @@
 本目录是「长征主题运动 + 每日答题」小程序（`../frontend`，原生微信小程序）的**后端服务**。
 
 - 业务逻辑由前端 `frontend/services/*.js` 的 Mock 实现**完整迁移**而来，数据结构与字段命名与前端 Mock 返回完全一致；
-- 前端已全量切换到真实接口（登录、组织、步数、路线、答题、积分、勋章、排名），因此「与前端服务层消费结构一致（camelCase）」是第一优先级约束；前端 `mock/data.js` 仅作路线节点离线兜底。
+- 前端已全量切换到真实接口（登录、组织、步数、路线、答题、积分、勋章、排名），因此「与前端服务层消费结构一致（camelCase）」是第一优先级约束。
 
 ## 2. 技术栈（不可随意更换）
 
@@ -57,9 +57,9 @@ schemas 被 routes/services 引用；core 不 import 业务模块
 
 ## 4. 架构不变量（改动时不得破坏）
 
-1. **camelCase 输出契约**：所有响应模型继承 `CamelModel`（`alias_generator=to_camel`，`populate_by_name=True`，`from_attributes=True`），响应 JSON 字段必须为 camelCase 且与前端 Mock 返回结构一致。新增/修改字段若与前端 mock/data.js、services 结构不一致，视为破坏性变更。
+1. **camelCase 输出契约**：所有响应模型继承 `CamelModel`（`alias_generator=to_camel`，`populate_by_name=True`，`from_attributes=True`），响应 JSON 字段必须为 camelCase 且与前端服务层消费结构一致。新增/修改字段若与前端 services 结构不一致，视为破坏性变更。
 2. **鉴权边界**：除 `POST /api/auth/login` 外，**所有**路由必须依赖 `Depends(get_current_user)`（token 无效抛 401）。新增公开接口需显式说明理由。
-3. **种子幂等**：`data/seed.py` 的写入必须幂等（按主键存在即跳过），重复启动不得产生重复数据。修改种子数据时同步核对前端 `mock/data.js`。
+3. **种子幂等**：`data/seed.py` 的写入必须幂等（按主键存在即跳过），重复启动不得产生重复数据。
 4. **业务规则与前端 Mock 一致**（见 design.md §5）：积分规则、步数覆盖规则、每日一题规则、勋章判定阈值，前后端必须同步修改，禁止单边变更。
 5. **副作用链**：凡影响步数、点亮、答题、积分的操作（sync/add/light-up/submit/login），调用后必须触发 `medal_service.check_and_grant`；积分发放必须统一走 `points_service`（保证「同日同 reason 去重」），禁止直接写 `PointsLog`。
 6. **数据库会话**：一律通过 `Depends(get_db)` 获取，禁止在 service 内自建 session；session 由依赖自动关闭。
@@ -81,7 +81,7 @@ schemas 被 routes/services 引用；core 不 import 业务模块
 
 在 backend 目录执行任何任务时：
 
-1. **先读**：修改某域（如 quiz）前，先读 `app/api/routes/<域>.py`、`app/services/<域>_service.py`、`app/schemas/schemas.py` 相关段、`app/models/models.py` 相关模型；涉及规则时对照 `../frontend/services/<域>.js` 与 `../frontend/mock/data.js`。
+1. **先读**：修改某域（如 quiz）前，先读 `app/api/routes/<域>.py`、`app/services/<域>_service.py`、`app/schemas/schemas.py` 相关段、`app/models/models.py` 相关模型；涉及规则时对照 `../frontend/services/<域>.js`。
 2. **改接口必改三处**：新增/修改 API 需同步更新 ① `routes` ② `services`（如有业务） ③ `schemas`，并检查 `main.py` 注册与前端 Mock 结构一致性。
 3. **改表结构**：同步修改 `app/models/models.py`、`data/seed.py`（如涉及默认数据）和 `../docker/init/`；新增递增编号 SQL，禁止修改已在共享数据库执行过的脚本。
 4. **禁止行为**：

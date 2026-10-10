@@ -7,7 +7,7 @@
 - 「长征主题运动 + 每日答题」原生微信小程序，**无构建工具**；
 - **全量对接后端** `../backend`（FastAPI）：登录、组织、步数、路线、答题、积分、勋章、排名均走真实接口，业务数据统一落库 openGauss；
 - 服务层对外返回结构与后端接口**完全一致**（camelCase，见 `../backend/AGENTS.md` 架构不变量 1）；
-- 路线节点采用三级降级：网络 → Storage 缓存 → 内置 Mock（`mock/data.js`），保证离线可用；
+- 路线节点配置（含经纬度与历史事件卡内容）随 `GET /api/march/route` 统一下发，前端无内置静态数据；
 - 兼顾低端机性能：Storage 会话缓存 + Canvas 离屏静态层 + 渐变复用（详见 `AGENTS.md` §4）。
 
 ## 2. 模块架构设计
@@ -28,13 +28,13 @@
 │  + request.js（统一 wx.request 封装、JWT、401 清理）        │
 │  + config.js（API 地址集中配置）                            │
 │  + store.js（遗留：登录数据迁移 migrateUserData）           │
-└───────┬──────────────────────────┬───────────────────────┘
-        │ HTTP /api/*（JWT）       │ 只读 / 路线节点离线降级
-┌───────▼───────────────┐   ┌──────▼──────────────────────┐
-│ 后端 ../backend        │   │ mock/data.js                 │
-│ FastAPI + openGauss   │   │ ROUTE_NODES(10)              │
-│ （业务数据唯一数据源）  │   │ 离线兜底，结构同后端种子      │
-└───────────────────────┘   └─────────────────────────────┘
+└───────┬──────────────────────────┘
+        │ HTTP /api/*（JWT）
+┌───────▼───────────────┐
+│ 后端 ../backend        │
+│ FastAPI + openGauss   │
+│ （业务数据唯一数据源）  │
+└───────────────────────┘
 ```
 
 ### 2.2 页面清单与职责
@@ -70,7 +70,7 @@
 | --- | --- | --- | --- |
 | `auth.js` | `wxLogin(profile)` / `getLocalUser()` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
 | `sport.js` | 今日步数 / `syncToday()` / `addSteps()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, add, calendar` | 步数按「用户+日期」覆盖；模拟步数；行军日历月聚合 |
-| `march.js` | `refreshRouteNodes()` / `getRouteNodes()` / `getRoute()` / `getNodeDetail()` / `lightUpNodes()` / `getGlobalGoal()` / `markCeremony()` | `/api/march/route-nodes, route, node/{id}, light-up, global, footprints, ceremony` | 三级降级获取节点配置；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4） |
+| `march.js` | `getRoute()` / `getNodeDetail(id)` / `lightUpNodes()` / `getGlobalGoal()` / `getFootprints()` / `markCeremony()` | `/api/march/route, node/{id}, light-up, global, footprints, ceremony` | 路线进度与节点配置由 `/march/route` 统一下发；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4） |
 | `quiz.js` | `getDaily()` / `submit()` / `checkAnswer()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, check, records, reset, knowledge` | 每日抽 5 题（同日同套）、判分、每日一次；`checkAnswer` 单题即时判题（无状态，连胜反馈用）；知识画像分类正确率 |
 | `points.js` | `grantDailyLogin()` / 总额与流水 | `/api/points`、登录副链路 | 积分发放（同日同 reason 去重） |
 | `medal.js` | `checkAndGrant()` / `getMedalList()` | `/api/medal/list, check` | 12 枚勋章判定与发放（分类/隐藏/排序由后端下发） |
@@ -90,20 +90,20 @@
 
 ### 3.1 用户业务数据（后端 openGauss 落库，前端不再本地存储）
 
-业务数据全部落库后端 openGauss（表结构见 `../backend/app/models/models.py` 与 `../docker/init/*.sql`）：`DailySport`（用户+日期唯一，同日覆盖）、`LitNode`（点亮永久保留）、`QuizRecord`（同日唯一）、`PointsLog`（同日同 reason 去重）、`UserMedal`、`UserIdentity`（微信身份关联，登录采集/扫码绑定）、`AdminUserRole`（后台角色授权）。前端仅保留登录态与路线缓存。
+业务数据全部落库后端 openGauss（表结构见 `../backend/app/models/models.py` 与 `../docker/init/*.sql`）：`DailySport`（用户+日期唯一，同日覆盖）、`LitNode`（点亮永久保留）、`QuizRecord`（同日唯一）、`PointsLog`（同日同 reason 去重）、`UserMedal`、`UserIdentity`（微信身份关联，登录采集/扫码绑定）、`AdminUserRole`（后台角色授权）。前端仅保留登录态。
 
 - 登录态单独存 `lm_login_user`：`{ id, nickname, avatar, orgId, loginAt }`；JWT 存 `lm_auth_token`，两者同时存在才视为已登录。
 - **用户数据迁移**：从 Mock 登录切换到真实后端时，`store.migrateUserData(oldId, newId)` 一次性复制旧用户的 Storage 数据到新 ID 下（仅在新 ID 无数据时执行），保留旧 key 不删除。
 
-### 3.2 静态配置数据（`mock/data.js`，只读，网络不可用时降级兜底）
+### 3.2 静态配置数据（后端 `app/data/seed.py` 种子，接口下发）
 
-| 常量 | 内容 | 关键字段 |
+路线节点、题库、勋章定义等静态数据仅存于后端种子与 openGauss，由管理后台维护、接口下发；前端无内置静态数据文件。
+
+| 数据 | 内容 | 下发接口 |
 | --- | --- | --- |
-| `ROUTE_NODES` | 10 个长征路线节点（瑞金→…→延安，含历史事件卡内容） | `id, name, targetSteps, historicalTime, icon, description, brief, significance, figures, location, images, audio, keywords, latitude, longitude, sortOrder, isEnabled` |
-| `QUESTIONS` | 15 道题库 | `id, type(single/judge), question, options, answer, analysis, score(20), category(event/route/figure)` |
-| `MEDALS` | 12 枚勋章定义 | `id, name, icon, desc, category(starter/route/challenge/complete), hidden, sortOrder` |
-
-> 路线节点在后台保存后由 `GET /api/march/route-nodes` 下发；`mock/data.js` 仅在无网络且无 Storage 缓存时使用。结构与后端 `app/data/seed.py` 一一对应，修改必须两边同步。
+| 路线节点 | 10 个长征节点（瑞金→…→延安），含历史事件卡 7 字段与经纬度 | 随 `GET /api/march/route` 统一下发；管理端经 `/api/admin/route-nodes` 维护 |
+| 题库 | 15 道题（type single/judge，category event/route/figure） | `GET /api/quiz/daily` 抽题下发（不含答案，判分在服务端） |
+| 勋章定义 | 12 枚（入门/路线/挑战/完成，含隐藏勋章） | `GET /api/medal/list` 下发 |
 
 ## 4. 关键流程设计
 
@@ -168,7 +168,7 @@ quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 
 
 ### 4.6 march 双模式地图
 
-- **路线节点配置**：`march.js` 维护模块级 `routeNodes` 变量，读取顺序为 `GET /api/march/route-nodes`（成功后写入 Storage `lm_route_nodes`）→ Storage 缓存 → 内置 `mock/data.js`。每次路线页 `onShow` 先用缓存即时渲染，再异步刷新，成功后重绘。请求序号防止旧响应覆盖。
+- **路线节点配置**：节点列表（含经纬度、三态、章节）随 `GET /api/march/route` 响应统一下发；路线页每次 `onShow` 调 `march.getRoute()` 拉取最新数据后渲染/重绘。
 - **实景模式（默认）**：原生 `<map>` + 节点 `latitude/longitude`（来自后端配置）→ `markers`（节点三态图标 + 「🚩 我在这里」进度旗）+ `polyline`（灰色全程 + 金色已完成段，段内线性插值）+ `includePoints` 视野动画（仅首次进入播放，步数刷新不重播）。
 - **插画模式**：「星空远征」深色主题 Canvas 2D；节点画布坐标由 `getCanvasNodePositions()` 按经纬度边界归一化计算（非硬编码），兼容任意节点数量和排列；静态层经 `wx.createOffscreenCanvas` 烘焙一次；动态元素（云、星、光晕精灵、流光彗尾）每帧 rAF 绘制；渐变对象缓存复用；离屏调用包 try/catch 降级。
 - **行军轨迹（006 P0）**：绘制进度统一取后端 `routeProgress`（旧接口降级为步数比例，见 `calcRouteProgress`/`currentRatio`）；步数刷新只从旧进度插值推进到新进度（约 800ms，`progressAnim`），仅首次渲染播放完整入场描画；当前行军点为「呼吸光点（光晕缩放）+ 3 颗上升光尘 + 摆动红旗」。
@@ -220,6 +220,6 @@ PC 管理后台登录页生成小程序码（POST /api/admin/wechat/qr，mock �
 3. **onShow + refresh() 统一刷新链**：以「页面显示即拉新」替代手写同步逻辑，杜绝热重载/后台恢复下的旧数据。
 4. **Canvas 离屏静态层 + 降级**：星空长征 60fps 动画不阻塞手势；静态背景离屏缓存、星点/星尘/粒子数量固定（粒子单节点≤14、总量≤64，低端减半）、仅当前节点持续动画；低版本基础库自动回退每帧直绘，保证兼容。
 5. **头像本地持久化**：`chooseAvatar` 临时路径经 `saveFile` 转持久路径，保证重启后头像仍可显示（生产化需上传后端换 URL，见 `../backend/README.md`）。
-6. **三级降级路线配置**：网络成功结果 → Storage `lm_route_nodes` 缓存 → 内置 `mock/data.js`；无网络时小程序仍可正常展示路线地图。
+6. **路线配置随路线接口统一下发**：节点配置不再内置前端，由后端 `GET /api/march/route` 统一返回，管理后台修改保存后小程序下次刷新即生效。
 7. **用户数据无损迁移**：Mock 用户 ID → 后端真实用户 ID 切换时，`store.migrateUserData` 保证本地步数、点亮、积分、勋章不丢失。
 8. **扫码确认页单页双模式**：bind 页按 scene 前缀分流 L/B 两种确认卡（文案/操作/结果语义不同），共用加载/完成/错误态；未登录用 login redirect 原路返回而非新流程，场景凭证有效期短不打断。

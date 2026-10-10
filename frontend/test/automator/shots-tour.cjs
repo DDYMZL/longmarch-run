@@ -24,7 +24,7 @@ const PROJECT = 'D:/project/longmarch-run';
 const IMAGES_DIR = path.join(__dirname, '..', 'images');
 const NICKNAME = '自动化测试员';
 const AVATAR = 'https://example.com/auto-avatar.png';
-// 后端题库（15 题，与 mock/data.js 种子一致）id → 正确答案。每日随机抽 5 题（非前 5），
+// 后端题库（15 题，与后端 app/data/seed.py 种子一致）id → 正确答案。每日随机抽 5 题（非前 5），
 // 映射必须覆盖全题库；页面题目对象不含 answer（判分在后端 quiz.submit）
 const CORRECT = {
   1: 'B', 2: 'A', 3: 'A', 4: 'A', 5: 'A', 6: 'A', 7: 'A',

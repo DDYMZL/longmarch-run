@@ -38,7 +38,7 @@ const STATE_FILE = path.join(__dirname, 'state.json');
 const RESULTS_FILE = path.join(__dirname, 'results.json');
 const CONSOLE_FILE = path.join(__dirname, 'console-log.json');
 
-// 后端题库（15 题，与 mock/data.js 种子一致）的 id → 正确答案（判分在服务端）
+// 后端题库（15 题，与后端 app/data/seed.py 种子一致）的 id → 正确答案（判分在服务端）
 const ANSWERS = {
   1: 'B', 2: 'A', 3: 'A', 4: 'A', 5: 'A', 6: 'A', 7: 'A',
   8: 'A', 9: 'B', 10: 'A', 11: 'C', 12: 'A', 13: 'A', 14: 'A', 15: 'A'

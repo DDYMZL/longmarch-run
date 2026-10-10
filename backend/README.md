@@ -114,7 +114,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/profile/timeline` | 我的长征足迹（user_event 时间轴） |
 | GET | `/api/broadcast/today` | 今日长征播报（期号/全局汇总/今日长征彩蛋/个人状态） |
 | GET | `/api/march/route` | 长征路线进度（含各节点状态，仅统计启用节点） |
-| GET | `/api/march/route-nodes` | 启用节点配置列表（含经纬度，供小程序缓存） |
+| GET | `/api/march/route-nodes` | 启用节点配置列表（含经纬度） |
 | GET | `/api/march/node/{node_id}` | 节点详情（任意状态可查看） |
 | POST | `/api/march/light-up` | 点亮达标节点、发放积分 |
 | GET | `/api/quiz/daily` | 今日题目（同一天同一套题） |
@@ -185,7 +185,7 @@ backend 所需的建库、建表、索引和结构变更统一维护在根目录
 
 ## 与前端对接说明
 
-1. 前端 `frontend/services/auth.js` 已对接真实后端登录（`wx.login` → `POST /api/auth/login` → JWT）；`march.js` 已对接路线节点配置（`GET /api/march/route-nodes`，三级降级：网络→缓存→内置 Mock）。
+1. 前端 `frontend/services/auth.js` 已对接真实后端登录（`wx.login` → `POST /api/auth/login` → JWT）；`march.js` 已对接路线数据（`GET /api/march/route`，节点配置随路线统一下发）。
 2. 其余业务（sport/quiz/points/medal/org/rank）也已全量切换为真实接口（`wx.request` + JWT）；**响应字段为 camelCase，与原 Mock 返回结构一致**，前端页面层零改动。
 3. 登录流程：前端 `wx.login()` 拿 `code` → `POST /api/auth/login` → 保存 `token` 到 `lm_auth_token` → 后续请求带 `Authorization: Bearer <token>`。401 时自动清理登录态并跳转登录页。
 4. 管理端实时推送：`GET /api/ws/updates?token=<JWT>` 建立 WebSocket 长连接（admin 与用户 token 均可），小程序侧任何用户数据写入（步数/答题/点亮/组织/登录/勋章）成功后广播 `data_changed` 事件，`user_event` 写入时额外广播 `activity`（含昵称与文案）；管理端驾驶舱/数据大屏据此自动刷新并滚动实时动态。

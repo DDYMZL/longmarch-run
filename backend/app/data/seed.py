@@ -1,6 +1,6 @@
 """静态配置数据与种子初始化。
 
-数据精确迁移自前端 mock/data.js：长征路线节点(10)、题库(15)、勋章定义(12)。
+长征路线节点(10)、题库(15)、勋章定义(12) 等静态数据唯一来源。
 init_seed 幂等：
 - 表为空时全量写入；
 - 表非空时仅「补空值/补新勋章 id」——节点历史内容、题目分类只填空字段，
@@ -314,7 +314,7 @@ MEDALS = [
 MEDAL_NODE_MAP = {"luding": 6, "snow": 7}
 
 # ---------------- 组织架构（多级树）----------------
-# parent_id 为空表示顶级；level 为层级深度。与前端 mock/data.js ORGANIZATIONS 完全一致。
+# parent_id 为空表示顶级；level 为层级深度。
 ORGANIZATIONS = [
     {"id": 1, "name": "长征集团总部", "parent_id": None, "level": 1, "sort_order": 1},
     {"id": 2, "name": "华东分公司", "parent_id": 1, "level": 2, "sort_order": 1},
