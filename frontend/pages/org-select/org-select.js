@@ -7,7 +7,7 @@
  *  - 无下级的组织点击整行即选定；
  *  - 已下钻到某组织时，顶部提供「选择当前组织」按钮，任意层级均可选中。
  *
- * 入口：登录后（from=login，未选组织时强制）/ 我的页修改（from=mine）
+ * 入口：首页「选择所属组织」引导（from=home，选填）/ 我的页修改（from=mine）
  */
 const app = getApp();
 const org = require('../../services/org');
@@ -15,7 +15,6 @@ const auth = require('../../services/auth');
 
 Page({
   data: {
-    from: '',
     stack: [], // 已下钻路径 [{id, name}]
     list: [], // 当前层级组织列表
     currentId: null, // 当前所处组织 id（stack 末级），null 表示顶级
@@ -29,31 +28,11 @@ Page({
     const from = (options && options.from) || '';
     const user = app.globalData.user || {};
     this.setData({
-      from: from,
       selectedId: user.orgId || null,
-      // 仅首次登录引导、且尚未使用过改名机会时采集微信名
-      showNickInput: from === 'login' && !user.nicknameChangedAt
+      // 首页引导入口、且尚未使用过改名机会时顺带采集微信名
+      showNickInput: from === 'home' && !user.nicknameChangedAt
     });
-    // 登录后强制选组织：隐藏左上角「返回主页」按钮，选完才能离开
-    if (from === 'login') {
-      this.hideHomeButton();
-    }
     this.loadLevel(null);
-  },
-
-  onShow() {
-    if (this.data.from === 'login') {
-      this.hideHomeButton();
-    }
-  },
-
-  /** 隐藏主页按钮（低版本基础库无此 API 时静默跳过） */
-  hideHomeButton() {
-    try {
-      if (wx.hideHomeButton) wx.hideHomeButton();
-    } catch (e) {
-      // 忽略：部分环境不支持
-    }
   },
 
   /** 加载某层级列表；parentId 为 null 表示顶级 */
@@ -153,12 +132,8 @@ Page({
       });
   },
 
-  /** 选定后的跳转：登录流程进首页，其余返回上一页 */
+  /** 选定后返回上一页（无上一页时回「我的」） */
   afterSelect() {
-    if (this.data.from === 'login') {
-      wx.switchTab({ url: '/pages/home/home' });
-      return;
-    }
     const pages = getCurrentPages();
     if (pages.length > 1) {
       wx.navigateBack();

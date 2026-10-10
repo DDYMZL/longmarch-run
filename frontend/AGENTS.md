@@ -15,7 +15,7 @@
 | --- | --- |
 | 语言 | 原生小程序 JS（CommonJS `require` / `module.exports`，**不支持 ESM**） |
 | 视图 | WXML + WXSS（rpx 单位，导航栏主色 `#C8102E`，背景 `#F7F1E5`） |
-| 数据 | 后端 API（`/api/*`，JWT Bearer）+ 本地 Storage（仅登录态 `lm_login_user` / `lm_auth_token`） |
+| 数据 | 后端 API（`/api/*`，JWT Bearer）+ 本地 Storage（仅登录态 `lm_login_user` / `lm_auth_token` / 退出标记 `lm_logged_out`） |
 | 地图 | 原生 `<map>`（腾讯地图，无需 key）+ Canvas 2D 插画地图双模式 |
 | 校验 | 无 ESLint 配置；改动后必须 `node --check` 逐个语法检查，并用 IDE 的 GetProblems 复核 |
 
@@ -23,13 +23,13 @@
 
 ```
 frontend/
-├── app.js / app.json / app.wxss   # 应用入口：登录态恢复、全局样式、页面与 tabBar 注册
+├── app.js / app.json / app.wxss   # 应用入口：全局登录态（启动不恢复，由 launch 页后端校验）、全局样式、页面与 tabBar 注册
 ├── sitemap.json                   # 索引配置
 ├── services/                      # 服务层（真实后端封装，对应后端 services/*.py 与 api/routes/*.py）
-│   ├── request.js                 # 统一 wx.request 封装：JWT 注入、401 清理登录态
+│   ├── request.js                 # 统一 wx.request 封装：JWT 注入、401 静默重登并重试一次
 │   ├── config.js                  # API_BASE_URL 集中配置
 │   ├── store.js                   # 遗留：仅登录数据迁移（migrateUserData）
-│   ├── auth.js                    # 微信登录（头像昵称填写、头像持久化）
+│   ├── auth.js                    # 微信登录：ensureLogin 启动校验/静默重登、手动登录、头像持久化
 │   ├── sport.js / march.js / quiz.js / points.js / medal.js / org.js / rank.js
 │   ├── profile.js / person.js / quote.js / broadcast.js / ws.js / identity.js
 ├── utils/util.js                  # 日期格式化、随机等纯工具
@@ -51,11 +51,11 @@ services -> request.js / config.js
 
 1. **数据展示页必须 `onShow` + `refresh()`**：所有展示页在 `onShow` 中重新读取最新数据（仅 `onLoad` 的页面在热重载、后台恢复、页面栈复用场景会显示旧数据）。
 2. **数据以后端为准**：业务数据一律通过后端接口读写（`request.js` 封装），前端禁止本地生成/持久化业务数据；`store.js` 仅保留登录迁移（`migrateUserData`）职责，新增服务不得读写 `lm_data_{userId}`。
-3. **Storage 键与结构**：登录态键 `lm_login_user`（`{ id, nickname, avatar, orgId, loginAt, nicknameChangedAt? }`）；JWT 键 `lm_auth_token`。`user` 与 `token` 同时存在才视为已登录。
+3. **Storage 键与结构**：登录态键 `lm_login_user`（`{ id, nickname, avatar, orgId, nicknameChangedAt?, orgName?, orgFullName? }`）；JWT 键 `lm_auth_token`；主动退出标记 `lm_logged_out`。**本地 Token 不经后端校验不得视为已登录**：`app.globalData.loggedIn` 只由 launch 页 `auth.ensureLogin()`（`/auth/me` 校验或静默 wx.login）或登录成功置 true。
 4. **头像持久化**：`chooseAvatar` 返回临时路径（工具 `http://tmp/`、真机 `wxfile://tmp_`），**必须**经 `auth.persistAvatar`（`FileSystemManager.saveFile`）转持久路径，否则重启丢头像；仅 `https://` 网络头像直接返回。
-5. **登录态守卫**：非 tab 页**没有**全局路由守卫，每个子页 `onShow/onLoad` 需自行判断 `app.globalData.loggedIn`，未登录跳转 login 页。
+5. **登录态守卫**：非 tab 页**没有**全局路由守卫，每个子页 `onShow/onLoad` 需自行判断 `app.globalData.loggedIn`，未登录 `reLaunch('/pages/launch/launch')`（需回原页时带 `?redirect=`）；**不得**再强制跳组织选择（组织为选填，首页引导卡 /「我的」页进入）。
 6. **march 双模式地图**：默认实景 `<map>`（真实经纬度 `NODE_COORDS` + polyline/markers），可切 Canvas 2D「星空远征」插画地图。Canvas 每帧绘制一律读 `this.routeData`；静态元素只在 `buildStaticLayer` 烘焙一次；渐变缓存（`_goldGrad`/`_flagGrad`）与光晕精灵须在画布重建时重置；离屏画布（`wx.createOffscreenCanvas`）相关调用**必须包 try/catch** 降级为低版本基础库每帧直绘路径。
-7. **微信登录交互契约**：login 页「微信授权登录」按钮本身即 `<button open-type="chooseAvatar">`（点击先弹微信头像选择，选完在 `bindchooseavatar` 回调完成登录）；登录页**无昵称输入框**；首次登录的用户在 org-select 页用 `<input type="nickname">` 采集微信名（可跳过，经 `PUT /auth/nickname/initial` 落库且不消耗「每人仅一次」改名机会）；登录页**无独立「选择头像」按钮**。
+7. **微信登录交互契约**：login 页「微信授权登录」按钮本身即 `<button open-type="chooseAvatar">`（点击先弹微信头像选择，选完在 `bindchooseavatar` 回调完成登录）；登录页**无昵称输入框**；从首页引导卡进入 org-select（from=home）的未改名用户用 `<input type="nickname">` 采集微信名（可跳过，经 `PUT /auth/nickname/initial` 落库且不消耗「每人仅一次」改名机会）；登录页**无独立「选择头像」按钮**。
 8. **任意节点（含未解锁）可进 node-detail 看历史**：不得在入口处拦截未解锁节点。
 
 ## 5. 编码规范
@@ -103,6 +103,6 @@ services -> request.js / config.js
 
 ## 7. 背景知识速查
 
-- 5 个 tab：首页 `home` / 长征 `march` / 答题 `quiz` / 排行 `rank` / 我的 `mine`；15 个子页：login、org-select、node-detail、quiz-answer、quiz-result、sport-records、quiz-records、medals、profile、calendar、person、ticket、ceremony、bind、account。
-- 登录态：`app.globalData.user / loggedIn`；登录成功调 `app.setLoginUser(user)`；登出调 `app.logout()`。
-- 服务层请求示例：`const res = await request({ url: '/quiz/daily' });`（JWT 由 request.js 自动注入，401 自动清理登录态并回登录页）。
+- 5 个 tab：首页 `home` / 长征 `march` / 答题 `quiz` / 排行 `rank` / 我的 `mine`；首页面 launch（启动自动登录 + 入驻二维码落地页）；15 个子页：login、org-select、node-detail、quiz-answer、quiz-result、sport-records、quiz-records、medals、profile、calendar、person、ticket、ceremony、bind、account。
+- 登录态：`app.globalData.user / loggedIn`（auth.js 登录/校验成功后自动同步）；登出调 `app.logout()`（写退出标记，之后需登录页手动登录）。
+- 服务层请求示例：`const res = await request({ url: '/quiz/daily' });`（JWT 由 request.js 自动注入；401 自动静默重登并重试一次，仍失败回启动页）。

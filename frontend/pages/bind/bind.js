@@ -36,9 +36,9 @@ Page({
     }
     this.scene = scene;
     if (!app.globalData.loggedIn) {
-      // 未登录先登录，登录成功后携带 redirect 回到本页
+      // 未登录先经启动页自动登录，成功后携带 redirect 回到本页
       const back = '/pages/bind/bind?scene=' + encodeURIComponent(scene);
-      wx.reLaunch({ url: '/pages/login/login?redirect=' + encodeURIComponent(back) });
+      wx.reLaunch({ url: '/pages/launch/launch?redirect=' + encodeURIComponent(back) });
       return;
     }
     this.loadScene();

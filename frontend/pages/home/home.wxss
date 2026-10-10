@@ -584,6 +584,19 @@
 }
 
 /* ===== 组织同行卡（P1-2，需求 §9） ===== */
+.org-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 28rpx;
+  color: #A00D26;
+}
+
+.org-empty-arrow {
+  font-size: 36rpx;
+  color: #B3A488;
+}
+
 .org-tag {
   flex-shrink: 0;
   max-width: 320rpx;

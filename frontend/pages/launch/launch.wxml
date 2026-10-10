@@ -1,0 +1,18 @@
+<view class="launch-page">
+  <view class="launch-hero">
+    <view class="logo">🚩</view>
+    <view class="app-name">长征运动挑战</view>
+    <view class="slogan">行万里路 · 学长征历史</view>
+  </view>
+
+  <view class="launch-status">
+    <block wx:if="{{loading}}">
+      <view class="spinner"></view>
+      <view class="status-text">正在进入长征…</view>
+    </block>
+    <block wx:else>
+      <view class="error-tip">{{errorMsg}}</view>
+      <button class="btn-primary retry-btn" bindtap="onRetry">重新进入</button>
+    </block>
+  </view>
+</view>

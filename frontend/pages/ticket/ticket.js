@@ -17,7 +17,7 @@ Page({
 
   onLoad(options) {
     if (!app.globalData.loggedIn) {
-      wx.reLaunch({ url: '/pages/login/login' });
+      wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
     const id = parseInt(options.id, 10);

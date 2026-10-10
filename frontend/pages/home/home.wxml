@@ -206,7 +206,11 @@
     </view>
   </view>
 
-  <!-- 组织同行（P1-2，需求 §9） -->
+  <!-- 组织同行（P1-2，需求 §9）；未选组织时展示选填引导 -->
+  <view class="card anim-card org-empty" style="animation-delay: 500ms" wx:if="{{orgChecked && !orgName}}" bindtap="goOrgSelect">
+    <text>🚩 选择所属组织，查看组织同行与集体长征</text>
+    <text class="org-empty-arrow">›</text>
+  </view>
   <view class="card anim-card" style="animation-delay: 500ms" wx:if="{{orgName}}">
     <view class="card-title">
       <text>🚩 组织同行</text>

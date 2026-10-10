@@ -75,6 +75,7 @@ Page({
     // 实时行军动态（P1-1，需求 §8）
     activities: [],
     // 组织同行（P1-2，需求 §9）
+    orgChecked: false,
     orgName: '',
     orgFullName: '',
     memberCount: 0,
@@ -99,14 +100,9 @@ Page({
   },
 
   onShow() {
-    // 未登录 -> 登录页
+    // 未登录（后端未校验通过）-> 启动页自动登录
     if (!app.globalData.loggedIn) {
-      wx.reLaunch({ url: '/pages/login/login' });
-      return;
-    }
-    // 已登录但未选组织 -> 强制先完成组织选择
-    if (!app.globalData.user.orgId) {
-      wx.redirectTo({ url: '/pages/org-select/org-select?from=login' });
+      wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
     this.setData({ user: app.globalData.user });
@@ -213,6 +209,7 @@ Page({
         // 组织同行（需求 §9：组织 + 同行人数 + 今日共同前进 + 同行者）
         if (orgData !== null) {
           this.setData({
+            orgChecked: true,
             orgName: orgData.org ? orgData.org.orgName : '',
             orgFullName: orgData.org ? orgData.org.fullName : '',
             memberCount: orgData.memberCount,
@@ -353,6 +350,11 @@ Page({
    */
   goMedals() {
     wx.navigateTo({ url: '/pages/medals/medals' });
+  },
+
+  /** 选择所属组织（选填，选定后返回首页） */
+  goOrgSelect() {
+    wx.navigateTo({ url: '/pages/org-select/org-select?from=home' });
   },
 
   /**

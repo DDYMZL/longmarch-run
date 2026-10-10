@@ -23,12 +23,7 @@ Page({
 
   onShow() {
     if (!app.globalData.loggedIn) {
-      wx.reLaunch({ url: '/pages/login/login' });
-      return;
-    }
-    // 已登录但未选组织 -> 强制先完成组织选择
-    if (!app.globalData.user.orgId) {
-      wx.redirectTo({ url: '/pages/org-select/org-select?from=login' });
+      wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
     this.refresh();

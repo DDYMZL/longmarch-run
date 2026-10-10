@@ -1,0 +1,72 @@
+.launch-page {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #A00D26 0%, #C8102E 45%, #F7F1E5 45.1%, #F7F1E5 100%);
+  display: flex;
+  flex-direction: column;
+}
+
+.launch-hero {
+  padding-top: 108rpx;
+  text-align: center;
+  color: #FFFFFF;
+}
+
+.logo {
+  width: 160rpx;
+  height: 160rpx;
+  line-height: 160rpx;
+  margin: 0 auto 30rpx;
+  font-size: 96rpx;
+  background: rgba(255, 255, 255, 0.15);
+  border: 4rpx solid rgba(255, 255, 255, 0.4);
+  border-radius: 50%;
+}
+
+.app-name {
+  font-size: 44rpx;
+  font-weight: 700;
+  letter-spacing: 6rpx;
+  margin-bottom: 34rpx;
+}
+
+.slogan {
+  margin-top: 16rpx;
+  font-size: 28rpx;
+  color: #F5D9A0;
+  letter-spacing: 4rpx;
+}
+
+.launch-status {
+  margin-top: auto;
+  padding: 0 80rpx 160rpx;
+  text-align: center;
+}
+
+.spinner {
+  width: 56rpx;
+  height: 56rpx;
+  margin: 0 auto 24rpx;
+  border: 6rpx solid rgba(200, 16, 46, 0.2);
+  border-top-color: #C8102E;
+  border-radius: 50%;
+  animation: spin 0.9s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.status-text {
+  font-size: 26rpx;
+  color: #999999;
+}
+
+.error-tip {
+  color: #C8102E;
+  font-size: 26rpx;
+  margin-bottom: 24rpx;
+}
+
+.retry-btn {
+  width: 100%;
+}

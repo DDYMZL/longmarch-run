@@ -1,5 +1,5 @@
 /**
- * 登录页
+ * 登录页（用户主动退出后的手动登录入口；日常启动由启动页静默登录）
  * 流程：点击「微信授权登录」-> chooseAvatar 选取微信头像 -> wx.login 换后端用户与 JWT。
  * 登录页不展示昵称输入框：昵称默认「长征小战士」，登录后可在「我的」页修改一次。
  * 登录成功后头像被持久化保存，首页与「我的」均回显微信头像。
@@ -35,8 +35,7 @@ Page({
   },
 
   /**
-   * 执行登录：不采集昵称，后端默认昵称「长征小战士」；
-   * 首次登录（无组织）跳组织选择，否则直达首页。
+   * 执行登录：不采集昵称，后端默认昵称「长征小战士」；成功后直达首页（组织在首页 /「我的」选填）。
    * @param {string} avatar chooseAvatar 选取的头像临时路径
    */
   doLogin(avatar) {
@@ -45,17 +44,12 @@ Page({
 
     auth
       .wxLogin({ avatar: avatar })
-      .then((user) => {
-        app.setLoginUser(user);
-
+      .then(() => {
         wx.showToast({ title: '登录成功', icon: 'success' });
         setTimeout(() => {
           if (this.redirect) {
             // 扫码确认流程：立即返回确认页（场景凭证有效期短，不打断）
             wx.redirectTo({ url: this.redirect });
-          } else if (!user.orgId) {
-            // 首次登录引导选择组织架构
-            wx.redirectTo({ url: '/pages/org-select/org-select?from=login' });
           } else {
             wx.switchTab({ url: '/pages/home/home' });
           }

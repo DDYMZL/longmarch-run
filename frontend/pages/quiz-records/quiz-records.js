@@ -12,7 +12,7 @@ Page({
   onShow() {
     // 未登录保护
     if (!app.globalData.loggedIn) {
-      wx.reLaunch({ url: '/pages/login/login' });
+      wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
     this.refresh();

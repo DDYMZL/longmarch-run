@@ -39,7 +39,7 @@ Page({
 
   onLoad() {
     if (!app.globalData.loggedIn) {
-      wx.reLaunch({ url: '/pages/login/login' });
+      wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
     Promise.all([march.getRoute(), profile.getSummary().catch(() => null)])

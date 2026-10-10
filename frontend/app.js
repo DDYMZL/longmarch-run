@@ -3,14 +3,8 @@ const auth = require('./services/auth');
 App({
   globalData: {
     user: null,
-    // 本地用户与 JWT 同时存在才视为已登录
+    // 仅在后端校验 Token 通过（启动页 ensureLogin）或登录成功后置为 true，本地缓存不作数
     loggedIn: false
-  },
-
-  onLaunch() {
-    // 恢复本地登录态
-    this.globalData.user = auth.getLocalUser();
-    this.globalData.loggedIn = !!this.globalData.user;
   },
 
   /**

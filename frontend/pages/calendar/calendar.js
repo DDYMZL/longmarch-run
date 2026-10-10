@@ -30,7 +30,7 @@ Page({
 
   onShow() {
     if (!app.globalData.loggedIn) {
-      wx.reLaunch({ url: '/pages/login/login' });
+      wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
     const now = new Date();
