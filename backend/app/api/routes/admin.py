@@ -16,6 +16,7 @@ from app.api.deps import AdminPrincipal, get_current_admin, require_menu
 from app.core import rate_limit
 from app.core.config import settings
 from app.core.database import get_db
+from app.core.helpers import today_str
 from app.core.security import create_admin_token, create_admin_token_for_user
 from app.models.models import User
 from app.schemas.schemas import (
@@ -41,6 +42,8 @@ from app.schemas.schemas import (
     AdminQuestionListOut,
     AdminQuestionOut,
     AdminQuestionUpsert,
+    AdminQuoteCycleOut,
+    AdminQuoteCycleUpdate,
     AdminQuoteListOut,
     AdminQuoteOut,
     AdminQuoteUpsert,
@@ -381,19 +384,31 @@ def create_question(payload: AdminQuestionUpsert, db: Session = Depends(get_db))
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+def _xlsx_response(content: bytes, filename: str) -> Response:
+    return Response(
+        content=content,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}"},
+    )
+
+
+def _read_import_file(file: UploadFile) -> bytes:
+    """校验上传文件类型与大小，返回文件内容。"""
+    if not (file.filename or "").lower().endswith(".xlsx"):
+        raise HTTPException(status_code=400, detail="仅支持 .xlsx 文件，请使用下载的模板")
+    content = file.file.read(import_service.MAX_FILE_SIZE + 1)
+    if len(content) > import_service.MAX_FILE_SIZE:
+        raise HTTPException(status_code=400, detail="文件大小超过 2MB 限制")
+    return content
+
+
 @router.get(
     "/questions/import-template",
     summary="下载题库导入模板（Excel）",
     dependencies=[Depends(require_menu("questions"))],
 )
 def download_question_import_template():
-    content = import_service.build_question_template()
-    filename = quote("长征步迹_题库导入模板.xlsx")
-    return Response(
-        content=content,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
-    )
+    return _xlsx_response(import_service.build_question_template(), "长征步迹_题库导入模板.xlsx")
 
 
 @router.post(
@@ -406,11 +421,7 @@ def preview_question_import(
     db: Session = Depends(get_db),
     admin: AdminPrincipal = Depends(require_menu("questions")),
 ):
-    if not (file.filename or "").lower().endswith(".xlsx"):
-        raise HTTPException(status_code=400, detail="仅支持 .xlsx 文件，请使用下载的模板")
-    content = file.file.read(import_service.MAX_FILE_SIZE + 1)
-    if len(content) > import_service.MAX_FILE_SIZE:
-        raise HTTPException(status_code=400, detail="文件大小超过 2MB 限制")
+    content = _read_import_file(file)
     try:
         return import_service.preview_question_import(db, content, admin.username)
     except import_service.ImportError as exc:
@@ -460,11 +471,11 @@ def delete_question(question_id: int, db: Session = Depends(get_db)):
     return {"message": "已删除"}
 
 
-# ---------------- 每日寄语维护（需求 §16）----------------
+# ---------------- 每日寄语维护（需求 §16、V1.1 功能二）----------------
 @router.get(
     "/quotes",
     response_model=AdminQuoteListOut,
-    summary="寄语列表（分页）",
+    summary="寄语列表（分页，按循环顺序）",
     dependencies=[Depends(require_menu("quotes"))],
 )
 def list_quotes(
@@ -477,6 +488,70 @@ def list_quotes(
     return {"total": total, "items": items}
 
 
+@router.get(
+    "/quotes/cycle",
+    response_model=AdminQuoteCycleOut,
+    summary="寄语循环概览（起始日期、启用条数、今日寄语）",
+    dependencies=[Depends(require_menu("quotes"))],
+)
+def get_quote_cycle(db: Session = Depends(get_db)):
+    return quote_service.get_cycle_info(db, today_str())
+
+
+@router.put(
+    "/quotes/cycle",
+    response_model=AdminQuoteCycleOut,
+    summary="修改寄语循环起始日期",
+    dependencies=[Depends(require_menu("quotes"))],
+)
+def update_quote_cycle(payload: AdminQuoteCycleUpdate, db: Session = Depends(get_db)):
+    try:
+        quote_service.set_cycle_start(db, payload.start_date)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return quote_service.get_cycle_info(db, today_str())
+
+
+@router.get(
+    "/quotes/import-template",
+    summary="下载每日寄语导入模板（Excel）",
+    dependencies=[Depends(require_menu("quotes"))],
+)
+def download_quote_import_template():
+    return _xlsx_response(import_service.build_quote_template(), "长征步迹_每日寄语导入模板.xlsx")
+
+
+@router.post(
+    "/quotes/import-preview",
+    response_model=AdminImportPreviewOut,
+    summary="寄语导入预览（上传 Excel 整批校验）",
+)
+def preview_quote_import(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("quotes")),
+):
+    content = _read_import_file(file)
+    try:
+        return import_service.preview_quote_import(db, content, admin.username)
+    except import_service.ImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/quotes/import-confirm",
+    response_model=AdminImportConfirmOut,
+    summary="确认寄语导入（事务写入，令牌一次性）",
+    dependencies=[Depends(require_menu("quotes"))],
+)
+def confirm_quote_import(payload: AdminImportConfirmRequest, db: Session = Depends(get_db)):
+    try:
+        imported = import_service.confirm_quote_import(db, payload.preview_token)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"imported": imported}
+
+
 @router.post(
     "/quotes",
     response_model=AdminQuoteOut,
@@ -484,13 +559,11 @@ def list_quotes(
     dependencies=[Depends(require_menu("quotes"))],
 )
 def create_quote(payload: AdminQuoteUpsert, db: Session = Depends(get_db)):
-    error = quote_service.validate_quote(db, payload.date, payload.content, payload.source, payload.node_id)
+    data = payload.model_dump()
+    error = quote_service.validate_quote(db, data["content"], data["source"], data["sort_order"], data["node_id"])
     if error:
         raise HTTPException(status_code=400, detail=error)
-    if quote_service.date_taken(db, payload.date):
-        raise HTTPException(status_code=400, detail="该日期已有寄语")
-    row = quote_service.create_quote(db, payload.date, payload.content, payload.source, payload.node_id)
-    return quote_service.get_admin_out(db, row)
+    return quote_service.get_admin_out(db, quote_service.create_quote(db, data))
 
 
 @router.put(
@@ -500,12 +573,11 @@ def create_quote(payload: AdminQuoteUpsert, db: Session = Depends(get_db)):
     dependencies=[Depends(require_menu("quotes"))],
 )
 def update_quote(quote_id: int, payload: AdminQuoteUpsert, db: Session = Depends(get_db)):
-    error = quote_service.validate_quote(db, payload.date, payload.content, payload.source, payload.node_id)
+    data = payload.model_dump()
+    error = quote_service.validate_quote(db, data["content"], data["source"], data["sort_order"], data["node_id"])
     if error:
         raise HTTPException(status_code=400, detail=error)
-    if quote_service.date_taken(db, payload.date, exclude_id=quote_id):
-        raise HTTPException(status_code=400, detail="该日期已有寄语")
-    row = quote_service.update_quote(db, quote_id, payload.date, payload.content, payload.source, payload.node_id)
+    row = quote_service.update_quote(db, quote_id, data)
     if row is None:
         raise HTTPException(status_code=404, detail="寄语不存在")
     return quote_service.get_admin_out(db, row)

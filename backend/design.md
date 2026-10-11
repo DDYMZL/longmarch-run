@@ -68,7 +68,9 @@
 | `event_service` | —（足迹时间轴/实时动态数据源） | 统一事件系统：`record` 写 `user_event` 并向 WS 广播 `activity`；`build_text` 生成与小程序足迹同源的中文文案；`list_public_activities` 提供小程序实时动态（脱敏由 `ACTIVITY_MASK_NICKNAME` 控制，`mask_nickname` 实现）；事件类型如 FIRST_STEP/DAILY_GOAL/STREAK_*/NODE_LIT/MEDAL_GRANTED/QUIZ_DONE 等 |
 | `streak_service` | —（内嵌于 sport 写入链） | 连续行军：写入侧 `on_sport_upsert` 在当日首次达标时维护 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件；读取侧 `compute_streaks` 以 `daily_sport.is_goal_completed` 重算（纯函数 `streaks_of` / `longest_run` 按自然日连续计算，缺记录的日期视为中断；勋章判定复用同一套函数）；启动兜底 `recompute_all` 流式分组计算、只批量回写变化用户 |
 | `person_service` | `person.js` | 长征人物志（需求 §14）：`get_persons_by_node` 节点反查人物（节点详情 → 人物）；`get_person_detail` 人物详情（简介 + 关联节点即历史事件/历史时间，人物详情 → 节点） |
-| `quote_service` | `quote.js` | 每日寄语（需求 §16）：`get_today` 当天优先、否则回退最近一条 date<=今天（都没有返回 null）；管理端分页列表（节点名批量查询）与 CRUD、日期唯一/节点存在性校验 |
+| `quote_service` | `quote.js` | 每日寄语（需求 §16、V1.1 按天循环）：`get_today` 取启用寄语按 (sort_order, id) 升序的第 `(今天−起始日期).days % N` 条（起始日在未来取第 1 条，无启用寄语返回 null），`get_cycle_info` 供管理端展示起始日期/启用条数/今日序号；管理端分页列表（节点名批量查询）与 CRUD、字段长度/排序号范围/节点存在性校验（`check_fields` 与 Excel 导入共用） |
+| `setting_service` | — | 系统键值配置（`system_settings`）读写：`get_value` / `set_value`（upsert，调用方提交），当前承载寄语循环起始日期 `quote_cycle_start` |
+| `import_service` | —（管理端） | Excel 批量导入通用框架（表头校验、≤2MB/≤500 行、公式注入拦截、预览令牌暂存 `import_previews`、条件更新抢占防重复确认、整批事务写入）；题库与每日寄语各自提供模板/逐行解析/确认写入 |
 | `profile_service` | `profile.js` | 个人档案聚合（用户/连续行军/勋章/长征进度/足迹时间轴/五维数据画像 _portrait：行军/坚持/知识/路线/成就，仅数据不评价 §17） |
 | `broadcast_service` | `broadcast.js` | 今日长征播报（全局运动汇总 + 今日长征彩蛋 + 个人当日状态）；今日人数/总步数/击败人数单条 SQL 聚合 |
 | `dashboard_service` | —（管理端） | 驾驶舱指标、路线总览、运动趋势、实时动态、数据大屏聚合（整体口径，无组织维度） |
@@ -90,7 +92,8 @@
 | `organizations` | id, name, parent_id(可空=顶级), level(≥1), sort_order | 多级树；用户可选定任意层级节点 |
 | `persons` | id, name, avatar(可空), brief(可空) | 长征人物志（006，需求 §14）：13 行真实历史人物；avatar 空时前端展示姓名首字占位（不伪造历史照片） |
 | `person_nodes` | person_id(FK), node_id(FK) | 复合主键 (person_id, node_id)：人物 ↔ 节点（历史事件）关联，22 对；idx_person_nodes_node 支撑节点反查 |
-| `daily_quotes` | id(自增), date(10,唯一), content, source, node_id(FK,可空) | 每日寄语（007，需求 §16）：有明确出处的语录，后台维护（/admin/quotes）；种子仅空表写入 5 条示例，非空表不动（不复活被删寄语） |
+| `daily_quotes` | id(自增), content, source, sort_order(默认0), is_enabled(默认TRUE), node_id(FK,可空) | 每日寄语（007 建表，013 改为循环模型：去掉 date，新增排序号/启用状态与索引 `ix_daily_quotes_cycle(is_enabled, sort_order, id)`）：有明确出处的语录，后台维护（/admin/quotes，支持 Excel 导入）；种子仅空表写入 5 条示例，非空表不动（不复活被删寄语） |
+| `system_settings` | setting_key(64,主键), setting_value(200), updated_at | 系统键值配置（013）：`quote_cycle_start`=每日寄语循环起始日期（YYYY-MM-DD，迁移时取原寄语最早日期） |
 
 ### 3.2 用户业务表
 
@@ -118,7 +121,7 @@
 
 ### 3.3 数据库部署与结构变更
 
-本地 openGauss 使用数据库 `longmarch`、用户 `gaussdb`、端口 `5118`。`../docker/init/init-db.sh` 创建数据库及 `schema_migrations`，再按文件名顺序执行尚未登记的 SQL。`001_schema.sql` 是当前基线；`002_route_node_config.sql` 增加路线节点经纬度、排序和启用字段；`003_optional_user_avatar.sql` 将 avatar 改为可空（适配 openGauss 空串→NULL）；`004_nickname_change.sql` 增加曾用名与改名时间；`005_upgrade.sql` 为高级化升级：users 连续行军字段、daily_sport 距离/达标/补签预留、lit_nodes 步数快照、route_nodes 历史事件卡 7 字段、questions 分类、medal_defs 分类/隐藏/排序、新建 user_event 表。`006_persons.sql` 新建 persons（长征人物志）与 person_nodes（人物-节点关联）两表。`007_daily_quotes.sql` 新建 daily_quotes（每日寄语）。`008_route_ceremony.sql` 为 users 增加 route_ceremony_at（长征完成仪式标记）。`009_org_serial.sql` 组织主键自增。`010_admin_identity.sql` 新建 user_identities/bind_requests/qr_login_sessions/admin_menus/admin_roles/admin_role_menus/admin_user_roles/audit_logs 八表并种入菜单与内置角色。后续变更新增递增编号脚本，并同步修改 SQLAlchemy ORM，FastAPI 不自动建表。
+本地 openGauss 使用数据库 `longmarch`、用户 `gaussdb`、端口 `5118`。`../docker/init/init-db.sh` 创建数据库及 `schema_migrations`，再按文件名顺序执行尚未登记的 SQL。`001_schema.sql` 是当前基线；`002_route_node_config.sql` 增加路线节点经纬度、排序和启用字段；`003_optional_user_avatar.sql` 将 avatar 改为可空（适配 openGauss 空串→NULL）；`004_nickname_change.sql` 增加曾用名与改名时间；`005_upgrade.sql` 为高级化升级：users 连续行军字段、daily_sport 距离/达标/补签预留、lit_nodes 步数快照、route_nodes 历史事件卡 7 字段、questions 分类、medal_defs 分类/隐藏/排序、新建 user_event 表。`006_persons.sql` 新建 persons（长征人物志）与 person_nodes（人物-节点关联）两表。`007_daily_quotes.sql` 新建 daily_quotes（每日寄语）。`008_route_ceremony.sql` 为 users 增加 route_ceremony_at（长征完成仪式标记）。`009_org_serial.sql` 组织主键自增。`010_admin_identity.sql` 新建 user_identities/bind_requests/qr_login_sessions/admin_menus/admin_roles/admin_role_menus/admin_user_roles/audit_logs 八表并种入菜单与内置角色。`011_import_previews.sql` 新建 Excel 导入预览暂存表。`012_perf_indexes.sql` 补充热点查询索引。`013_daily_quote_cycle.sql` 将每日寄语改为循环模型（按原日期顺序回填排序号、全部置为启用、新建 system_settings 并写入循环起始日期、删除 date 列）。后续变更新增递增编号脚本，并同步修改 SQLAlchemy ORM，FastAPI 不自动建表。
 
 ## 4. 关键接口定义
 
@@ -155,7 +158,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | POST | `/api/quiz/submit` | 是 | 提交答卷 `{answers: [{questionId, answer[]}]}` → 判分记录；重复提交 400 |
 | POST | `/api/quiz/check` | 是 | 单题即时判题（需求 §15 连胜反馈）`{questionId, answer[]}` → `{questionId, correct}`；无状态不写记录/不发积分，最终成绩以 submit 为准；题目不存在 404 |
 | GET | `/api/persons/{person_id}` | 是 | 长征人物志详情（需求 §14）：`{id, name, avatar, brief, nodes[{id,name,icon,historicalTime,brief}]}`（相关历史事件=关联节点，按路线顺序）；人物不存在 404 |
-| GET | `/api/quotes/today` | 是 | 今日寄语（需求 §16）：`{id, date, content, source, node{id,name}|null}`；当天优先，无当天则回退最近一条 date<=今天，一条都没有返回 null |
+| GET | `/api/quotes/today` | 是 | 今日寄语（需求 §16、V1.1）：`{id, date, content, source, node{id,name}|null}`，date 为当天；启用寄语按排序号自循环起始日期起每天一条、末条后回到第一条，同一天所有用户同一条；无启用寄语返回 null |
 | GET | `/api/quiz/records` | 是 | 答题记录列表 |
 | GET | `/api/quiz/knowledge` | 是 | 知识画像：总正确率 + 按题目分类（event/route/figure）的答题数与正确率 |
 | POST | `/api/quiz/reset` | 是 | 重置今日答题（调试用） |
@@ -196,7 +199,10 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | PUT | `/api/admin/route-nodes/{id}` | 管理员(route_nodes) | 编辑路线节点（含历史事件卡 7 字段） |
 | PATCH | `/api/admin/route-nodes/{id}/enabled` | 管理员(route_nodes) | 启用/停用节点 |
 | GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 管理员(questions) | 题库 CRUD（含 category 分类） |
-| GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 管理员(quotes) | 每日寄语 CRUD（需求 §16；GET 分页 page/pageSize 日期倒序，可选 keyword 按内容/出处模糊搜索（LIKE 通配符转义），日期唯一冲突/坏格式/坏节点 400，不存在 404） |
+| GET/POST | `/api/admin/questions/import-template` · `import-preview` · `import-confirm` | 管理员(questions) | 题库 Excel 导入：模板下载 → 上传校验（返回 `{preview_token, total, valid_count, invalid_count, errors[{row, field, reason}]}`）→ 凭令牌确认写入 `{imported}`（令牌 30 分钟有效、单次核销，重复确认 400） |
+| GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 管理员(quotes) | 每日寄语 CRUD（需求 §16）：字段 `{content, source, sort_order(0~999999), is_enabled, node_id}`；GET 分页 page/pageSize 按 (sort_order, id) 升序，可选 keyword 按内容/出处模糊搜索（LIKE 通配符转义）；内容/出处为空或超 200 字、排序号越界、坏节点 400，不存在 404 |
+| GET/PUT | `/api/admin/quotes/cycle` | 管理员(quotes) | 寄语循环信息 `{start_date, enabled_count, today_quote_id, today_position}`；PUT `{start_date}` 修改循环起始日期（格式非法 400） |
+| GET/POST | `/api/admin/quotes/import-template` · `import-preview` · `import-confirm` | 管理员(quotes) | 寄语 Excel 导入（契约同题库导入）：表头 寄语内容/出处/排序号/启用状态/关联节点（节点填名称或 ID）；错误定位到行与字段，库内/文件内重复内容判错不覆盖；排序号留空接在库内与文件内最大值之后 |
 | GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 管理员(orgs) | 组织架构树 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计，后序累加）；`POST /api/admin/orgs/sync` 从外部系统同步 |
 | GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 管理员(orgs) | 组织人员明细（分页）：`scope=direct` 仅直属成员（与 direct_user_count 同口径）、`scope=all` 含全部层级下级（与 total_user_count 同口径）；组织不存在 404 |
 

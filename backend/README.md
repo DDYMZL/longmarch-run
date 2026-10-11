@@ -130,6 +130,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/org/mine` | 我的所属组织（含全路径） |
 | POST | `/api/org/select` | 选定/修改所属组织（body: `orgId`，可选任意层级） |
 | GET | `/api/rank/steps` | 全员工累计步数总榜（跨所有组织，标记我的名次） |
+| GET | `/api/quotes/today` | 今日寄语（启用寄语按排序号自循环起始日期起每天一条循环；无启用寄语返回 null） |
 | POST | `/api/auth/qr/info` | 查询扫码场景 `{scene}`：L 登录确认 / B 绑定确认（含目标渠道信息），pending 置 scanned |
 | POST | `/api/auth/qr/confirm` | 确认/取消扫码 `{scene, action}`：L 无后台角色 403（会话置 failed），有角色置 confirmed；B 事务写身份（unionid 冲突不合并） |
 | GET | `/api/auth/identities` | 当前用户已绑定身份列表（wx_mini 主身份不可解绑） |
@@ -152,6 +153,12 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | PUT | `/api/admin/route-nodes/{id}` | 编辑路线节点（含历史事件卡内容字段） |
 | PATCH | `/api/admin/route-nodes/{id}/enabled` | 启用/停用路线节点 |
 | GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 题库 CRUD（含知识分类） |
+| GET | `/api/admin/questions/import-template` | 下载题库 Excel 导入模板（数据表 + 填写说明） |
+| POST | `/api/admin/questions/import-preview` / `import-confirm` | 题库批量导入：上传 .xlsx 逐行校验返回预览令牌与错误明细 → 凭令牌一次性整批写入 |
+| GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 每日寄语 CRUD（排序号/启用状态/出处/关联节点；按排序号升序分页，keyword 搜内容/出处） |
+| GET/PUT | `/api/admin/quotes/cycle` | 寄语循环信息（起始日期、启用条数、今日展示寄语与序号）/ 修改循环起始日期 `{start_date}` |
+| GET | `/api/admin/quotes/import-template` | 下载寄语 Excel 导入模板（寄语内容/出处/排序号/启用状态/关联节点 + 填写说明） |
+| POST | `/api/admin/quotes/import-preview` / `import-confirm` | 寄语批量导入：逐行校验（定位到行与字段，库内/文件内重复判错不覆盖）→ 凭令牌一次性写入 |
 | GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 组织架构 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计）；`POST /api/admin/orgs/sync` 外部同步 |
 | GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 组织人员明细（分页）：`scope=direct` 仅直属成员，`scope=all` 含全部层级下级，与组织树两列统计口径一致 |
 | GET | `/api/admin/users?keyword=&org_id=&page=` | 人员授权列表（昵称/组织筛选、分页），每项含启用/禁用角色 |
@@ -171,6 +178,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 - **事件系统**：用户成就（首次运动/当日达标/连续里程碑/点亮/勋章/答题等）统一落 `user_event` 并生成中文文案，小程序足迹时间轴与管理端实时动态共用此数据源。
 - **组织架构**：多级树（种子 13 个节点，4 级），用户可选定**任意层级**节点作为所属组织，登录后可随时修改；管理端组织树按节点统计直属人数与含下级累计人数。
 - **排名**：**员工个人**总榜（非组织间排名），按累计步数（`DailySport.steps` 求和）降序，跨所有组织；同分按 `user_id` 升序保证名次稳定；返回前 `TOP_LIMIT`（默认 100）条并始终包含当前用户。
+- **每日寄语**：启用寄语按 `(sort_order, id)` 升序排列共 N 条，今日展示第 `(今天 − 循环起始日期).days % N` 条（起始日期存 `system_settings.quote_cycle_start`，后台可改；起始日期在未来时展示第 1 条）；同一天所有用户看到同一条，停用/新增/删除后按最新启用列表重算；无启用寄语返回 null。Excel 导入未填排序号的行接在库内与文件内已填排序号最大值之后。
 - **身份关联**：认证（JWT）/ 身份关联（user_identities）/ 后台授权（RBAC）三层分离，绑定身份成功**不等于**拥有后台权限；`wx_mini` 登录凭证身份不可解绑；同一 `provider+app_id+openid` 全局唯一，unionid 冲突**禁止自动合并**；绑定凭证只存 SHA-256 摘要，确认后单次有效。
 - **扫码登录**：L 场景创建→轮询→小程序确认（无启用角色会话置 failed 并返回原因）→PC 轮询 confirmed 后**单次签发**管理员 JWT（token_issued 原子标记防重放）。
 - **RBAC**：超管全菜单放行；微信关联管理员按启用角色的菜单并集校验，每请求查库——撤销/禁用即时生效；授权/角色变更逐项写审计。

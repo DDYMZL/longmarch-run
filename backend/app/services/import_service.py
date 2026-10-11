@@ -18,7 +18,8 @@ from openpyxl import Workbook, load_workbook
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from app.models.models import ImportPreview, Question
+from app.models.models import DailyQuote, ImportPreview, Question, RouteNode
+from app.services import quote_service
 from app.services.admin_service import _validate_question
 
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
@@ -295,3 +296,115 @@ def confirm_question_import(db: Session, token: str) -> int:
         return len(rows)
 
     return _confirm(db, token, "question", _insert)
+
+
+# ---------------- 寄语导入 ----------------
+QUOTE_HEADERS = ["寄语内容", "出处", "排序号", "启用状态", "关联节点"]
+
+QUOTE_INSTRUCTIONS = [
+    "长征步迹每日寄语导入模板 · 填写说明",
+    "1. 在「寄语数据」工作表从第 2 行开始填写，请勿修改表头；单次最多 500 行。",
+    f"2. 寄语内容：必填，不超过 {quote_service.CONTENT_MAX_LEN} 字；须为有明确出处的史料语录，请勿虚构。",
+    f"3. 出处：必填，不超过 {quote_service.SOURCE_MAX_LEN} 字，填写作者及著作，如：毛泽东《七律·长征》。",
+    f"4. 排序号：可选，0~{quote_service.SORT_ORDER_MAX} 的整数，决定循环展示顺序（升序，相同排序号按导入先后）；"
+    "留空时按文件行顺序依次排在现有寄语及本文件已填排序号之后。",
+    "5. 启用状态：可选，填「启用」或「停用」（也接受 是/否、1/0），留空默认启用；仅启用的寄语参与每日循环。",
+    "6. 关联节点：可选，填路线节点名称（如：遵义）或节点 ID；关联后小程序可从寄语卡跳转节点详情。",
+    "7. 循环规则：启用寄语按排序号升序，从「循环起始日期」起每天展示下一条，最后一条之后回到第一条。",
+    "8. 寄语内容与库内已有寄语或文件内其他行完全相同的，整行判错（默认新增导入，不覆盖）。",
+    "9. 任意一行校验失败，本批次全部禁止导入；修正后重新上传即可。",
+]
+
+_ENABLED_ALIASES = {"启用": True, "是": True, "1": True, "停用": False, "禁用": False, "否": False, "0": False}
+
+
+def build_quote_template() -> bytes:
+    """生成寄语导入模板（数据表 + 填写说明）。"""
+    return _build_workbook("寄语数据", QUOTE_HEADERS, QUOTE_INSTRUCTIONS)
+
+
+def _parse_quote_row(raw: Dict[str, str], nodes_by_name: Dict[str, int], node_ids: set) -> Dict:
+    """把一行 Excel 文本转换为寄语字段；sort_order 为 None 表示待自动分配。非法值抛 ValueError(字段, 原因)。"""
+    sort_order: Optional[int] = None
+    if raw["排序号"]:
+        if not raw["排序号"].isdigit():
+            raise ValueError("排序号", f"排序号须为 0~{quote_service.SORT_ORDER_MAX} 的整数")
+        sort_order = int(raw["排序号"])
+    error = quote_service.check_fields(raw["寄语内容"], raw["出处"], sort_order or 0)
+    if error:
+        # check_fields 的错误信息均以字段名开头
+        raise ValueError(next((h for h in QUOTE_HEADERS if error.startswith(h)), ""), error)
+    enabled_text = raw["启用状态"]
+    if enabled_text and enabled_text not in _ENABLED_ALIASES:
+        raise ValueError("启用状态", "启用状态须为「启用」或「停用」，或留空")
+    node_id: Optional[int] = None
+    node_text = raw["关联节点"]
+    if node_text:
+        if node_text.isdigit() and int(node_text) in node_ids:
+            node_id = int(node_text)
+        elif node_text in nodes_by_name:
+            node_id = nodes_by_name[node_text]
+        else:
+            raise ValueError("关联节点", f"关联节点「{node_text}」不存在")
+    return {
+        "content": raw["寄语内容"],
+        "source": raw["出处"],
+        "sort_order": sort_order,
+        "is_enabled": _ENABLED_ALIASES.get(enabled_text, True),
+        "node_id": node_id,
+    }
+
+
+def preview_quote_import(db: Session, content: bytes, operator: str) -> Dict:
+    """解析并整批校验寄语文件，暂存预览，返回统计与令牌。"""
+    data_rows, row_errors = _read_sheet(content, QUOTE_HEADERS)
+    nodes = db.query(RouteNode.id, RouteNode.name).all()
+    nodes_by_name = {name: node_id for node_id, name in nodes}
+    node_ids = {node_id for node_id, _ in nodes}
+    existing = {c.strip() for (c,) in db.query(DailyQuote.content).all()}
+    valid_rows: List[Dict] = []
+    errors: List[Dict] = list(row_errors)
+    seen_texts: Dict[str, int] = {}
+    for item in data_rows:
+        row_no, raw = item["row"], item["raw"]
+        try:
+            data = _parse_quote_row(raw, nodes_by_name, node_ids)
+        except ValueError as exc:
+            errors.append(_fail(row_no, *exc.args))
+            continue
+        text = data["content"]
+        if text in existing:
+            errors.append(_fail(row_no, "寄语内容", "与库中已有寄语重复"))
+            continue
+        if text in seen_texts:
+            errors.append(_fail(row_no, "寄语内容", f"与文件内第 {seen_texts[text]} 行重复"))
+            continue
+        seen_texts[text] = row_no
+        valid_rows.append({"row": row_no, "data": data})
+    errors.sort(key=lambda e: e["row"])
+    token = _save_preview(db, "quote", valid_rows, errors, operator)
+    return {
+        "preview_token": token,
+        "total": len(valid_rows) + len(errors),
+        "valid_count": len(valid_rows),
+        "invalid_count": len(errors),
+        "errors": errors,
+    }
+
+
+def confirm_quote_import(db: Session, token: str) -> int:
+    """核销令牌并批量写入寄语；未填排序号的行按文件顺序接在库内及本批已填排序号的最大值之后。"""
+
+    def _insert(session: Session, rows: List[Dict]) -> int:
+        db_max = session.query(func.max(DailyQuote.sort_order)).scalar() or 0
+        file_max = max((r["data"]["sort_order"] or 0 for r in rows), default=0)
+        next_order = max(db_max, file_max) + 1
+        for item in rows:
+            data = dict(item["data"])
+            if data["sort_order"] is None:
+                data["sort_order"] = min(next_order, quote_service.SORT_ORDER_MAX)
+                next_order += 1
+            session.add(DailyQuote(**data))
+        return len(rows)
+
+    return _confirm(db, token, "quote", _insert)

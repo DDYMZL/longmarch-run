@@ -79,18 +79,30 @@ class PersonNode(Base):
 
 
 class DailyQuote(Base):
-    """每日寄语（需求 §16）。内容为有明确出处的史料语录，由后台维护，可关联路线节点。
+    """每日寄语（需求 §16、V1.1 功能二）。内容为有明确出处的史料语录，由后台维护，可关联路线节点。
 
-    date 为 'YYYY-MM-DD' 字符串；同一日期仅一条。
+    启用寄语按 (sort_order, id) 升序参与按天循环展示；循环起始日期见 SystemSetting。
     """
 
     __tablename__ = "daily_quotes"
+    __table_args__ = (Index("ix_daily_quotes_cycle", "is_enabled", "sort_order", "id"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    date: Mapped[str] = mapped_column(String(10), unique=True)
     content: Mapped[str] = mapped_column(Text)
     source: Mapped[str] = mapped_column(String(200))
     node_id: Mapped[Optional[int]] = mapped_column(ForeignKey("route_nodes.id"), nullable=True, default=None)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
+class SystemSetting(Base):
+    """系统级键值配置（管理端可改），如寄语循环起始日期 quote_cycle_start。"""
+
+    __tablename__ = "system_settings"
+
+    setting_key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    setting_value: Mapped[str] = mapped_column(String(200))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class Question(Base):

@@ -2,18 +2,10 @@
 // 题库维护：列表（服务端分页 + 类型/分类/关键字筛选）、新增、编辑、删除、Excel 批量导入
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import type { FormInstance, FormRules, UploadFile } from 'element-plus'
-import {
-  confirmQuestionImport,
-  createQuestion,
-  deleteQuestion,
-  downloadQuestionImportTemplate,
-  fetchQuestions,
-  previewQuestionImport,
-  updateQuestion
-} from '../api/admin'
-import type { ImportPreviewResult, Question, QuestionOption } from '../api/admin'
-import { csvCell, saveFile, today } from '../utils/download'
+import type { FormInstance, FormRules } from 'element-plus'
+import { createQuestion, deleteQuestion, fetchQuestions, questionImportApi, updateQuestion } from '../api/admin'
+import type { Question, QuestionOption } from '../api/admin'
+import ExcelImportDialog from '../components/ExcelImportDialog.vue'
 
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F']
 const CATEGORIES = [
@@ -209,67 +201,17 @@ function answerText(row: Question): string {
 
 // ---------------- Excel 批量导入 ----------------
 const importVisible = ref(false)
-const importFile = ref<File | null>(null)
-const previewing = ref(false)
-const confirming = ref(false)
-const preview = ref<ImportPreviewResult | null>(null)
+const importDialog = ref<InstanceType<typeof ExcelImportDialog>>()
+const IMPORT_TIPS = [
+  '先下载导入模板，按「填写说明」工作表的要求填写题目数据；',
+  '上传文件后系统逐行校验，任意一行失败则整批禁止导入；',
+  '校验通过后点击「确认导入」一次性写入，与库内已有题目重复的行会判错（不覆盖）。'
+]
 
-function openImport() {
-  importFile.value = null
-  preview.value = null
-  importVisible.value = true
-}
-
-function handleFileChange(file: UploadFile) {
-  importFile.value = file.raw ?? null
-  preview.value = null
-}
-
-async function handlePreview() {
-  if (!importFile.value) {
-    ElMessage.warning('请先选择填写好的 .xlsx 文件')
-    return
-  }
-  previewing.value = true
-  try {
-    const { data } = await previewQuestionImport(importFile.value)
-    preview.value = data
-    if (data.invalid_count === 0) {
-      ElMessage.success(`校验通过：${data.valid_count} 行可导入`)
-    } else {
-      ElMessage.warning(`发现 ${data.invalid_count} 行错误，修正后请重新上传`)
-    }
-  } finally {
-    previewing.value = false
-  }
-}
-
-async function handleConfirmImport() {
-  if (!preview.value || confirming.value) return
-  confirming.value = true
-  try {
-    const { data } = await confirmQuestionImport(preview.value.preview_token)
-    ElMessage.success(`成功导入 ${data.imported} 道题目`)
-    importVisible.value = false
-    // 回到第一页；已在第一页时页码不变，需手动刷新
-    if (page.value === 1) await loadQuestions()
-    else page.value = 1
-  } finally {
-    confirming.value = false
-  }
-}
-
-async function handleDownloadTemplate() {
-  const { data } = await downloadQuestionImportTemplate()
-  saveFile(data, '长征步迹_题库导入模板.xlsx')
-}
-
-function downloadErrorReport() {
-  if (!preview.value?.errors.length) return
-  const header = ['Excel行号', '出错字段', '错误原因']
-  const rows = preview.value.errors.map((e) => [e.row, e.field || '整行', e.reason])
-  const content = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')
-  saveFile(`\uFEFF${content}`, `题库导入错误报告_${today()}.csv`, 'text/csv;charset=utf-8')
+function handleImported() {
+  // 回到第一页；已在第一页时页码不变，需手动刷新
+  if (page.value === 1) loadQuestions()
+  else page.value = 1
 }
 </script>
 
@@ -292,8 +234,8 @@ function downloadErrorReport() {
       />
       <div class="spacer" />
       <span class="total">共 {{ total }} 题</span>
-      <el-button :icon="'Download'" @click="handleDownloadTemplate">下载导入模板</el-button>
-      <el-button :icon="'Upload'" @click="openImport">批量导入</el-button>
+      <el-button :icon="'Download'" @click="importDialog?.downloadTemplate()">下载导入模板</el-button>
+      <el-button :icon="'Upload'" @click="importVisible = true">批量导入</el-button>
       <el-button type="primary" :icon="'Plus'" @click="openCreate">新增题目</el-button>
       <el-button :icon="'Refresh'" @click="loadQuestions">刷新</el-button>
     </div>
@@ -341,67 +283,18 @@ function downloadErrorReport() {
       class="pagination"
     />
 
-    <el-dialog v-model="importVisible" title="批量导入题目" width="720px" destroy-on-close>
-      <el-alert type="info" :closable="false" class="import-tip">
-        <p>1. 先下载导入模板，按「填写说明」工作表的要求填写题目数据；</p>
-        <p>2. 上传文件后系统逐行校验，任意一行失败则整批禁止导入；</p>
-        <p>3. 校验通过后点击「确认导入」一次性写入，与库内已有题目重复的行会判错（不覆盖）。</p>
-      </el-alert>
-      <div class="import-actions">
-        <el-button :icon="'Download'" @click="handleDownloadTemplate">下载导入模板</el-button>
-        <el-upload
-          :auto-upload="false"
-          :show-file-list="false"
-          accept=".xlsx"
-          :limit="1"
-          :on-change="handleFileChange"
-        >
-          <el-button type="primary" plain :icon="'FolderOpened'">
-            {{ importFile ? importFile.name : '选择 .xlsx 文件' }}
-          </el-button>
-        </el-upload>
-        <el-button type="primary" :loading="previewing" :disabled="!importFile" @click="handlePreview">
-          上传校验
-        </el-button>
-      </div>
-
-      <template v-if="preview">
-        <el-alert
-          :type="preview.invalid_count === 0 ? 'success' : 'error'"
-          :closable="false"
-          class="import-tip"
-        >
-          共 {{ preview.total }} 行：有效 {{ preview.valid_count }} 行，错误 {{ preview.invalid_count }} 行
-        </el-alert>
-        <template v-if="preview.errors.length">
-          <div class="error-header">
-            <span class="error-title">错误明细</span>
-            <el-button link type="primary" :icon="'Download'" @click="downloadErrorReport">
-              下载错误报告
-            </el-button>
-          </div>
-          <el-table :data="preview.errors" border size="small" max-height="280">
-            <el-table-column prop="row" label="Excel行号" width="90" align="center" />
-            <el-table-column label="出错字段" width="110" align="center">
-              <template #default="{ row }">{{ row.field || '整行' }}</template>
-            </el-table-column>
-            <el-table-column prop="reason" label="错误原因" min-width="260" show-overflow-tooltip />
-          </el-table>
-        </template>
-      </template>
-
-      <template #footer>
-        <el-button @click="importVisible = false">取消</el-button>
-        <el-button
-          type="primary"
-          :loading="confirming"
-          :disabled="!preview || preview.invalid_count > 0 || preview.valid_count === 0"
-          @click="handleConfirmImport"
-        >
-          确认导入{{ preview && preview.valid_count ? ` ${preview.valid_count} 题` : '' }}
-        </el-button>
-      </template>
-    </el-dialog>
+    <ExcelImportDialog
+      ref="importDialog"
+      v-model="importVisible"
+      title="批量导入题目"
+      unit="题"
+      item-label="道题目"
+      template-filename="长征步迹_题库导入模板.xlsx"
+      report-prefix="题库导入错误报告"
+      :tips="IMPORT_TIPS"
+      :api="questionImportApi"
+      @imported="handleImported"
+    />
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="640px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
@@ -481,29 +374,6 @@ function downloadErrorReport() {
 .pagination {
   margin-top: 14px;
   justify-content: flex-end;
-}
-
-.import-tip {
-  margin-bottom: 14px;
-}
-
-.import-actions {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.error-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin: 10px 0 6px;
-}
-
-.error-title {
-  font-weight: 600;
-  color: #f56c6c;
 }
 
 .option-list {

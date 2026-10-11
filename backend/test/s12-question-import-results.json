@@ -10,7 +10,7 @@
       "id": "Q02",
       "name": "合法文件预览统计正确",
       "ok": true,
-      "detail": "status=200 body={\"preview_token\": \"640068363231441d9b92ff23fa676903\", \"total\": 3, \"valid_count\": 3, \"invalid_count\": 0, \"errors\": []}"
+      "detail": "status=200 body={\"preview_token\": \"717c10b89f0d4941905a2d0ebca3f428\", \"total\": 3, \"valid_count\": 3, \"invalid_count\": 0, \"errors\": []}"
     },
     {
       "id": "Q03",

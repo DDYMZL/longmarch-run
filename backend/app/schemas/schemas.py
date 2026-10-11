@@ -287,7 +287,7 @@ class QuoteNodeRefOut(CamelModel):
 
 
 class QuoteTodayOut(CamelModel):
-    """今日寄语（需求 §16）：取当天寄语，无当天则取最近一条不晚于今天的寄语。"""
+    """今日寄语（V1.1 功能二）：启用寄语按天循环，date 为当天业务日期。"""
 
     id: int
     date: str
@@ -865,12 +865,13 @@ class AdminQuestionUpsert(BaseModel):
 
 
 class AdminQuoteOut(BaseModel):
-    """每日寄语条目（需求 §16 后台维护）。"""
+    """每日寄语条目（需求 §16、V1.1 功能二后台维护）。"""
 
     id: int
-    date: str
     content: str
     source: str
+    sort_order: int
+    is_enabled: bool
     node_id: Optional[int] = None
     node_name: str = ""
 
@@ -881,12 +882,28 @@ class AdminQuoteListOut(BaseModel):
 
 
 class AdminQuoteUpsert(BaseModel):
-    """新增/编辑寄语请求体。date 为 'YYYY-MM-DD'，同一日期唯一；node_id 可空。"""
+    """新增/编辑寄语请求体。启用寄语按 sort_order、id 升序循环展示；node_id 可空。"""
 
-    date: str
     content: str
     source: str
+    sort_order: int = 0
+    is_enabled: bool = True
     node_id: Optional[int] = None
+
+
+class AdminQuoteCycleOut(BaseModel):
+    """寄语循环概览：today_position 为今日寄语在启用列表中的序号（从 1 起，无启用寄语为 0）。"""
+
+    start_date: str
+    enabled_count: int
+    today_quote_id: Optional[int] = None
+    today_position: int = 0
+
+
+class AdminQuoteCycleUpdate(BaseModel):
+    """修改循环起始日期（YYYY-MM-DD，该日展示排序后的第 1 条启用寄语）。"""
+
+    start_date: str
 
 
 # ---------------- 管理端 Excel 批量导入（V1.1）----------------

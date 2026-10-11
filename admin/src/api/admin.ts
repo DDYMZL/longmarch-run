@@ -109,13 +109,17 @@ export interface RouteNodeListResult {
   items: RouteNode[]
 }
 
-// ---------------- 每日寄语（需求 §16） ----------------
-export interface Quote {
-  id: number
-  date: string
+// ---------------- 每日寄语（需求 §16、V1.1 按天循环） ----------------
+export interface QuoteUpsert {
   content: string
   source: string
+  sort_order: number
+  is_enabled: boolean
   node_id: number | null
+}
+
+export interface Quote extends QuoteUpsert {
+  id: number
   node_name: string
 }
 
@@ -124,11 +128,12 @@ export interface QuoteListResult {
   items: Quote[]
 }
 
-export interface QuoteUpsert {
-  date: string
-  content: string
-  source: string
-  node_id: number | null
+// today_position：今日寄语在启用列表中的序号（从 1 起，无启用寄语为 0）
+export interface QuoteCycle {
+  start_date: string
+  enabled_count: number
+  today_quote_id: number | null
+  today_position: number
 }
 
 export interface MessageResult {
@@ -515,20 +520,24 @@ export function deleteQuestion(id: number) {
   return request.delete<MessageResult>(`/admin/questions/${id}`)
 }
 
-export function downloadQuestionImportTemplate() {
-  return request.get('/admin/questions/import-template', { responseType: 'blob' })
+function downloadImportTemplate(url: string) {
+  return request.get<Blob>(url, { responseType: 'blob' })
 }
 
-export function previewQuestionImport(file: File) {
+function previewImport(url: string, file: File) {
   const form = new FormData()
   form.append('file', file)
-  return request.post<ImportPreviewResult>('/admin/questions/import-preview', form)
+  return request.post<ImportPreviewResult>(url, form)
 }
 
-export function confirmQuestionImport(previewToken: string) {
-  return request.post<{ imported: number }>('/admin/questions/import-confirm', {
-    preview_token: previewToken
-  })
+function confirmImport(url: string, previewToken: string) {
+  return request.post<{ imported: number }>(url, { preview_token: previewToken })
+}
+
+export const questionImportApi = {
+  downloadTemplate: () => downloadImportTemplate('/admin/questions/import-template'),
+  preview: (file: File) => previewImport('/admin/questions/import-preview', file),
+  confirm: (token: string) => confirmImport('/admin/questions/import-confirm', token)
 }
 
 // ---------------- 每日寄语 ----------------
@@ -548,6 +557,20 @@ export function updateQuote(id: number, data: QuoteUpsert) {
 
 export function deleteQuote(id: number) {
   return request.delete<MessageResult>(`/admin/quotes/${id}`)
+}
+
+export function fetchQuoteCycle() {
+  return request.get<QuoteCycle>('/admin/quotes/cycle')
+}
+
+export function updateQuoteCycle(startDate: string) {
+  return request.put<QuoteCycle>('/admin/quotes/cycle', { start_date: startDate })
+}
+
+export const quoteImportApi = {
+  downloadTemplate: () => downloadImportTemplate('/admin/quotes/import-template'),
+  preview: (file: File) => previewImport('/admin/quotes/import-preview', file),
+  confirm: (token: string) => confirmImport('/admin/quotes/import-confirm', token)
 }
 
 // ---------------- 组织架构 ----------------
