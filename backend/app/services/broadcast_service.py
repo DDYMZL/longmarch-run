@@ -8,6 +8,7 @@ import re
 from datetime import datetime
 from typing import Dict, Optional
 
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.core.helpers import local_to_utc, today_str
@@ -45,13 +46,24 @@ def get_today(db: Session, user_id: int) -> Dict:
     date = today_str()
     now = datetime.now()
 
-    today_rows = (
-        db.query(DailySport.user_id, DailySport.steps)
-        .filter(DailySport.date == date)
-        .all()
+    my_steps = int(
+        db.query(DailySport.steps)
+        .filter(DailySport.user_id == user_id, DailySport.date == date)
+        .scalar()
+        or 0
     )
-    today_users = len(today_rows)
-    today_steps_total = sum((r[1] or 0) for r in today_rows)
+    # 今日全平台聚合一次完成：参与人数 / 总步数 / 步数不高于我的人数（击败百分比）
+    steps = func.coalesce(DailySport.steps, 0)
+    today_users, today_steps_total, beaten = (
+        db.query(
+            func.count(DailySport.id),
+            func.coalesce(func.sum(steps), 0),
+            func.coalesce(func.sum(case((steps <= my_steps, 1), else_=0)), 0),
+        )
+        .filter(DailySport.date == date)
+        .one()
+    )
+    today_users, today_steps_total, beaten = int(today_users), int(today_steps_total), int(beaten)
 
     # lit_at 为 UTC 存储：本地今日 0 点换算成 UTC 再比较
     day_start_utc = local_to_utc(now.replace(hour=0, minute=0, second=0, microsecond=0))
@@ -61,9 +73,6 @@ def get_today(db: Session, user_id: int) -> Dict:
     today_quiz_users = db.query(QuizRecord.id).filter(QuizRecord.date == date).count()
     total_users = db.query(User.id).count()
 
-    step_map = {uid: (steps or 0) for uid, steps in today_rows}
-    my_steps = step_map.get(user_id, 0)
-    beaten = sum(1 for value in step_map.values() if value <= my_steps)
     beat_percent = round(beaten / today_users * 100) if today_users else 0
 
     route = march_service.get_route(db, user_id)

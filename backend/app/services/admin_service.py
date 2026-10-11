@@ -11,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.helpers import today_str
 from app.data.seed import ORGANIZATIONS
 from app.models.models import (
     DailyQuestion,
@@ -195,7 +196,8 @@ def delete_question(db: Session, question_id: int) -> None:
     question = db.query(Question).filter(Question.id == question_id).first()
     if question is None:
         return
-    caches = db.query(DailyQuestion).all()
+    # 只有今天（含）之后的抽题缓存仍会被读取，历史缓存不必扫描
+    caches = db.query(DailyQuestion).filter(DailyQuestion.date >= today_str()).all()
     for cache in caches:
         if question_id in (cache.question_ids or []):
             cache.question_ids = [q for q in cache.question_ids if q != question_id]
@@ -492,7 +494,7 @@ def get_org_users(
     if org is None:
         return None
     if scope == "all":
-        org_ids = _collect_subtree_ids(db, org_id)
+        org_ids = org_service.subtree_org_ids(db, org_id)
         base_query = db.query(User).filter(User.org_id.in_(org_ids))
     else:
         base_query = db.query(User).filter(User.org_id == org_id)
@@ -569,7 +571,7 @@ def delete_org(db: Session, org_id: int) -> List[int]:
     org = db.query(Organization).filter(Organization.id == org_id).first()
     if org is None:
         return []
-    subtree_ids = _collect_subtree_ids(db, org_id)
+    subtree_ids = org_service.subtree_org_ids(db, org_id)
     used_ids = {
         row[0]
         for row in db.query(User.org_id)
@@ -577,10 +579,14 @@ def delete_org(db: Session, org_id: int) -> List[int]:
         .distinct()
         .all()
     }
-    # 被引用节点的祖先也必须保留，否则树断裂
+    # 被引用节点的祖先也必须保留，否则树断裂（父链整表一次加载，逐级上溯不再查库）
+    parent_of = dict(db.query(Organization.id, Organization.parent_id).all())
     kept_ids = set(used_ids)
     for used_id in used_ids:
-        kept_ids.update(_collect_ancestor_ids(db, used_id))
+        current = parent_of.get(used_id)
+        while current is not None and current not in kept_ids:
+            kept_ids.add(current)
+            current = parent_of.get(current)
     deletable = [i for i in subtree_ids if i not in kept_ids]
     db.query(Organization).filter(Organization.id.in_(deletable)).delete(
         synchronize_session=False
@@ -601,45 +607,17 @@ def _resolve_level(db: Session, parent_id: Optional[int]) -> int:
 
 def _is_descendant(db: Session, org_id: int, candidate_id: int) -> bool:
     """判断 candidate_id 是否为 org_id 的子孙节点。"""
-    return candidate_id in _collect_subtree_ids(db, org_id)[1:]
-
-
-def _collect_subtree_ids(db: Session, org_id: int) -> List[int]:
-    """收集以 org_id 为根的整棵子树 id（含自身），广度优先避免递归。"""
-    all_nodes = db.query(Organization.id, Organization.parent_id).all()
-    children_map: Dict[Optional[int], List[int]] = {}
-    for nid, pid in all_nodes:
-        children_map.setdefault(pid, []).append(nid)
-    result: List[int] = []
-    queue = [org_id]
-    while queue:
-        current = queue.pop(0)
-        result.append(current)
-        queue.extend(children_map.get(current, []))
-    return result
-
-
-def _collect_ancestor_ids(db: Session, org_id: int) -> List[int]:
-    """收集 org_id 的全部祖先 id（不含自身）。"""
-    ancestors: List[int] = []
-    current = db.query(Organization).filter(Organization.id == org_id).first()
-    guard = 0
-    while current is not None and current.parent_id is not None and guard < 32:
-        ancestors.append(current.parent_id)
-        current = (
-            db.query(Organization).filter(Organization.id == current.parent_id).first()
-        )
-        guard += 1
-    return ancestors
+    return candidate_id in org_service.subtree_org_ids(db, org_id)[1:]
 
 
 def _shift_subtree_level(db: Session, root_id: int, diff: int) -> None:
-    """父节点变更后，整棵子树（不含根自身）层级平移 diff。"""
-    for sub_id in _collect_subtree_ids(db, root_id)[1:]:
-        sub = db.query(Organization).filter(Organization.id == sub_id).first()
-        if sub is not None:
-            sub.level += diff
-    db.commit()
+    """父节点变更后，整棵子树（不含根自身）层级平移 diff（单条批量 UPDATE）。"""
+    sub_ids = org_service.subtree_org_ids(db, root_id)[1:]
+    if sub_ids:
+        db.query(Organization).filter(Organization.id.in_(sub_ids)).update(
+            {Organization.level: Organization.level + diff}, synchronize_session=False
+        )
+        db.commit()
 
 
 # ---------------- 组织架构同步 ----------------
@@ -745,16 +723,15 @@ def _normalize_org_node(raw: Dict) -> Dict:
         "name": name,
         "parent_id": parent_id,
         "sort_order": int(sort_order),
-        "level": _calc_level(raw, org_id),
+        "level": _calc_level(raw),
     }
 
 
-def _calc_level(raw: Dict, fallback_id: int) -> int:
-    """优先采用数据源 level 字段；缺失时按 parent_id 链在源数据内推算，顶级为 1。"""
+def _calc_level(raw: Dict) -> int:
+    """优先采用数据源 level 字段；缺失时按 1 处理，由 _rebuild_levels 依 parent 链修正。"""
     level = raw.get("level")
     if isinstance(level, int) and level > 0:
         return level
-    # 无 level 字段时统一按 1 处理，随后由 _rebuild_levels 依据 parent 链修正
     return 1
 
 

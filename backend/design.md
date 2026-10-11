@@ -64,13 +64,13 @@
 | `points_service` | `points.js` | 积分总额、流水；`grant` 按「同日同 reason」去重；`grant_daily_login` 等快捷方法 |
 | `medal_service` | `medal.js` | 12 枚勋章的判定与发放（`check_and_grant` 返回新获列表），含连续行军/步数里程碑/隐藏勋章 |
 | `org_service` | `org.js` | 组织树逐级下钻、用户组织查询/选定（任意层级）；`get_companions` 同组织同行者（子树口径人数/今日总步数/同行者列表，隐私只下发昵称/头像/步数）；`get_org_march` 组织共同长征目标（子树成员累计步数映射组织路线，复用 `march_service._route_state` 现算无持久点亮） |
-| `rank_service` | `rank.js` | 全员工累计步数总榜（跨组织，降序，标记我的名次） |
+| `rank_service` | `rank.js` | 全员工累计步数总榜（跨组织，降序，标记我的名次）；名次由库内窗口函数 `row_number()` 计算，只取前 100 名 + 本人，`ranked_users_subquery` 供管理端排名复用 |
 | `event_service` | —（足迹时间轴/实时动态数据源） | 统一事件系统：`record` 写 `user_event` 并向 WS 广播 `activity`；`build_text` 生成与小程序足迹同源的中文文案；`list_public_activities` 提供小程序实时动态（脱敏由 `ACTIVITY_MASK_NICKNAME` 控制，`mask_nickname` 实现）；事件类型如 FIRST_STEP/DAILY_GOAL/STREAK_*/NODE_LIT/MEDAL_GRANTED/QUIZ_DONE 等 |
-| `streak_service` | —（内嵌于 sport 写入链） | 连续行军：写入侧 `on_sport_upsert` 在当日首次达标时维护 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件；读取侧 `compute_streaks` 以 `daily_sport.is_goal_completed` 重算 |
+| `streak_service` | —（内嵌于 sport 写入链） | 连续行军：写入侧 `on_sport_upsert` 在当日首次达标时维护 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件；读取侧 `compute_streaks` 以 `daily_sport.is_goal_completed` 重算（纯函数 `streaks_of` / `longest_run` 按自然日连续计算，缺记录的日期视为中断；勋章判定复用同一套函数）；启动兜底 `recompute_all` 流式分组计算、只批量回写变化用户 |
 | `person_service` | `person.js` | 长征人物志（需求 §14）：`get_persons_by_node` 节点反查人物（节点详情 → 人物）；`get_person_detail` 人物详情（简介 + 关联节点即历史事件/历史时间，人物详情 → 节点） |
 | `quote_service` | `quote.js` | 每日寄语（需求 §16）：`get_today` 当天优先、否则回退最近一条 date<=今天（都没有返回 null）；管理端分页列表（节点名批量查询）与 CRUD、日期唯一/节点存在性校验 |
 | `profile_service` | `profile.js` | 个人档案聚合（用户/连续行军/勋章/长征进度/足迹时间轴/五维数据画像 _portrait：行军/坚持/知识/路线/成就，仅数据不评价 §17） |
-| `broadcast_service` | `broadcast.js` | 今日长征播报（全局运动汇总 + 今日长征彩蛋 + 个人当日状态） |
+| `broadcast_service` | `broadcast.js` | 今日长征播报（全局运动汇总 + 今日长征彩蛋 + 个人当日状态）；今日人数/总步数/击败人数单条 SQL 聚合 |
 | `dashboard_service` | —（管理端） | 驾驶舱指标、路线总览、运动趋势、实时动态、数据大屏聚合（整体口径，无组织维度） |
 | `admin_service` | —（管理端） | 管理员登录、路线节点/题库/组织架构 CRUD、全员排名、人员详情聚合（每日寄语 CRUD 在 `quote_service`） |
 | `identity_service` | `identity.js` | 微信身份关联：PC 扫码登录会话（创建/轮询/置 scanned/确认/取消/令牌单次签发）、B 场景绑定确认事务（unionid 冲突禁止自动合并）、身份列表与解绑（wx_mini 主身份禁解绑）、登录同步采集 unionid 身份行 |

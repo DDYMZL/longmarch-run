@@ -6,7 +6,7 @@ timeline 直接读取 user_event 统一事件表，文案由 event_service.build
 from datetime import datetime
 from typing import Dict, List, Optional
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from app.core.helpers import to_local
@@ -77,15 +77,18 @@ def _join_days(created_at: Optional[datetime]) -> int:
 
 def get_summary(db: Session, user: User) -> Dict:
     """档案页聚合：用户信息 + 运动/路线统计 + 答题 + 勋章 + 积分。"""
-    sport_rows = (
-        db.query(DailySport.steps, DailySport.distance)
+    sport_days, total_steps, total_distance, max_day_steps = (
+        db.query(
+            func.count(DailySport.id),
+            func.coalesce(func.sum(DailySport.steps), 0),
+            func.coalesce(func.sum(DailySport.distance), 0),
+            func.coalesce(func.max(DailySport.steps), 0),
+        )
         .filter(DailySport.user_id == user.id)
-        .all()
+        .one()
     )
-    total_steps = sum((r[0] or 0) for r in sport_rows)
-    total_distance = round(sum(float(r[1] or 0) for r in sport_rows), 2)
-    sport_days = len(sport_rows)
-    max_day_steps = max((r[0] or 0) for r in sport_rows) if sport_rows else 0
+    sport_days, total_steps, max_day_steps = int(sport_days), int(total_steps), int(max_day_steps)
+    total_distance = round(float(total_distance), 2)
 
     current_streak, max_streak = streak_service.compute_streaks(db, user.id)
 
@@ -113,12 +116,18 @@ def get_summary(db: Session, user: User) -> Dict:
         else None
     )
 
-    quiz_rows = db.query(QuizRecord).filter(QuizRecord.user_id == user.id).all()
-    quiz_total = len(quiz_rows)
-    answered = sum(r.total_count for r in quiz_rows)
-    correct = sum(r.correct_count for r in quiz_rows)
+    quiz_total, answered, correct, full_score_count = (
+        int(v or 0)
+        for v in db.query(
+            func.count(QuizRecord.id),
+            func.sum(QuizRecord.total_count),
+            func.sum(QuizRecord.correct_count),
+            func.sum(case((QuizRecord.score >= 100, 1), else_=0)),
+        )
+        .filter(QuizRecord.user_id == user.id)
+        .one()
+    )
     correct_rate = round(correct / answered * 100) if answered else 0
-    full_score_count = sum(1 for r in quiz_rows if r.score >= 100)
 
     owned_count = db.query(UserMedal.id).filter(UserMedal.user_id == user.id).count()
     medal_total = db.query(MedalDef.id).count()

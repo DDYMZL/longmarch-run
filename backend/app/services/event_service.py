@@ -8,7 +8,7 @@
 medal_service.check_and_grant + ws 广播副作用链继续执行）。
 """
 from datetime import datetime
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -73,34 +73,34 @@ def mask_nickname(nickname: str) -> str:
     return n[0] + "*" + n[-1]
 
 
+def recent_events(db: Session, limit: int) -> List[Tuple[UserEvent, str]]:
+    """最近 limit 条事件及其用户昵称（单次外连接查询，事件倒序）。"""
+    rows = (
+        db.query(UserEvent, User.nickname)
+        .outerjoin(User, User.id == UserEvent.user_id)
+        .order_by(UserEvent.event_time.desc(), UserEvent.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return [(event, nickname or "") for event, nickname in rows]
+
+
 def list_public_activities(db: Session, limit: int = 10) -> List[Dict]:
     """小程序实时行军动态（user_event 倒序，关联昵称）。
 
     隐私边界（需求 §8.5）：只下发昵称 / 行为文案 / 事件类型与时间，
     不含 user_id、openid 与事件参数；ACTIVITY_MASK_NICKNAME 开启时昵称脱敏。
     """
-    rows = (
-        db.query(UserEvent)
-        .order_by(UserEvent.event_time.desc(), UserEvent.id.desc())
-        .limit(limit)
-        .all()
-    )
-    user_ids = {r.user_id for r in rows}
-    nicknames = (
-        {u.id: (u.nickname or "") for u in db.query(User.id, User.nickname).filter(User.id.in_(user_ids)).all()}
-        if user_ids
-        else {}
-    )
     mask = get_settings().ACTIVITY_MASK_NICKNAME
     return [
         {
             "id": r.id,
             "event_type": r.event_type,
             "event_time": r.event_time,
-            "nickname": mask_nickname(nicknames.get(r.user_id, "")) if mask else nicknames.get(r.user_id, ""),
+            "nickname": mask_nickname(nickname) if mask else nickname,
             "text": build_text(r.event_type, r.event_data or {}),
         }
-        for r in rows
+        for r, nickname in recent_events(db, limit)
     ]
 
 
@@ -121,10 +121,7 @@ def record(
     db.add(event)
     db.commit()
 
-    nickname = ""
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is not None:
-        nickname = user.nickname or ""
+    nickname = db.query(User.nickname).filter(User.id == user_id).scalar() or ""
     if get_settings().ACTIVITY_MASK_NICKNAME:
         nickname = mask_nickname(nickname)
     ws_manager.broadcast(

@@ -1,12 +1,13 @@
 """排名服务：全员工「累计步数」总榜（跨所有组织）。
 
 口径：
-  以每个用户 DailySport.steps 之和作为成绩，从高到低排名；
+  以每个用户 DailySport.steps 之和作为成绩，从高到低排名（同分按 user_id 升序）；
   榜单为所有员工的总榜，返回名次、组织名，并标记当前用户与「我的名次」。
+排名在数据库内用窗口函数计算，只取榜单所需的少量行，用户量大时不做全量加载。
 """
 from typing import Dict, List, Optional
 
-from sqlalchemy import func
+from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.models.models import DailySport, User
@@ -16,52 +17,63 @@ from app.services import org_service
 TOP_LIMIT = 100
 
 
+def ranked_users_subquery(db: Session):
+    """全员排名子查询：列 user_id / steps（累计步数，无记录计 0）/ rank（名次）。"""
+    totals = (
+        db.query(
+            DailySport.user_id.label("user_id"),
+            func.sum(DailySport.steps).label("steps"),
+        )
+        .group_by(DailySport.user_id)
+        .subquery()
+    )
+    steps = func.coalesce(totals.c.steps, 0)
+    return (
+        db.query(
+            User.id.label("user_id"),
+            steps.label("steps"),
+            func.row_number().over(order_by=(steps.desc(), User.id.asc())).label("rank"),
+        )
+        .outerjoin(totals, totals.c.user_id == User.id)
+        .subquery()
+    )
+
+
 def get_steps_rank(db: Session, current_user_id: int) -> Dict:
     """全员工累计步数排行榜。
 
     返回：{list, my_rank, my_steps, total}
       list 每项：{rank, user_id, nickname, avatar, org_name, steps, is_me}
+      list 为前 TOP_LIMIT 名，当前用户在榜外时追加到末尾。
     """
-    # 每个用户的累计步数（无运动记录者计 0，仍参与榜单）
-    steps_rows = dict(
-        db.query(DailySport.user_id, func.coalesce(func.sum(DailySport.steps), 0))
-        .group_by(DailySport.user_id)
+    ranked = ranked_users_subquery(db)
+    rows = (
+        db.query(ranked.c.rank, ranked.c.steps, User.id, User.nickname, User.avatar, User.org_id)
+        .join(User, User.id == ranked.c.user_id)
+        .filter(or_(ranked.c.rank <= TOP_LIMIT, ranked.c.user_id == current_user_id))
+        .order_by(ranked.c.rank)
         .all()
     )
+    org_names = org_service.get_full_name_map(db, [row.org_id for row in rows])
 
-    users = db.query(User).all()
-    # 组织全路径名整表一次加载（避免逐组织逐层回溯查询）
-    org_names = org_service.get_full_name_map(db, [u.org_id for u in users])
-
-    entries: List[Dict] = []
-    for u in users:
-        entries.append(
+    board: List[Dict] = []
+    my_rank: Optional[int] = None
+    my_steps = 0
+    for rank, steps, user_id, nickname, avatar, org_id in rows:
+        is_me = user_id == current_user_id
+        if is_me:
+            my_rank, my_steps = int(rank), int(steps)
+        board.append(
             {
-                "user_id": u.id,
-                "nickname": u.nickname,
-                "avatar": u.avatar,
-                "org_name": org_names.get(u.org_id, "") if u.org_id else "",
-                "steps": int(steps_rows.get(u.id, 0)),
-                "is_me": u.id == current_user_id,
+                "rank": int(rank),
+                "user_id": user_id,
+                "nickname": nickname,
+                "avatar": avatar,
+                "org_name": org_names.get(org_id, "") if org_id else "",
+                "steps": int(steps),
+                "is_me": is_me,
             }
         )
 
-    # 步数降序；同分按 user_id 升序，保证名次稳定
-    entries.sort(key=lambda e: (-e["steps"], e["user_id"]))
-
-    my_rank: Optional[int] = None
-    my_steps = 0
-    for idx, e in enumerate(entries):
-        e["rank"] = idx + 1
-        if e["is_me"]:
-            my_rank = e["rank"]
-            my_steps = e["steps"]
-
-    total = len(entries)
-    # 截取前 TOP_LIMIT，但确保当前用户在榜单内
-    board = entries[:TOP_LIMIT]
-    if my_rank is not None and my_rank > TOP_LIMIT:
-        me = next(e for e in entries if e["is_me"])
-        board = board + [me]
-
-    return {"list": board, "my_rank": my_rank, "my_steps": my_steps, "total": total}
+    total = db.query(func.count(User.id)).scalar() or 0
+    return {"list": board, "my_rank": my_rank, "my_steps": my_steps, "total": int(total)}

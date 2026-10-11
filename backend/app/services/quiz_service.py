@@ -96,9 +96,9 @@ def get_daily(db: Session, user_id: int) -> Dict:
         .first()
     )
     if cache is None or not cache.question_ids:
-        all_q = db.query(Question).all()
-        picked = random.sample(all_q, min(DAILY_COUNT, len(all_q)))
-        ids = [q.id for q in picked]
+        # 只取主键抽样，题库再大也不加载题干/选项
+        all_ids = [r[0] for r in db.query(Question.id).all()]
+        ids = random.sample(all_ids, min(DAILY_COUNT, len(all_ids)))
         if cache is None:
             db.add(DailyQuestion(user_id=user_id, date=date, question_ids=ids))
         else:
@@ -140,7 +140,7 @@ def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
     if any(a.get("question_id") not in allowed_ids for a in answers):
         raise ValueError("提交的答案包含不属于今日抽题的题目")
 
-    qmap = {q.id: q for q in db.query(Question).all()}
+    qmap = {q.id: q for q in db.query(Question).filter(Question.id.in_(allowed_ids)).all()}
     correct_count = 0
     wrong_list: List[Dict] = []
 

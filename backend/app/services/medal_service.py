@@ -11,7 +11,6 @@
 """
 from typing import Dict, List, Set
 
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.data.seed import MEDALS, MEDAL_NODE_MAP
@@ -19,12 +18,11 @@ from app.models.models import (
     DailySport,
     LitNode,
     MedalDef,
-    PointsLog,
     QuizRecord,
     RouteNode,
     UserMedal,
 )
-from app.services import event_service, streak_service
+from app.services import event_service, points_service, streak_service
 
 
 def _owned_ids(db: Session, user_id: int) -> Set[str]:
@@ -32,37 +30,35 @@ def _owned_ids(db: Session, user_id: int) -> Set[str]:
     return {r[0] for r in rows}
 
 
-def _total_points(db: Session, user_id: int) -> int:
-    total = (
-        db.query(func.coalesce(func.sum(PointsLog.delta), 0))
-        .filter(PointsLog.user_id == user_id)
-        .scalar()
-    )
-    return int(total or 0)
-
-
 def check_and_grant(db: Session, user_id: int) -> List[str]:
     """检查并发放勋章，返回本次新获得的勋章 id 列表。"""
     owned = _owned_ids(db, user_id)
 
-    has_sport = (
-        db.query(DailySport.id).filter(DailySport.user_id == user_id).first() is not None
+    # 运动类条件只查一次 daily_sport（每用户每日一行），在内存中派生全部指标
+    sport_rows = (
+        db.query(DailySport.date, DailySport.steps, DailySport.is_goal_completed)
+        .filter(DailySport.user_id == user_id)
+        .all()
     )
+    has_sport = bool(sport_rows)
+    total_steps = sum((steps or 0) for _d, steps, _g in sport_rows)
+    goal_days = {d for d, _s, goal in sport_rows if goal}
+    days_10k = {d for d, steps, _g in sport_rows if (steps or 0) >= 10000}
     quiz_count = db.query(QuizRecord.id).filter(QuizRecord.user_id == user_id).count()
-    total_points = _total_points(db, user_id)
+    total_points = points_service.get_total(db, user_id)
 
-    total_steps = sum(
-        (r[0] or 0)
-        for r in db.query(DailySport.steps).filter(DailySport.user_id == user_id).all()
-    )
     lit: Set[int] = {
         r[0] for r in db.query(LitNode.node_id).filter(LitNode.user_id == user_id).all()
     }
-    all_nodes = db.query(RouteNode).filter(RouteNode.is_enabled.is_(True)).all()
+    all_nodes = (
+        db.query(RouteNode.id, RouteNode.target_steps)
+        .filter(RouteNode.is_enabled.is_(True))
+        .all()
+    )
     # 与 march 服务口径一致：步数达标的节点视为已点亮
-    for n in all_nodes:
-        if total_steps >= n.target_steps:
-            lit.add(n.id)
+    for node_id, target_steps in all_nodes:
+        if total_steps >= target_steps:
+            lit.add(node_id)
 
     candidates: List[str] = []
     if has_sport:
@@ -75,28 +71,22 @@ def check_and_grant(db: Session, user_id: int) -> List[str]:
         candidates.append("luding")
     if MEDAL_NODE_MAP.get("snow") in lit:
         candidates.append("snow")
-    if all_nodes and all(n.id in lit for n in all_nodes):
+    if all_nodes and all(node_id in lit for node_id, _t in all_nodes):
         candidates.append("victory")
 
     # 连续行军与步数挑战类（以 daily_sport 记录为准实时计算）
-    _current, best_streak = streak_service.compute_streaks(db, user_id)
+    best_streak = streak_service.streaks_of(goal_days)[1]
     if best_streak >= 7:
         candidates.append("persistence")
     if best_streak >= 30:
         candidates.append("streak-30")
-    has_day_10k = (
-        db.query(DailySport.id)
-        .filter(DailySport.user_id == user_id, DailySport.steps >= 10000)
-        .first()
-        is not None
-    )
-    if has_day_10k:
+    if days_10k:
         candidates.append("day-10k")
     if total_steps >= 100000:
         candidates.append("steps-100k")
     if total_steps >= 500000:
         candidates.append("steps-500k")
-    if streak_service.compute_run_with_min_steps(db, user_id, 10000) >= 7:
+    if streak_service.longest_run(days_10k) >= 7:
         candidates.append("fearless")
 
     newly: List[str] = []

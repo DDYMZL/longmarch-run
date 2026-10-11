@@ -8,8 +8,8 @@
 - users.continuous_days / max_continuous_days 为缓存，供管理端列表免逐户重算，
   启动时 recompute_all 全量兜底。
 """
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from datetime import date, datetime, timedelta
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
@@ -18,64 +18,44 @@ from app.models.models import DailySport, User
 from app.services import event_service, points_service
 
 
-def _goal_map(db: Session, user_id: int) -> Dict[str, bool]:
-    """用户每日达标标记（date -> is_goal_completed）。"""
-    rows = (
-        db.query(DailySport.date, DailySport.is_goal_completed)
-        .filter(DailySport.user_id == user_id)
-        .all()
-    )
-    return {r[0]: bool(r[1]) for r in rows}
+def longest_run(days: Iterable[str]) -> int:
+    """日期集合（'YYYY-MM-DD'）中最长的连续自然日天数；缺记录的日期视为中断。"""
+    best = run = 0
+    prev: Optional[date] = None
+    for day in sorted(set(days)):
+        cur = date.fromisoformat(day)
+        run = run + 1 if prev is not None and cur - prev == timedelta(days=1) else 1
+        best = max(best, run)
+        prev = cur
+    return best
 
 
-def compute_streaks(db: Session, user_id: int) -> Tuple[int, int]:
-    """按记录重算（当前连续天数, 历史最长连续天数）。
+def streaks_of(achieved_days: Set[str]) -> Tuple[int, int]:
+    """由达标日期集合计算（当前连续天数, 历史最长连续天数）。
 
     当前连续：从今天开始往前数连续达标日；今天未达标时允许从昨天开始数
     （今日尚未结束，连续仍然有效），昨天也未达标则为 0。
     """
-    goals = _goal_map(db, user_id)
-    if not goals:
+    if not achieved_days:
         return 0, 0
-
-    today = datetime.now().date()
+    cursor = datetime.now().date()
+    if cursor.isoformat() not in achieved_days:
+        cursor -= timedelta(days=1)
     current = 0
-    cursor = today
-    if not goals.get(cursor.strftime("%Y-%m-%d"), False):
-        cursor = today - timedelta(days=1)
-    while goals.get(cursor.strftime("%Y-%m-%d"), False):
+    while cursor.isoformat() in achieved_days:
         current += 1
         cursor -= timedelta(days=1)
-
-    best = 0
-    run = 0
-    for day in sorted(goals):
-        if goals[day]:
-            run += 1
-            best = max(best, run)
-        else:
-            run = 0
-    best = max(best, current)
-    return current, best
+    return current, max(longest_run(achieved_days), current)
 
 
-def compute_run_with_min_steps(db: Session, user_id: int, min_steps: int) -> int:
-    """历史最长「单日步数 >= min_steps」连续天数（隐藏勋章等判定用）。"""
+def compute_streaks(db: Session, user_id: int) -> Tuple[int, int]:
+    """按 daily_sport.is_goal_completed 重算（当前连续天数, 历史最长连续天数）。"""
     rows = (
-        db.query(DailySport.date, DailySport.steps)
-        .filter(DailySport.user_id == user_id)
-        .order_by(DailySport.date.asc())
+        db.query(DailySport.date)
+        .filter(DailySport.user_id == user_id, DailySport.is_goal_completed.is_(True))
         .all()
     )
-    best = 0
-    run = 0
-    for _date, steps in rows:
-        if (steps or 0) >= min_steps:
-            run += 1
-            best = max(best, run)
-        else:
-            run = 0
-    return best
+    return streaks_of({r[0] for r in rows})
 
 
 def on_sport_written(db: Session, user_id: int, date: str) -> Optional[int]:
@@ -124,13 +104,27 @@ def on_sport_written(db: Session, user_id: int, date: str) -> Optional[int]:
 
 
 def recompute_all(db: Session) -> int:
-    """启动兜底：全量重算 users 连续天数缓存（daily_sport 为准）。返回更新用户数。"""
-    user_ids = [r[0] for r in db.query(User.id).all()]
-    for uid in user_ids:
-        current, best = compute_streaks(db, uid)
-        db.query(User).filter(User.id == uid).update(
-            {User.continuous_days: current, User.max_continuous_days: best},
-            synchronize_session=False,
-        )
-    db.commit()
-    return len(user_ids)
+    """启动兜底：全量重算 users 连续天数缓存（daily_sport 为准）。返回更新用户数。
+
+    达标记录按用户流式分组计算，只回写与缓存不一致的用户，避免逐户查询。
+    """
+    achieved: Dict[int, Set[str]] = {}
+    rows = (
+        db.query(DailySport.user_id, DailySport.date)
+        .filter(DailySport.is_goal_completed.is_(True))
+        .yield_per(5000)
+    )
+    for uid, day in rows:
+        achieved.setdefault(uid, set()).add(day)
+
+    changes: List[Dict] = []
+    for uid, cached_current, cached_best in db.query(
+        User.id, User.continuous_days, User.max_continuous_days
+    ).yield_per(5000):
+        current, best = streaks_of(achieved.get(uid, set()))
+        if (current, best) != (cached_current or 0, cached_best or 0):
+            changes.append({"id": uid, "continuous_days": current, "max_continuous_days": best})
+    if changes:
+        db.bulk_update_mappings(User, changes)
+        db.commit()
+    return len(changes)

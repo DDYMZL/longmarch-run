@@ -16,15 +16,12 @@ def _child_counts(db: Session, parent_ids: List[int]) -> Dict[int, int]:
     """批量统计一批组织的直接下级数量，避免逐项查询。"""
     if not parent_ids:
         return {}
-    rows = (
-        db.query(Organization.parent_id, Organization.id)
+    return dict(
+        db.query(Organization.parent_id, func.count(Organization.id))
         .filter(Organization.parent_id.in_(parent_ids))
+        .group_by(Organization.parent_id)
         .all()
     )
-    counts: Dict[int, int] = {}
-    for parent_id, _ in rows:
-        counts[parent_id] = counts.get(parent_id, 0) + 1
-    return counts
 
 
 def get_children(db: Session, parent_id: Optional[int] = None) -> List[Dict]:
@@ -122,7 +119,7 @@ def get_user_org(db: Session, user: User) -> Dict:
     }
 
 
-def _subtree_org_ids(db: Session, root_id: int) -> List[int]:
+def subtree_org_ids(db: Session, root_id: int) -> List[int]:
     """组织子树 id 集合（含自身）：整表一次加载内存 BFS，避免逐层查询。"""
     rows = db.query(Organization.id, Organization.parent_id).all()
     children: Dict[Optional[int], List[int]] = {}
@@ -146,7 +143,7 @@ def get_companions(db: Session, user: User, limit: int = 6) -> Dict:
     """
     if not user.org_id:
         return {"org": None, "member_count": 0, "today_total_steps": 0, "companions": []}
-    org_ids = _subtree_org_ids(db, user.org_id)
+    org_ids = subtree_org_ids(db, user.org_id)
     today = today_str()
     member_count = (
         db.query(func.count(User.id)).filter(User.org_id.in_(org_ids)).scalar() or 0
@@ -199,7 +196,7 @@ def get_org_march(db: Session, user: User) -> Dict:
     }
     if not user.org_id:
         return empty
-    org_ids = _subtree_org_ids(db, user.org_id)
+    org_ids = subtree_org_ids(db, user.org_id)
     member_count = (
         db.query(func.count(User.id)).filter(User.org_id.in_(org_ids)).scalar() or 0
     )

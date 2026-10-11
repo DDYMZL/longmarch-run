@@ -12,6 +12,7 @@
 from datetime import datetime
 from typing import Dict, List, Optional
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -24,10 +25,14 @@ DAILY_TARGET = 10000  # 今日目标步数（展示用）
 TOTAL_MILESTONES = [(100000, "TOTAL_STEPS_100000"), (500000, "TOTAL_STEPS_500000")]
 
 
-def _calc_total(db: Session, user_id: int) -> int:
-    """累计有效步数（每日步数求和）。"""
-    rows = db.query(DailySport.steps).filter(DailySport.user_id == user_id).all()
-    return sum((r[0] or 0) for r in rows)
+def get_total_steps(db: Session, user_id: int) -> int:
+    """累计有效步数（每日步数求和，库内聚合）。"""
+    total = (
+        db.query(func.coalesce(func.sum(DailySport.steps), 0))
+        .filter(DailySport.user_id == user_id)
+        .scalar()
+    )
+    return int(total or 0)
 
 
 def _distance_of(steps: int) -> float:
@@ -43,8 +48,8 @@ def _after_written(
     is_first_record: bool,
     prev_record_steps: int,
     prev_total: int,
-) -> None:
-    """运动写入后的统一副作用：连续行军 + 事件（均在主数据提交后触发）。"""
+) -> int:
+    """运动写入后的统一副作用：连续行军 + 事件（均在主数据提交后触发）。返回写入后累计步数。"""
     if is_first_record:
         event_service.record(db, user_id, "FIRST_STEP", {"date": date, "steps": record.steps})
 
@@ -53,10 +58,11 @@ def _after_written(
     if prev_record_steps < 10000 <= (record.steps or 0):
         event_service.record(db, user_id, "STEP_10000", {"date": date, "steps": record.steps})
 
-    total = _calc_total(db, user_id)
+    total = prev_total - prev_record_steps + (record.steps or 0)
     for threshold, event_type in TOTAL_MILESTONES:
         if prev_total < threshold <= total and not event_service.has_event(db, user_id, event_type):
             event_service.record(db, user_id, event_type, {"totalSteps": total})
+    return total
 
 
 def _resolve_steps(
@@ -109,11 +115,11 @@ def sync_today(
         return {
             "date": date,
             "steps": record.steps,
-            "total_steps": _calc_total(db, user_id),
+            "total_steps": get_total_steps(db, user_id),
             "synced": False,
         }
 
-    prev_total = _calc_total(db, user_id)
+    prev_total = get_total_steps(db, user_id)
     is_first_record = (
         db.query(DailySport.id).filter(DailySport.user_id == user_id).first() is None
     )
@@ -128,14 +134,9 @@ def sync_today(
     elif value >= 5000:
         points_service.grant(db, user_id, "每日运动达到5000步", 5)
 
-    _after_written(db, user_id, date, record, is_first_record, 0, prev_total)
+    total = _after_written(db, user_id, date, record, is_first_record, 0, prev_total)
 
-    return {
-        "date": date,
-        "steps": value,
-        "total_steps": _calc_total(db, user_id),
-        "synced": True,
-    }
+    return {"date": date, "steps": value, "total_steps": total, "synced": True}
 
 
 def get_today(db: Session, user_id: int) -> Dict:
@@ -154,7 +155,7 @@ def get_today(db: Session, user_id: int) -> Dict:
         "date": date,
         "steps": record.steps if record else 0,
         "target": DAILY_TARGET,
-        "total_steps": _calc_total(db, user_id),
+        "total_steps": get_total_steps(db, user_id),
         "current_streak": current_streak,
         "max_streak": max_streak,
         "streak_goal": settings.STREAK_GOAL_STEPS,
@@ -261,7 +262,7 @@ def get_recent(db: Session, user_id: int, n: int) -> List[Dict]:
 def add_steps(db: Session, user_id: int, delta: int) -> Dict:
     """手动补充步数（演示用）：当天累加 delta，不触发达标积分。"""
     date = today_str()
-    prev_total = _calc_total(db, user_id)
+    prev_total = get_total_steps(db, user_id)
     record = (
         db.query(DailySport)
         .filter(DailySport.user_id == user_id, DailySport.date == date)
@@ -276,6 +277,6 @@ def add_steps(db: Session, user_id: int, delta: int) -> Dict:
     record.distance = _distance_of(record.steps)
     db.commit()
 
-    _after_written(db, user_id, date, record, is_first_record, prev_steps, prev_total)
+    total = _after_written(db, user_id, date, record, is_first_record, prev_steps, prev_total)
 
-    return {"date": date, "steps": record.steps, "total_steps": _calc_total(db, user_id)}
+    return {"date": date, "steps": record.steps, "total_steps": total}

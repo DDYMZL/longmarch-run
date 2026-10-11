@@ -16,6 +16,7 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
@@ -164,7 +165,7 @@ class User(Base):
     nickname_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
     continuous_days: Mapped[int] = mapped_column(Integer, default=0)
     max_continuous_days: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     # 长征完成仪式（需求 §20.4）：非空表示已观看首次完成仪式，之后仅展示「已完成长征」
     route_ceremony_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
 
@@ -201,7 +202,7 @@ class LitNode(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     node_id: Mapped[int] = mapped_column(Integer)
-    lit_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    lit_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     step_snapshot: Mapped[int] = mapped_column(Integer, default=0)
 
 
@@ -268,6 +269,7 @@ class UserEvent(Base):
     """
 
     __tablename__ = "user_event"
+    __table_args__ = (Index("ix_user_event_user_type", "user_id", "event_type"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)

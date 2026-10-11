@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.helpers import to_local
 from app.models.models import DailySport, LitNode, RouteNode, User
-from app.services import event_service, person_service, points_service
+from app.services import event_service, person_service, points_service, sport_service
 
 # 长征章节配置（node_ids 对应 route_nodes 主键；介绍为公开史实概述，供章节完成仪式展示）
 CHAPTERS: List[Dict] = [
@@ -52,11 +52,6 @@ GLOBAL_MILESTONES: List[Dict] = [
     {"name": "1.5亿", "steps": 150_000_000},
     {"name": "2亿", "steps": 200_000_000},
 ]
-
-
-def _total_steps(db: Session, user_id: int) -> int:
-    rows = db.query(DailySport.steps).filter(DailySport.user_id == user_id).all()
-    return sum((r[0] or 0) for r in rows)
 
 
 def _lit_node_ids(db: Session, user_id: int) -> Set[int]:
@@ -195,7 +190,7 @@ def _route_state(
 def get_route(db: Session, user_id: int) -> Dict:
     """计算节点状态列表 + 路线整体进度。"""
     nodes_def = _ordered_nodes(db)
-    current_steps = _total_steps(db, user_id)
+    current_steps = sport_service.get_total_steps(db, user_id)
     lit = _lit_node_ids(db, user_id)
 
     # 步数达标即视为点亮（规则：点亮后永久保留，即使步数下降也不取消）
@@ -365,7 +360,7 @@ def light_up_nodes(db: Session, user_id: int) -> Tuple[List[Dict], List[Dict]]:
     NODE_UNLOCK / CHAPTER_COMPLETE / COMPLETE_ROUTE 事件（我的足迹与管理端动态同源）。
     章节完成不改变原有节点点亮逻辑与积分规则（需求 §4.5）。
     """
-    current_steps = _total_steps(db, user_id)
+    current_steps = sport_service.get_total_steps(db, user_id)
     lit = _lit_node_ids(db, user_id)
     nodes_def = _ordered_nodes(db)
     enabled_ids = {n.id for n in nodes_def}

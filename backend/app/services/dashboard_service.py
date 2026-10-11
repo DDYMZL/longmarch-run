@@ -22,7 +22,6 @@ from app.models.models import (
     QuizRecord,
     RouteNode,
     User,
-    UserEvent,
     UserMedal,
 )
 from app.services import event_service
@@ -140,28 +139,17 @@ def get_trend(db: Session, days: int) -> Dict:
 
 def get_activities(db: Session, limit: int = 50) -> List[Dict]:
     """实时动态（user_event 倒序，关联昵称）。"""
-    rows = (
-        db.query(UserEvent)
-        .order_by(UserEvent.event_time.desc(), UserEvent.id.desc())
-        .limit(limit)
-        .all()
-    )
-    user_ids = {r.user_id for r in rows}
-    nicknames = {
-        u.id: (u.nickname or "")
-        for u in db.query(User.id, User.nickname).filter(User.id.in_(user_ids)).all()
-    } if user_ids else {}
     return [
         {
             "id": r.id,
             "event_type": r.event_type,
             "event_time": r.event_time,
             "user_id": r.user_id,
-            "nickname": nicknames.get(r.user_id, ""),
+            "nickname": nickname,
             "text": event_service.build_text(r.event_type, r.event_data or {}),
             "data": r.event_data or {},
         }
-        for r in rows
+        for r, nickname in event_service.recent_events(db, limit)
     ]
 
 

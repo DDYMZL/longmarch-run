@@ -1,13 +1,13 @@
 {
-  "date": "2026-10-09 13:08:21",
+  "date": "2026-10-11 11:48:55",
   "backend": "http://127.0.0.1:8010/api",
-  "testUser": 340,
+  "testUser": 380,
   "results": [
     {
       "id": "B01",
       "name": "管理端排名总览",
       "ok": true,
-      "detail": "users=55 totalSteps=547277"
+      "detail": "users=88 totalSteps=1028115"
     },
     {
       "id": "B02",
@@ -25,7 +25,7 @@
       "id": "M01",
       "name": "运动-今日步数",
       "ok": true,
-      "detail": "{\"date\": \"2026-10-09\", \"steps\": 0, \"target\": 10000, \"totalSteps\": 0, \"currentStreak\": 0, \"maxStreak\": 0, \"streakGoal\": 5000, \"todayGoalCompleted\": false, \"nextStreakMilestone\": 3, \"streakRemain\": 3}"
+      "detail": "{\"date\": \"2026-10-11\", \"steps\": 0, \"target\": 10000, \"totalSteps\": 0, \"currentStreak\": 0, \"maxStreak\": 0, \"streakGoal\": 5000, \"todayGoalCompleted\": false, \"nextStreakMilestone\": 3, \"streakRemain\": 3}"
     },
     {
       "id": "M02",
@@ -67,7 +67,7 @@
       "id": "M08",
       "name": "排名-全员步数榜",
       "ok": true,
-      "detail": "total=55 myRank=55"
+      "detail": "total=88 myRank=88"
     },
     {
       "id": "M09",
@@ -121,19 +121,19 @@
       "id": "M16",
       "name": "积分-答题积分入账",
       "ok": true,
-      "detail": "logs=[{\"date\": \"2026-10-09\", \"reason\": \"答题满分\", \"delta\": 10}, {\"date\": \"2026-10-09\", \"reason\": \"每日答题\", \"delta\": 5}, {\"date\": \"2026-10-09\", \"reason\": \"点亮节点：瑞金\", \"delta\": 10}, {\"date\": \"2026-10-09\", \"reason\":"
+      "detail": "logs=[{\"date\": \"2026-10-11\", \"reason\": \"答题满分\", \"delta\": 10}, {\"date\": \"2026-10-11\", \"reason\": \"每日答题\", \"delta\": 5}, {\"date\": \"2026-10-11\", \"reason\": \"点亮节点：瑞金\", \"delta\": 10}, {\"date\": \"2026-10-11\", \"reason\":"
     },
     {
       "id": "W01",
       "name": "WS-用户令牌连接并接收运动变更广播",
       "ok": true,
-      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 340, \"at\": \"2026-10-09T05:08:21.923118\"}"
+      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 380, \"at\": \"2026-10-11T03:48:55.022778\"}"
     },
     {
       "id": "W02",
       "name": "WS-管理端令牌连接并接收广播",
       "ok": true,
-      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 340, \"at\": \"2026-10-09T05:08:21.972561\"}"
+      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 380, \"at\": \"2026-10-11T03:48:55.057883\"}"
     },
     {
       "id": "W03",
