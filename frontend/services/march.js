@@ -28,16 +28,18 @@ function getNodeDetail(nodeId) {
 
 /**
  * 按当前累计步数点亮达标节点（后端发放积分、判定章节完成并刷新勋章）。
- * @returns {Promise<{newlyLit:Array, newlyCompletedChapters:Array}>}
+ * @returns {Promise<{newlyLit:Array, newlyCompletedChapters:Array, newMedals:Array<string>}>}
  *   newlyLit 本次新点亮节点（含 gainedPoints/nextNode，供抵达事件卡）；
- *   newlyCompletedChapters 本次新完成章节（含 title/intro，供章节完成仪式）。
+ *   newlyCompletedChapters 本次新完成章节（含 title/intro，供章节完成仪式）；
+ *   newMedals 本次新获得勋章 id。
  */
 function lightUpNodes() {
   return requestService
     .request({ url: '/march/light-up', method: 'POST' })
     .then((result) => ({
       newlyLit: result.newlyLit || [],
-      newlyCompletedChapters: result.newlyCompletedChapters || []
+      newlyCompletedChapters: result.newlyCompletedChapters || [],
+      newMedals: result.newMedals || []
     }));
 }
 
@@ -65,11 +67,32 @@ function markCeremony() {
   return requestService.request({ url: '/march/ceremony', method: 'POST' });
 }
 
+/** 长征 Tab 开场动画播放标记（本地缓存，需求 §5：仅首次完整播放） */
+const INTRO_PLAYED_KEY = 'lm_march_intro_played';
+
+function hasPlayedIntro() {
+  try {
+    return !!wx.getStorageSync(INTRO_PLAYED_KEY);
+  } catch (e) {
+    return false;
+  }
+}
+
+function markIntroPlayed() {
+  try {
+    wx.setStorageSync(INTRO_PLAYED_KEY, 1);
+  } catch (e) {
+    // 写缓存失败仅导致下次重播开场，不影响功能
+  }
+}
+
 module.exports = {
   getRoute,
   getNodeDetail,
   lightUpNodes,
   getGlobalGoal,
   getFootprints,
-  markCeremony
+  markCeremony,
+  hasPlayedIntro,
+  markIntroPlayed
 };

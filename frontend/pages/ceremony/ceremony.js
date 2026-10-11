@@ -82,6 +82,11 @@ Page({
     };
   },
 
+  onShow() {
+    // 动画播放中切到后台（onHide 已停帧）：回来续播，时间轴按真实时间推进
+    if (this._ctx && this.data.pending && !this._finalized) this.startLoop();
+  },
+
   onHide() {
     this.stopScene();
   },
@@ -118,9 +123,7 @@ Page({
           this.startLoop();
         } else {
           // 回顾态（§20.4）：仅静态展示「已完成长征」+ 数据
-          this._staticMode = true;
           this.setData({ phase: 'done', showFinalText: true, showStats: true });
-          this.drawFrame(99);
           this.finalizeScene();
         }
       });
@@ -143,6 +146,10 @@ Page({
     this.pathDist = sampled.dist;
     this.pathLen = sampled.len;
     this.nodePathIndex = sampled.nodePathIndex;
+
+    // 渐变与光晕精灵构建期创建一次，帧内复用（夜空按「星空展开前/后」两档缓存）
+    this._skyGrads = {};
+    this._glow = routeCanvas.createGlowSprite([[0, 'rgba(255,205,90,0.55)'], [1, 'rgba(255,205,90,0)']]);
 
     // 星点：基础 70 颗 + 展开阶段追加 50 颗（§20.2「星空模式展开」）
     const mk = (n) => {
@@ -182,7 +189,7 @@ Page({
     this.stopScene();
     const loop = () => {
       if (!this.running || !this._ctx) return;
-      const t = this._staticMode ? 99 : (Date.now() - this._startAt) / 1000;
+      const t = (Date.now() - this._startAt) / 1000;
       this.drawFrame(t);
       this.tickTimeline(t);
       if (this._canvas && this._canvas.requestAnimationFrame) {
@@ -250,10 +257,15 @@ Page({
 
     // 深空背景（星空展开阶段后略微提亮）
     const expand = routeCanvas.easeOutCubic(Math.min(1, Math.max(0, (t - TL.PULSE_END) / (TL.STARS_END - TL.PULSE_END))));
-    const sky = ctx.createLinearGradient(0, 0, 0, ch);
-    sky.addColorStop(0, '#070D1A');
-    sky.addColorStop(0.55, '#0D1B30');
-    sky.addColorStop(1, expand > 0 ? '#1A2E4A' : '#14263E');
+    const skyKey = expand > 0 ? 'expanded' : 'base';
+    let sky = this._skyGrads[skyKey];
+    if (!sky) {
+      sky = ctx.createLinearGradient(0, 0, 0, ch);
+      sky.addColorStop(0, '#070D1A');
+      sky.addColorStop(0.55, '#0D1B30');
+      sky.addColorStop(1, expand > 0 ? '#1A2E4A' : '#14263E');
+      this._skyGrads[skyKey] = sky;
+    }
     ctx.fillStyle = sky;
     ctx.fillRect(0, 0, cw, ch);
 
@@ -315,11 +327,15 @@ Page({
         const breathe = 0.5 + 0.5 * Math.sin(t * 2 + i);
         const bump = 1 + allLitPulse * 0.5;
         const s = (26 + breathe * 10) * bump;
-        const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, s / 2);
-        g.addColorStop(0, 'rgba(255,205,90,0.55)');
-        g.addColorStop(1, 'rgba(255,205,90,0)');
-        ctx.fillStyle = g;
-        ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+        if (this._glow) {
+          ctx.drawImage(this._glow, p.x - s / 2, p.y - s / 2, s, s);
+        } else {
+          const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, s / 2);
+          g.addColorStop(0, 'rgba(255,205,90,0.55)');
+          g.addColorStop(1, 'rgba(255,205,90,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(p.x - s / 2, p.y - s / 2, s, s);
+        }
         routeCanvas.drawStar(ctx, p.x, p.y, 5, 9 * bump, 3.8 * bump, t * 0.3);
         ctx.fillStyle = '#E8B84B';
         ctx.fill();

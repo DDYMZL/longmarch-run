@@ -3,18 +3,13 @@
  */
 const app = getApp();
 const identity = require('../../services/identity');
+const util = require('../../utils/util');
 
 /** 渠道展示名映射 */
 const PROVIDER_NAMES = {
   wx_mini: '微信小程序',
   wx_web: '微信网页授权'
 };
-
-/** 时间格式化（后端 ISO 字符串 -> YYYY-MM-DD HH:mm），无 WXML 方法调用 */
-function formatTime(value) {
-  if (!value) return '';
-  return String(value).replace('T', ' ').slice(0, 16);
-}
 
 Page({
   data: {
@@ -42,8 +37,8 @@ Page({
           providerName: PROVIDER_NAMES[row.provider] || row.provider,
           appId: row.appId,
           isPrimary: row.provider === 'wx_mini',
-          verifiedAt: formatTime(row.verifiedAt),
-          createdAt: formatTime(row.createdAt)
+          verifiedAt: util.formatTime(row.verifiedAt),
+          createdAt: util.formatTime(row.createdAt)
         }));
         this.setData({ identities: items, empty: items.length === 0, loading: false });
       })

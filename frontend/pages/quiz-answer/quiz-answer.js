@@ -8,10 +8,8 @@ const quiz = require('../../services/quiz');
 
 Page({
   data: {
-    questions: [],
     currentIndex: 0,
-    total: 5,
-    answers: {}, // { questionId: [label] }
+    total: 0,
     current: null,
     selected: '',
     submitting: false,
@@ -22,6 +20,13 @@ Page({
   },
 
   onLoad() {
+    if (!app.globalData.loggedIn) {
+      wx.reLaunch({ url: '/pages/launch/launch' });
+      return;
+    }
+    // 题目与作答仅逻辑层使用，不进 data（避免每次选择都整体 setData）
+    this._questions = [];
+    this._answers = {}; // { questionId: [label] }
     quiz
       .getDaily()
       .then((daily) => {
@@ -36,13 +41,11 @@ Page({
           return;
         }
 
-        const answers = {};
-        daily.questions.forEach((q) => (answers[q.id] = []));
+        this._questions = daily.questions;
+        daily.questions.forEach((q) => (this._answers[q.id] = []));
 
         this.setData({
-          questions: daily.questions,
           total: daily.questions.length,
-          answers,
           current: daily.questions[0],
           selected: '',
           questionAnim: 'q-slide-in'
@@ -61,9 +64,8 @@ Page({
   handleSelect(e) {
     const label = e.currentTarget.dataset.label;
     const qid = this.data.current.id;
-    const answers = this.data.answers;
-    answers[qid] = [label]; // 单选/判断：直接覆盖
-    this.setData({ answers, selected: label, lastCheck: '', checkedLabel: '' });
+    this._answers[qid] = [label]; // 单选/判断：直接覆盖
+    this.setData({ selected: label, lastCheck: '', checkedLabel: '' });
 
     quiz
       .checkAnswer(qid, [label])
@@ -83,7 +85,7 @@ Page({
    * 下一题 / 提交
    */
   handleNext() {
-    const { currentIndex, total, current, answers, selected } = this.data;
+    const { currentIndex, total, selected } = this.data;
     if (!selected) {
       wx.showToast({ title: '请先选择答案', icon: 'none' });
       return;
@@ -91,16 +93,17 @@ Page({
 
     if (currentIndex < total - 1) {
       const nextIndex = currentIndex + 1;
+      const next = this._questions[nextIndex];
       this.setData({
         currentIndex: nextIndex,
-        current: this.data.questions[nextIndex],
-        selected: this.data.answers[this.data.questions[nextIndex].id][0] || '',
+        current: next,
+        selected: this._answers[next.id][0] || '',
         lastCheck: '',
         checkedLabel: '',
         questionAnim: ''
       });
       // 重置类名以重新触发题目切换动画
-      setTimeout(() => {
+      this._animTimer = setTimeout(() => {
         this.setData({ questionAnim: 'q-slide-in' });
       }, 30);
       return;
@@ -117,9 +120,9 @@ Page({
     if (this.data.submitting) return;
     this.setData({ submitting: true });
 
-    const payload = Object.keys(this.data.answers).map((qid) => ({
+    const payload = Object.keys(this._answers).map((qid) => ({
       questionId: parseInt(qid, 10),
-      answer: this.data.answers[qid]
+      answer: this._answers[qid]
     }));
 
     quiz
@@ -134,5 +137,9 @@ Page({
       .finally(() => {
         this.setData({ submitting: false });
       });
+  },
+
+  onUnload() {
+    if (this._animTimer) clearTimeout(this._animTimer);
   }
 });

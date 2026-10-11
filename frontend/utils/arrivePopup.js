@@ -27,9 +27,11 @@ function buildQueue(newlyLit, newChapters) {
  * @param {Object} page 页面实例（使用其 setData 与 popupTimer）
  * @param {Array} newlyLit light-up 返回的新点亮节点（含 gainedPoints/nextNode）
  * @param {Array} newChapters light-up 返回的新完成章节（含 title/intro）
+ * @returns {number} 队列总播放时长（ms），供页面安排后续跳转
  */
 function playArriveQueue(page, newlyLit, newChapters) {
   const queue = buildQueue(newlyLit, newChapters);
+  const cardMs = (card) => (card.kind === 'chapter' ? CHAPTER_CARD_MS : NODE_CARD_MS);
   let i = 0;
   const showNext = () => {
     if (i >= queue.length) {
@@ -37,13 +39,13 @@ function playArriveQueue(page, newlyLit, newChapters) {
       return;
     }
     const card = queue[i];
-    card.key = Date.now();
     page.setData({ litPopup: card });
     i++;
     if (page.popupTimer) clearTimeout(page.popupTimer);
-    page.popupTimer = setTimeout(showNext, card.kind === 'chapter' ? CHAPTER_CARD_MS : NODE_CARD_MS);
+    page.popupTimer = setTimeout(showNext, cardMs(card));
   };
   showNext();
+  return queue.reduce((sum, card) => sum + cardMs(card), 0);
 }
 
 module.exports = { playArriveQueue };

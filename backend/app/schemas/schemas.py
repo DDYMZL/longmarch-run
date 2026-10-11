@@ -314,6 +314,7 @@ class LightUpNodeOut(RouteNodeOut):
 class LightUpResult(CamelModel):
     newly_lit: List[LightUpNodeOut] = []
     newly_completed_chapters: List[ChapterCompletedOut] = []
+    new_medals: List[str] = []
 
 
 class GlobalMilestoneOut(CamelModel):

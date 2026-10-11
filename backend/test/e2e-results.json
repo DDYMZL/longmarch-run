@@ -1,13 +1,13 @@
 {
-  "date": "2026-10-11 18:28:19",
+  "date": "2026-10-11 18:55:41",
   "backend": "http://127.0.0.1:8010/api",
-  "testUser": 410,
+  "testUser": 424,
   "results": [
     {
       "id": "B01",
       "name": "管理端排名总览（服务端分页）",
       "ok": true,
-      "detail": "users=110 page_items=50 totalSteps=1116288"
+      "detail": "users=124 page_items=50 totalSteps=1386788"
     },
     {
       "id": "B02",
@@ -67,7 +67,7 @@
       "id": "M08",
       "name": "排名-全员步数榜",
       "ok": true,
-      "detail": "total=110 myRank=110"
+      "detail": "total=124 myRank=124"
     },
     {
       "id": "M09",
@@ -127,13 +127,13 @@
       "id": "W01",
       "name": "WS-用户令牌连接并接收运动变更广播",
       "ok": true,
-      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 410, \"at\": \"2026-10-11T10:28:19.383901\"}"
+      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 424, \"at\": \"2026-10-11T10:55:41.582144\"}"
     },
     {
       "id": "W02",
       "name": "WS-管理端令牌连接并接收广播",
       "ok": true,
-      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 410, \"at\": \"2026-10-11T10:28:19.418336\"}"
+      "detail": "{\"type\": \"data_changed\", \"reason\": \"sport.add\", \"user_id\": 424, \"at\": \"2026-10-11T10:55:41.632702\"}"
     },
     {
       "id": "W03",

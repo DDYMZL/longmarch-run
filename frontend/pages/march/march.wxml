@@ -14,7 +14,7 @@
   <view wx:if="{{showVeil}}" class="intro-veil"></view>
 
   <!-- 抵达事件卡 / 章节完成仪式弹层 -->
-  <view wx:if="{{litPopup}}" class="lit-overlay" wx:key="{{litPopup.key}}">
+  <view wx:if="{{litPopup}}" class="lit-overlay">
     <view wx:if="{{litPopup.kind === 'chapter'}}" class="lit-card chapter-lit-card">
       <view class="lit-star anim-pop">🚩</view>
       <view class="lit-title">🎉 章节完成</view>
@@ -115,7 +115,7 @@
       wx:key="id"
       class="route-item anim-card"
       style="animation-delay: {{index * 70}}ms"
-      data-node="{{item}}"
+      data-id="{{item.id}}"
       bindtap="handleNodeTap"
     >
       <view class="route-icon-wrap">

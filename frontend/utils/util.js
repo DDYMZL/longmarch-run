@@ -35,9 +35,9 @@ function formatCn(num) {
  * @param {string} iso 如 2026-10-01T16:10:35.619914
  */
 function formatTime(iso) {
-  if (!iso) return '';
-  const d = new Date(String(iso) + 'Z');
-  if (isNaN(d.getTime())) return '';
+  const t = parseUtc(iso);
+  if (isNaN(t)) return '';
+  const d = new Date(t);
   return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) +
     ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
 }
@@ -64,11 +64,33 @@ function formatRelative(iso) {
   return (d.getMonth() + 1) + '-' + pad(d.getDate());
 }
 
+/** 用户事件图标（时间轴与实时动态共用；STREAK_* 前缀统一 🔥） */
+const EVENT_ICONS = {
+  FIRST_STEP: '👣',
+  DAILY_GOAL: '🎯',
+  NODE_UNLOCK: '🚩',
+  CHAPTER_COMPLETE: '⭐',
+  BADGE_UNLOCK: '🎖️',
+  QUIZ_COMPLETE: '✅',
+  QUIZ_FULL_SCORE: '💯',
+  STEP_10000: '🏃',
+  TOTAL_STEPS_100000: '🏆',
+  TOTAL_STEPS_500000: '🏆',
+  COMPLETE_ROUTE: '🏆'
+};
+
+function eventIcon(eventType) {
+  if (EVENT_ICONS[eventType]) return EVENT_ICONS[eventType];
+  if (eventType && eventType.indexOf('STREAK_') === 0) return '🔥';
+  return '📌';
+}
+
 module.exports = {
   pad,
   formatDate,
   formatNumber,
   formatCn,
   formatTime,
-  formatRelative
+  formatRelative,
+  eventIcon
 };

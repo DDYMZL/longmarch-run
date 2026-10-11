@@ -25,6 +25,10 @@ Page({
   },
 
   onLoad(options) {
+    if (!app.globalData.loggedIn) {
+      wx.reLaunch({ url: '/pages/launch/launch' });
+      return;
+    }
     const from = (options && options.from) || '';
     const user = app.globalData.user || {};
     this.setData({
@@ -35,11 +39,14 @@ Page({
     this.loadLevel(null);
   },
 
-  /** 加载某层级列表；parentId 为 null 表示顶级 */
+  /** 加载某层级列表；parentId 为 null 表示顶级（快速连点下钻/回跳时只采纳最后一次请求） */
   loadLevel(parentId) {
+    const requestId = (this._levelRequestId || 0) + 1;
+    this._levelRequestId = requestId;
     org
       .getChildren(parentId)
       .then((list) => {
+        if (requestId !== this._levelRequestId) return;
         this.setData({
           list: list,
           currentId: parentId,
@@ -47,6 +54,7 @@ Page({
         });
       })
       .catch(() => {
+        if (requestId !== this._levelRequestId) return;
         this.setData({ list: [], currentId: parentId, currentFullName: '' });
       });
   },
@@ -103,6 +111,8 @@ Page({
 
   /** 确认选定组织：先落昵称（可选）再调后端持久化 + 更新全局用户 + 跳转 */
   confirmSelect(orgId) {
+    if (this._selecting) return; // 防连点重复提交
+    this._selecting = true;
     const nick = (this.data.nickname || '').trim();
     // 昵称设置失败不阻塞组织选择（后端默认昵称兜底）
     const setNick = this.data.showNickInput && nick
@@ -128,6 +138,7 @@ Page({
         }, 600);
       })
       .catch((err) => {
+        this._selecting = false;
         wx.showToast({ title: (err && err.message) || '选定失败，请重试', icon: 'none' });
       });
   },

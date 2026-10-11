@@ -22,7 +22,15 @@ Page({
     quiz
       .getRecords()
       .then((result) => {
-        const records = result.map((r) => Object.assign({}, r, { text: r.date.slice(5) }));
+        // 仅取表格展示字段（丢弃 wrongList 等明细，减小 setData 体积）
+        const records = result.map((r) => ({
+          date: r.date,
+          text: r.date.slice(5),
+          totalCount: r.totalCount,
+          correctCount: r.correctCount,
+          score: r.score,
+          points: r.points
+        }));
         this.setData({ records });
       })
       .catch(() => {

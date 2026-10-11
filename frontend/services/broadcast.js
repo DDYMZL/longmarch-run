@@ -4,27 +4,6 @@
 const requestService = require('./request');
 const util = require('../utils/util');
 
-/** 动态事件图标（实时行军卡片用；STREAK_* 前缀匹配 🔥） */
-const EVENT_ICONS = {
-  FIRST_STEP: '👣',
-  DAILY_GOAL: '🎯',
-  NODE_UNLOCK: '🚩',
-  CHAPTER_COMPLETE: '⭐',
-  BADGE_UNLOCK: '🎖️',
-  QUIZ_COMPLETE: '✅',
-  QUIZ_FULL_SCORE: '💯',
-  STEP_10000: '🏃',
-  TOTAL_STEPS_100000: '🏆',
-  TOTAL_STEPS_500000: '🏆',
-  COMPLETE_ROUTE: '🏆'
-};
-
-function activityIcon(eventType) {
-  if (EVENT_ICONS[eventType]) return EVENT_ICONS[eventType];
-  if (eventType && eventType.indexOf('STREAK_') === 0) return '🔥';
-  return '⚡';
-}
-
 /**
  * 组装实时动态视图模型（REST 条目与 WS activity 消息共用）。
  * WS 消息字段为 {eventType, nickname, text, at(ms)}，REST 条目为 {id, eventType, eventTime, nickname, text}。
@@ -33,7 +12,7 @@ function toActivityView(item) {
   const atIso = item.eventTime || (item.at ? new Date(item.at).toISOString() : '');
   return {
     id: item.id || 'ws-' + (item.at || Date.now()) + '-' + (item.eventType || ''),
-    icon: activityIcon(item.eventType),
+    icon: util.eventIcon(item.eventType),
     nickname: item.nickname || '战友',
     text: item.text || '',
     timeText: util.formatRelative(atIso)

@@ -112,11 +112,32 @@ function distToIndex(dist, len) {
   return lo;
 }
 
+/**
+ * 径向光晕精灵：预渲染到 64px 离屏画布，绘制时 drawImage 缩放复用，避免每帧创建径向渐变。
+ * @param {Array<[number, string]>} stops 渐变色标 [offset, color]
+ * @returns {Object|null} 离屏画布；低版本基础库不支持时返回 null（调用方降级）
+ */
+function createGlowSprite(stops) {
+  try {
+    const size = 64;
+    const off = wx.createOffscreenCanvas({ type: '2d', width: size, height: size });
+    const c = off.getContext('2d');
+    const g = c.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
+    stops.forEach((s) => g.addColorStop(s[0], s[1]));
+    c.fillStyle = g;
+    c.fillRect(0, 0, size, size);
+    return off;
+  } catch (e) {
+    return null;
+  }
+}
+
 module.exports = {
   easeOutCubic,
   drawStar,
   drawRoundRect,
   getCanvasNodePositions,
   sampleRoutePath,
-  distToIndex
+  distToIndex,
+  createGlowSprite
 };

@@ -30,7 +30,7 @@ frontend/
 │   ├── config.js                  # API_BASE_URL 集中配置
 │   ├── store.js                   # 遗留：仅登录数据迁移（migrateUserData）
 │   ├── auth.js                    # 微信登录：ensureLogin 启动校验/静默重登、手动登录、头像持久化
-│   ├── sport.js / march.js / quiz.js / points.js / medal.js / org.js / rank.js
+│   ├── sport.js / march.js / quiz.js / medal.js / org.js / rank.js
 │   ├── profile.js / person.js / quote.js / broadcast.js / ws.js / identity.js
 ├── utils/util.js                  # 日期格式化、随机等纯工具
 └── pages/                         # 20 个页面（5 tab + 15 子页），每个页面 4 件套 js/json/wxml/wxss

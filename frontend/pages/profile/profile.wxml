@@ -156,7 +156,7 @@
       <view class="card-title">长征足迹</view>
       <view wx:if="{{timeline.length === 0}}" class="empty-tip">暂无足迹，去运动或答题吧</view>
       <view class="timeline">
-        <view class="timeline-item" wx:for="{{timeline}}" wx:key="eventType">
+        <view class="timeline-item" wx:for="{{timeline}}" wx:key="key">
           <view class="timeline-dot">{{item.icon}}</view>
           <view class="timeline-body">
             <view class="timeline-text">{{item.text}}</view>

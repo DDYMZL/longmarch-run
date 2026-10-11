@@ -31,7 +31,7 @@
         <text class="rank-top-label" wx:elif="{{item.rank === 3}}">季军</text>
       </view>
       <view class="rank-avatar">
-        <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" />
+        <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
         <text wx:else class="rank-avatar-ph">跑</text>
       </view>
       <view class="rank-info">

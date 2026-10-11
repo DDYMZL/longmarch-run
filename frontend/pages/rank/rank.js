@@ -22,7 +22,7 @@ Page({
   },
 
   refresh() {
-    rank
+    return rank
       .getStepsRank()
       .then((r) => {
         this.setData({
@@ -33,12 +33,12 @@ Page({
         });
       })
       .catch(() => {
-        this.setData({ list: [], myRank: null, mySteps: 0, total: 0 });
+        // 网络失败保留上一次榜单，避免整页清空
+        wx.showToast({ title: '排行榜加载失败，请稍后重试', icon: 'none' });
       });
   },
 
   onPullDownRefresh() {
-    this.refresh();
-    wx.stopPullDownRefresh();
+    this.refresh().then(() => wx.stopPullDownRefresh());
   }
 });

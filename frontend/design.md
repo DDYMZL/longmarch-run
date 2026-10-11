@@ -71,15 +71,14 @@
 | --- | --- | --- | --- |
 | `auth.js` | `ensureLogin()` / `wxLogin(profile)` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；启动校验 Token（/auth/me）+ 静默重登（单飞，注册为 request.js 的 401 重登处理器）；主动退出标记 `lm_logged_out`；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
 | `sport.js` | 今日步数 / `syncToday()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, calendar` | 步数按「用户+日期」覆盖；同步走 wx.getWeRunData 加密数据后端解密取真实步数；行军日历月聚合 |
-| `march.js` | `getRoute()` / `getNodeDetail(id)` / `lightUpNodes()` / `getGlobalGoal()` / `getFootprints()` / `markCeremony()` | `/api/march/route, node/{id}, light-up, global, footprints, ceremony` | 路线进度与节点配置由 `/march/route` 统一下发；步数达标由后端点亮并广播；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4） |
+| `march.js` | `getRoute()` / `getNodeDetail(id)` / `lightUpNodes()` / `getGlobalGoal()` / `getFootprints()` / `markCeremony()` / `hasPlayedIntro()` / `markIntroPlayed()` | `/api/march/route, node/{id}, light-up, global, footprints, ceremony` | 路线进度与节点配置由 `/march/route` 统一下发；步数达标由后端点亮、发放勋章并广播（light-up 返回 newlyLit / newlyCompletedChapters / newMedals）；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4）；开场动画播放标记（Storage `lm_march_intro_played`，页面不直接读写 Storage） |
 | `quiz.js` | `getDaily()` / `submit()` / `checkAnswer()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, check, records, reset, knowledge` | 每日抽 5 题（同日同套）、判分、每日一次；`checkAnswer` 单题即时判题（无状态，连胜反馈用）；知识画像分类正确率 |
-| `points.js` | `grantDailyLogin()` / 总额与流水 | `/api/points`、登录副链路 | 积分发放（同日同 reason 去重） |
-| `medal.js` | `checkAndGrant()` / `getMedalList()` | `/api/medal/list, check` | 12 枚勋章判定与发放（分类/隐藏/排序由后端下发） |
+| `medal.js` | `getMedalList()` | `/api/medal/list` | 勋章墙（分类/隐藏/排序由后端下发；判定发放由后端在同步/点亮/答题副链路完成） |
 | `profile.js` | `getSummary()` / `getTimeline(limit)` | `/api/profile/summary, timeline` | 我的长征档案聚合与足迹时间轴 |
 | `person.js` | `getPerson(id)` | `/api/persons/{id}` | 长征人物志详情（§14，含相关历史事件节点） |
 | `quote.js` | `getToday()` | `/api/quotes/today` | 今日寄语（§16）：当天优先、回退最近一条，无则 null（首页寄语卡隐藏） |
 | `broadcast.js` | `getToday()` / `getActivities(limit)` / `toActivityView(item)` | `/api/broadcast/today, activities` | 今日长征播报（期号/全局汇总/彩蛋/个人状态）；实时行军动态（REST 快照与 WS 消息共用视图模型：图标/昵称/相对时间） |
-| `ws.js` | `subscribe(fn)` | `WS /api/ws/updates?token=` | 实时推送客户端：单连接全局复用、断线指数退避重连（1s 起封顶 15s）；页面订阅 `activity` 等消息，退订即清理 |
+| `ws.js` | `subscribe(fn)` | `WS /api/ws/updates?token=` | 实时推送客户端：单连接全局复用、断线指数退避重连（1s 起封顶 15s）；页面订阅 `activity` 等消息，全部退订后 30s 空闲自动断开且不再重连，再次订阅时重建 |
 | `org.js` | 组织树下钻 / 我的组织 / 选定组织 / `getCompanions(limit)` / `getOrgMarch()` | `/api/org/children, mine, select, companions, march` | 组织树（任意层级可选）；同组织同行者（组织信息/同行人数/今日共同前进/同行者列表）；组织共同长征目标（组织累计步数/路线进度/节点pct） |
 | `rank.js` | `getStepsRank()` | `/api/rank/steps` | 全员工累计步数总榜 |
 | `identity.js` | `qrInfo(scene)` / `qrConfirm(scene, action)` / `listIdentities()` / `unbind(id)` | `/api/auth/qr/info, qr/confirm, identities, identities/{id}` | 扫码确认（L 登录/B 绑定场景查询与确认取消）与身份绑定管理（列表/解绑，主身份禁解绑） |
@@ -158,8 +157,7 @@ mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为
 
 ```
 home/march 触发 → sport.syncToday()（授权 scope.werun → wx.login 取 code → wx.getWeRunData 取加密数据，POST /api/sport/sync {code, encryptedData, iv} 后端解密落库并维护连续行军；授权/取数失败即报错不发请求）
-  → march.lightUpNodes()（POST /api/march/light-up，后端点亮并发放积分，返回 newlyLit + newlyCompletedChapters）
-  → medal.checkAndGrant()（POST /api/medal/check，后端判定发放）
+  → march.lightUpNodes()（POST /api/march/light-up，后端点亮、发放积分并判定勋章，返回 newlyLit + newlyCompletedChapters + newMedals，一次请求完成，不再单独调 /medal/check）
   → 有新点亮/新完成章节时按队列播放「节点抵达事件卡 → 章节完成仪式卡」（utils/arrivePopup.js 共用播放器；march 页另有 Canvas 金光扩散动画）
   → 页面 onShow 时 refresh() 拉最新数据展示；后端同步向管理端广播 data_changed / activity
 ```

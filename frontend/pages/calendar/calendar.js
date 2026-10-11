@@ -28,19 +28,25 @@ Page({
     selected: null
   },
 
+  onLoad() {
+    const now = new Date();
+    this.setData({ year: now.getFullYear(), month: now.getMonth() + 1 });
+  },
+
   onShow() {
     if (!app.globalData.loggedIn) {
       wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
-    const now = new Date();
-    this.setData({ year: now.getFullYear(), month: now.getMonth() + 1 });
     this.loadMonth();
   },
 
   loadMonth() {
     const { year, month } = this.data;
     const now = new Date();
+    // 快速切换月份时只采纳最后一次请求，避免旧月份数据覆盖
+    const requestId = (this._requestId || 0) + 1;
+    this._requestId = requestId;
     this.setData({
       loading: true,
       errorMsg: '',
@@ -51,6 +57,7 @@ Page({
     sport
       .getCalendar(monthStr(year, month))
       .then((res) => {
+        if (this._requestId !== requestId) return;
         this.setData({
           loading: false,
           cells: this.buildCells(year, month, res.days),
@@ -59,6 +66,7 @@ Page({
         });
       })
       .catch(() => {
+        if (this._requestId !== requestId) return;
         this.setData({ loading: false, errorMsg: '日历加载失败，请稍后重试' });
       });
   },
@@ -138,6 +146,7 @@ Page({
         quizDone: cell.quizDone,
         quizScore: cell.quizScore,
         litNodes: cell.litNodes,
+        litNodesText: cell.litNodes.join('、'),
         isToday: cell.isToday
       }
     });

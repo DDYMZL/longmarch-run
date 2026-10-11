@@ -44,7 +44,7 @@ Page({
           totalCount: summary.stats.totalCount,
           quizCount: summary.quiz.totalCount,
           points: summary.points.total,
-          medalIcons: ownedMedals.slice(0, 6).map((m) => m.icon),
+          medalIcons: ownedMedals.slice(0, 6).map((m) => ({ id: m.id, icon: m.icon })),
           medalCount: ownedMedals.length,
           medalTotal: medalList.length
         });

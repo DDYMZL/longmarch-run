@@ -10,8 +10,6 @@
  */
 const requestService = require('./request');
 
-const DAILY_TARGET = 10000; // 今日目标步数（展示用）
-
 /**
  * 发起微信运动授权
  * @returns {Promise<boolean>} 是否授权成功
@@ -111,7 +109,6 @@ function getRecent(n) {
 }
 
 module.exports = {
-  DAILY_TARGET,
   syncToday,
   getToday,
   getCalendar,

@@ -27,26 +27,6 @@ const PORTRAIT_DIMS = [
   { key: 'achievement', label: '成就' }
 ];
 
-/** 事件图标（时间轴按类型区分） */
-const EVENT_ICONS = {
-  FIRST_STEP: '🏃',
-  DAILY_GOAL: '🎯',
-  NODE_UNLOCK: '⭐',
-  BADGE_UNLOCK: '🏅',
-  QUIZ_COMPLETE: '📝',
-  QUIZ_FULL_SCORE: '💯',
-  STEP_10000: '👟',
-  TOTAL_STEPS_100000: '🎖️',
-  TOTAL_STEPS_500000: '💪',
-  COMPLETE_ROUTE: '🏆'
-};
-
-function eventIcon(eventType) {
-  if (EVENT_ICONS[eventType]) return EVENT_ICONS[eventType];
-  if (eventType && eventType.indexOf('STREAK_') === 0) return '🔥';
-  return '📌';
-}
-
 Page({
   data: {
     loading: true,
@@ -79,10 +59,10 @@ Page({
     ])
       .then((results) => {
         const summary = results[0];
-        const timeline = results[1].map((item) => ({
-          eventType: item.eventType,
+        const timeline = results[1].map((item, i) => ({
+          key: item.eventType + '_' + item.eventTime + '_' + i,
           text: item.text,
-          icon: eventIcon(item.eventType),
+          icon: util.eventIcon(item.eventType),
           timeText: util.formatTime(item.eventTime)
         }));
         const fpData = results[2];

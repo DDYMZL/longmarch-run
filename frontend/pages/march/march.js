@@ -22,6 +22,18 @@ const CLOUDS = [
   { x: 0.88, y: 0.2, s: 0.85, v: 0.016 }
 ];
 
+/** 列表/信息卡视图节点：仅保留模板用到的字段，减小 setData 体积 */
+function toViewNode(node) {
+  return {
+    id: node.id,
+    name: node.name,
+    icon: node.icon,
+    status: node.status,
+    targetSteps: node.targetSteps,
+    remain: node.remain
+  };
+}
+
 Page({
   data: {
     nodes: [],
@@ -43,8 +55,7 @@ Page({
     // 选中节点区域氛围（§12：信息卡柔和主题色 + 环境描述）
     selectedThemeStyle: '',
     selectedThemeEnv: '',
-    // 章节系统（后端统一下发）：各章状态与当前章节卡
-    chapters: [],
+    // 当前章节卡（章节系统后端统一下发）
     currentChapter: null,
     // 开场动画（需求 §5）：showIntro 首次完整开场 / showVeil 非首次快速过渡纱幕
     showIntro: false,
@@ -53,19 +64,14 @@ Page({
     litPopup: null
   },
 
-  onReady() {
-    // 实景地图默认模式，星空长征切换到 canvas 时再初始化
-    if (this.data.mode === 'canvas') {
-      this.initCanvas();
-    }
-  },
-
   onShow() {
     if (!app.globalData.loggedIn) {
       wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
     this.maybePlayIntro();
+    // onHide 停掉了星空动画：先用已有路线恢复，刷新失败时画面也不冻结
+    if (this.ctx && this.routeData) this.startAnim();
     this.refresh();
   },
 
@@ -75,11 +81,15 @@ Page({
    * 300~800ms 快速过渡纱幕（不拦截操作）。地图加载与 refresh 并发进行不阻塞。
    */
   maybePlayIntro() {
-    if (this._introChecked) return;
+    if (this._introChecked) {
+      // 开场播放中切走 tab（onHide 已取消定时器）：回来后重新计时自动结束
+      if (this.data.showIntro && !this._introTimer) {
+        this._introTimer = setTimeout(() => this.dismissIntro(), 3350);
+      }
+      return;
+    }
     this._introChecked = true;
-    let played = '';
-    try { played = wx.getStorageSync('lm_march_intro_played'); } catch (e) { /* ignore */ }
-    if (played) {
+    if (march.hasPlayedIntro()) {
       this.setData({ showVeil: true });
       this._veilTimer = setTimeout(() => this.setData({ showVeil: false }), 560);
       return;
@@ -98,7 +108,7 @@ Page({
     if (!this.data.showIntro) return;
     if (this._introTimer) { clearTimeout(this._introTimer); this._introTimer = null; }
     this.setData({ showIntro: false });
-    try { wx.setStorageSync('lm_march_intro_played', 1); } catch (e) { /* ignore */ }
+    march.markIntroPlayed();
     if (!this._viewPlayed && this.data.mode === 'real' && this.routeData) {
       this._viewPlayed = true;
       this.playViewAnim();
@@ -116,6 +126,7 @@ Page({
     this._refreshRequestId = (this._refreshRequestId || 0) + 1;
     if (this._viewTimer) clearTimeout(this._viewTimer);
     if (this.popupTimer) clearTimeout(this.popupTimer);
+    if (this._introTimer) { clearTimeout(this._introTimer); this._introTimer = null; }
     if (this._ceremonyTimer) { clearTimeout(this._ceremonyTimer); this._ceremonyTimer = null; }
     this.stopAnim();
   },
@@ -211,10 +222,8 @@ Page({
         particles: this.makeArriveParticles(lit.map((n) => n.id))
       };
     }
-    // 事件卡队列总时长（节点卡 2.4s / 章节卡 3.4s，与 arrivePopup 一致），
-    // 完成仪式跳转延迟到队列播完（§20.2：最后节点点亮后再进入仪式）
-    this._popupMs = lit.length * 2400 + chapters.length * 3400;
-    arrivePopup.playArriveQueue(this, lit, chapters);
+    // 事件卡队列总时长：完成仪式跳转延迟到队列播完（§20.2：最后节点点亮后再进入仪式）
+    this._popupMs = arrivePopup.playArriveQueue(this, lit, chapters);
   },
 
   /**
@@ -227,12 +236,10 @@ Page({
     const CAP = 64; // 粒子总量上限（§13.4 性能约束）
     const list = [];
     for (const id of ids) {
-      let idx = -1;
-      for (let i = 0; i < this.routeData.nodes.length; i++) {
-        if (this.routeData.nodes[i].id === id) { idx = i; break; }
-      }
-      if (idx < 0) continue;
+      const idx = this.nodeIndex[id];
+      if (idx === undefined) continue;
       const p = this.nodePts[idx];
+      if (!p) continue;
       for (let k = 0; k < per && list.length < CAP; k++) {
         const ang = Math.random() * Math.PI * 2;
         const sp = 26 + Math.random() * 42;
@@ -259,14 +266,26 @@ Page({
         ? this.routeData.routeProgress
         : null;
     this.routeData = route;
+    // 节点 id → 路线下标（点亮特效/粒子按 id 定位节点坐标）
+    this.nodeIndex = {};
+    route.nodes.forEach((n, i) => { this.nodeIndex[n.id] = i; });
 
     // 章节视图（需求 §4.4）：progressPct 预计算供 WXML 进度条；全部完成时展示末章
-    const chapters = (route.chapters || []).map((c) =>
-      Object.assign({}, c, { progressPct: Math.round((c.progress || 0) * 100) })
-    );
-    const currentChapter =
+    const chapters = route.chapters || [];
+    const chapter =
       chapters.find((c) => c.id === route.currentChapterId) ||
       (route.finished && chapters.length ? chapters[chapters.length - 1] : null);
+    const patch = {
+      nodes: route.nodes.map(toViewNode),
+      currentSteps: route.currentSteps,
+      totalSteps: route.totalSteps,
+      litCount: route.litCount,
+      totalCount: route.totalCount,
+      finished: route.finished,
+      currentChapter: chapter
+        ? Object.assign({}, chapter, { progressPct: Math.round((chapter.progress || 0) * 100) })
+        : null
+    };
 
     if (this.data.mode === 'real') {
       const mapData = this.buildMapData(route);
@@ -276,21 +295,14 @@ Page({
         route.nodes[0] ||
         null;
       const selectedTheme = selectedNode ? nodeThemes.getNodeTheme(selectedNode.id) : null;
-      this.setData({
-        nodes: route.nodes,
-        currentSteps: route.currentSteps,
-        totalSteps: route.totalSteps,
-        litCount: route.litCount,
-        totalCount: route.totalCount,
-        finished: route.finished,
+      Object.assign(patch, {
         markers: mapData.markers,
         polylines: mapData.polylines,
-        selectedNode: selectedNode,
+        selectedNode: selectedNode ? toViewNode(selectedNode) : null,
         selectedThemeStyle: selectedTheme ? nodeThemes.themeSoftStyle(selectedTheme) : '',
-        selectedThemeEnv: selectedTheme ? selectedTheme.environment : '',
-        chapters: chapters,
-        currentChapter: currentChapter
+        selectedThemeEnv: selectedTheme ? selectedTheme.environment : ''
       });
+      this.setData(patch);
       // 镜头俯冲只在首次进入播放（开场动画期间延至其结束），后续刷新保持当前视野
       if (!this._viewPlayed && !this.data.showIntro) {
         this._viewPlayed = true;
@@ -299,16 +311,7 @@ Page({
       return;
     }
 
-    this.setData({
-      nodes: route.nodes,
-      currentSteps: route.currentSteps,
-      totalSteps: route.totalSteps,
-      litCount: route.litCount,
-      totalCount: route.totalCount,
-      finished: route.finished,
-      chapters: chapters,
-      currentChapter: currentChapter
-    });
+    this.setData(patch);
     if (this.ctx) {
       if (prevProgress === null || !this.path) {
         // 首次渲染：重建静态层并播放完整入场描画
@@ -360,9 +363,17 @@ Page({
     this.setData({ mode }, () => {
       if (mode === 'canvas') {
         this.initCanvas();
-      } else {
-        this.playViewAnim();
+        return;
       }
+      // <canvas> 已被 wx:else 移除：释放画布与离屏缓存，回到实景时用最新路线重建 markers
+      this.ctx = null;
+      this.canvas = null;
+      this.staticLayer = null;
+      this.glowGold = null;
+      this.glowRed = null;
+      this.arriveFx = null;
+      if (this.routeData) this.renderRoute(this.routeData);
+      this.playViewAnim();
     });
   },
 
@@ -502,7 +513,7 @@ Page({
     if (!node) return;
     const theme = nodeThemes.getNodeTheme(node.id);
     this.setData({
-      selectedNode: node,
+      selectedNode: toViewNode(node),
       selectedThemeStyle: nodeThemes.themeSoftStyle(theme),
       selectedThemeEnv: theme.environment
     });
@@ -574,8 +585,6 @@ Page({
     this.path = sampled.path;
     this.pathDist = sampled.dist;
     this.pathLen = sampled.len;
-    // 节点在 path 上的采样索引（i * (segs+1)）
-    this.nodePathIndex = sampled.nodePathIndex;
 
     // 星河轨迹沿线星尘（§13.2「路线=星河轨迹」）：固定 22 颗采样点，
     // 仅已完成段内闪烁（相位各异，数量固定不随帧分配）
@@ -709,14 +718,8 @@ Page({
     const bump = Math.sin(Math.min(1, tSec / 1.2) * Math.PI);
 
     fx.ids.forEach((id) => {
-      let idx = -1;
-      for (let i = 0; i < this.routeData.nodes.length; i++) {
-        if (this.routeData.nodes[i].id === id) {
-          idx = i;
-          break;
-        }
-      }
-      if (idx < 0) return;
+      const idx = this.nodeIndex[id];
+      if (idx === undefined || !this.nodePts[idx]) return;
       const p = this.nodePts[idx];
 
       // 中心光晕放大渐隐（图标激活）
@@ -788,24 +791,13 @@ Page({
    * 绘制节点/粒子/旗座时直接 drawImage 缩放复用，避免每帧创建径向渐变，兼顾观感与性能。
    */
   buildGlowSprites() {
-    const make = (rgb) => {
-      try {
-        const size = 64;
-        const off = wx.createOffscreenCanvas({ type: '2d', width: size, height: size });
-        const c = off.getContext('2d');
-        const g = c.createRadialGradient(size / 2, size / 2, 0, size / 2, size / 2, size / 2);
-        g.addColorStop(0, 'rgba(' + rgb + ',0.85)');
-        g.addColorStop(0.4, 'rgba(' + rgb + ',0.32)');
-        g.addColorStop(1, 'rgba(' + rgb + ',0)');
-        c.fillStyle = g;
-        c.fillRect(0, 0, size, size);
-        return off;
-      } catch (e) {
-        return null;
-      }
-    };
-    this.glowGold = make('255,205,90');
-    this.glowRed = make('255,80,105');
+    const stops = (rgb) => [
+      [0, 'rgba(' + rgb + ',0.85)'],
+      [0.4, 'rgba(' + rgb + ',0.32)'],
+      [1, 'rgba(' + rgb + ',0)']
+    ];
+    this.glowGold = routeCanvas.createGlowSprite(stops('255,205,90'));
+    this.glowRed = routeCanvas.createGlowSprite(stops('255,80,105'));
   },
 
   /**
@@ -1051,7 +1043,6 @@ Page({
   /** 路线：发光金色已完成段（外发光 + 内核亮线，渐变按 endIdx 缓存）+ 流光彗尾 */
   drawRoute(t) {
     const ctx = this.ctx;
-    const route = this.routeData;
     const path = this.path;
 
     // 已完成段长度（按行军进度比例，含增量推进动画）+ 入场描画进度
@@ -1406,7 +1397,8 @@ Page({
    * 点击列表节点（含未解锁节点，可查看历史）
    */
   handleNodeTap(e) {
-    const node = e.currentTarget.dataset.node;
-    wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + node.id });
+    const id = e.currentTarget.dataset.id;
+    if (!id) return;
+    wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + id });
   }
 });

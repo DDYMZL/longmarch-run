@@ -12,7 +12,7 @@ const CONFETTI_COLORS = ['#C8102E', '#D4A017', '#E8C76A', '#FF6B6B', '#4ECDC4', 
 Page({
   data: {
     record: null,
-    stars: [false, false, false, false, false],
+    stars: [0, 1, 2, 3, 4].map((id) => ({ id, on: false })),
     wrongCount: 0,
     displayScore: 0,
     confetti: [],
@@ -21,6 +21,11 @@ Page({
   },
 
   onLoad() {
+    if (!app.globalData.loggedIn) {
+      wx.reLaunch({ url: '/pages/launch/launch' });
+      return;
+    }
+    this._timers = [];
     quiz
       .getDaily()
       .then((daily) => {
@@ -45,10 +50,9 @@ Page({
         // 2. 星星逐个点亮（间隔 220ms）
         const starCount = Math.round(record.score / 20);
         for (let i = 1; i <= starCount; i++) {
-          setTimeout(() => {
-            const key = 'stars[' + (i - 1) + ']';
-            this.setData({ [key]: true });
-          }, 500 + i * 220);
+          this._timers.push(setTimeout(() => {
+            this.setData({ ['stars[' + (i - 1) + '].on']: true });
+          }, 500 + i * 220));
         }
 
         // 3. 满分彩带
@@ -84,10 +88,15 @@ Page({
       const eased = 1 - Math.pow(1 - p, 3);
       this.setData({ displayScore: Math.round(target * eased) });
       if (p < 1) {
-        setTimeout(step, 30);
+        this._scoreTimer = setTimeout(step, 30);
       }
     };
     step();
+  },
+
+  onUnload() {
+    (this._timers || []).forEach(clearTimeout);
+    if (this._scoreTimer) clearTimeout(this._scoreTimer);
   },
 
   /**

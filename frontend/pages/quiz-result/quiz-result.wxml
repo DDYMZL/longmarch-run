@@ -15,7 +15,7 @@
     <view class="result-score">{{displayScore}} 分</view>
     <view wx:if="{{isPerfect}}" class="result-perfect-line">{{perfectLine}}</view>
     <view class="result-stars">
-      <text wx:for="{{stars}}" wx:key="*this" class="star {{item ? 'on' : ''}}">★</text>
+      <text wx:for="{{stars}}" wx:key="id" class="star {{item.on ? 'on' : ''}}">★</text>
     </view>
   </view>
 

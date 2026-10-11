@@ -3,6 +3,7 @@
  * 头像（无图时姓名首字占位）→ 名称 → 简介 → 相关历史事件（节点事件 + 历史时间）
  * 点击事件卡跳转对应路线节点详情（人物详情 → 节点，§14.3）。
  */
+const app = getApp();
 const person = require('../../services/person');
 
 Page({
@@ -14,6 +15,10 @@ Page({
   },
 
   onLoad(options) {
+    if (!app.globalData.loggedIn) {
+      wx.reLaunch({ url: '/pages/launch/launch' });
+      return;
+    }
     const id = parseInt((options && options.id) || '0', 10);
     if (!id) {
       this.setData({ loading: false, errorMsg: '人物不存在' });

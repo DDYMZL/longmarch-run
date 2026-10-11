@@ -1,17 +1,7 @@
 /**
- * 勋章服务：勋章列表与检查发放（后端依据用户行为统一评估）。
+ * 勋章服务：勋章列表（后端在步数/答题/点亮等行为后统一评估发放）。
  */
 const requestService = require('./request');
-
-/**
- * 检查并发放勋章（数据变化后调用），返回本次新获得的勋章 id 列表。
- * @returns {Promise<Array<string>>}
- */
-function checkAndGrant() {
-  return requestService
-    .request({ url: '/medal/check', method: 'POST' })
-    .then((result) => result.newly || []);
-}
 
 /**
  * 获取勋章列表（后端返回前已自动检查发放）。
@@ -24,6 +14,5 @@ function getMedalList() {
 }
 
 module.exports = {
-  checkAndGrant,
   getMedalList
 };

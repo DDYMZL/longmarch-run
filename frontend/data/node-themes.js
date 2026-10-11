@@ -68,4 +68,4 @@ function themeSoftStyle(theme) {
   return 'background: linear-gradient(160deg, ' + bg[1] + '2E 0%, ' + bg[2] + '1A 45%, #FFFFFF 80%);';
 }
 
-module.exports = { THEMES, getNodeTheme, themeBgStyle, themeSoftStyle };
+module.exports = { getNodeTheme, themeBgStyle, themeSoftStyle };

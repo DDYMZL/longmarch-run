@@ -19,7 +19,7 @@
     <!-- 勋章：展示在组织下方，点击进入勋章墙 -->
     <view class="mine-medals" bindtap="goMedals">
       <block wx:if="{{medalIcons.length > 0}}">
-        <text class="mine-medal-icon" wx:for="{{medalIcons}}" wx:key="*this">{{item}}</text>
+        <text class="mine-medal-icon" wx:for="{{medalIcons}}" wx:key="id">{{item.icon}}</text>
         <text class="mine-medal-count">{{medalCount}}/{{medalTotal}} ›</text>
       </block>
       <text wx:else class="mine-medal-empty">🏅 暂无勋章，快去运动答题吧 ›</text>

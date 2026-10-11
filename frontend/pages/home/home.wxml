@@ -1,6 +1,6 @@
 <view class="home-page">
   <!-- 抵达事件卡 / 章节完成仪式弹层 -->
-  <view wx:if="{{litPopup}}" class="lit-overlay" wx:key="{{litPopup.key}}">
+  <view wx:if="{{litPopup}}" class="lit-overlay">
     <view wx:if="{{litPopup.kind === 'chapter'}}" class="lit-card chapter-lit-card">
       <view class="lit-star anim-pop">🚩</view>
       <view class="lit-title">🎉 章节完成</view>
@@ -231,7 +231,7 @@
     <view class="companion-list" wx:else>
       <view class="companion-item {{item.isSelf ? 'self' : ''}}" wx:for="{{companions}}" wx:key="rowKey">
         <view class="companion-avatar">
-          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" />
+          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
           <text wx:else class="avatar-placeholder">👤</text>
         </view>
         <view class="companion-name">

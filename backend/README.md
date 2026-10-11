@@ -117,7 +117,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/march/route` | 长征路线进度（含各节点状态，仅统计启用节点） |
 | GET | `/api/march/route-nodes` | 启用节点配置列表（含经纬度） |
 | GET | `/api/march/node/{node_id}` | 节点详情（任意状态可查看） |
-| POST | `/api/march/light-up` | 点亮达标节点、发放积分 |
+| POST | `/api/march/light-up` | 点亮达标节点、发放积分并判定勋章（返回 newMedals） |
 | GET | `/api/quiz/daily` | 今日题目（同一天同一套题） |
 | POST | `/api/quiz/submit` | 提交答卷（每日一次，body: `answers`） |
 | GET | `/api/quiz/records` | 答题记录 |

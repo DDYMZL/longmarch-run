@@ -6,6 +6,7 @@
 const app = getApp();
 const march = require('../../services/march');
 const util = require('../../utils/util');
+const routeCanvas = require('../../utils/routeCanvas');
 
 Page({
   data: {
@@ -73,7 +74,7 @@ Page({
 
     // 票根外框：米黄纸面 + 圆角
     const m = 10;
-    this.roundRect(ctx, m, m, w - m * 2, h - m * 2, 14);
+    routeCanvas.drawRoundRect(ctx, m, m, w - m * 2, h - m * 2, 14);
     ctx.fillStyle = '#FBF3DC';
     ctx.fill();
     ctx.strokeStyle = '#C8102E';
@@ -81,7 +82,7 @@ Page({
     ctx.stroke();
 
     // 顶部红色票头
-    this.roundRect(ctx, m, m, w - m * 2, 74, 14);
+    routeCanvas.drawRoundRect(ctx, m, m, w - m * 2, 74, 14);
     ctx.fillStyle = '#A00D26';
     ctx.fill();
     ctx.fillRect(m, m + 60, w - m * 2, 14); // 补圆角下沿成直角
@@ -137,16 +138,6 @@ Page({
     ctx.fillStyle = '#B8860B';
     ctx.font = '11px sans-serif';
     ctx.fillText(t.serial, w / 2, h - m - 16);
-  },
-
-  roundRect(ctx, x, y, w, h, r) {
-    ctx.beginPath();
-    ctx.moveTo(x + r, y);
-    ctx.arcTo(x + w, y, x + w, y + h, r);
-    ctx.arcTo(x + w, y + h, x, y + h, r);
-    ctx.arcTo(x, y + h, x, y, r);
-    ctx.arcTo(x, y, x + w, y, r);
-    ctx.closePath();
   },
 
   /**

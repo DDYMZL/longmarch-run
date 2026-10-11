@@ -38,7 +38,6 @@ Page({
     dailyTarget: 10000,
     stepPercent: 0,
     marchStatus: '今天还没有开始行军',
-    totalSteps: 0,
     syncing: false,
     syncError: '',
     // 今日播报（个人）
@@ -50,7 +49,6 @@ Page({
     routeError: '',
     litCount: 0,
     totalCount: 10,
-    nextNode: null,
     finished: false,
     routeNodesPreview: [],
     // 连续行军
@@ -137,6 +135,9 @@ Page({
    * 刷新首页全部数据
    */
   refreshAll() {
+    // 请求序号：onShow 与同步后刷新并发时，只采纳最后一次结果
+    const requestId = (this._refreshRequestId || 0) + 1;
+    this._refreshRequestId = requestId;
     Promise.all([
       sport.getToday(),
       march.getRoute(),
@@ -150,6 +151,7 @@ Page({
       quote.getToday().catch(() => null) // 今日寄语失败同上
     ])
       .then((results) => {
+        if (requestId !== this._refreshRequestId) return;
         const today = results[0];
         const route = results[1];
         const daily = results[2];
@@ -163,16 +165,16 @@ Page({
         const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
 
         // 勋章行：已获得的排前面（按获得时间倒序取最近 6 枚展示）
-        const owned = medals
-          .filter((m) => m.owned)
+        const ownedAll = medals.filter((m) => m.owned);
+        const owned = ownedAll
           .sort((a, b) => String(b.grantedAt || '').localeCompare(String(a.grantedAt || '')))
           .slice(0, 6);
 
-        this.setData({
+        // 主数据 + 可选区块合并为一次 setData，减少逻辑层到渲染层的通信次数
+        const patch = {
           dailyTarget: today.target,
           stepPercent: percent,
           marchStatus: marchStatusText(today.steps, today.streakGoal, today.target),
-          totalSteps: today.totalSteps,
           // 连续行军
           currentStreak: today.currentStreak,
           streakGoal: today.streakGoal,
@@ -189,7 +191,6 @@ Page({
           routeError: '',
           litCount: route.litCount,
           totalCount: route.totalCount,
-          nextNode: route.nextNode,
           finished: route.finished,
           routeNodesPreview: route.nodes.slice(0, 6),
           // 情报
@@ -199,16 +200,18 @@ Page({
           issueNo: daily.issueNo,
           // 勋章
           medalPreview: owned,
-          medalOwned: medals.filter((m) => m.owned).length,
-          medalTotal: medals.length
-        });
+          medalOwned: ownedAll.length,
+          medalTotal: medals.length,
+          // 今日寄语（需求 §16：无寄语时隐藏卡片）
+          quote: todayQuote && todayQuote.content ? todayQuote : null
+        };
         // 实时行军动态：REST 为权威快照（WS 期间的事件已落库，快照自含）
         if (activities !== null) {
-          this.setData({ activities: activities.slice(0, 6) });
+          patch.activities = activities.slice(0, 6);
         }
         // 组织同行（需求 §9：组织 + 同行人数 + 今日共同前进 + 同行者）
         if (orgData !== null) {
-          this.setData({
+          Object.assign(patch, {
             orgChecked: true,
             orgName: orgData.org ? orgData.org.orgName : '',
             orgFullName: orgData.org ? orgData.org.fullName : '',
@@ -223,10 +226,9 @@ Page({
             }))
           });
         }
-
         // 集体长征（需求 §10：组织累计步数映射路线进度，节点 pct 后端下发）
         if (orgMarch !== null) {
-          this.setData({
+          Object.assign(patch, {
             omProgress: orgMarch.progressPct,
             omTotalText: util.formatNumber(orgMarch.totalSteps),
             omCurrent: orgMarch.currentNodeName || '',
@@ -240,10 +242,9 @@ Page({
             }))
           });
         }
-
         // 全员同行（需求 §11：全员累计步数对 2 亿步总目标，里程碑状态后端下发）
         if (globalGoal !== null) {
-          this.setData({
+          Object.assign(patch, {
             ggTotalText: util.formatCn(globalGoal.totalSteps),
             ggProgress: globalGoal.progressPct,
             ggNextName: globalGoal.nextMilestone ? globalGoal.nextMilestone.name : '',
@@ -256,15 +257,14 @@ Page({
             }))
           });
         }
-
-        // 今日寄语（需求 §16：无寄语时隐藏卡片）
-        this.setData({ quote: todayQuote && todayQuote.content ? todayQuote : null });
+        this.setData(patch);
 
         // 步数滚动动画
         this.animateSteps(today.steps);
       })
       .catch(() => {
-        this.setData({ routeLoading: false, routeError: '数据加载失败，请下拉重试' });
+        if (requestId !== this._refreshRequestId) return;
+        this.setData({ routeLoading: false, routeError: '数据加载失败，请稍后重试' });
       });
   },
 
@@ -273,9 +273,10 @@ Page({
    */
   animateSteps(target) {
     if (this.stepsTimer) clearInterval(this.stepsTimer);
+    const from = this.data.todaySteps || 0;
+    if (from === target) return;
     const duration = 900;
     const start = Date.now();
-    const from = this.data.todaySteps || 0;
     const step = () => {
       const p = Math.min(1, (Date.now() - start) / duration);
       const eased = 1 - Math.pow(1 - p, 3); // easeOutCubic
@@ -295,18 +296,13 @@ Page({
     sport
       .syncToday()
       .then((result) => {
-        // 步数同步后：点亮节点（含章节判定）-> 刷新勋章（后端联动）
-        return Promise.all([march.lightUpNodes(), medal.checkAndGrant()]).then((r) => ({
-          result: result,
-          newlyLit: r[0].newlyLit,
-          newlyCompletedChapters: r[0].newlyCompletedChapters,
-          newMedals: r[1]
-        }));
+        // 步数同步后点亮节点（后端同时判定章节并发放勋章）
+        return march.lightUpNodes().then((lit) => Object.assign({ result: result }, lit));
       })
       .then((res) => {
         if (res.newlyLit.length > 0 || res.newlyCompletedChapters.length > 0) {
           // 按队列播放「抵达事件卡 → 章节完成仪式」
-          this.playLitPopup(res.newlyLit, res.newlyCompletedChapters);
+          arrivePopup.playArriveQueue(this, res.newlyLit, res.newlyCompletedChapters);
         } else if (res.newMedals.length > 0) {
           wx.showToast({ title: '获得新勋章！', icon: 'none' });
         } else if (res.result.synced) {
@@ -322,13 +318,6 @@ Page({
       .finally(() => {
         this.setData({ syncing: false });
       });
-  },
-
-  /**
-   * 抵达事件队列（逐个播放）：先节点抵达卡，后章节完成仪式卡（需求 §4.5）
-   */
-  playLitPopup(newlyLit, newChapters) {
-    arrivePopup.playArriveQueue(this, newlyLit, newChapters);
   },
 
   /**
