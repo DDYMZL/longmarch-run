@@ -2,7 +2,8 @@
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { fetchScreen, type ScreenResult } from '../api/admin'
-import { formatNumber, formatTime, useLiveUpdates } from '../utils/liveUpdates'
+import { useLiveUpdates } from '../utils/liveUpdates'
+import { formatNumber, formatTime } from '../utils/format'
 
 const router = useRouter()
 const loading = ref(false)
@@ -18,19 +19,10 @@ async function load() {
   try { state.value = (await fetchScreen()).data } finally { loading.value = false }
 }
 
-let reloadTimer: number | null = null
-function scheduleReload() {
-  if (reloadTimer !== null) return
-  reloadTimer = window.setTimeout(() => { reloadTimer = null; load() }, 800)
-}
-
-const { wsStatus } = useLiveUpdates((data) => {
-  if (data.type === 'data_changed') scheduleReload()
-  if (data.type === 'activity' && data.text) {
-    state.value = {
-      ...state.value,
-      activities: [{ id: Date.now(), event_type: String(data.eventType || ''), event_time: new Date().toISOString(), user_id: 0, nickname: String(data.nickname || ''), text: String(data.text), data: {} }, ...state.value.activities].slice(0, 20)
-    }
+const { wsStatus } = useLiveUpdates({
+  onDataChanged: load,
+  onActivity: (item) => {
+    state.value = { ...state.value, activities: [item, ...state.value.activities].slice(0, 20) }
   }
 })
 

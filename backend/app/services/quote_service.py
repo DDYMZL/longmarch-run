@@ -6,6 +6,7 @@
 import re
 from typing import Dict, List, Optional, Tuple
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.models import DailyQuote, RouteNode
@@ -63,9 +64,17 @@ def validate_quote(db: Session, date: str, content: str, source: str, node_id: O
     return None
 
 
-def list_quotes(db: Session, page: int, page_size: int) -> Tuple[int, List[Dict]]:
-    """分页列出寄语（日期倒序）。"""
+def list_quotes(db: Session, page: int, page_size: int, keyword: str = "") -> Tuple[int, List[Dict]]:
+    """分页列出寄语（日期倒序）；keyword 按内容/出处模糊匹配。"""
     query = db.query(DailyQuote)
+    word = keyword.strip()
+    if word:
+        query = query.filter(
+            or_(
+                DailyQuote.content.contains(word, autoescape=True),
+                DailyQuote.source.contains(word, autoescape=True),
+            )
+        )
     total = query.count()
     rows = (
         query.order_by(DailyQuote.date.desc(), DailyQuote.id.desc())

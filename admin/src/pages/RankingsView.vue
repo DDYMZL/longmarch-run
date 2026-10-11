@@ -2,10 +2,10 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { exportRankings, fetchRankings, fetchUserOverview, type RankFilter, type RankItem, type RankResult, type UserOverview } from '../api/admin'
-import { formatNumber as number, useLiveUpdates } from '../utils/liveUpdates'
+import { useLiveUpdates } from '../utils/liveUpdates'
+import { formatDateTime, formatNumber as number } from '../utils/format'
 import { saveFile, today } from '../utils/download'
 
-const TIME_FORMAT = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 
 const loading = ref(false)
 const exporting = ref(false)
@@ -52,32 +52,16 @@ watch([appliedKeyword, orgId, onlyChanged], () => { page.value = 1 })
 // 筛选变化与页码复位在同一轮刷新内合并，只触发一次请求
 watch([page, pageSize, filter], load, { immediate: true })
 
-// ---------------- 实时推送（复用 useLiveUpdates：token 鉴权、指数退避重连、卸载清理） ----------------
-let reloadTimer: number | null = null
-
-function scheduleReload() {
-  if (reloadTimer !== null) return
-  reloadTimer = window.setTimeout(() => {
-    reloadTimer = null
-    load()
-  }, 800)
-}
-
-const { wsStatus } = useLiveUpdates((data) => {
-  if (data.type === 'data_changed') scheduleReload()
-})
+// ---------------- 实时推送（数据变更防抖重载当前页） ----------------
+const { wsStatus } = useLiveUpdates({ onDataChanged: load })
 
 onBeforeUnmount(() => {
-  if (reloadTimer !== null) window.clearTimeout(reloadTimer)
   if (keywordTimer !== null) window.clearTimeout(keywordTimer)
 })
 
 function progress(item: RankItem) { return item.node_count ? Math.round(item.completed_nodes / item.node_count * 100) : 0 }
 function initial(name: string) { return name.trim().slice(0, 1) || '员' }
-function time(value: string | null) {
-  if (!value) return '尚未到达'
-  return TIME_FORMAT.format(new Date(/Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`))
-}
+function time(value: string | null) { return formatDateTime(value, '尚未到达') }
 async function exportData() {
   if (!state.value.match_total) return ElMessage.warning('当前没有可导出的排名数据')
   exporting.value = true

@@ -41,6 +41,7 @@ import {
   ElTag,
   ElTooltip,
   ElTreeSelect,
+  ElUpload,
   provideGlobalConfig
 } from 'element-plus'
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
@@ -83,6 +84,7 @@ import 'element-plus/es/components/table-column/style/css'
 import 'element-plus/es/components/tag/style/css'
 import 'element-plus/es/components/tooltip/style/css'
 import 'element-plus/es/components/tree-select/style/css'
+import 'element-plus/es/components/upload/style/css'
 // 程序化调用与指令的样式（ElMessage / ElMessageBox / ElNotification / v-loading）
 import 'element-plus/es/components/loading/style/css'
 import 'element-plus/es/components/message/style/css'
@@ -126,7 +128,8 @@ const components = [
   ElTabs,
   ElTag,
   ElTooltip,
-  ElTreeSelect
+  ElTreeSelect,
+  ElUpload
 ]
 
 export function setupElementPlus(app: App): void {

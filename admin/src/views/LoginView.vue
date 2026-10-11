@@ -5,8 +5,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { createWechatQr, fetchMe, login, pollWechatQr } from '../api/admin'
-import type { QrCreateResult } from '../api/admin'
-import { setAuth, setProfile } from '../store/auth'
+import type { QrCreateResult, QrStatusResult } from '../api/admin'
+import { setProfile, setToken } from '../store/auth'
 
 const router = useRouter()
 const route = useRoute()
@@ -24,8 +24,7 @@ const rules: FormRules = {
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
-function handleLoggedIn(token: string, username: string) {
-  setAuth(token, username)
+function handleLoggedIn() {
   const redirect = (route.query.redirect as string) || '/'
   router.push(redirect)
 }
@@ -36,11 +35,11 @@ async function handleLogin() {
   loading.value = true
   try {
     const { data } = await login(form.username, form.password)
-    setAuth(data.token, data.username)
+    setToken(data.token)
     const me = await fetchMe()
     setProfile(me.data.username, me.data.is_super, me.data.menus.map((m) => m.code))
     ElMessage.success('登录成功')
-    handleLoggedIn(data.token, data.username)
+    handleLoggedIn()
   } catch {
     // 错误提示已由 axios 拦截器统一处理
   } finally {
@@ -54,64 +53,79 @@ const qr = ref<QrCreateResult | null>(null)
 const qrStatusText = ref('')
 const qrFailed = ref(false)
 const qrFailReason = ref('')
+const POLL_INTERVAL = 2000
+// 上一次请求返回后再排下一次（避免慢响应时请求堆叠）；代次递增使在途的旧轮询回调失效
 let pollTimer: number | null = null
+let pollGen = 0
 
 function stopPolling() {
+  pollGen++
   if (pollTimer !== null) {
-    window.clearInterval(pollTimer)
+    window.clearTimeout(pollTimer)
     pollTimer = null
   }
 }
 
+function schedulePoll(gen: number) {
+  pollTimer = window.setTimeout(() => {
+    pollTimer = null
+    pollOnce(gen)
+  }, POLL_INTERVAL)
+}
+
 async function startQr() {
   stopPolling()
+  const gen = pollGen
   qrFailed.value = false
   qrFailReason.value = ''
   qrStatusText.value = '正在生成小程序码…'
   try {
     const { data } = await createWechatQr()
+    if (gen !== pollGen) return
     qr.value = data
     qrStatusText.value = data.mock ? '开发模式：请将场景码填入小程序调试入口' : '请使用手机微信扫码'
-    pollTimer = window.setInterval(pollOnce, 2000)
+    schedulePoll(gen)
   } catch {
-    qrStatusText.value = '小程序码生成失败，请稍后重试'
+    if (gen === pollGen) qrStatusText.value = '小程序码生成失败，请稍后重试'
   }
 }
 
-async function pollOnce() {
+async function pollOnce(gen: number) {
   if (!qr.value) return
+  let data: QrStatusResult
   try {
-    const { data } = await pollWechatQr(qr.value.qr_id)
-    if (data.status === 'confirmed') {
-      if (data.token && data.username) {
-        stopPolling()
-        setAuth(data.token, data.username)
-        setProfile(data.username, data.is_super ?? false, (data.menus || []).map((m) => m.code))
-        ElMessage.success('扫码登录成功')
-        handleLoggedIn(data.token, data.username)
-      } else {
-        // 会话已被其他标签页签发，刷新二维码
-        startQr()
-      }
-    } else if (data.status === 'scanned') {
-      qrStatusText.value = '已扫码，请在手机上确认登录'
-    } else if (data.status === 'failed') {
-      stopPolling()
-      qrFailed.value = true
-      qrFailReason.value = data.fail_reason || '登录未获授权'
-      qrStatusText.value = '登录未获授权'
-    } else if (data.status === 'expired') {
-      qrStatusText.value = '二维码已过期，正在刷新…'
-      startQr()
-    } else {
-      qrStatusText.value = '请使用手机微信扫码'
-    }
+    data = (await pollWechatQr(qr.value.qr_id)).data
   } catch (error: unknown) {
+    if (gen !== pollGen) return
     const status = (error as { response?: { status?: number } })?.response?.status
-    if (status === 404) {
+    // 会话不存在则重建，其余错误静默等待下次轮询
+    if (status === 404) startQr()
+    else schedulePoll(gen)
+    return
+  }
+  if (gen !== pollGen) return
+  if (data.status === 'confirmed') {
+    if (data.token && data.username) {
+      stopPolling()
+      setToken(data.token)
+      setProfile(data.username, data.is_super ?? false, (data.menus || []).map((m) => m.code))
+      ElMessage.success('扫码登录成功')
+      handleLoggedIn()
+    } else {
+      // 会话已被其他标签页签发，刷新二维码
       startQr()
     }
-    // 其余错误静默，等待下次轮询
+  } else if (data.status === 'failed') {
+    stopPolling()
+    qrFailed.value = true
+    qrFailReason.value = data.fail_reason || '登录未获授权'
+    qrStatusText.value = '登录未获授权'
+  } else if (data.status === 'expired') {
+    qrStatusText.value = '二维码已过期，正在刷新…'
+    startQr()
+  } else {
+    qrStatusText.value = data.status === 'scanned' ? '已扫码，请在手机上确认登录' : '请使用手机微信扫码'
+    schedulePoll(gen)
   }
 }
 

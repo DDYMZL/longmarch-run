@@ -10,6 +10,8 @@ from typing import List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
+from app.core.helpers import local_to_utc
+
 from app.models.models import (
     AdminMenu,
     AdminRole,
@@ -105,7 +107,7 @@ def list_users(
     """人员分页列表（含角色与后台授权状态）；批量取角色与组织名避免 N+1。"""
     query = db.query(User)
     if keyword:
-        query = query.filter(User.nickname.ilike(f"%{keyword}%"))
+        query = query.filter(User.nickname.icontains(keyword, autoescape=True))
     if org_id is not None:
         query = query.filter(User.org_id == org_id)
     if has_access is not None:
@@ -393,7 +395,8 @@ def list_audit_logs(
     if actor_type:
         query = query.filter(AuditLog.actor_type == actor_type)
     if date:
-        start = datetime.strptime(date, "%Y-%m-%d")
+        # 前端按本地日期筛选，库内为 UTC naive，需换算本地日界
+        start = local_to_utc(datetime.strptime(date, "%Y-%m-%d"))
         query = query.filter(
             AuditLog.created_at >= start, AuditLog.created_at < start + timedelta(days=1)
         )

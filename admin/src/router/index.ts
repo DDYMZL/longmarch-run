@@ -3,22 +3,11 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { hasMenu, isLoggedIn } from '../store/auth'
+import { MENUS } from './menus'
 
-// 菜单顺序（与侧边栏一致）：无权限访问页面时回退到第一个可用菜单
-const MENU_ORDER = [
-  { path: '/dashboard', code: 'dashboard' },
-  { path: '/screen', code: 'screen' },
-  { path: '/rankings', code: 'rankings' },
-  { path: '/route-nodes', code: 'route_nodes' },
-  { path: '/questions', code: 'questions' },
-  { path: '/quotes', code: 'quotes' },
-  { path: '/orgs', code: 'orgs' },
-  { path: '/access', code: 'access' },
-  { path: '/audit', code: 'audit' }
-]
-
+// 无权限访问页面时按侧边栏顺序回退到第一个可用菜单
 function firstAllowedPath(): string {
-  const item = MENU_ORDER.find((m) => hasMenu(m.code))
+  const item = MENUS.find((m) => hasMenu(m.code))
   return item ? item.path : '/login'
 }
 

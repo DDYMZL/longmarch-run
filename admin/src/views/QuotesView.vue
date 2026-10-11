@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 每日寄语维护（需求 §16）：有出处的史料语录，按日期展示，可关联路线节点
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import {
@@ -18,25 +18,22 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(20)
 const keyword = ref('')
+const appliedKeyword = ref('')
 
 const nodes = ref<RouteNode[]>([])
 
-const filtered = computed(() =>
-  keyword.value
-    ? quotes.value.filter(
-        (q) => q.content.includes(keyword.value.trim()) || q.source.includes(keyword.value.trim())
-      )
-    : quotes.value
-)
-
+// 服务端按内容/出处搜索；只采纳最后一次请求
+let requestSeq = 0
 async function loadQuotes() {
+  const seq = ++requestSeq
   loading.value = true
   try {
-    const { data } = await fetchQuotes(page.value, pageSize.value)
+    const { data } = await fetchQuotes(page.value, pageSize.value, appliedKeyword.value.trim())
+    if (seq !== requestSeq) return
     quotes.value = data.items
     total.value = data.total
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
@@ -44,6 +41,20 @@ function handlePageChange(next: number) {
   page.value = next
   loadQuotes()
 }
+
+let searchTimer: number | null = null
+watch(keyword, (value) => {
+  if (searchTimer !== null) window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(() => {
+    searchTimer = null
+    appliedKeyword.value = value
+    page.value = 1
+    loadQuotes()
+  }, 400)
+})
+onBeforeUnmount(() => {
+  if (searchTimer !== null) window.clearTimeout(searchTimer)
+})
 
 // ---------------- 新增 / 编辑弹窗 ----------------
 const dialogVisible = ref(false)
@@ -123,10 +134,11 @@ async function handleDelete(row: Quote) {
 onMounted(async () => {
   loadQuotes()
   try {
-    const { data } = await fetchRouteNodes()
+    // 节点下拉加载失败不阻塞寄语维护，也不弹错误
+    const { data } = await fetchRouteNodes(true)
     nodes.value = data.items
   } catch {
-    // 节点下拉加载失败不阻塞寄语维护
+    nodes.value = []
   }
 })
 </script>
@@ -136,7 +148,7 @@ onMounted(async () => {
     <div class="toolbar">
       <el-input
         v-model="keyword"
-        placeholder="按内容 / 出处搜索（当前页）"
+        placeholder="按内容 / 出处搜索"
         clearable
         style="width: 260px"
         :prefix-icon="'Search'"
@@ -147,7 +159,7 @@ onMounted(async () => {
       <el-button :icon="'Refresh'" @click="loadQuotes">刷新</el-button>
     </div>
 
-    <el-table v-loading="loading" :data="filtered" border stripe row-key="id">
+    <el-table v-loading="loading" :data="quotes" border stripe row-key="id">
       <el-table-column prop="id" label="ID" width="64" align="center" />
       <el-table-column prop="date" label="日期" width="120" align="center" sortable />
       <el-table-column prop="content" label="寄语内容" min-width="280" show-overflow-tooltip />

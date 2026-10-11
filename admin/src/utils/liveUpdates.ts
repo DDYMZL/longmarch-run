@@ -1,9 +1,10 @@
 // 实时推送 composable：后端 /api/ws/updates 数据变更广播（data_changed / activity）
-// 模式抽自 RankingsView：token query 鉴权、指数退避重连、卸载自动清理
+// token query 鉴权、指数退避重连、data_changed 合并防抖刷新、卸载自动清理
 import { onBeforeUnmount, onMounted, ref } from 'vue'
+import type { ActivityItem } from '../api/admin'
 import { getToken } from '../store/auth'
 
-export type LiveMessage = {
+type LiveMessage = {
   type: string
   eventType?: string
   userId?: number
@@ -12,17 +13,50 @@ export type LiveMessage = {
   at?: string
 }
 
-export function useLiveUpdates(onMessage: (data: LiveMessage) => void) {
+type LiveHandlers = {
+  /** 数据变更：同一窗口内多次广播合并为一次回调 */
+  onDataChanged?: () => void
+  onActivity?: (item: ActivityItem) => void
+}
+
+const RELOAD_DELAY = 800
+// 推送动态无库内 id，用递减负数作行 key，避免与真实 id 及同毫秒事件冲突
+let liveActivitySeq = 0
+
+export function useLiveUpdates(handlers: LiveHandlers) {
   const wsStatus = ref<'connecting' | 'online' | 'offline'>('connecting')
   let socket: WebSocket | null = null
   let reconnectTimer: number | null = null
+  let reloadTimer: number | null = null
   let reconnectDelay = 3000
   let disposed = false
+
+  function handle(data: LiveMessage) {
+    if (data.type === 'data_changed' && handlers.onDataChanged && reloadTimer === null) {
+      reloadTimer = window.setTimeout(() => {
+        reloadTimer = null
+        handlers.onDataChanged?.()
+      }, RELOAD_DELAY)
+    } else if (data.type === 'activity' && data.text && handlers.onActivity) {
+      handlers.onActivity({
+        id: --liveActivitySeq,
+        event_type: data.eventType || '',
+        event_time: data.at || new Date().toISOString(),
+        user_id: data.userId || 0,
+        nickname: data.nickname || '',
+        text: data.text,
+        data: {}
+      })
+    }
+  }
 
   function connect() {
     if (disposed) return
     const token = getToken()
-    if (!token) return
+    if (!token) {
+      wsStatus.value = 'offline'
+      return
+    }
     wsStatus.value = 'connecting'
     const proto = location.protocol === 'https:' ? 'wss' : 'ws'
     const ws = new WebSocket(`${proto}://${location.host}/api/ws/updates?token=${encodeURIComponent(token)}`)
@@ -32,12 +66,13 @@ export function useLiveUpdates(onMessage: (data: LiveMessage) => void) {
       reconnectDelay = 3000
     }
     ws.onmessage = (event) => {
+      let data: unknown
       try {
-        const data = JSON.parse(String(event.data))
-        if (data && typeof data.type === 'string') onMessage(data as LiveMessage)
+        data = JSON.parse(String(event.data))
       } catch {
-        // 非 JSON 消息（心跳等）忽略
+        return // 非 JSON 消息（心跳等）忽略
       }
+      if (data && typeof (data as LiveMessage).type === 'string') handle(data as LiveMessage)
     }
     ws.onclose = () => {
       socket = null
@@ -59,6 +94,7 @@ export function useLiveUpdates(onMessage: (data: LiveMessage) => void) {
   function dispose() {
     disposed = true
     if (reconnectTimer !== null) window.clearTimeout(reconnectTimer)
+    if (reloadTimer !== null) window.clearTimeout(reloadTimer)
     if (socket) {
       socket.onclose = null
       socket.close()
@@ -69,21 +105,4 @@ export function useLiveUpdates(onMessage: (data: LiveMessage) => void) {
   onBeforeUnmount(dispose)
 
   return { wsStatus }
-}
-
-/** 后端时间为 UTC naive ISO，按本地时区格式化（与小程序 util.formatTime 同约定） */
-export function formatTime(value: string | null | undefined) {
-  if (!value) return ''
-  const source = /Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`
-  return new Intl.DateTimeFormat('zh-CN', {
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }).format(new Date(source))
-}
-
-export function formatNumber(value: number) {
-  return new Intl.NumberFormat('zh-CN').format(value)
 }

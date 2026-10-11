@@ -155,7 +155,7 @@ def list_questions(
     """
     query = db.query(Question)
     if keyword.strip():
-        query = query.filter(Question.question.contains(keyword.strip()))
+        query = query.filter(Question.question.contains(keyword.strip(), autoescape=True))
     if qtype:
         query = query.filter(Question.type == qtype)
     if category:

@@ -349,19 +349,6 @@ export function fetchMe() {
   return request.get<MeResult>('/admin/me')
 }
 
-// 菜单目录（与 docker/init/010_admin_identity.sql 种子一致）：角色编辑勾选与菜单名展示
-export const MENU_CATALOG: MenuItem[] = [
-  { code: 'dashboard', name: '驾驶舱' },
-  { code: 'screen', name: '数据大屏' },
-  { code: 'rankings', name: '排名洞察' },
-  { code: 'route_nodes', name: '路线点位' },
-  { code: 'questions', name: '题库维护' },
-  { code: 'quotes', name: '每日寄语' },
-  { code: 'orgs', name: '组织架构' },
-  { code: 'access', name: '人员授权' },
-  { code: 'audit', name: '审计日志' }
-]
-
 // ---------------- 人员授权 / 角色管理 / 审计日志 ----------------
 export interface UserRoleItem {
   id: number
@@ -471,8 +458,8 @@ export function fetchAuditLogs(params: AuditQuery) {
 }
 
 // ---------------- 路线节点 ----------------
-export function fetchRouteNodes() {
-  return request.get<RouteNodeListResult>('/admin/route-nodes')
+export function fetchRouteNodes(silent = false) {
+  return request.get<RouteNodeListResult>('/admin/route-nodes', { silent })
 }
 
 export function createRouteNode(data: RouteNodeUpsert) {
@@ -545,8 +532,10 @@ export function confirmQuestionImport(previewToken: string) {
 }
 
 // ---------------- 每日寄语 ----------------
-export function fetchQuotes(page: number, pageSize: number) {
-  return request.get<QuoteListResult>('/admin/quotes', { params: { page, page_size: pageSize } })
+export function fetchQuotes(page: number, pageSize: number, keyword = '') {
+  return request.get<QuoteListResult>('/admin/quotes', {
+    params: { page, page_size: pageSize, keyword: keyword || undefined }
+  })
 }
 
 export function createQuote(data: QuoteUpsert) {
@@ -562,8 +551,8 @@ export function deleteQuote(id: number) {
 }
 
 // ---------------- 组织架构 ----------------
-export function fetchOrgTree() {
-  return request.get<OrgTreeResult>('/admin/orgs')
+export function fetchOrgTree(silent = false) {
+  return request.get<OrgTreeResult>('/admin/orgs', { silent })
 }
 
 export function createOrg(data: OrgUpsert) {

@@ -4,7 +4,6 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
-  MENU_CATALOG,
   createRole,
   deleteRole,
   fetchAdminUsers,
@@ -15,10 +14,9 @@ import {
   updateRole
 } from '../api/admin'
 import type { AdminUserItem, OrgNode, RoleItem } from '../api/admin'
+import { MENUS } from '../router/menus'
 
-const MENU_NAME: Record<string, string> = Object.fromEntries(
-  MENU_CATALOG.map((m) => [m.code, m.name])
-)
+const MENU_NAME: Record<string, string> = Object.fromEntries(MENUS.map((m) => [m.code, m.title]))
 
 const activeTab = ref('users')
 
@@ -34,11 +32,18 @@ const hasAccess = ref<boolean | null>(null)
 const orgOptions = ref<{ id: number; name: string }[]>([])
 const roles = ref<RoleItem[]>([])
 
-function flattenOrg(nodes: OrgNode[]): { id: number; name: string }[] {
-  return nodes.flatMap((n) => [{ id: n.id, name: n.name }, ...flattenOrg(n.children || [])])
+// 下拉展示完整路径（如「总部 / 一部 / 一班」），同名下级组织可区分
+function flattenOrg(nodes: OrgNode[], prefix = ''): { id: number; name: string }[] {
+  return nodes.flatMap((n) => {
+    const name = prefix ? `${prefix} / ${n.name}` : n.name
+    return [{ id: n.id, name }, ...flattenOrg(n.children || [], name)]
+  })
 }
 
+// 只采纳最后一次请求，避免快速翻页/筛选时旧响应覆盖新结果
+let requestSeq = 0
 async function loadUsers() {
+  const seq = ++requestSeq
   loading.value = true
   try {
     const { data } = await fetchAdminUsers({
@@ -48,10 +53,11 @@ async function loadUsers() {
       org_id: orgId.value ?? undefined,
       has_access: hasAccess.value ?? undefined
     })
+    if (seq !== requestSeq) return
     users.value = data.items
     total.value = data.total
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
@@ -91,20 +97,27 @@ async function saveGrant() {
   }
 }
 
-async function toggleRoleEnabled(user: AdminUserItem | null, role: { id: number; name: string }, enabled: unknown) {
-  if (!user) return
+const togglingRoleId = ref<number | null>(null)
+
+async function toggleRoleEnabled(role: { id: number; name: string }, enabled: unknown) {
+  const user = grantUser.value
+  if (!user || togglingRoleId.value !== null) return
   const on = !!enabled
-  await setUserRoleEnabled(user.id, role.id, on)
+  togglingRoleId.value = role.id
+  try {
+    await setUserRoleEnabled(user.id, role.id, on)
+  } finally {
+    togglingRoleId.value = null
+  }
   ElMessage.success(on ? `已启用「${role.name}」` : `已禁用「${role.name}」（即时生效）`)
-  await loadUsers()
+  // 弹窗内本地同步开关状态，不重置尚未保存的勾选；列表重拉以刷新「后台权限」列
   if (grantUser.value?.id === user.id) {
-    const fresh = users.value.find((u) => u.id === user.id)
-    if (fresh) {
-      grantUser.value = fresh
-      // 保持「已授权」勾选（禁用仅影响开关状态，不撤销授权）
-      checkedRoleIds.value = fresh.roles.map((r) => r.id)
+    grantUser.value = {
+      ...user,
+      roles: user.roles.map((r) => (r.id === role.id ? { ...r, enabled: on } : r))
     }
   }
+  loadUsers()
 }
 
 function onGrantCheck(role: RoleItem, checked: unknown) {
@@ -179,10 +192,11 @@ onMounted(async () => {
   loadUsers()
   loadRoles()
   try {
-    const { data } = await fetchOrgTree()
+    // 无组织架构菜单权限时隐藏组织筛选，不弹错误
+    const { data } = await fetchOrgTree(true)
     orgOptions.value = flattenOrg(data.nodes)
   } catch {
-    // 无组织架构菜单权限时隐藏组织筛选
+    orgOptions.value = []
   }
 })
 </script>
@@ -202,7 +216,14 @@ onMounted(async () => {
             @keyup.enter="handleSearch"
             @clear="handleSearch"
           />
-          <el-select v-if="orgOptions.length" v-model="orgId" placeholder="组织筛选" clearable style="width: 180px">
+          <el-select
+            v-if="orgOptions.length"
+            v-model="orgId"
+            placeholder="组织筛选"
+            clearable
+            filterable
+            style="width: 240px"
+          >
             <el-option v-for="o in orgOptions" :key="o.id" :label="o.name" :value="o.id" />
           </el-select>
           <el-select v-model="hasAccess" placeholder="后台权限" clearable style="width: 140px">
@@ -283,9 +304,10 @@ onMounted(async () => {
             </el-checkbox>
             <el-switch
               v-if="grantUser && checkedRoleIds.includes(role.id)"
-              :model-value="grantUser?.roles.find((r) => r.id === role.id)?.enabled ?? true"
-              :disabled="!(grantUser?.roles.some((r) => r.id === role.id) ?? false)"
-              @change="toggleRoleEnabled(grantUser, role, $event)"
+              :model-value="grantUser.roles.find((r) => r.id === role.id)?.enabled ?? true"
+              :loading="togglingRoleId === role.id"
+              :disabled="togglingRoleId !== null || !grantUser.roles.some((r) => r.id === role.id)"
+              @change="toggleRoleEnabled(role, $event)"
             />
           </div>
           <template #footer>
@@ -339,7 +361,7 @@ onMounted(async () => {
             </el-form-item>
             <el-form-item label="菜单权限">
               <el-checkbox-group v-model="roleForm.menus">
-                <el-checkbox v-for="m in MENU_CATALOG" :key="m.code" :value="m.code">{{ m.name }}</el-checkbox>
+                <el-checkbox v-for="m in MENUS" :key="m.code" :value="m.code">{{ m.title }}</el-checkbox>
               </el-checkbox-group>
             </el-form-item>
           </el-form>

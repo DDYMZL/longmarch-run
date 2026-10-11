@@ -28,9 +28,8 @@ export function hasMenu(code: string): boolean {
   return getIsSuper() || getMenus().includes(code)
 }
 
-export function setAuth(token: string, username: string): void {
+export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token)
-  localStorage.setItem(USERNAME_KEY, username)
 }
 
 // 登录成功后写入用户档案（超管标记与菜单码集合），菜单渲染与路由守卫据此判断

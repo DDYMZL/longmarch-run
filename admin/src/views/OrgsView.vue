@@ -6,12 +6,26 @@ import { ElMessage, ElMessageBox, ElNotification } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { createOrg, deleteOrg, fetchOrgTree, fetchOrgUsers, syncOrgs, updateOrg } from '../api/admin'
 import type { OrgNode, OrgUserItem } from '../api/admin'
+import { formatDateTime } from '../utils/format'
 
 const loading = ref(false)
 const syncing = ref(false)
 const total = ref(0)
 const treeData = ref<OrgNode[]>([])
 const lastSyncSource = ref('')
+// 节点过多时只展开顶级，避免整棵树一次性渲染全部行
+const EXPAND_ALL_LIMIT = 200
+const expandKeys = computed(() => {
+  const keys: string[] = []
+  const walk = (nodes: OrgNode[], deep: boolean) => {
+    for (const n of nodes) {
+      keys.push(String(n.id))
+      if (deep) walk(n.children || [], deep)
+    }
+  }
+  walk(treeData.value, total.value <= EXPAND_ALL_LIMIT)
+  return keys
+})
 
 async function loadTree() {
   loading.value = true
@@ -174,8 +188,12 @@ async function openMemberDialog(row: OrgNode, scope: 'direct' | 'all') {
   await loadMembers()
 }
 
+// 快速切换组织/翻页时只采纳最后一次请求
+let memberSeq = 0
+
 async function loadMembers() {
   if (memberOrgId.value === null) return
+  const seq = ++memberSeq
   memberLoading.value = true
   try {
     const { data } = await fetchOrgUsers(
@@ -184,28 +202,16 @@ async function loadMembers() {
       memberPage.value,
       memberPageSize
     )
+    if (seq !== memberSeq) return
     memberTotal.value = data.total
     memberItems.value = data.items
   } finally {
-    memberLoading.value = false
+    if (seq === memberSeq) memberLoading.value = false
   }
 }
 
 function memberInitial(name: string) {
   return name.trim().slice(0, 1) || '员'
-}
-
-function memberTime(value: string | null) {
-  if (!value) return '—'
-  const source = /Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`
-  return new Intl.DateTimeFormat('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  }).format(new Date(source))
 }
 
 onMounted(loadTree)
@@ -240,7 +246,7 @@ onMounted(loadTree)
       :data="treeData"
       row-key="id"
       border
-      default-expand-all
+      :expand-row-keys="expandKeys"
       :tree-props="{ children: 'children' }"
     >
       <el-table-column prop="name" label="组织名称" min-width="260" />
@@ -326,7 +332,7 @@ onMounted(loadTree)
         <el-table-column prop="org_name" label="所属组织" min-width="200" show-overflow-tooltip />
         <el-table-column label="注册时间" width="165" align="center">
           <template #default="{ row }">
-            {{ memberTime(row.created_at) }}
+            {{ formatDateTime(row.created_at) }}
           </template>
         </el-table-column>
         <template #empty>

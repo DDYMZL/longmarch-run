@@ -8,6 +8,7 @@ import {
   Document,
   Download,
   EditPen,
+  FolderOpened,
   Iphone,
   Location,
   Lock,
@@ -21,6 +22,7 @@ import {
   Search,
   Setting,
   TrendCharts,
+  Upload,
   User,
   UserFilled
 } from '@element-plus/icons-vue'
@@ -40,6 +42,7 @@ const icons = {
   Document,
   Download,
   EditPen,
+  FolderOpened,
   Iphone,
   Location,
   Lock,
@@ -53,6 +56,7 @@ const icons = {
   Search,
   Setting,
   TrendCharts,
+  Upload,
   User,
   UserFilled
 }

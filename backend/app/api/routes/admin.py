@@ -470,9 +470,10 @@ def delete_question(question_id: int, db: Session = Depends(get_db)):
 def list_quotes(
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    keyword: str = Query("", max_length=64, description="按内容/出处模糊搜索"),
     db: Session = Depends(get_db),
 ):
-    total, items = quote_service.list_quotes(db, page, page_size)
+    total, items = quote_service.list_quotes(db, page, page_size, keyword)
     return {"total": total, "items": items}
 
 

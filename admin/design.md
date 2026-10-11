@@ -24,9 +24,11 @@ src/
 │   ├── request.ts        # axios 实例：baseURL /api，注入 token，401 跳登录
 │   └── admin.ts          # 全部管理端接口封装 + 类型（与后端 Admin* 模型一一对应）
 ├── store/auth.ts         # 登录态读写（localStorage）
-├── router/index.ts       # 路由 + 登录守卫；/login 与 /screen 为顶层全屏路由，其余走布局子路由
+├── router/index.ts       # 路由 + 登录守卫 + 菜单权限守卫；/login 与 /screen 为顶层全屏路由，其余走布局子路由
+├── router/menus.ts       # 菜单单一来源（code/path/title/icon，与 010_admin_identity.sql 种子一致），侧边栏/守卫/角色勾选共用
 ├── layout/AdminLayout.vue # 深色侧边导航 + 顶栏 + <router-view>
-├── utils/liveUpdates.ts  # useLiveUpdates 组合式函数（WS 连接/指数退避重连）+ formatTime/formatNumber
+├── utils/liveUpdates.ts  # useLiveUpdates 组合式函数（WS 连接/指数退避重连/data_changed 800ms 防抖）
+├── utils/format.ts       # formatTime/formatDateTime/formatNumber（模块级复用 Intl 格式化器）
 └── views/ + pages/       # 各业务页面
 ```
 
@@ -58,16 +60,20 @@ src/
 
 ```
 WS /api/ws/updates?token=<admin token>
-  ├─ message {type: 'data_changed'} → 800ms 防抖重新拉取当前页数据
-  ├─ message {type: 'activity'}     → 驾驶舱/大屏实时动态流 prepend（截断 20 条）
-  └─ onclose → 指数退避重连（3s → ×2 → 上限 15s），页面卸载时 dispose
+  ├─ message {type: 'data_changed'} → composable 内 800ms 防抖后回调 onDataChanged（页面只传重载函数）
+  ├─ message {type: 'activity'}     → 转为 ActivityItem 回调 onActivity，驾驶舱/大屏 prepend（截断 20 条）
+  └─ onclose → 指数退避重连（3s → ×2 → 上限 15s），页面卸载时 dispose（同时清理防抖定时器）
 ```
 
-`RankingsView` 内嵌同款 WS 逻辑（早于 composable 抽取），新页面统一用 `useLiveUpdates`。
+驾驶舱、大屏、排名洞察统一使用 `useLiveUpdates`，页面不再各自维护防抖定时器。
 
 ### 4.3 时间约定
 
-后端返回 naive ISO 时间串视为 **UTC**；`formatTime` 在无时区后缀时补 `Z` 再按 zh-CN 本地时区格式化（与小程序 `util.formatTime` 同约定）。
+后端返回 naive ISO 时间串视为 **UTC**；`utils/format.ts` 在无时区后缀时补 `Z` 再按 zh-CN 本地时区格式化（与小程序 `util.formatTime` 同约定）；审计日志按日期筛选时后端把本地日期换算为 UTC 区间。
+
+### 4.4 列表加载约定
+
+分页/筛选列表（题库、寄语、人员授权、组织成员、排名）使用请求序号守卫，只采纳最后一次请求的结果；关键字搜索走服务端并防抖（LIKE 通配符由后端转义）；筛选变化重置页码与翻页合并为一次请求。
 
 ## 5. 关键设计决策
 

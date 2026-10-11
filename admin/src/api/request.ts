@@ -33,12 +33,14 @@ request.interceptors.response.use(
     const silent = !!error.config?.silent
     const onLoginPage = router.currentRoute.value.path === '/login'
     if (status === 401) {
+      // 并发请求同时 401 时只有首个（清除前仍持有令牌）提示，避免连弹多条
+      const hadToken = !!getToken()
       clearAuth()
       // 登录页：直接提示账号密码错误；其他页：令牌失效，提示并跳转登录
-      if (!silent) {
-        ElMessage.error(onLoginPage ? detail || '用户名或密码错误' : '登录已过期，请重新登录')
-      }
-      if (!onLoginPage) {
+      if (onLoginPage) {
+        if (!silent) ElMessage.error(detail || '用户名或密码错误')
+      } else {
+        if (hadToken && !silent) ElMessage.error('登录已过期，请重新登录')
         router.push('/login')
       }
     } else if (!silent) {

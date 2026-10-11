@@ -3,6 +3,7 @@
 import { onMounted, ref } from 'vue'
 import { fetchAuditLogs } from '../api/admin'
 import type { AuditLogItem } from '../api/admin'
+import { formatDateTime } from '../utils/format'
 
 const loading = ref(false)
 const logs = ref<AuditLogItem[]>([])
@@ -47,10 +48,6 @@ function handlePageChange(next: number) {
   loadLogs()
 }
 
-function formatTime(value: string): string {
-  return value ? value.replace('T', ' ').slice(0, 19) : '—'
-}
-
 function actionTagType(name: string): 'success' | 'warning' | 'danger' | 'info' {
   if (name.startsWith('access.')) return 'danger'
   if (name.includes('identity')) return 'warning'
@@ -93,7 +90,7 @@ onMounted(loadLogs)
     <el-table v-loading="loading" :data="logs" border stripe row-key="id">
       <el-table-column prop="id" label="ID" width="80" align="center" />
       <el-table-column label="时间" width="170">
-        <template #default="{ row }">{{ formatTime(row.created_at) }}</template>
+        <template #default="{ row }">{{ formatDateTime(row.created_at, '—', true) }}</template>
       </el-table-column>
       <el-table-column label="操作人" min-width="140">
         <template #default="{ row }">

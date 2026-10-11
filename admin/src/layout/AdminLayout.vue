@@ -5,6 +5,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessageBox } from 'element-plus'
 import { clearAuth, getIsSuper, getUsername, hasMenu } from '../store/auth'
 import { fetchOnboardingQr, type OnboardingQrResult } from '../api/admin'
+import { MENUS } from '../router/menus'
 
 const route = useRoute()
 const router = useRouter()
@@ -38,19 +39,7 @@ function downloadOnboardingQr() {
   link.click()
 }
 
-const MENU_ITEMS = [
-  { path: '/dashboard', code: 'dashboard', title: '驾驶舱', icon: 'Odometer' },
-  { path: '/screen', code: 'screen', title: '数据大屏', icon: 'Monitor' },
-  { path: '/rankings', code: 'rankings', title: '排名洞察', icon: 'DataAnalysis' },
-  { path: '/route-nodes', code: 'route_nodes', title: '路线点位', icon: 'Location' },
-  { path: '/questions', code: 'questions', title: '题库维护', icon: 'EditPen' },
-  { path: '/quotes', code: 'quotes', title: '每日寄语', icon: 'ChatLineSquare' },
-  { path: '/orgs', code: 'orgs', title: '组织架构', icon: 'OfficeBuilding' },
-  { path: '/access', code: 'access', title: '人员授权', icon: 'Setting' },
-  { path: '/audit', code: 'audit', title: '审计日志', icon: 'Document' }
-]
-
-const visibleMenus = computed(() => MENU_ITEMS.filter((item) => hasMenu(item.code)))
+const visibleMenus = computed(() => MENUS.filter((item) => hasMenu(item.code)))
 
 async function handleLogout() {
   await ElMessageBox.confirm('确定退出登录吗？', '提示', { type: 'warning' })

@@ -15,7 +15,8 @@ import {
   type DashboardResult,
   type TrendResult
 } from '../api/admin'
-import { formatNumber, formatTime, useLiveUpdates } from '../utils/liveUpdates'
+import { useLiveUpdates } from '../utils/liveUpdates'
+import { formatNumber, formatTime } from '../utils/format'
 
 echarts.use([BarChart, LineChart, GridComponent, LegendComponent, TooltipComponent, CanvasRenderer])
 
@@ -42,13 +43,19 @@ async function loadDashboard() {
   dashboard.value = (await fetchDashboard()).data
 }
 
+// 快速切换 7/30 天时只采纳最后一次请求，避免旧响应覆盖新选择
+let trendSeq = 0
+
 async function loadTrend() {
+  const seq = ++trendSeq
   trendLoading.value = true
   try {
-    trend.value = (await fetchDashboardTrend(days.value)).data
+    const data = (await fetchDashboardTrend(days.value)).data
+    if (seq !== trendSeq) return
+    trend.value = data
     renderChart()
   } finally {
-    trendLoading.value = false
+    if (seq === trendSeq) trendLoading.value = false
   }
 }
 
@@ -130,33 +137,14 @@ function resizeChart() {
 }
 
 // ---------------- 实时推送 ----------------
-let reloadTimer: number | null = null
-
-function scheduleReload() {
-  if (reloadTimer !== null) return
-  reloadTimer = window.setTimeout(() => {
-    reloadTimer = null
+const { wsStatus } = useLiveUpdates({
+  onDataChanged: () => {
     loadDashboard()
     loadTrend()
-  }, 800)
-}
-
-const { wsStatus } = useLiveUpdates((data) => {
-  if (data.type === 'data_changed') scheduleReload()
-  if (data.type === 'activity' && data.text) {
-    // 实时动态：新事件直接插入顶部，无需整表刷新
-    activities.value = [
-      {
-        id: Date.now(),
-        event_type: data.eventType || '',
-        event_time: data.at || '',
-        user_id: data.userId || 0,
-        nickname: data.nickname || '',
-        text: data.text,
-        data: {}
-      },
-      ...activities.value
-    ].slice(0, 20)
+  },
+  // 实时动态：新事件直接插入顶部，无需整表刷新
+  onActivity: (item) => {
+    activities.value = [item, ...activities.value].slice(0, 20)
   }
 })
 
@@ -174,7 +162,6 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   window.removeEventListener('resize', resizeChart)
-  if (reloadTimer !== null) window.clearTimeout(reloadTimer)
   chart.value?.dispose()
 })
 </script>

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // 题库维护：列表（服务端分页 + 类型/分类/关键字筛选）、新增、编辑、删除、Excel 批量导入
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules, UploadFile } from 'element-plus'
 import {
@@ -13,6 +13,7 @@ import {
   updateQuestion
 } from '../api/admin'
 import type { ImportPreviewResult, Question, QuestionOption } from '../api/admin'
+import { csvCell, saveFile, today } from '../utils/download'
 
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F']
 const CATEGORIES = [
@@ -30,37 +31,48 @@ const pageSize = ref(20)
 const filterType = ref('')
 const filterCategory = ref('')
 const keyword = ref('')
+const appliedKeyword = ref('')
 
+// 只采纳最后一次请求，避免快速翻页/筛选时旧响应覆盖新结果
+let requestSeq = 0
 async function loadQuestions() {
+  const seq = ++requestSeq
   loading.value = true
   try {
     const { data } = await fetchQuestions({
       page: page.value,
       page_size: pageSize.value,
-      keyword: keyword.value.trim() || undefined,
+      keyword: appliedKeyword.value.trim() || undefined,
       qtype: filterType.value || undefined,
       category: filterCategory.value || undefined
     })
+    if (seq !== requestSeq) return
+    // 删除末页最后一题等导致当前页越界时回到最后一页
+    const lastPage = Math.max(1, Math.ceil(data.total / pageSize.value))
+    if (!data.items.length && page.value > lastPage) {
+      page.value = lastPage
+      return
+    }
     questions.value = data.items
     total.value = data.total
   } finally {
-    loading.value = false
+    if (seq === requestSeq) loading.value = false
   }
 }
 
-// 筛选条件变化回到第一页重新查询
-watch([filterType, filterCategory], () => {
-  page.value = 1
-  loadQuestions()
-})
-
-let searchTimer: ReturnType<typeof setTimeout> | null = null
-watch(keyword, () => {
-  if (searchTimer) clearTimeout(searchTimer)
-  searchTimer = setTimeout(() => {
-    page.value = 1
-    loadQuestions()
+let searchTimer: number | null = null
+watch(keyword, (value) => {
+  if (searchTimer !== null) window.clearTimeout(searchTimer)
+  searchTimer = window.setTimeout(() => {
+    searchTimer = null
+    appliedKeyword.value = value
   }, 400)
+})
+// 筛选条件/每页条数变化回到第一页；与页码变化合并为一次请求
+watch([pageSize, filterType, filterCategory, appliedKeyword], () => { page.value = 1 })
+watch([page, pageSize, filterType, filterCategory, appliedKeyword], loadQuestions, { immediate: true })
+onBeforeUnmount(() => {
+  if (searchTimer !== null) window.clearTimeout(searchTimer)
 })
 
 // ---------------- 新增 / 编辑弹窗 ----------------
@@ -239,8 +251,9 @@ async function handleConfirmImport() {
     const { data } = await confirmQuestionImport(preview.value.preview_token)
     ElMessage.success(`成功导入 ${data.imported} 道题目`)
     importVisible.value = false
-    page.value = 1
-    await loadQuestions()
+    // 回到第一页；已在第一页时页码不变，需手动刷新
+    if (page.value === 1) await loadQuestions()
+    else page.value = 1
   } finally {
     confirming.value = false
   }
@@ -248,19 +261,7 @@ async function handleConfirmImport() {
 
 async function handleDownloadTemplate() {
   const { data } = await downloadQuestionImportTemplate()
-  const url = URL.createObjectURL(new Blob([data]))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = '长征步迹_题库导入模板.xlsx'
-  link.click()
-  URL.revokeObjectURL(url)
-}
-
-// CSV 单元格防公式注入：以 = + - @ 开头的文本加前导单引号
-function csvCell(value: unknown) {
-  let text = value == null ? '' : String(value)
-  if (/^[=+\-@]/.test(text)) text = `'${text}`
-  return `"${text.replace(/"/g, '""')}"`
+  saveFile(data, '长征步迹_题库导入模板.xlsx')
 }
 
 function downloadErrorReport() {
@@ -268,15 +269,8 @@ function downloadErrorReport() {
   const header = ['Excel行号', '出错字段', '错误原因']
   const rows = preview.value.errors.map((e) => [e.row, e.field || '整行', e.reason])
   const content = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')
-  const url = URL.createObjectURL(new Blob([`﻿${content}`], { type: 'text/csv;charset=utf-8' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `题库导入错误报告_${new Date().toISOString().slice(0, 10)}.csv`
-  link.click()
-  URL.revokeObjectURL(url)
+  saveFile(`\uFEFF${content}`, `题库导入错误报告_${today()}.csv`, 'text/csv;charset=utf-8')
 }
-
-onMounted(loadQuestions)
 </script>
 
 <template>
@@ -345,8 +339,6 @@ onMounted(loadQuestions)
       :page-sizes="[10, 20, 50, 100]"
       layout="total, sizes, prev, pager, next"
       class="pagination"
-      @current-change="loadQuestions"
-      @size-change="page = 1; loadQuestions()"
     />
 
     <el-dialog v-model="importVisible" title="批量导入题目" width="720px" destroy-on-close>
