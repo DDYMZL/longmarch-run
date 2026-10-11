@@ -1137,11 +1137,23 @@ class AdminRankItemOut(BaseModel):
         return value or ""
 
 
+class AdminRankOrgOption(BaseModel):
+    id: int
+    name: str
+
+
 class AdminRankListOut(BaseModel):
+    """排名洞察：total/total_steps/completed_users/avg_progress 为全员口径，
+    match_total 为筛选命中人数，items 仅为当前页。"""
+
     total: int = 0
     total_steps: int = 0
     completed_users: int = 0
+    avg_progress: int = 0
+    match_total: int = 0
+    org_options: List[AdminRankOrgOption] = []
     route_nodes: List[AdminRankNodeOut] = []
+    podium: List[AdminRankItemOut] = []
     items: List[AdminRankItemOut] = []
 
 

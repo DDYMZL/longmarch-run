@@ -57,6 +57,18 @@ def admin_login():
     return create_admin_token("admin")
 
 
+def fetch_all_rankings(token):
+    """排名接口已服务端分页：逐页拉取拼出全员 items（口径对照需要全量）。"""
+    page, items = 1, []
+    while True:
+        _, body = http("/admin/rankings?page=%d&page_size=200" % page, token)
+        items += body["items"]
+        if len(items) >= body["match_total"] or not body["items"]:
+            body["items"] = items
+            return body
+        page += 1
+
+
 def build_full_names(tree_nodes):
     """由组织树重建 {id: 全路径名}（与 get_full_name_map 口径对照）。"""
     names = {}
@@ -76,7 +88,7 @@ def main():
     token = admin_login()
 
     _, dash = http("/admin/dashboard", token)
-    _, rankings = http("/admin/rankings", token)
+    rankings = fetch_all_rankings(token)
     _, orgs = http("/admin/orgs", token)
 
     # ---------- 1) dashboard 二分计数 == rankings 暴力计数 ----------
@@ -137,6 +149,28 @@ def main():
            all(k in sc for k in ("metrics", "routeOverview", "trend", "activities"))
            or all(k in sc for k in ("metrics", "route_overview", "trend", "activities")),
            f"keys={sorted(sc.keys())}")
+
+    # ---------- 6) 排名服务端分页/筛选/导出 ----------
+    word = "1"
+    expect = [it for it in items if word in it["nickname"].lower() or word in str(it["user_id"])]
+    _, page2 = http("/admin/rankings?page=2&page_size=5&keyword=%s" % word, token)
+    record("P6", "rankings 关键字筛选 + 第 2 页与全量暴力过滤一致，名次为全员口径",
+           page2["match_total"] == len(expect) and page2["items"] == expect[5:10]
+           and page2["podium"] == items[:3] and page2["total"] == len(items),
+           f"match_total={page2['match_total']} expect={len(expect)}")
+    progress = [round(it["completed_nodes"] / it["node_count"] * 100 + 1e-9) if it["node_count"] else 0 for it in items]
+    record("P7", "rankings 全员指标（总步数/完成全程/平均进度）与全量计算一致",
+           page2["total_steps"] == sum(it["total_steps"] for it in items)
+           and page2["completed_users"] == sum(1 for it in items if it["node_count"] and it["completed_nodes"] == it["node_count"])
+           and abs(page2["avg_progress"] - sum(progress) / max(len(items), 1)) <= 1,
+           f"steps={page2['total_steps']} completed={page2['completed_users']} avg={page2['avg_progress']}")
+    req = urllib.request.Request(BASE + "/admin/rankings/export?keyword=" + word, headers={"Authorization": "Bearer " + token})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        raw = resp.read().decode("utf-8")
+    lines = raw.lstrip("\ufeff").splitlines()
+    record("P8", "rankings 流式导出：BOM + 表头 + 行数等于筛选命中数",
+           raw.startswith("\ufeff") and lines[0].startswith('"排名"') and len(lines) - 1 == len(expect),
+           f"rows={len(lines) - 1} expect={len(expect)}")
 
     failed = [r for r in RESULTS if not r["ok"]]
     print(f"\n== S7 冒烟：{len(RESULTS) - len(failed)}/{len(RESULTS)} 通过 ==")

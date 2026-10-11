@@ -1,38 +1,56 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
-import request from '../api/request'
-import { fetchUserOverview, type UserOverview } from '../api/admin'
-import { formatNumber, useLiveUpdates } from '../utils/liveUpdates'
+import { exportRankings, fetchRankings, fetchUserOverview, type RankFilter, type RankItem, type RankResult, type UserOverview } from '../api/admin'
+import { formatNumber as number, useLiveUpdates } from '../utils/liveUpdates'
+import { saveFile, today } from '../utils/download'
 
-interface RankNode { id: number; name: string; target_steps: number; reached: boolean; reached_at: string | null }
-interface RankItem { rank: number; user_id: number; nickname: string; avatar: string; org_name: string; original_nickname: string; nickname_changed_at: string | null; total_steps: number; completed_nodes: number; node_count: number; last_reached_at: string | null; nodes: RankNode[] }
-interface RankResult { total: number; total_steps: number; completed_users: number; route_nodes: RankNode[]; items: RankItem[] }
+const TIME_FORMAT = new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false })
 
 const loading = ref(false)
+const exporting = ref(false)
 const keyword = ref('')
-const org = ref('')
+const appliedKeyword = ref('')
+const orgId = ref<number | null>(null)
 const onlyChanged = ref(false)
-const state = ref<RankResult>({ total: 0, total_steps: 0, completed_users: 0, route_nodes: [], items: [] })
-const organizations = computed(() => [...new Set(state.value.items.map((item) => item.org_name).filter(Boolean))].sort())
-const items = computed(() => {
-  const word = keyword.value.trim().toLowerCase()
-  return state.value.items.filter((item) => (!word || item.nickname.toLowerCase().includes(word) || String(item.user_id).includes(word)) && (!org.value || item.org_name === org.value) && (!onlyChanged.value || !!item.nickname_changed_at))
-})
-const podium = computed(() => state.value.items.slice(0, 3))
+const state = ref<RankResult>({ total: 0, total_steps: 0, completed_users: 0, avg_progress: 0, match_total: 0, org_options: [], route_nodes: [], podium: [], items: [] })
 const averageSteps = computed(() => state.value.total ? Math.round(state.value.total_steps / state.value.total) : 0)
-const averageProgress = computed(() => state.value.items.length ? Math.round(state.value.items.reduce((sum, item) => sum + progress(item), 0) / state.value.items.length) : 0)
 
-// 分页渲染：人员基数大时整表一次渲染会卡死页面，仅渲染当前页（筛选/导出仍基于全量 items）
+// 服务端分页与筛选：人员基数大时只拉取、渲染当前页，指标与领奖台为全员口径
 const page = ref(1)
 const pageSize = ref(50)
-const pagedItems = computed(() => items.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
-watch([keyword, org, onlyChanged], () => { page.value = 1 })
+const filter = computed<RankFilter>(() => ({ keyword: appliedKeyword.value.trim(), org_id: orgId.value, only_changed: onlyChanged.value }))
 
+let requestSeq = 0
 async function load() {
+  const seq = ++requestSeq
   loading.value = true
-  try { state.value = (await request.get<RankResult>('/admin/rankings')).data } finally { loading.value = false }
+  try {
+    const { data } = await fetchRankings(page.value, pageSize.value, filter.value)
+    if (seq !== requestSeq) return
+    // 数据变少导致当前页越界时回到最后一页
+    const lastPage = Math.max(1, Math.ceil(data.match_total / pageSize.value))
+    if (!data.items.length && page.value > lastPage) {
+      page.value = lastPage
+      return
+    }
+    state.value = data
+  } finally {
+    if (seq === requestSeq) loading.value = false
+  }
 }
+
+let keywordTimer: number | null = null
+watch(keyword, (value) => {
+  if (keywordTimer !== null) window.clearTimeout(keywordTimer)
+  keywordTimer = window.setTimeout(() => {
+    keywordTimer = null
+    appliedKeyword.value = value
+  }, 300)
+})
+watch([appliedKeyword, orgId, onlyChanged], () => { page.value = 1 })
+// 筛选变化与页码复位在同一轮刷新内合并，只触发一次请求
+watch([page, pageSize, filter], load, { immediate: true })
 
 // ---------------- 实时推送（复用 useLiveUpdates：token 鉴权、指数退避重连、卸载清理） ----------------
 let reloadTimer: number | null = null
@@ -51,35 +69,27 @@ const { wsStatus } = useLiveUpdates((data) => {
 
 onBeforeUnmount(() => {
   if (reloadTimer !== null) window.clearTimeout(reloadTimer)
+  if (keywordTimer !== null) window.clearTimeout(keywordTimer)
 })
 
-function number(value: number) { return formatNumber(value) }
 function progress(item: RankItem) { return item.node_count ? Math.round(item.completed_nodes / item.node_count * 100) : 0 }
 function initial(name: string) { return name.trim().slice(0, 1) || '员' }
 function time(value: string | null) {
   if (!value) return '尚未到达'
-  const source = /Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`
-  return new Intl.DateTimeFormat('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(source))
+  return TIME_FORMAT.format(new Date(/Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`))
 }
-function csvCell(value: unknown) {
-  let text = value == null ? '' : String(value)
-  if (/^[=+\-@]/.test(text)) text = `'${text}`
-  return `"${text.replace(/"/g, '""')}"`
+async function exportData() {
+  if (!state.value.match_total) return ElMessage.warning('当前没有可导出的排名数据')
+  exporting.value = true
+  try {
+    const count = state.value.match_total
+    const { data } = await exportRankings(filter.value)
+    saveFile(data, `全员长征排名_${today()}.csv`)
+    ElMessage.success(`已导出 ${count} 人的完整数据`)
+  } finally {
+    exporting.value = false
+  }
 }
-function exportData() {
-  if (!items.value.length) return ElMessage.warning('当前没有可导出的排名数据')
-  const header = ['排名', '人员ID', '姓名', '曾用名', '改名时间', '所属组织', '累计步数', '到达节点数', ...state.value.route_nodes.map((node) => `${node.name}到达时间`)]
-  const rows = items.value.map((item) => [item.rank, item.user_id, item.nickname, item.nickname_changed_at ? (item.original_nickname || '') : '', item.nickname_changed_at ? time(item.nickname_changed_at) : '', item.org_name || '未分配组织', item.total_steps, item.completed_nodes, ...item.nodes.map((node) => time(node.reached_at))])
-  const content = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n')
-  const url = URL.createObjectURL(new Blob([`\ufeff${content}`], { type: 'text/csv;charset=utf-8' }))
-  const link = document.createElement('a')
-  link.href = url
-  link.download = `全员长征排名_${new Date().toISOString().slice(0, 10)}.csv`
-  link.click()
-  URL.revokeObjectURL(url)
-  ElMessage.success(`已导出 ${items.value.length} 人的完整数据`)
-}
-onMounted(load)
 
 // ---------------- 人员详情抽屉（运动/答题/勋章/长征/积分） ----------------
 const overviewVisible = ref(false)
@@ -109,20 +119,20 @@ async function openOverview(row: RankItem, _column: unknown, event: MouseEvent) 
   <main class="rank-page" v-loading="loading">
     <section class="hero">
       <div><label><i /> LONG MARCH COMMAND CENTER</label><h1>全员征程排名</h1><p>实时洞察全体人员累计步数与路线节点抵达进度</p></div>
-      <div class="actions"><span class="ws-status" :class="wsStatus"><i />{{ wsStatus === 'online' ? '实时同步中' : wsStatus === 'connecting' ? '正在连接实时通道…' : '实时通道已断开，重连中…' }}</span><el-button :icon="'Refresh'" :loading="loading" @click="load">刷新数据</el-button><el-button class="export" :icon="'Download'" @click="exportData">导出当前数据</el-button></div>
+      <div class="actions"><span class="ws-status" :class="wsStatus"><i />{{ wsStatus === 'online' ? '实时同步中' : wsStatus === 'connecting' ? '正在连接实时通道…' : '实时通道已断开，重连中…' }}</span><el-button :icon="'Refresh'" :loading="loading" @click="load">刷新数据</el-button><el-button class="export" :icon="'Download'" :loading="exporting" @click="exportData">导出当前数据</el-button></div>
     </section>
 
     <section class="metrics">
       <article><el-icon class="red"><User /></el-icon><div><span>参与人员</span><strong>{{ number(state.total) }}</strong><small>全部成员</small></div></article>
       <article><el-icon class="gold"><Position /></el-icon><div><span>累计总步数</span><strong>{{ number(state.total_steps) }}</strong><small>人均 {{ number(averageSteps) }} 步</small></div></article>
-      <article><el-icon class="blue"><TrendCharts /></el-icon><div><span>平均路线进度</span><strong>{{ averageProgress }}%</strong><small>共 {{ state.route_nodes.length }} 个节点</small></div></article>
+      <article><el-icon class="blue"><TrendCharts /></el-icon><div><span>平均路线进度</span><strong>{{ state.avg_progress }}%</strong><small>共 {{ state.route_nodes.length }} 个节点</small></div></article>
       <article><el-icon class="green"><CircleCheck /></el-icon><div><span>完成全程</span><strong>{{ state.completed_users }}</strong><small>抵达全部节点</small></div></article>
     </section>
 
-    <section v-if="podium.length" class="panel honors">
+    <section v-if="state.podium.length" class="panel honors">
       <header><div><label>TOP PERFORMERS</label><h2>领跑者荣誉榜</h2></div><em>累计步数实时排名</em></header>
       <div class="podium">
-        <article v-for="person in podium" :key="person.user_id" :class="{ champion: person.rank === 1 }">
+        <article v-for="person in state.podium" :key="person.user_id" :class="{ champion: person.rank === 1 }">
           <b>{{ String(person.rank).padStart(2, '0') }}</b><el-avatar :size="person.rank === 1 ? 66 : 54" :src="person.avatar">{{ initial(person.nickname) }}</el-avatar>
           <h3>{{ person.nickname }}</h3><p>{{ person.org_name || '未分配组织' }}</p><strong>{{ number(person.total_steps) }} <small>步</small></strong>
         </article>
@@ -130,8 +140,8 @@ async function openOverview(row: RankItem, _column: unknown, event: MouseEvent) 
     </section>
 
     <section class="panel">
-      <header><div><label>FULL RANKING</label><h2>全员排名明细</h2></div><div class="filters"><el-input v-model="keyword" clearable :prefix-icon="'Search'" placeholder="搜索姓名或人员 ID" /><el-select v-model="org" clearable placeholder="全部组织"><el-option v-for="name in organizations" :key="name" :label="name" :value="name" /></el-select><el-checkbox v-model="onlyChanged">只看已改名</el-checkbox></div></header>
-      <el-table :data="pagedItems" row-key="user_id" class="rank-table" empty-text="暂无人员数据" @row-click="openOverview">
+      <header><div><label>FULL RANKING</label><h2>全员排名明细</h2></div><div class="filters"><el-input v-model="keyword" clearable :prefix-icon="'Search'" placeholder="搜索姓名或人员 ID" /><el-select v-model="orgId" clearable filterable placeholder="全部组织" @clear="orgId = null"><el-option v-for="option in state.org_options" :key="option.id" :label="option.name" :value="option.id" /></el-select><el-checkbox v-model="onlyChanged">只看已改名</el-checkbox></div></header>
+      <el-table :data="state.items" row-key="user_id" class="rank-table" empty-text="暂无人员数据" @row-click="openOverview">
         <el-table-column type="expand" width="48"><template #default="{ row }"><div class="journey"><div class="journey-head"><div><strong>{{ row.nickname }}的节点轨迹</strong><span>已抵达 {{ row.completed_nodes }} / {{ row.node_count }} 个节点</span></div><el-progress :percentage="progress(row)" :stroke-width="8" :show-text="false" /></div><div class="track"><div v-for="(node, index) in row.nodes" :key="node.id" class="node" :class="{ reached: node.reached }"><i v-if="index < row.nodes.length - 1" /><b><el-icon v-if="node.reached"><Check /></el-icon><span v-else>{{ node.id }}</span></b><strong>{{ node.name }}</strong><span>{{ number(node.target_steps) }} 步</span><time>{{ time(node.reached_at) }}</time></div></div></div></template></el-table-column>
         <el-table-column label="排名" width="80" align="center"><template #default="{ row }"><b class="rank">{{ String(row.rank).padStart(2, '0') }}</b></template></el-table-column>
         <el-table-column label="人员" min-width="210"><template #default="{ row }"><div class="person"><el-avatar :size="38" :src="row.avatar">{{ initial(row.nickname) }}</el-avatar><div class="person-meta"><div class="person-name"><strong>{{ row.nickname }}</strong><el-tooltip v-if="row.nickname_changed_at" :content="`曾用名：${row.original_nickname || '—'}（${time(row.nickname_changed_at)} 修改）`" placement="top"><el-tag size="small" class="renamed-tag">改名</el-tag></el-tooltip></div><span>ID {{ row.user_id }}</span></div></div></template></el-table-column>
@@ -140,7 +150,7 @@ async function openOverview(row: RankItem, _column: unknown, event: MouseEvent) 
         <el-table-column label="路线进度" min-width="190"><template #default="{ row }"><div class="progress"><el-progress :percentage="progress(row)" :stroke-width="7" /><span>{{ row.completed_nodes }}/{{ row.node_count }} 节点</span></div></template></el-table-column>
         <el-table-column label="最近抵达" width="180"><template #default="{ row }"><span :class="{ muted: !row.last_reached_at }">{{ time(row.last_reached_at) }}</span></template></el-table-column>
       </el-table>
-      <footer><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="items.length" :page-sizes="[20, 50, 100, 200]" layout="total, sizes, prev, pager, next" background /><span class="hint">点击人员行查看完整档案</span></footer>
+      <footer><el-pagination v-model:current-page="page" v-model:page-size="pageSize" :total="state.match_total" :page-sizes="[20, 50, 100, 200]" layout="total, sizes, prev, pager, next" background /><span class="hint">点击人员行查看完整档案</span></footer>
     </section>
 
     <el-drawer v-model="overviewVisible" :title="overview ? `${overview.user.nickname}的完整档案` : `${overviewName}的完整档案`" size="560px">

@@ -144,7 +144,8 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/admin/dashboard/trend?days=` | 运动趋势（近 N 日） |
 | GET | `/api/admin/activities?limit=` | 实时动态（user_event 倒序） |
 | GET | `/api/admin/screen` | 数据大屏聚合（指标 + 路线总览 + 7 日趋势 + 动态） |
-| GET | `/api/admin/rankings` | 管理端全员排名、统计概览及每人全部节点到达时间 |
+| GET | `/api/admin/rankings` | 管理端全员排名：服务端分页与筛选（关键字/组织/已改名），全员指标与领奖台，当前页每人全部节点到达时间 |
+| GET | `/api/admin/rankings/export` | 按筛选条件流式导出排名 CSV |
 | GET | `/api/admin/users/{id}/overview` | 人员详情聚合（运动/答题/勋章/长征/积分） |
 | GET | `/api/admin/route-nodes` | 全部路线节点列表（含停用节点） |
 | POST | `/api/admin/route-nodes` | 新增路线节点（校验坐标/步数/排序/递增） |

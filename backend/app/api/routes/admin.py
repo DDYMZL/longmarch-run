@@ -9,6 +9,7 @@ from typing import List, Optional
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, Response, UploadFile
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import AdminPrincipal, get_current_admin, require_menu
@@ -302,11 +303,36 @@ def set_route_node_enabled(
 @router.get(
     "/rankings",
     response_model=AdminRankListOut,
-    summary="全员排名与节点到达时间",
+    summary="全员排名与节点到达时间（服务端分页/筛选）",
     dependencies=[Depends(require_menu("rankings"))],
 )
-def rankings(db: Session = Depends(get_db)):
-    return admin_service.get_rank_overview(db)
+def rankings(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    keyword: str = Query("", max_length=64),
+    org_id: Optional[int] = Query(None),
+    only_changed: bool = Query(False),
+    db: Session = Depends(get_db),
+):
+    return admin_service.get_rank_overview(db, page, page_size, keyword, org_id, only_changed)
+
+
+@router.get(
+    "/rankings/export",
+    summary="按筛选条件流式导出排名 CSV",
+    dependencies=[Depends(require_menu("rankings"))],
+)
+def export_rankings(
+    keyword: str = Query("", max_length=64),
+    org_id: Optional[int] = Query(None),
+    only_changed: bool = Query(False),
+):
+    filename = quote(f"全员长征排名_{datetime.now().strftime('%Y-%m-%d')}.csv")
+    return StreamingResponse(
+        admin_service.iter_rank_csv(keyword, org_id, only_changed),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+    )
 
 
 @router.get(

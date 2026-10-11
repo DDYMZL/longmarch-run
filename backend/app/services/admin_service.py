@@ -4,14 +4,20 @@
 组织架构同步：配置 ORG_SYNC_API_URL 时从外部系统拉取；留空时降级使用
 内置种子数据（data/seed.ORGANIZATIONS），便于开发调试。
 """
-from typing import Dict, List, Optional, Tuple
+import csv
+import io
+import itertools
+import math
+from datetime import datetime
+from typing import Dict, Iterator, List, Optional, Tuple
 
 import httpx
-from sqlalchemy import func
+from sqlalchemy import String, cast, func, or_
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.core.helpers import today_str
+from app.core.database import SessionLocal
+from app.core.helpers import to_local, today_str
 from app.data.seed import ORGANIZATIONS
 from app.models.models import (
     DailyQuestion,
@@ -26,7 +32,7 @@ from app.models.models import (
     User,
     UserMedal,
 )
-from app.services import org_service, sport_service
+from app.services import org_service, rank_service, sport_service
 
 
 # ---------------- 路线节点维护 ----------------
@@ -234,93 +240,234 @@ def _validate_question(data: Dict) -> None:
 
 
 # ---------------- 排名洞察 ----------------
-def get_rank_overview(db: Session) -> Dict:
-    """返回全员累计步数排名及每个路线节点的实际到达时间。"""
-    users = db.query(User).all()
-    route_nodes = (
-        db.query(RouteNode)
+# 导出时每批处理的人数（流式游标批量读取，内存占用与总人数无关）
+RANK_EXPORT_BATCH = 1000
+
+
+def _enabled_route_nodes(db: Session) -> List:
+    return (
+        db.query(RouteNode.id, RouteNode.name, RouteNode.target_steps)
         .filter(RouteNode.is_enabled.is_(True))
         .order_by(RouteNode.sort_order, RouteNode.id)
         .all()
     )
-    route_node_ids = {node.id for node in route_nodes}
-    steps_by_user = {
-        user_id: int(total or 0)
-        for user_id, total in (
-            db.query(DailySport.user_id, func.sum(DailySport.steps))
-            .group_by(DailySport.user_id)
-            .all()
-        )
-    }
-    # 仅取启用节点点亮记录的三列（禁用节点的历史记录不参与展示，避免全表加载）
-    reached_by_user: Dict[int, Dict[int, object]] = {}
-    lit_rows = (
-        db.query(LitNode.user_id, LitNode.node_id, LitNode.lit_at)
-        .filter(LitNode.node_id.in_(route_node_ids))
-        .order_by(LitNode.lit_at)
-        .all()
-    )
-    for lit_user_id, lit_node_id, lit_at in lit_rows:
-        reached_by_user.setdefault(lit_user_id, {})[lit_node_id] = lit_at
 
-    # 组织全路径名整表一次加载（避免逐组织逐层回溯查询）
-    org_names = org_service.get_full_name_map(db, [user.org_id for user in users])
+
+def _filter_rank_users(query, keyword: str, org_id: Optional[int], only_changed: bool):
+    """排名筛选：昵称（不区分大小写）或人员 ID 包含关键字、所属组织精确匹配、仅已改名。"""
+    word = (keyword or "").strip().lower()
+    if word:
+        query = query.filter(
+            or_(
+                func.lower(User.nickname).contains(word, autoescape=True),
+                cast(User.id, String).contains(word, autoescape=True),
+            )
+        )
+    if org_id is not None:
+        query = query.filter(User.org_id == org_id)
+    if only_changed:
+        query = query.filter(User.nickname_changed_at.isnot(None))
+    return query
+
+
+def _ranked_user_query(db: Session, keyword: str = "", org_id: Optional[int] = None, only_changed: bool = False):
+    """按全员名次排序的用户查询；名次始终是全员口径，筛选不改变名次。"""
+    ranked = rank_service.ranked_users_subquery(db)
+    query = (
+        db.query(
+            ranked.c.rank,
+            ranked.c.steps,
+            User.id.label("user_id"),
+            User.nickname,
+            User.avatar,
+            User.org_id,
+            User.original_nickname,
+            User.nickname_changed_at,
+            User.created_at,
+        )
+        .join(User, User.id == ranked.c.user_id)
+        .order_by(ranked.c.rank)
+    )
+    return _filter_rank_users(query, keyword, org_id, only_changed)
+
+
+def _reached_map(db: Session, user_ids: List[int], node_ids: List[int]) -> Dict[int, Dict[int, datetime]]:
+    """一批用户在启用节点上的点亮时间 {user_id: {node_id: lit_at}}。"""
+    if not user_ids or not node_ids:
+        return {}
+    reached: Dict[int, Dict[int, datetime]] = {}
+    for uid, nid, lit_at in (
+        db.query(LitNode.user_id, LitNode.node_id, LitNode.lit_at)
+        .filter(LitNode.user_id.in_(user_ids), LitNode.node_id.in_(node_ids))
+        .all()
+    ):
+        reached.setdefault(uid, {})[nid] = lit_at
+    return reached
+
+
+def _rank_items(db: Session, rows: List, route_nodes: List, org_names: Dict[int, str]) -> List[Dict]:
+    reached_by_user = _reached_map(db, [r.user_id for r in rows], [n.id for n in route_nodes])
     items = []
-    for user in users:
-        reached_nodes = reached_by_user.get(user.id, {})
-        node_details = [
-            {
-                "id": node.id,
-                "name": node.name,
-                "target_steps": node.target_steps,
-                "reached": node.id in reached_nodes,
-                "reached_at": reached_nodes.get(node.id),
-            }
-            for node in route_nodes
-        ]
-        reached_times = [item["reached_at"] for item in node_details if item["reached_at"]]
+    for r in rows:
+        reached = reached_by_user.get(r.user_id, {})
         items.append(
             {
-                "user_id": user.id,
-                "nickname": user.nickname,
-                "avatar": user.avatar,
-                "org_name": org_names.get(user.org_id, ""),
-                "original_nickname": user.original_nickname or user.nickname,
-                "nickname_changed_at": user.nickname_changed_at,
-                "total_steps": steps_by_user.get(user.id, 0),
-                "completed_nodes": len(reached_nodes),
+                "rank": int(r.rank),
+                "user_id": r.user_id,
+                "nickname": r.nickname,
+                "avatar": r.avatar,
+                "org_name": org_names.get(r.org_id, ""),
+                "original_nickname": r.original_nickname or r.nickname,
+                "nickname_changed_at": r.nickname_changed_at,
+                "total_steps": int(r.steps),
+                "completed_nodes": len(reached),
                 "node_count": len(route_nodes),
-                "last_reached_at": max(reached_times) if reached_times else None,
-                "created_at": user.created_at,
-                "nodes": node_details,
+                "last_reached_at": max(reached.values()) if reached else None,
+                "created_at": r.created_at,
+                "nodes": [
+                    {
+                        "id": n.id,
+                        "name": n.name,
+                        "target_steps": n.target_steps,
+                        "reached": n.id in reached,
+                        "reached_at": reached.get(n.id),
+                    }
+                    for n in route_nodes
+                ],
             }
         )
+    return items
 
-    items.sort(key=lambda item: (-item["total_steps"], item["user_id"]))
-    for index, item in enumerate(items, start=1):
-        item["rank"] = index
 
-    total_steps = sum(item["total_steps"] for item in items)
-    completed_users = sum(
-        item["completed_nodes"] == item["node_count"] and item["node_count"] > 0
-        for item in items
-    )
+def _rank_summary(db: Session, node_ids: List[int]) -> Dict:
+    """全员指标：人数、总步数、完成全程人数、平均路线进度（各人进度四舍五入后取平均）。"""
+    total = db.query(func.count(User.id)).scalar() or 0
+    total_steps = db.query(func.coalesce(func.sum(DailySport.steps), 0)).scalar() or 0
+    node_count = len(node_ids)
+    completed_users, avg_progress = 0, 0
+    if node_count and total:
+        per_user = (
+            db.query(func.count(LitNode.id).label("cnt"))
+            .filter(LitNode.node_id.in_(node_ids))
+            .group_by(LitNode.user_id)
+            .subquery()
+        )
+        # 按「点亮节点数」分布聚合：结果行数不超过节点数 + 1，与人数无关
+        histogram = db.query(per_user.c.cnt, func.count()).group_by(per_user.c.cnt).all()
+        completed_users = sum(users for cnt, users in histogram if cnt == node_count)
+        progress_sum = sum(math.floor(cnt * 100 / node_count + 0.5) * users for cnt, users in histogram)
+        avg_progress = math.floor(progress_sum / total + 0.5)
     return {
-        "total": len(items),
-        "total_steps": total_steps,
-        "completed_users": completed_users,
-        "route_nodes": [
-            {
-                "id": node.id,
-                "name": node.name,
-                "target_steps": node.target_steps,
-                "reached": False,
-                "reached_at": None,
-            }
-            for node in route_nodes
-        ],
-        "items": items,
+        "total": int(total),
+        "total_steps": int(total_steps),
+        "completed_users": int(completed_users),
+        "avg_progress": int(avg_progress),
     }
+
+
+def get_rank_overview(
+    db: Session,
+    page: int = 1,
+    page_size: int = 50,
+    keyword: str = "",
+    org_id: Optional[int] = None,
+    only_changed: bool = False,
+) -> Dict:
+    """排名洞察：全员指标 + 领奖台 + 筛选后的当前页明细（含每个启用节点的到达时间）。"""
+    route_nodes = _enabled_route_nodes(db)
+    summary = _rank_summary(db, [n.id for n in route_nodes])
+    filtered = bool((keyword or "").strip()) or org_id is not None or only_changed
+    rows = (
+        _ranked_user_query(db, keyword, org_id, only_changed)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    podium_rows = _ranked_user_query(db).limit(3).all() if filtered or page != 1 else rows[:3]
+    match_total = (
+        _filter_rank_users(db.query(func.count(User.id)), keyword, org_id, only_changed).scalar()
+        if filtered
+        else summary["total"]
+    )
+
+    org_ids = [oid for (oid,) in db.query(User.org_id).filter(User.org_id.isnot(None)).distinct().all()]
+    org_names = org_service.get_full_name_map(db, org_ids)
+    return {
+        **summary,
+        "match_total": int(match_total or 0),
+        "org_options": sorted(
+            ({"id": oid, "name": org_names[oid]} for oid in org_ids if org_names.get(oid)),
+            key=lambda o: o["name"],
+        ),
+        "route_nodes": [
+            {"id": n.id, "name": n.name, "target_steps": n.target_steps, "reached": False, "reached_at": None}
+            for n in route_nodes
+        ],
+        "podium": _rank_items(db, podium_rows, route_nodes, org_names),
+        "items": _rank_items(db, rows, route_nodes, org_names),
+    }
+
+
+def _csv_text(value) -> str:
+    """CSV 单元格防公式注入：以 = + - @ 开头的内容前置单引号。"""
+    text = "" if value is None else str(value)
+    return "'" + text if text[:1] in ("=", "+", "-", "@") else text
+
+
+def _export_time(value: Optional[datetime], empty: str) -> str:
+    return to_local(value).strftime("%Y/%m/%d %H:%M") if value else empty
+
+
+def iter_rank_csv(keyword: str = "", org_id: Optional[int] = None, only_changed: bool = False) -> Iterator[str]:
+    """按筛选条件流式生成排名 CSV（UTF-8 BOM）。
+
+    使用独立会话：响应体在路由返回后才被逐块消费，不能依赖请求级会话。
+    """
+    db = SessionLocal()
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, quoting=csv.QUOTE_ALL, lineterminator="\r\n")
+
+    def flush() -> str:
+        chunk = buffer.getvalue()
+        buffer.seek(0)
+        buffer.truncate(0)
+        return chunk
+
+    try:
+        route_nodes = _enabled_route_nodes(db)
+        node_ids = [n.id for n in route_nodes]
+        org_names = org_service.get_full_name_map(db, [oid for (oid,) in db.query(Organization.id).all()])
+        writer.writerow(
+            ["排名", "人员ID", "姓名", "曾用名", "改名时间", "所属组织", "累计步数", "到达节点数"]
+            + [_csv_text(f"{n.name}到达时间") for n in route_nodes]
+        )
+        yield "\ufeff" + flush()
+
+        rows_iter = iter(_ranked_user_query(db, keyword, org_id, only_changed).yield_per(RANK_EXPORT_BATCH))
+        while True:
+            batch = list(itertools.islice(rows_iter, RANK_EXPORT_BATCH))
+            if not batch:
+                break
+            reached_by_user = _reached_map(db, [r.user_id for r in batch], node_ids)
+            for r in batch:
+                reached = reached_by_user.get(r.user_id, {})
+                changed = r.nickname_changed_at is not None
+                writer.writerow(
+                    [
+                        int(r.rank),
+                        r.user_id,
+                        _csv_text(r.nickname),
+                        _csv_text((r.original_nickname or r.nickname) if changed else ""),
+                        _export_time(r.nickname_changed_at, ""),
+                        _csv_text(org_names.get(r.org_id) or "未分配组织"),
+                        int(r.steps),
+                        len(reached),
+                    ]
+                    + [_export_time(reached.get(nid), "尚未到达") for nid in node_ids]
+                )
+            yield flush()
+    finally:
+        db.close()
 
 
 # ---------------- 人员详情聚合 ----------------

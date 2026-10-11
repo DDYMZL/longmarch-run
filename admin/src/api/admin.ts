@@ -271,6 +271,24 @@ export function fetchUserOverview(userId: number) {
   return request.get<UserOverview>(`/admin/users/${userId}/overview`)
 }
 
+// ---------------- 排名洞察（服务端分页/筛选/流式导出） ----------------
+export interface RankNode { id: number; name: string; target_steps: number; reached: boolean; reached_at: string | null }
+export interface RankItem { rank: number; user_id: number; nickname: string; avatar: string; org_name: string; original_nickname: string; nickname_changed_at: string | null; total_steps: number; completed_nodes: number; node_count: number; last_reached_at: string | null; nodes: RankNode[] }
+export interface RankResult { total: number; total_steps: number; completed_users: number; avg_progress: number; match_total: number; org_options: { id: number; name: string }[]; route_nodes: RankNode[]; podium: RankItem[]; items: RankItem[] }
+export interface RankFilter { keyword?: string; org_id?: number | null; only_changed?: boolean }
+
+function rankParams(filter: RankFilter) {
+  return { keyword: filter.keyword || undefined, org_id: filter.org_id ?? undefined, only_changed: filter.only_changed || undefined }
+}
+
+export function fetchRankings(page: number, pageSize: number, filter: RankFilter) {
+  return request.get<RankResult>('/admin/rankings', { params: { page, page_size: pageSize, ...rankParams(filter) } })
+}
+
+export function exportRankings(filter: RankFilter) {
+  return request.get<Blob>('/admin/rankings/export', { params: rankParams(filter), responseType: 'blob', timeout: 0 })
+}
+
 // ---------------- 登录 ----------------
 export function login(username: string, password: string) {
   return request.post<LoginResult>('/admin/login', { username, password })

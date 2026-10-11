@@ -98,7 +98,7 @@ def main():
            "nickname=%s changedAt=%s" % (res5["user"]["nickname"], res5["user"].get("nicknameChangedAt")))
 
     # 6. 排名洞察展示修改记录
-    st, rank = http("/admin/rankings", admin_token)
+    st, rank = http("/admin/rankings?page_size=200&only_changed=true&keyword=%d" % user_id, admin_token)
     item = next((i for i in rank.get("items", []) if i["user_id"] == user_id), None) if st == 200 else None
     ok = bool(item) and item["nickname"] == "长征小红军" \
         and item["original_nickname"] == "微信昵称测试员" and bool(item.get("nickname_changed_at"))

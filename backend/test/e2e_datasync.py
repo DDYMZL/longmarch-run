@@ -70,8 +70,9 @@ def main():
 
     # ---------- 1. 管理端聚合接口 ----------
     st, data = http("/admin/rankings", admin_token)
-    record("B01", "管理端排名总览", st == 200 and len(data.get("items", [])) >= 5,
-           "users=%d totalSteps=%d" % (len(data.get("items", [])), data.get("total_steps", -1)))
+    record("B01", "管理端排名总览（服务端分页）",
+           st == 200 and data.get("total", 0) >= 5 and len(data.get("items", [])) == min(data.get("match_total", 0), 50),
+           "users=%d page_items=%d totalSteps=%d" % (data.get("total", 0), len(data.get("items", [])), data.get("total_steps", -1)))
 
     st, ov = http("/admin/users/%d/overview" % test_user_id, admin_token)
     ok = st == 200 and all(k in ov for k in ("user", "sport", "quiz_records", "medals", "march", "points"))
