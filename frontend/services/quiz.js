@@ -22,22 +22,12 @@ function getKnowledge() {
 }
 
 /**
- * 提交答卷（后端判分并发放积分）。
+ * 提交答卷（后端判分并发放积分；作答过程中不提供单题判题）。
  * @param {Array<{questionId:number, answer:Array<string>}>} answers
- * @returns {Promise<object>} 答题记录
+ * @returns {Promise<object>} 答题记录（含 details 逐题结果）
  */
 function submit(answers) {
   return requestService.request({ url: '/quiz/submit', method: 'POST', data: { answers } });
-}
-
-/**
- * 单题即时判题（需求 §15 连续答对反馈；无状态，不影响提交判分与积分）。
- * @param {number} questionId
- * @param {Array<string>} answer
- * @returns {Promise<{questionId:number, correct:boolean}>}
- */
-function checkAnswer(questionId, answer) {
-  return requestService.request({ url: '/quiz/check', method: 'POST', data: { questionId, answer } });
 }
 
 /**
@@ -61,7 +51,6 @@ module.exports = {
   getDaily,
   getKnowledge,
   submit,
-  checkAnswer,
   getRecords,
   resetToday
 };

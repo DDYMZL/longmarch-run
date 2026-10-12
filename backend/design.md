@@ -102,7 +102,7 @@
 | `users` | id, openid(64,唯一), nickname(默认"长征小战士"), avatar(500,可空), org_id(可空), original_nickname(64,可空), nickname_changed_at(可空), continuous_days, max_continuous_days, route_ceremony_at(可空), created_at | openid 唯一 | 微信登录创建；org_id 指向 `organizations`；avatar 可为 NULL（openGauss 将空字符串转为 NULL）；original_nickname 记录登录时的微信名（曾用名），nickname_changed_at 非空表示已使用唯一一次改名机会；continuous_days/max_continuous_days 为连续行军冗余缓存（sport 写入时维护，读取以 daily_sport 重算为准）；route_ceremony_at 非空表示已观看首次长征完成仪式（§20.4，之后仅静态回顾） |
 | `daily_sport` | id, user_id, date(10), steps, distance, is_goal_completed, is_makeup, makeup_at | `uq_sport_user_date`(user_id+date) | 每日步数，**同日同步覆盖而非累加**；distance 为估算公里数（steps × 步长）；is_goal_completed 为当日达标标记（连续行军判定依据）；is_makeup/makeup_at 为补签预留（未实现） |
 | `lit_nodes` | id, user_id, node_id, lit_at, step_snapshot | `uq_lit_user_node`(user_id+node_id) | 已点亮节点，**点亮后永久保留**；step_snapshot 记录点亮时刻累计步数 |
-| `quiz_records` | id, user_id, date, total_count, correct_count, score, points, wrong_list(JSON), answer_at | `uq_quiz_user_date`(user_id+date) | 每日答题记录，**每日仅一次**；wrong_list 元素含 questionId/category 供知识画像推导 |
+| `quiz_records` | id, user_id, date, total_count, correct_count, score, points, wrong_list(JSON), details(JSON, 可空，014), answer_at | `uq_quiz_user_date`(user_id+date) | 每日答题记录，**每日仅一次**；wrong_list 元素含 questionId/category 供知识画像推导；details 为提交后逐题结果（我的答案/正确答案/对错/得分），历史记录不回填 |
 | `daily_questions` | id, user_id, date, question_ids(JSON) | `uq_dailyq_user_date`(user_id+date) | 当日抽题缓存，保证同一天返回同一套题 |
 | `points_log` | id, user_id, date, reason(50), delta | 无表级唯一（去重在 service 层） | 积分流水；**同日同 reason 去重** |
 | `user_medals` | id, user_id, medal_id(50), granted_at | `uq_user_medal`(user_id+medal_id) | 用户已获勋章 |
@@ -154,9 +154,8 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET | `/api/march/node/{node_id}` | 是 | 节点详情（任意状态可看，含未解锁），不存在 404；含 `persons[{id,name}]` 关联人物（§14 节点 → 人物入口） |
 | POST | `/api/march/light-up` | 是 | 点亮达标节点，返回 `{newlyLit: [...], newlyCompletedChapters: [...], newMedals: [...]}`，发放积分并刷新勋章（newMedals 为本次新获勋章 id） |
 | POST | `/api/march/ceremony` | 是 | 标记长征完成仪式已观看（§20.4）：幂等写入 users.route_ceremony_at；仅首次完成触发完整动画，之后仪式页为静态回顾 |
-| GET | `/api/quiz/daily` | 是 | 今日题目 `{date, completed, questions?, record?}`（同天同套，不含答案） |
-| POST | `/api/quiz/submit` | 是 | 提交答卷 `{answers: [{questionId, answer[]}]}` → 判分记录；重复提交 400 |
-| POST | `/api/quiz/check` | 是 | 单题即时判题（需求 §15 连胜反馈）`{questionId, answer[]}` → `{questionId, correct}`；无状态不写记录/不发积分，最终成绩以 submit 为准；题目不存在 404 |
+| GET | `/api/quiz/daily` | 是 | 今日题目 `{date, completed, questions?, record?}`（同天同套，作答中不含答案与解析；已完成时 record 含 details 逐题结果） |
+| POST | `/api/quiz/submit` | 是 | 提交答卷 `{answers: [{questionId, answer[]}]}` → 判分记录（含 details 逐题结果）；须恰好覆盖今日全部题目且不重复、每题已作答，否则 400；重复/并发提交 400「今日答题已完成」（唯一约束兜底，仅首个提交发积分）。V1.2 起已移除单题判题 `/api/quiz/check` |
 | GET | `/api/persons/{person_id}` | 是 | 长征人物志详情（需求 §14）：`{id, name, avatar, brief, nodes[{id,name,icon,historicalTime,brief}]}`（相关历史事件=关联节点，按路线顺序）；人物不存在 404 |
 | GET | `/api/quotes/today` | 是 | 今日寄语（需求 §16、V1.1）：`{id, date, content, source, node{id,name}|null}`，date 为当天；启用寄语按排序号自循环起始日期起每天一条、末条后回到第一条，同一天所有用户同一条；无启用寄语返回 null |
 | GET | `/api/quiz/records` | 是 | 答题记录列表 |
@@ -251,13 +250,13 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 - **章节状态**：基于节点状态计算——章内启用节点全部点亮为 `COMPLETED`，第一个未完成章为 `ACTIVE`，之后各章为 `LOCKED`；节点全部停用的章节跳过不下发；全部完成时 `currentChapterId` 为 null。
 - **章节完成判定**：`light_up_nodes` 对比本次点亮前后已完成章节集合，新增完成章写入 `CHAPTER_COMPLETE` 事件（我的足迹与管理端动态同源），并在响应 `newlyCompletedChapters` 中返回 `{id, name, title, intro}` 供前端章节完成仪式展示；章节完成不改变既有节点点亮逻辑与积分规则。
 
-**今日题目**（`GET /api/quiz/daily`，`questions` 不含 `answer`）：
+**今日题目**（`GET /api/quiz/daily`，`questions` 不含 `answer` 与 `analysis`）：
 
 ```json
 {
   "date": "2026-09-30", "completed": false,
   "questions": [
-    { "id": 3, "type": "single", "question": "……", "options": [{ "label": "A", "text": "……" }], "analysis": "……", "score": 20 }
+    { "id": 3, "type": "single", "question": "……", "options": [{ "label": "A", "text": "……" }], "score": 20 }
   ],
   "record": null
 }
@@ -266,15 +265,19 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 **提交答卷**（`POST /api/quiz/submit`）：
 
 ```json
-// 请求
+// 请求（须覆盖今日全部题目，每题一次）
 { "answers": [{ "questionId": 3, "answer": ["A"] }] }
 // 响应（每日仅一次，重复提交返回 400）
 {
   "date": "2026-09-30", "totalCount": 5, "correctCount": 4, "score": 80, "points": 5,
   "wrongList": [{ "index": 2, "question": "……", "correctAnswer": "B", "analysis": "……" }],
+  "details": [{ "index": 1, "questionId": 3, "type": "single", "question": "……", "options": [{ "label": "A", "text": "……" }],
+                "userAnswer": ["A"], "correctAnswer": ["A"], "correct": true, "score": 20, "analysis": "……" }],
   "answerAt": 1760000000000
 }
 ```
+
+`details` 为 014 迁移新增的 `quiz_records.details`（JSON，可空）；历史记录为空数组，前端回退展示 `wrongList`，不回算历史成绩。`/api/quiz/records` 列表不返回 details。
 
 ## 5. 核心业务规则（与前端 Mock 完全一致）
 
@@ -283,7 +286,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | 步数 | 按「用户+日期」唯一，同日同步**覆盖**；步数来源为 wx.getWeRunData 加密数据后端解密取当日真实步数，仅 mock 用户（开发模式）或未配置微信凭证时回退按「日期+用户」稳定模拟（4000~12999），真实用户绝不编造步数；`/sport/add` 演示补步 |
 | 路线 | 累计步数 ≥ 节点 `targetSteps` 即点亮，点亮**永久保留**；节点状态 `completed`（已点亮）/ `current`（下一目标）/ `unlocked`（未解锁）；停用节点不在小程序可见路线中，不参与完成判定和排名，已有 lit_nodes 记录保留 |
 | 章节 | 5 章配置于 `march_service.CHAPTERS`（每章 2 个 route_nodes 主键，划分与介绍可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`（全部停用的章节不下发）；`light_up_nodes` 对比点亮前后完成集，新完成章写 `CHAPTER_COMPLETE` 事件并随响应返回（含 title/intro 供前端仪式展示），不改变节点点亮与积分规则 |
-| 答题 | 每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可提交一次；题目接口**不下发答案**；`/quiz/reset` 仅供调试 |
+| 答题 | 每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可提交一次；题目接口**不下发答案与解析**、不提供单题判题，对错仅在提交后由后端判定；`/quiz/reset` 仅供调试 |
 | 积分 | 登录 +1；运动 5000 步 +5、10000 步 +10；答题 +5、满分额外 +10；点亮节点 +10；完成路线 +100；**同日同 reason 去重** |
 | 勋章 | 12 枚分四类：入门（first-step 首次运动 / learner 答题 10 次 / persistence 连续行军 7 天）、路线（luding 点亮泸定桥 / snow 点亮雪山）、挑战（day-10k 单日万步 / steps-100k / steps-500k / streak-30 连续 30 天 / master 积分≥500 / fearless 连续 7 天日万步，隐藏）、完成（victory 全部**启用**节点点亮）；隐藏勋章未获得时不公开条件 |
 | 连续行军 | 当日步数 ≥ `STREAK_GOAL_STEPS`（默认 5000）即完成当日行军；写入侧在 `is_goal_completed` 由 False 翻 True 时更新 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件（一次性成就按事件表去重）；读取侧以 `daily_sport.is_goal_completed` 重算为准 |

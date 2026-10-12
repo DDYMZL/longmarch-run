@@ -368,11 +368,12 @@ class OptionOut(CamelModel):
 
 
 class QuestionOut(CamelModel):
+    """作答中的题目：不含答案与解析（解析可能暗示答案，提交后在 details 中展示）。"""
+
     id: int
     type: str
     question: str
     options: List[OptionOut]
-    analysis: str
     score: int
 
 
@@ -385,6 +386,21 @@ class WrongItem(CamelModel):
     analysis: str
 
 
+class QuizDetailItem(CamelModel):
+    """提交后逐题结果：题干、我的答案、正确答案、对错与本题得分。"""
+
+    index: int
+    question_id: int
+    type: str = "single"
+    question: str
+    options: List[OptionOut] = []
+    user_answer: List[str] = []
+    correct_answer: List[str] = []
+    correct: bool
+    score: int
+    analysis: str = ""
+
+
 class QuizRecordOut(CamelModel):
     date: str
     total_count: int
@@ -392,6 +408,7 @@ class QuizRecordOut(CamelModel):
     score: int
     points: int
     wrong_list: List[WrongItem] = []
+    details: List[QuizDetailItem] = []
     answer_at: int
 
 
@@ -425,13 +442,6 @@ class AnswerItem(BaseModel):
 
 class SubmitRequest(BaseModel):
     answers: List[AnswerItem]
-
-
-class QuizCheckOut(CamelModel):
-    """单题即时判题结果（需求 §15 答题连胜反馈；不改动积分/提交规则）。"""
-
-    question_id: int
-    correct: bool
 
 
 # ---------------- 积分 ----------------

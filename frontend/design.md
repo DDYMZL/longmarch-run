@@ -54,8 +54,8 @@
 | `pages/ceremony/ceremony` | 子页 | 长征完成仪式（§20）：约 8.1s 时间轴（逐段点亮 → 末节点辉光 → 金线扫过 → 全亮脉冲 → 星空展开 →「我的长征/完成了」→ 完成数据卡：行军/运动天数/答题/路线/勋章/积分，取 `/march/route` + `/profile/summary`）；可跳过；首次确认后 `POST /march/ceremony` 标记，再进为「已完成长征」静态回顾；收尾快照最终帧为静态图并移除画布，数据卡浮于快照上（原生 canvas 层会盖住 DOM） |
 | `pages/ticket/ticket` | 子页 | 节点纪念票（§19）：纯 Canvas 2d 绘制（米黄纸面/红头/虚线撕裂线/编号），数据取 `/march/node/{id}` + `/march/footprints`（点亮日期/当日步数/累计），未点亮节点显示提示；保存相册走 `canvasToTempFilePath`（传 canvas 节点）+ `saveImageToPhotosAlbum` |
 | `pages/person/person` | 子页 | 长征人物志详情（§14）：头像（无图姓名首字占位）/名称/简介、相关历史事件卡（节点事件+历史时间+简述），点击事件卡回跳节点详情（人物 → 节点双向） |
-| `pages/quiz-answer/quiz-answer` | 子页 | 情报破译过程（单选/判断、逐题作答）；连续答对反馈（§15：选项即判 `/quiz/check`，🔥连续N题徽章、对错即时提示、答错连胜清零；判题失败静默不影响作答） |
-| `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（得分、错题解析）；满分效果（§15.3：「🎉 今日情报完美通关」标题 + 5/5 · 100 分 + 彩带，积分/事件/勋章规则不变） |
+| `pages/quiz-answer/quiz-answer` | 子页 | 情报破译过程（单选/判断、逐题作答，可「上一题」回看改选）；作答中仅中性选中高亮，不显示对错/连胜/得分（V1.2 移除 `/quiz/check` 即时判题）；提交前校验全部作答，未答题定位提示 |
+| `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（得分、答对/答错/积分统计、逐题「答题详情」：题干/我的答案/正确答案/对错/每题得分/解析；V1.2 前历史记录无 details 时回退错题解析）；满分效果（§15.3：「🎉 今日情报完美通关」标题 + 5/5 · 100 分 + 彩带，积分/事件/勋章规则不变） |
 | `pages/sport-records/sport-records` | 子页 | 最近运动记录 |
 | `pages/quiz-records/quiz-records` | 子页 | 答题历史记录 |
 | `pages/medals/medals` | 子页 | 勋章墙：按入门/路线/挑战/完成分组，隐藏勋章未获得时显示「神秘勋章」，点击查看详情弹层 |
@@ -72,7 +72,7 @@
 | `auth.js` | `ensureLogin()` / `wxLogin(profile)` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；启动校验 Token（/auth/me）+ 静默重登（单飞，注册为 request.js 的 401 重登处理器）；主动退出标记 `lm_logged_out`；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
 | `sport.js` | 今日步数 / `syncToday()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, calendar` | 步数按「用户+日期」覆盖；同步走 wx.getWeRunData 加密数据后端解密取真实步数；行军日历月聚合 |
 | `march.js` | `getRoute()` / `getNodeDetail(id)` / `lightUpNodes()` / `getGlobalGoal()` / `getFootprints()` / `markCeremony()` / `hasPlayedIntro()` / `markIntroPlayed()` | `/api/march/route, node/{id}, light-up, global, footprints, ceremony` | 路线进度与节点配置由 `/march/route` 统一下发；步数达标由后端点亮、发放勋章并广播（light-up 返回 newlyLit / newlyCompletedChapters / newMedals）；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4）；开场动画播放标记（Storage `lm_march_intro_played`，页面不直接读写 Storage） |
-| `quiz.js` | `getDaily()` / `submit()` / `checkAnswer()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, check, records, reset, knowledge` | 每日抽 5 题（同日同套）、判分、每日一次；`checkAnswer` 单题即时判题（无状态，连胜反馈用）；知识画像分类正确率 |
+| `quiz.js` | `getDaily()` / `submit()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, records, reset, knowledge` | 每日抽 5 题（同日同套，题目不含答案与解析）、提交后由后端统一判分、每日一次；知识画像分类正确率 |
 | `medal.js` | `getMedalList()` | `/api/medal/list` | 勋章墙（分类/隐藏/排序由后端下发；判定发放由后端在同步/点亮/答题副链路完成） |
 | `profile.js` | `getSummary()` / `getTimeline(limit)` | `/api/profile/summary, timeline` | 我的长征档案聚合与足迹时间轴 |
 | `person.js` | `getPerson(id)` | `/api/persons/{id}` | 长征人物志详情（§14，含相关历史事件节点） |
@@ -166,8 +166,8 @@ home/march 触发 → sport.syncToday()（授权 scope.werun → wx.login 取 co
 
 ```
 quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 题、按用户+日期固定）
-  → quiz-answer 逐题作答（每题选择即 POST /api/quiz/check 即时判题，驱动 🔥 连胜反馈 §15）→ quiz.submit(answers)（POST /api/quiz/submit 后端判分、记分、发积分；每日仅一次）
-  → quiz-result 展示得分与错题解析 → 返回后 quiz 页 refresh() 显示已完成
+  → quiz-answer 逐题作答（仅本地记录选择，作答中无对错反馈）→ quiz.submit(answers)（POST /api/quiz/submit 后端校验题目集合、判分、记分、发积分；每日仅一次）
+  → quiz-result 展示得分与逐题答题详情 → 返回后 quiz 页 refresh() 显示已完成
 ```
 
 ### 4.5a 实时行军动态（P1-1，需求 §8）

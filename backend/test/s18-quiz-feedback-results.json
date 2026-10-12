@@ -1,0 +1,88 @@
+{
+  "results": [
+    {
+      "id": "Q01",
+      "name": "今日 5 题每题 20 分，不下发答案与解析",
+      "ok": true,
+      "detail": "status=200 n=5 leaked=[]"
+    },
+    {
+      "id": "Q02",
+      "name": "同日多次获取同一套题",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "Q03",
+      "name": "/api/quiz/check 已移除",
+      "ok": true,
+      "detail": "status=404"
+    },
+    {
+      "id": "Q04",
+      "name": "缺题/空答案提交 400 且不写记录",
+      "ok": true,
+      "detail": "missing=400 empty=400 detail=请完成全部题目后提交"
+    },
+    {
+      "id": "Q05",
+      "name": "非今日题目提交 400",
+      "ok": true,
+      "detail": "status=400 detail=提交的答案包含不属于今日抽题的题目"
+    },
+    {
+      "id": "Q06",
+      "name": "重复同题伪造满分 400",
+      "ok": true,
+      "detail": "status=400 detail=提交的答案包含重复题目"
+    },
+    {
+      "id": "Q07",
+      "name": "非法选项 400",
+      "ok": true,
+      "detail": "status=400 detail=答案选项无效"
+    },
+    {
+      "id": "Q08",
+      "name": "后端判分返回逐题结果（60 分 3 对 2 错）",
+      "ok": true,
+      "detail": "status=200 score=60 det_ok=True"
+    },
+    {
+      "id": "Q09",
+      "name": "重复提交 400 且积分不重复",
+      "ok": true,
+      "detail": "status=400 points=5 rows=1"
+    },
+    {
+      "id": "Q10",
+      "name": "已完成 daily 含 details，records 不含 details",
+      "ok": true,
+      "detail": "daily_details=5 records_details=[]"
+    },
+    {
+      "id": "Q11",
+      "name": "满分 100 分、积分 15、逐题全对",
+      "ok": true,
+      "detail": "status=200 score=100 points=15/2"
+    },
+    {
+      "id": "Q12",
+      "name": "8 并发提交仅 1 成功、积分仅发一次",
+      "ok": true,
+      "detail": "statuses=[200, 400, 400, 400, 400, 400, 400, 400] records=1 points=15/2"
+    },
+    {
+      "id": "Q13",
+      "name": "历史无 details 记录原样返回不重算",
+      "ok": true,
+      "detail": "record={\"date\": \"2026-10-12\", \"totalCount\": 5, \"correctCount\": 2, \"score\": 40, \"points\": 5, \"wrongList\": [{\"index\": 1, \"questionId\": 1, \"category\": \"\", \"question\": \"旧题"
+    },
+    {
+      "id": "Q14",
+      "name": "未登录访问答题接口 401",
+      "ok": true,
+      "detail": "codes=[401, 401]"
+    }
+  ]
+}

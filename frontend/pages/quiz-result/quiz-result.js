@@ -1,6 +1,7 @@
 /**
  * 答题结果页
- * 展示：得分 / 星级 / 对错统计 / 获得积分 / 错题与解析
+ * 展示：得分 / 星级 / 对错统计 / 获得积分 / 逐题结果（题干、我的答案、正确答案、对错、得分）
+ * 历史记录无 details 时回退展示错题回顾（wrongList）
  * 动画：分数滚动、星星逐个点亮、满分彩带庆贺
  */
 const app = getApp();
@@ -9,9 +10,36 @@ const quiz = require('../../services/quiz');
 // 彩带颜色池
 const CONFETTI_COLORS = ['#C8102E', '#D4A017', '#E8C76A', '#FF6B6B', '#4ECDC4', '#F5D9A0'];
 
+/** 选项标签转展示文本，如 ["B"] -> "B. 遵义会议" */
+function answerText(labels, options) {
+  if (!labels || !labels.length) return '未作答';
+  return labels
+    .map((label) => {
+      const opt = (options || []).find((o) => o.label === label);
+      return opt ? label + '. ' + opt.text : label;
+    })
+    .join('；');
+}
+
+/** 逐题结果预处理（WXML 不支持调用方法，展示文本在逻辑层拼好） */
+function buildDetails(details) {
+  return (details || []).map((d) => ({
+    key: d.index + '-' + d.questionId,
+    index: d.index,
+    typeText: d.type === 'judge' ? '判断题' : '单选题',
+    question: d.question,
+    correct: d.correct,
+    score: d.score,
+    userAnswerText: answerText(d.userAnswer, d.options),
+    correctAnswerText: answerText(d.correctAnswer, d.options),
+    analysis: d.analysis || ''
+  }));
+}
+
 Page({
   data: {
     record: null,
+    details: [],
     stars: [0, 1, 2, 3, 4].map((id) => ({ id, on: false })),
     wrongCount: 0,
     displayScore: 0,
@@ -39,6 +67,7 @@ Page({
 
         this.setData({
           record,
+          details: buildDetails(record.details),
           wrongCount: record.totalCount - record.correctCount,
           isPerfect: record.score === 100,
           perfectLine: record.correctCount + ' / ' + record.totalCount + ' · ' + record.score + ' 分'

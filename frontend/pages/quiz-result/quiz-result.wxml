@@ -39,10 +39,24 @@
     </view>
   </view>
 
-  <!-- 错题 -->
-  <view class="card anim-card" style="animation-delay: 420ms" wx:if="{{record.wrongList.length > 0}}">
+  <!-- 逐题结果（提交后统一展示） -->
+  <view class="card anim-card" style="animation-delay: 420ms" wx:if="{{details.length > 0}}">
+    <view class="card-title">答题详情</view>
+    <view class="detail-item {{index === 0 ? 'first' : ''}}" wx:for="{{details}}" wx:key="key">
+      <view class="detail-head">
+        <text class="detail-index">第 {{item.index}} 题 · {{item.typeText}}</text>
+        <text class="detail-verdict {{item.correct ? 'right' : 'wrong'}}">{{item.correct ? '✓ 正确' : '✗ 错误'}} · {{item.score}} 分</text>
+      </view>
+      <view class="detail-question">{{item.question}}</view>
+      <view class="detail-line">我的答案：<text class="{{item.correct ? 'ans-right' : 'ans-wrong'}}">{{item.userAnswerText}}</text></view>
+      <view class="detail-line">正确答案：<text class="ans-right">{{item.correctAnswerText}}</text></view>
+      <view wx:if="{{item.analysis}}" class="wrong-analysis">解析：{{item.analysis}}</view>
+    </view>
+  </view>
+  <!-- 历史记录无逐题明细：回退错题回顾 -->
+  <view class="card anim-card" style="animation-delay: 420ms" wx:elif="{{record.wrongList.length > 0}}">
     <view class="card-title">错题回顾</view>
-    <view class="wrong-item" wx:for="{{record.wrongList}}" wx:key="question">
+    <view class="wrong-item" wx:for="{{record.wrongList}}" wx:key="index">
       <view class="wrong-index">第 {{item.index}} 题</view>
       <view class="wrong-question">{{item.question}}</view>
       <view class="wrong-answer">正确答案：{{item.correctAnswer}}</view>

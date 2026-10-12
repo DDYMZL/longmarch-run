@@ -148,6 +148,57 @@
   padding: 20rpx 0;
 }
 
+/* 逐题结果 */
+.detail-item {
+  border-top: 1rpx solid #F0E6D2;
+  padding: 24rpx 0;
+}
+
+.detail-item.first {
+  border-top: none;
+  padding-top: 0;
+}
+
+.detail-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.detail-index {
+  font-size: 24rpx;
+  color: #8C6B1F;
+  font-weight: 600;
+}
+
+.detail-verdict {
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.detail-verdict.right,
+.ans-right {
+  color: #2E7D32;
+}
+
+.detail-verdict.wrong,
+.ans-wrong {
+  color: #C8102E;
+}
+
+.detail-question {
+  font-size: 28rpx;
+  color: #333333;
+  margin-top: 8rpx;
+  line-height: 1.6;
+}
+
+.detail-line {
+  font-size: 26rpx;
+  color: #666666;
+  margin-top: 8rpx;
+}
+
 /* 操作 */
 .result-actions {
   padding: 20rpx 60rpx;

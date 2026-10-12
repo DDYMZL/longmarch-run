@@ -3,7 +3,9 @@
 规则：
   每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可完成一次；
   提交后由后端按正确答案判分并发放积分（每日答题 +5，满分额外 +10）。
-安全：题目接口不返回 answer，答案仅存于后端。
+安全：作答阶段题目接口不返回 answer / analysis，也不提供单题判题；
+  提交须恰好覆盖今日全部题目且不重复（防重复提交同一道已知答案的题刷分），
+  对错与逐题得分只在提交后由后端从题库判定并随记录返回。
 
 情报化扩展（功能 8）：
   get_daily 返回 issue_no（第 N 期，以 Settings.ACTIVITY_START_DATE 为第 1 期）；
@@ -14,6 +16,7 @@ import time
 from datetime import datetime
 from typing import Dict, List
 
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -22,6 +25,8 @@ from app.models.models import DailyQuestion, PointsLog, Question, QuizRecord
 from app.services import event_service, points_service
 
 DAILY_COUNT = 5
+SCORE_PER_QUESTION = 20
+ALREADY_DONE = "今日答题已完成"
 
 # 知识画像分类（key -> 展示名），与 questions.category 取值对应
 KNOWLEDGE_CATEGORIES = [
@@ -39,18 +44,17 @@ def _issue_no(date: str) -> int:
 
 
 def _public_question(q: Question) -> Dict:
-    """对外题目结构（不含 answer）。"""
+    """作答阶段题目结构（不含 answer 与 analysis）。"""
     return {
         "id": q.id,
         "type": q.type,
         "question": q.question,
         "options": q.options,
-        "analysis": q.analysis,
         "score": q.score,
     }
 
 
-def _record_out(r: QuizRecord) -> Dict:
+def _record_out(r: QuizRecord, with_details: bool = True) -> Dict:
     return {
         "date": r.date,
         "total_count": r.total_count,
@@ -58,17 +62,9 @@ def _record_out(r: QuizRecord) -> Dict:
         "score": r.score,
         "points": r.points,
         "wrong_list": r.wrong_list or [],
+        "details": (r.details or []) if with_details else [],
         "answer_at": r.answer_at,
     }
-
-
-def check_answer(db: Session, question_id: int, answer: List[str]) -> Dict:
-    """单题即时判题（需求 §15 答题连胜反馈）。无状态：不发积分、不写记录，
-    最终成绩仍以 submit 判分为准（积分规则不变）。题目不存在返回 None。"""
-    q = db.query(Question).filter(Question.id == question_id).first()
-    if q is None:
-        return None
-    return {"question_id": q.id, "correct": sorted(answer or []) == sorted(q.answer or [])}
 
 
 def get_daily(db: Session, user_id: int) -> Dict:
@@ -119,15 +115,20 @@ def get_daily(db: Session, user_id: int) -> Dict:
 
 
 def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
-    """提交答卷（每日仅一次）。answers: [{question_id, answer: []}]。"""
+    """提交答卷（每日仅一次）。answers: [{question_id, answer: []}]。
+
+    须恰好覆盖今日全部题目、每题一次且已作答；判分按今日抽题顺序逐题进行，
+    结果（含逐题对错/得分）落库后返回。并发重复提交由唯一约束兜底，
+    只有首个提交成功写记录并发放积分，其余返回「今日答题已完成」。
+    """
     date = today_str()
     existing = (
-        db.query(QuizRecord)
+        db.query(QuizRecord.id)
         .filter(QuizRecord.user_id == user_id, QuizRecord.date == date)
         .first()
     )
     if existing is not None:
-        raise ValueError("今日答题已完成")
+        raise ValueError(ALREADY_DONE)
 
     cache = (
         db.query(DailyQuestion)
@@ -136,46 +137,80 @@ def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
     )
     if cache is None:
         raise ValueError("今日题目尚未生成，请先获取题目")
-    allowed_ids = set(cache.question_ids or [])
-    if any(a.get("question_id") not in allowed_ids for a in answers):
-        raise ValueError("提交的答案包含不属于今日抽题的题目")
+    cache_ids = list(cache.question_ids or [])
+    qmap = {q.id: q for q in db.query(Question).filter(Question.id.in_(cache_ids)).all()}
+    # 抽题后被删除的题目不下发、不计分（与 get_daily 一致）
+    ordered_ids = [qid for qid in cache_ids if qid in qmap]
 
-    qmap = {q.id: q for q in db.query(Question).filter(Question.id.in_(allowed_ids)).all()}
+    submitted: Dict[int, List[str]] = {}
+    for a in answers:
+        qid = a.get("question_id")
+        if qid not in qmap:
+            raise ValueError("提交的答案包含不属于今日抽题的题目")
+        if qid in submitted:
+            raise ValueError("提交的答案包含重复题目")
+        submitted[qid] = list(a.get("answer") or [])
+    if len(submitted) != len(ordered_ids) or any(not v for v in submitted.values()):
+        raise ValueError("请完成全部题目后提交")
+
     correct_count = 0
     wrong_list: List[Dict] = []
-
-    for idx, a in enumerate(answers):
-        q = qmap.get(a.get("question_id"))
-        right = sorted((q.answer if q else []) or [])
-        user_ans = sorted(a.get("answer") or [])
-        if right and user_ans == right:
+    details: List[Dict] = []
+    for idx, qid in enumerate(ordered_ids, start=1):
+        q = qmap[qid]
+        labels = {o.get("label") for o in (q.options or [])}
+        user_ans = sorted(submitted[qid])
+        if any(label not in labels for label in user_ans):
+            raise ValueError("答案选项无效")
+        right = sorted(q.answer or [])
+        is_right = bool(right) and user_ans == right
+        if is_right:
             correct_count += 1
         else:
             wrong_list.append(
                 {
-                    "index": idx + 1,
-                    "question_id": q.id if q else 0,
-                    "category": (q.category or "") if q else "",
-                    "question": q.question if q else "",
+                    "index": idx,
+                    "question_id": q.id,
+                    "category": q.category or "",
+                    "question": q.question,
                     "correct_answer": "".join(right),
-                    "analysis": q.analysis if q else "",
+                    "analysis": q.analysis or "",
                 }
             )
+        details.append(
+            {
+                "index": idx,
+                "question_id": q.id,
+                "type": q.type,
+                "question": q.question,
+                "options": q.options or [],
+                "user_answer": user_ans,
+                "correct_answer": right,
+                "correct": is_right,
+                "score": SCORE_PER_QUESTION if is_right else 0,
+                "analysis": q.analysis or "",
+            }
+        )
 
-    score = correct_count * 20  # 每题 20 分
+    score = correct_count * SCORE_PER_QUESTION
     earned = 15 if score == 100 else 5  # 每日答题 +5，满分额外 +10
     record = QuizRecord(
         user_id=user_id,
         date=date,
-        total_count=len(answers),
+        total_count=len(ordered_ids),
         correct_count=correct_count,
         score=score,
         points=earned,
         wrong_list=wrong_list,
+        details=details,
         answer_at=int(time.time() * 1000),
     )
     db.add(record)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise ValueError(ALREADY_DONE)
 
     points_service.grant(db, user_id, "每日答题", 5)
     event_service.record(
@@ -190,14 +225,14 @@ def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
 
 
 def get_records(db: Session, user_id: int) -> List[Dict]:
-    """答题记录列表（从新到旧）。"""
+    """答题记录列表（从新到旧）；列表不含逐题明细以控制体积。"""
     rows = (
         db.query(QuizRecord)
         .filter(QuizRecord.user_id == user_id)
         .order_by(QuizRecord.date.desc())
         .all()
     )
-    return [_record_out(r) for r in rows]
+    return [_record_out(r, with_details=False) for r in rows]
 
 
 def get_knowledge(db: Session, user_id: int) -> Dict:

@@ -219,7 +219,7 @@ class LitNode(Base):
 
 
 class QuizRecord(Base):
-    """每日答题记录（user_id + date 唯一，每日仅一次）。"""
+    """每日答题记录（user_id + date 唯一，每日仅一次；并发提交由唯一约束兜底）。"""
 
     __tablename__ = "quiz_records"
     __table_args__ = (UniqueConstraint("user_id", "date", name="uq_quiz_user_date"),)
@@ -232,6 +232,8 @@ class QuizRecord(Base):
     score: Mapped[int] = mapped_column(Integer, default=0)
     points: Mapped[int] = mapped_column(Integer, default=0)
     wrong_list: Mapped[list] = mapped_column(JSON, default=list)
+    # 逐题判分结果（014 迁移新增）；历史记录为 None，展示时回退 wrong_list
+    details: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
     answer_at: Mapped[int] = mapped_column(BigInteger, default=0)
 
 
