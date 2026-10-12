@@ -233,11 +233,13 @@ function setInitialNickname(nickname) {
     .then((user) => updateLocalUser(user));
 }
 
-/** 更新本地用户缓存并返回新用户（如组织选择结果）。 */
+/** 更新本地用户缓存并同步全局用户（不改变登录态），返回新用户（如组织选择结果）。 */
 function updateLocalUser(patch) {
   try {
     const user = Object.assign({}, readLocalUser() || {}, patch);
     wx.setStorageSync(USER_KEY, user);
+    const app = getApp();
+    if (app && app.globalData) app.globalData.user = user;
     return user;
   } catch (e) {
     return null;

@@ -84,11 +84,13 @@ Page({
         avatar: ''
       })
       .then((res) => {
-        auth.updateLocalUser({
-          orgId: this.data.orgId,
-          orgName: this.data.orgName,
-          orgFullName: this.data.orgFullName
-        });
+        // 已入驻身份重复提交时后端保留原组织，仅当组织一致才回填所选组织名称
+        if (res.user && res.user.orgId === this.data.orgId) {
+          auth.updateLocalUser({
+            orgName: this.data.orgName,
+            orgFullName: this.data.orgFullName
+          });
+        }
         wx.showToast({ title: res.created ? '入驻成功' : '欢迎回来', icon: 'success' });
         setTimeout(() => wx.switchTab({ url: '/pages/home/home' }), 600);
       })

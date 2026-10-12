@@ -147,14 +147,11 @@ Page({
     setNick
       .then(() => org.select(orgId))
       .then((res) => {
-        const updated = auth.updateLocalUser({
+        auth.updateLocalUser({
           orgId: res.orgId,
           orgName: res.orgName,
           orgFullName: res.fullName
         });
-        if (app.globalData && app.globalData.user && updated) {
-          app.globalData.user = updated;
-        }
         this.setData({ selectedId: orgId });
         wx.showToast({ title: '已选定组织', icon: 'success' });
         setTimeout(() => this.afterSelect(), 600);
