@@ -56,6 +56,11 @@ Page({
         }, 600);
       })
       .catch((err) => {
+        if (err && err.admission) {
+          // 未入驻 / 已停用：由启动页统一走邀请码校验或准入拦截
+          wx.reLaunch({ url: '/pages/launch/launch' });
+          return;
+        }
         this.setData({ errorMsg: (err && err.message) || '微信授权失败，请重试' });
       })
       .finally(() => {

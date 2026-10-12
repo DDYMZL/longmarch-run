@@ -125,14 +125,16 @@
 
 ## 4. 关键接口定义
 
-Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/auth/login` 与 `GET /api/org/children` 外，均需 `Authorization: Bearer <token>`（小程序令牌）。响应字段全部 camelCase。管理后台 `/api/admin/*` 使用管理员令牌（`typ=super` 超管 / `typ=user` 微信关联管理员），除 `POST /api/admin/login`、`POST /api/admin/wechat/qr`、`GET /api/admin/wechat/qr/{qr_id}/status` 外均需管理员令牌，且按菜单码校验权限（`require_menu`）。
+Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/auth/login`、`POST /api/auth/invite/verify`、`POST /api/auth/onboard` 与 `GET /api/org/children` 外，均需 `Authorization: Bearer <token>`（小程序令牌）。响应字段全部 camelCase。管理后台 `/api/admin/*` 使用管理员令牌（`typ=super` 超管 / `typ=user` 微信关联管理员），除 `POST /api/admin/login`、`POST /api/admin/wechat/qr`、`GET /api/admin/wechat/qr/{qr_id}/status` 外均需管理员令牌，且按菜单码校验权限（`require_menu`）。
 
 ### 4.1 接口总览
 
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/` | 否 | 健康检查 |
-| POST | `/api/auth/login` | 否 | 微信登录：`{code, nickname?, avatar?}` → `{token, user}`；顺带发放每日登录积分与采集 unionid 身份行（幂等）；昵称仅在首次创建时写入，后续登录不覆盖；同一 openid 重复/并发登录复用同一用户；微信换取失败 502 不签发 Token |
+| POST | `/api/auth/login` | 否 | 微信登录：`{code, avatar?}` → 仅为**已入驻**用户签发 `{status:"active", token, user}`；未入驻 `{status:"unregistered"}`、已停用 `{status:"disabled"}` 均不签发 Token；active 登录顺带发放每日登录积分（同日去重）与采集 unionid 身份行（幂等）；同一 openid 重复/并发登录复用同一用户；微信换取失败 502 |
+| POST | `/api/auth/invite/verify` | 否 | 校验入驻邀请码 `{inviteCode}`（不核销，`invite_limiter` 限流），返回 `{name, orgId, orgName}`；邀请码不可用返回 400（无效/停用/过期/用满） |
+| POST | `/api/auth/onboard` | 否 | 持邀请码入驻 `{code, inviteCode, nickname, orgId, avatar?}`：同一事务内条件 UPDATE 核销（used_count + 1，未过期未停用）+ 建号 + 审计 `user.onboard`；openid 唯一约束冲突回滚撤销核销复用已有用户。返回 `{token, user, created}`；邀请码不可用或组织越界 400；账号已停用 403（头 `X-Account-Status: disabled`）；微信换取失败 502 |
 | GET | `/api/auth/me` | 是 | 当前用户 `{id, nickname, avatar, orgId, nicknameChangedAt}` |
 | PUT | `/api/auth/nickname` | 是 | 修改昵称 `{nickname}`（每人仅一次，已修改过返回 400）→ 返回最新用户 |
 | PUT | `/api/auth/nickname/initial` | 是 | 首次引导设置昵称 `{nickname}`（不消耗改名机会；已改过名返回 400）→ 返回最新用户 |
@@ -176,9 +178,12 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | POST | `/api/admin/login` | 否 | 管理后台账号登录 `{username, password}` → `{token, username}`；`ADMIN_PASSWORD` 未配置时禁用（403「未配置管理账号密码，请使用微信扫码登录」） |
 | POST | `/api/admin/wechat/qr` | 否 | 创建扫码登录会话 → `{qr_id, image?, scene, mock, expires_in}`；未配置微信凭证（mock 模式）image 为 None、scene 为明文供调试 |
 | GET | `/api/admin/wechat/qr/{qr_id}/status` | 否 | 轮询扫码状态（限流 2s 起）：pending/scanned 返回状态；confirmed 返回 `{token, username, is_super, menus}`（令牌单次签发防重放）；failed 带 `fail_reason` |
-| GET | `/api/admin/onboarding-qrcode` | 管理员 | 通用入驻小程序码 `{image?, page, scene, env_version, mock}`：页面 `pages/launch/launch`、scene 固定 `src=onboard`（不含个人信息/OpenID/Token），成功结果进程内缓存；mock 模式 image 为 None |
+| GET/POST | `/api/admin/invites` | 管理员(invites) | 邀请码分页/新建：GET `?page=&page_size=&keyword=` 返回 `{total, items[{id,code,name,remark,orgId,orgName,maxUses,usedCount,expiresAt,isEnabled,status,createdBy,createdAt}]}`（`status∈active|disabled|expired|exhausted`）；POST `{name,remark,orgId,maxUses,expiresAt}` 生成 8 位随机 code（唯一），审计 |
+| PATCH | `/api/admin/invites/{id}` | 管理员(invites) | 编辑邀请码：`{name?,remark?,orgId?,maxUses?,expiresAt?,isEnabled?}`，`maxUses` 不能低于已用次数，审计（不下发原码） |
+| GET | `/api/admin/invites/{id}/qrcode` | 管理员(invites) | 下发邀请小程序码 `{image?, page, scene, envVersion, mock}`：页面 `pages/launch/launch`、scene `i=<CODE>`（≤32 字符，不含敏感信息）；mock 模式 image=None 返回明文 scene 供调试 |
+| PATCH | `/api/admin/users/{user_id}/status` | 管理员(access) | 启用/禁用账号 `{status: "active"|"disabled"}`：禁用后下次请求返回 403 `X-Account-Status: disabled`，审计记录操作人 |
 | GET | `/api/admin/me` | 管理员 | 当前管理员信息与菜单权限 `{is_super, username, menus}` |
-| GET | `/api/admin/users` | 管理员(access) | 人员授权列表（昵称/组织筛选、分页）：每项含启用/禁用角色与授权人 |
+| GET | `/api/admin/users` | 管理员(access) | 人员授权列表（昵称/组织/`status`筛选、分页）：每项含启用/禁用角色、授权人、邀请码来源（inviteCodeId/inviteName）、onboardedAt、status |
 | GET | `/api/admin/roles` | 管理员(access) | 角色列表（含菜单勾选与是否内置） |
 | POST | `/api/admin/roles` | 管理员(access) | 新建角色 `{name, menu_ids}`（code 由拼音首字母生成，重名 400） |
 | PUT | `/api/admin/roles/{role_id}` | 管理员(access) | 编辑角色名称与菜单（内置角色 400） |

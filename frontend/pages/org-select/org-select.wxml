@@ -2,10 +2,12 @@
   <!-- 面包屑：点击任意一级回跳 -->
   <scroll-view class="crumb-bar" scroll-x="true">
     <view class="crumb-inner">
-      <text class="crumb {{stack.length === 0 ? 'crumb-active' : ''}}" data-index="-1" bindtap="onTapCrumb">全部组织</text>
+      <text class="crumb {{stack.length === 0 ? 'crumb-active' : ''}}" data-index="-1" bindtap="onTapCrumb">{{stack.length && stack[0].id === rootId ? stack[0].name : '全部组织'}}</text>
       <block wx:for="{{stack}}" wx:key="id">
-        <text class="crumb-sep">›</text>
-        <text class="crumb {{index === stack.length - 1 ? 'crumb-active' : ''}}" data-index="{{index}}" bindtap="onTapCrumb">{{item.name}}</text>
+        <block wx:if="{{index > 0 || stack[0].id !== rootId}}">
+          <text class="crumb-sep">›</text>
+          <text class="crumb {{index === stack.length - 1 ? 'crumb-active' : ''}}" data-index="{{index}}" bindtap="onTapCrumb">{{item.name}}</text>
+        </block>
       </block>
     </view>
   </scroll-view>

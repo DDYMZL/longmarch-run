@@ -11,7 +11,7 @@ from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.core.security import decode_token
 from app.models.models import User
-from app.services import access_service
+from app.services import access_service, invite_service
 
 router = APIRouter(prefix="/ws", tags=["ws"])
 
@@ -22,7 +22,7 @@ async def updates(
     token: str = Query("", description="JWT（浏览器原生 WebSocket 无法携带请求头）"),
     db: Session = Depends(get_db),
 ):
-    """建立数据变更长链接；鉴权失败 4401 关闭，管理员授权被撤销 4403 关闭。
+    """建立数据变更长链接；鉴权失败 4401 关闭，管理员授权被撤销或账号停用 4403 关闭。
 
     同时接受小程序用户令牌与管理端令牌（role=admin）：超管令牌直接放行；
     微信关联管理员令牌建连时查库校验启用角色，权限撤销/禁用即时断权。
@@ -43,7 +43,9 @@ async def updates(
     elif user is None:
         await ws.close(code=4401)
         return
-    elif payload.get("role") == "admin" and access_service.build_principal(db, user) is None:
+    elif user.status != invite_service.STATUS_ACTIVE or (
+        payload.get("role") == "admin" and access_service.build_principal(db, user) is None
+    ):
         await ws.close(code=4403)
         return
     await ws_manager.connect(ws)

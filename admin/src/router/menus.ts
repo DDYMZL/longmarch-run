@@ -9,5 +9,6 @@ export const MENUS = [
   { code: 'quotes', path: '/quotes', title: '每日寄语', icon: 'ChatLineSquare' },
   { code: 'orgs', path: '/orgs', title: '组织架构', icon: 'OfficeBuilding' },
   { code: 'access', path: '/access', title: '人员授权', icon: 'Setting' },
+  { code: 'invites', path: '/invites', title: '入驻邀请码', icon: 'Promotion' },
   { code: 'audit', path: '/audit', title: '审计日志', icon: 'Document' }
 ] as const

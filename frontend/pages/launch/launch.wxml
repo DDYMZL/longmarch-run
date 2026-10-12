@@ -6,13 +6,20 @@
   </view>
 
   <view class="launch-status">
-    <block wx:if="{{loading}}">
+    <block wx:if="{{phase === 'loading'}}">
       <view class="spinner"></view>
-      <view class="status-text">正在进入长征…</view>
+      <view class="status-text">{{message}}</view>
+    </block>
+    <block wx:elif="{{phase === 'disabled'}}">
+      <view class="block-title">账号已停用</view>
+      <view class="block-tip">{{message}}</view>
+      <button class="btn-primary retry-btn" bindtap="onExit">退出小程序</button>
     </block>
     <block wx:else>
-      <view class="error-tip">{{errorMsg}}</view>
-      <button class="btn-primary retry-btn" bindtap="onRetry">重新进入</button>
+      <view class="block-title">暂无法进入</view>
+      <view class="block-tip">{{message}}</view>
+      <button class="btn-primary retry-btn" bindtap="onRescan">重新扫码</button>
+      <button class="btn-secondary retry-btn" bindtap="onExit">退出小程序</button>
     </block>
   </view>
 </view>

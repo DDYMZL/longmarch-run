@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db  # 在此重新导出，作为 API 层统一入口
 from app.core.security import decode_token
 from app.models.models import User
-from app.services import access_service
+from app.services import access_service, auth_service, invite_service
 
 
 _bearer = HTTPBearer(auto_error=False)
@@ -39,7 +39,18 @@ def get_current_user(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="用户不存在"
         )
+    _ensure_active(user)
     return user
+
+
+def _ensure_active(user: User) -> None:
+    """停用账号即时断权：403 + X-Account-Status 头，前端据此清会话进入停用提示。"""
+    if user.status != invite_service.STATUS_ACTIVE:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=auth_service.ACCOUNT_DISABLED_MESSAGE,
+            headers={"X-Account-Status": "disabled"},
+        )
 
 
 class AdminPrincipal:
@@ -99,6 +110,7 @@ def get_current_admin(
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="管理员账号不存在"
         )
+    _ensure_active(user)
     principal_data = access_service.build_principal(db, user)
     if principal_data is None:
         raise HTTPException(

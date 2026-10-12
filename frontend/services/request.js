@@ -74,7 +74,14 @@ function send(opts) {
           return;
         }
         const fallback = res.statusCode === 401 ? '登录已过期，请重新登录' : '请求失败';
-        reject(buildError(errorMessage(res.data, fallback), { statusCode: res.statusCode }));
+        const err = buildError(errorMessage(res.data, fallback), { statusCode: res.statusCode });
+        // 账号被停用：后端用响应头 X-Account-Status 标识（小写键兼容部分设备）
+        const headers = res.header || {};
+        const accountStatus = headers['X-Account-Status'] || headers['x-account-status'];
+        if (res.statusCode === 403 && accountStatus === 'disabled') {
+          err.admission = 'disabled';
+        }
+        reject(err);
       },
       fail: (err) => {
         const raw = (err && err.errMsg) || '';
@@ -97,6 +104,11 @@ function send(opts) {
 function request(options) {
   const opts = options || {};
   return send(opts).catch((err) => {
+    // 账号停用：清登录态并回启动页由其显示准入拦截，不再做静默重登
+    if (err.admission === 'disabled') {
+      if (!opts.skipAuthRetry) clearSession();
+      throw err;
+    }
     if (err.statusCode !== 401 || opts.skipAuthRetry) throw err;
     if (!reauthHandler) {
       clearSession();

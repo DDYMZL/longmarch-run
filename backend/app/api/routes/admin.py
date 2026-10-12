@@ -27,7 +27,11 @@ from app.schemas.schemas import (
     AdminLoginRequest,
     AdminMeOut,
     AdminMenuOut,
-    AdminOnboardingQrOut,
+    AdminInviteCreate,
+    AdminInviteListOut,
+    AdminInviteOut,
+    AdminInviteQrOut,
+    AdminInviteUpdate,
     AdminOrgNodeOut,
     AdminOrgUserListOut,
     AdminQrCreateOut,
@@ -60,6 +64,7 @@ from app.schemas.schemas import (
     AdminUserListOut,
     AdminUserOverviewOut,
     AdminUserRolesRequest,
+    AdminUserStatusRequest,
     MessageOut,
 )
 from app.services import (
@@ -68,6 +73,7 @@ from app.services import (
     dashboard_service,
     identity_service,
     import_service,
+    invite_service,
     quote_service,
     wechat_service,
 )
@@ -113,23 +119,6 @@ def create_wechat_qr(request: Request, db: Session = Depends(get_db)):
         "scene": scene_token if mock else None,
         "mock": mock,
         "expires_in": settings.QR_LOGIN_TTL_SECONDS,
-    }
-
-
-@router.get(
-    "/onboarding-qrcode",
-    response_model=AdminOnboardingQrOut,
-    summary="通用入驻小程序码（员工扫码进入小程序自动登录）",
-)
-def get_onboarding_qrcode(_: AdminPrincipal = Depends(get_current_admin)):
-    """码内仅含启动页路径与固定渠道标记，不含任何个人信息、OpenID 或 Token。"""
-    image = wechat_service.get_onboarding_image()
-    return {
-        "image": None if image is None else wechat_service.to_data_url(image),
-        "page": wechat_service.ONBOARD_PAGE,
-        "scene": wechat_service.ONBOARD_SCENE,
-        "env_version": settings.WXACODE_ENV_VERSION,
-        "mock": image is None,
     }
 
 
@@ -698,13 +687,120 @@ def list_admin_users(
     keyword: str = Query("", max_length=64),
     org_id: Optional[int] = Query(None),
     has_access: Optional[bool] = Query(None),
+    status: str = Query("", pattern="^(|active|disabled)$"),
     db: Session = Depends(get_db),
     admin: AdminPrincipal = Depends(require_menu("access")),
 ):
     total, items = access_service.list_users(
-        db, page, page_size, keyword, org_id, has_access
+        db, page, page_size, keyword, org_id, has_access, status
     )
     return {"total": total, "items": items}
+
+
+@router.patch(
+    "/users/{user_id}/status",
+    response_model=MessageOut,
+    summary="启用或停用用户（停用后小程序与后台即时断权）",
+)
+def set_user_status(
+    user_id: int,
+    payload: AdminUserStatusRequest,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("access")),
+):
+    if not admin.is_super and admin.user_id == user_id:
+        raise HTTPException(status_code=400, detail="不能修改自己的账号状态")
+    try:
+        actor_type, actor_id = _actor(admin)
+        invite_service.set_user_status(db, user_id, payload.status, actor_type, actor_id)
+    except ValueError as exc:
+        status_code = 404 if str(exc) == "用户不存在" else 400
+        raise HTTPException(status_code=status_code, detail=str(exc))
+    return {"message": "已更新"}
+
+
+# ---------------- 入驻邀请码 ----------------
+@router.get(
+    "/invites",
+    response_model=AdminInviteListOut,
+    summary="入驻邀请码分页列表",
+)
+def list_invites(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str = Query("", max_length=64),
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("invites")),
+):
+    total, items = invite_service.list_invites(db, page, page_size, keyword)
+    return {"total": total, "items": items}
+
+
+@router.post(
+    "/invites",
+    response_model=AdminInviteOut,
+    summary="生成入驻邀请码（可限组织、有效期、使用次数）",
+)
+def create_invite(
+    payload: AdminInviteCreate,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("invites")),
+):
+    try:
+        actor_type, actor_id = _actor(admin)
+        return invite_service.create_invite(
+            db, payload.model_dump(), actor_type, actor_id, admin.username
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.patch(
+    "/invites/{invite_id}",
+    response_model=AdminInviteOut,
+    summary="编辑/启停入驻邀请码（部分更新）",
+)
+def update_invite(
+    invite_id: int,
+    payload: AdminInviteUpdate,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("invites")),
+):
+    fields = payload.model_dump(exclude_unset=True)
+    if any(fields.get(key, "") is None for key in ("name", "is_enabled")):
+        raise HTTPException(status_code=400, detail="名称与启用状态不能为空")
+    try:
+        actor_type, actor_id = _actor(admin)
+        return invite_service.update_invite(db, invite_id, fields, actor_type, actor_id)
+    except ValueError as exc:
+        status_code = 404 if str(exc) == "邀请码不存在" else 400
+        raise HTTPException(status_code=status_code, detail=str(exc))
+
+
+@router.get(
+    "/invites/{invite_id}/qrcode",
+    response_model=AdminInviteQrOut,
+    summary="邀请码小程序码（扫码进入启动页入驻）",
+)
+def get_invite_qrcode(
+    invite_id: int,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("invites")),
+):
+    """码内仅含启动页路径与 scene=i=<邀请码>，不含 OpenID、Token 或个人信息。"""
+    try:
+        invite = invite_service.get_invite(db, invite_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    scene = invite_service.scene_of(invite.code)
+    image = wechat_service.get_invite_image(scene)
+    return {
+        "image": None if image is None else wechat_service.to_data_url(image),
+        "page": wechat_service.ONBOARD_PAGE,
+        "scene": scene,
+        "env_version": settings.WXACODE_ENV_VERSION,
+        "mock": image is None,
+    }
 
 
 @router.get(

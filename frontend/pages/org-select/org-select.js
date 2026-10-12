@@ -20,20 +20,31 @@ Page({
     currentId: null, // 当前所处组织 id（stack 末级），null 表示顶级
     currentFullName: '', // 当前所处组织全路径名
     selectedId: null, // 用户已选定的组织 id（回显）
+    rootId: null, // pick 模式下的组织范围根 id，限制不得越界
     showNickInput: false, // 首次登录（未改名）时展示微信昵称采集
     nickname: '' // 昵称输入框内容
   },
 
   onLoad(options) {
+    const opts = options || {};
+    const from = opts.from || '';
+    this.pickMode = from === 'onboard';
+    this.rootId = opts.rootId ? Number(opts.rootId) : null;
+    const rootName = decodeURIComponent(opts.rootName || '');
+    if (this.pickMode) {
+      // 入驻场景尚未登录：不读 app.globalData、不采集昵称，仅通过 eventChannel 回传选定结果
+      const initialStack = this.rootId ? [{ id: this.rootId, name: rootName || '所属组织' }] : [];
+      this.setData({ stack: initialStack, showNickInput: false, selectedId: null, rootId: this.rootId });
+      this.loadLevel(this.rootId || null);
+      return;
+    }
     if (!app.globalData.loggedIn) {
       wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
-    const from = (options && options.from) || '';
     const user = app.globalData.user || {};
     this.setData({
       selectedId: user.orgId || null,
-      // 首页引导入口、且尚未使用过改名机会时顺带采集微信名
       showNickInput: from === 'home' && !user.nicknameChangedAt
     });
     this.loadLevel(null);
@@ -84,14 +95,16 @@ Page({
     this.confirmSelect(id);
   },
 
-  /** 点击面包屑回跳到某一级；index = -1 表示回到顶级 */
+  /** 点击面包屑回跳到某一级；pick 模式下不允许回到 rootId 之上 */
   onTapCrumb(e) {
     const index = Number(e.currentTarget.dataset.index);
+    const minIndex = this.pickMode && this.rootId ? 0 : -1;
+    const safeIndex = Math.max(index, minIndex);
     let stack;
-    if (index < 0) {
+    if (safeIndex < 0) {
       stack = [];
     } else {
-      stack = this.data.stack.slice(0, index + 1);
+      stack = this.data.stack.slice(0, safeIndex + 1);
     }
     this.setData({ stack: stack });
     this.loadLevel(stack.length ? stack[stack.length - 1].id : null);
@@ -109,19 +122,31 @@ Page({
     this.setData({ nickname: e.detail.value });
   },
 
-  /** 确认选定组织：先落昵称（可选）再调后端持久化 + 更新全局用户 + 跳转 */
+  /** 确认选定组织：pick 模式仅回传给入驻页；其余模式按原逻辑调后端持久化 */
   confirmSelect(orgId) {
-    if (this._selecting) return; // 防连点重复提交
+    if (this._selecting) return;
     this._selecting = true;
+    if (this.pickMode) {
+      const node = this.findNode(orgId);
+      const fullName = this.data.stack
+        .concat(this.data.currentId === orgId ? [] : [{ id: orgId, name: node ? node.name : '' }])
+        .map((s) => s.name)
+        .filter(Boolean)
+        .join(' / ');
+      const channel = this.getOpenerEventChannel && this.getOpenerEventChannel();
+      if (channel && channel.emit) {
+        channel.emit('orgPicked', { orgId: orgId, orgName: node ? node.name : fullName, orgFullName: fullName });
+      }
+      wx.navigateBack();
+      return;
+    }
     const nick = (this.data.nickname || '').trim();
-    // 昵称设置失败不阻塞组织选择（后端默认昵称兜底）
     const setNick = this.data.showNickInput && nick
       ? auth.setInitialNickname(nick).catch(() => null)
       : Promise.resolve(null);
     setNick
       .then(() => org.select(orgId))
       .then((res) => {
-        // 同步本地缓存与全局登录态，供「我的」等页面回显
         const updated = auth.updateLocalUser({
           orgId: res.orgId,
           orgName: res.orgName,
@@ -131,16 +156,24 @@ Page({
           app.globalData.user = updated;
         }
         this.setData({ selectedId: orgId });
-
         wx.showToast({ title: '已选定组织', icon: 'success' });
-        setTimeout(() => {
-          this.afterSelect();
-        }, 600);
+        setTimeout(() => this.afterSelect(), 600);
       })
       .catch((err) => {
         this._selecting = false;
         wx.showToast({ title: (err && err.message) || '选定失败，请重试', icon: 'none' });
       });
+  },
+
+  findNode(orgId) {
+    const list = this.data.list || [];
+    for (let i = 0; i < list.length; i += 1) {
+      if (list[i].id === orgId) return list[i];
+    }
+    // 选当前层级：从 stack 末尾取
+    const stack = this.data.stack || [];
+    if (stack.length && stack[stack.length - 1].id === orgId) return stack[stack.length - 1];
+    return null;
   },
 
   /** 选定后返回上一页（无上一页时回「我的」） */

@@ -331,7 +331,40 @@ export function pollWechatQr(qrId: string) {
   return request.get<QrStatusResult>(`/admin/wechat/qr/${qrId}/status`, { silent: true })
 }
 
-export interface OnboardingQrResult {
+// ---------------- 入驻邀请码 ----------------
+export type InviteStatus = 'active' | 'disabled' | 'expired' | 'exhausted'
+
+export interface InviteItem {
+  id: number
+  code: string
+  name: string
+  remark: string | null
+  org_id: number | null
+  org_name: string | null
+  max_uses: number | null
+  used_count: number
+  expires_at: string | null
+  is_enabled: boolean
+  status: InviteStatus
+  created_by: string | null
+  created_at: string
+}
+
+export interface InviteListResult {
+  total: number
+  items: InviteItem[]
+}
+
+// org_id / max_uses / expires_at 传 null 表示不限；expires_at 为带时区的 ISO 字符串
+export interface InviteUpsert {
+  name: string
+  remark: string | null
+  org_id: number | null
+  max_uses: number | null
+  expires_at: string | null
+}
+
+export interface InviteQrResult {
   image: string | null
   page: string
   scene: string
@@ -339,8 +372,20 @@ export interface OnboardingQrResult {
   mock: boolean
 }
 
-export function fetchOnboardingQr() {
-  return request.get<OnboardingQrResult>('/admin/onboarding-qrcode')
+export function fetchInvites(page: number, pageSize: number, keyword = '') {
+  return request.get<InviteListResult>('/admin/invites', { params: { page, page_size: pageSize, keyword: keyword || undefined } })
+}
+
+export function createInvite(data: InviteUpsert) {
+  return request.post<InviteItem>('/admin/invites', data)
+}
+
+export function updateInvite(id: number, data: Partial<InviteUpsert> & { is_enabled?: boolean }) {
+  return request.patch<InviteItem>(`/admin/invites/${id}`, data)
+}
+
+export function fetchInviteQr(id: number) {
+  return request.get<InviteQrResult>(`/admin/invites/${id}/qrcode`)
 }
 
 export interface MeResult {
@@ -370,7 +415,13 @@ export interface AdminUserItem {
   org_name: string | null
   has_access: boolean
   roles: UserRoleItem[]
+  status: UserStatus
+  invite_code_id: number | null
+  invite_name: string | null
+  onboarded_at: string | null
 }
+
+export type UserStatus = 'active' | 'disabled'
 
 export interface AdminUserListResult {
   total: number
@@ -383,10 +434,15 @@ export interface AdminUserQuery {
   keyword?: string
   org_id?: number | null
   has_access?: boolean | null
+  status?: UserStatus | ''
 }
 
 export function fetchAdminUsers(params: AdminUserQuery) {
   return request.get<AdminUserListResult>('/admin/users', { params })
+}
+
+export function setUserStatus(userId: number, status: UserStatus) {
+  return request.patch<MessageResult>(`/admin/users/${userId}/status`, { status })
 }
 
 export interface RoleItem {

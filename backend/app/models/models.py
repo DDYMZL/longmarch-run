@@ -158,7 +158,7 @@ class Organization(Base):
 
 # ---------------- 用户业务数据 ----------------
 class User(Base):
-    """用户（微信登录创建）。openid 唯一。
+    """用户（持有效邀请码入驻时创建）。openid 唯一。
 
     nickname_changed_at 非空表示已使用唯一一次改名机会；original_nickname
     记录登录时的微信昵称（曾用名），供管理端展示修改记录。
@@ -180,6 +180,33 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     # 长征完成仪式（需求 §20.4）：非空表示已观看首次完成仪式，之后仅展示「已完成长征」
     route_ceremony_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    # 准入（015）：status active/disabled；invite_code_id 为空即 015 之前的历史用户
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    invite_code_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True, default=None)
+    onboarded_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+
+
+class InviteCode(Base):
+    """入驻邀请码（PC 后台生成）。code 即小程序码 scene 参数 i=<code>。
+
+    org_id 非空时入驻只能选择该组织及其下级；max_uses 为空不限次数；
+    used_count 仅由 invite_service 的条件 UPDATE 原子递增。
+    """
+
+    __tablename__ = "invite_codes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    code: Mapped[str] = mapped_column(String(32), unique=True)
+    name: Mapped[str] = mapped_column(String(64))
+    remark: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, default=None)
+    org_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    max_uses: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    used_count: Mapped[int] = mapped_column(Integer, default=0)
+    expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    created_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class DailySport(Base):

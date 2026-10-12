@@ -11,6 +11,8 @@ from typing import List, Optional
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
+from app.core.helpers import local_to_utc
+
 
 class CamelModel(BaseModel):
     """输出 camelCase、可按字段名或别名填充、支持从 ORM 对象读取。"""
@@ -43,8 +45,41 @@ class LoginRequest(BaseModel):
 
 
 class LoginResponse(CamelModel):
+    """status：active 已入驻（带 token/user）/ unregistered 未入驻 / disabled 已停用（均无 token）。"""
+
+    status: str
+    token: Optional[str] = None
+    user: Optional[UserOut] = None
+
+
+class InviteVerifyRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    invite_code: str = Field(alias="inviteCode", max_length=64)
+
+
+class InviteVerifyOut(CamelModel):
+    """邀请码可用时返回入驻页所需信息；org_id 非空表示只能选择该组织及其下级。"""
+
+    name: str
+    org_id: Optional[int] = None
+    org_name: Optional[str] = None
+
+
+class OnboardRequest(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
+    code: str
+    invite_code: str = Field(alias="inviteCode", max_length=64)
+    nickname: str = Field(min_length=1, max_length=64)
+    org_id: int = Field(alias="orgId")
+    avatar: Optional[str] = Field("", max_length=500)
+
+
+class OnboardResponse(CamelModel):
     token: str
     user: UserOut
+    created: bool
 
 
 class NicknameUpdateRequest(BaseModel):
@@ -639,6 +674,8 @@ class UserOrgOut(CamelModel):
     org_name: str = ""
     full_name: str = ""
     path: List[OrgPathItem] = []
+    scope_org_id: Optional[int] = None
+    scope_org_name: Optional[str] = None
 
 
 class CompanionItemOut(CamelModel):
@@ -734,14 +771,69 @@ class AdminQrCreateOut(BaseModel):
     expires_in: int
 
 
-class AdminOnboardingQrOut(BaseModel):
-    """通用入驻小程序码；mock 模式（未配置微信凭证或生成失败）image 为 None。"""
+class AdminInviteQrOut(BaseModel):
+    """邀请码小程序码；mock 模式（未配置微信凭证或生成失败）image 为 None。"""
 
     image: Optional[str] = None
     page: str
     scene: str
     env_version: str
     mock: bool = False
+
+
+class AdminInviteOut(BaseModel):
+    """status：active 可用 / disabled 已停用 / expired 已过期 / exhausted 已用满。"""
+
+    id: int
+    code: str
+    name: str
+    remark: Optional[str] = None
+    org_id: Optional[int] = None
+    org_name: Optional[str] = None
+    max_uses: Optional[int] = None
+    used_count: int
+    expires_at: Optional[datetime] = None
+    is_enabled: bool
+    status: str
+    created_by: Optional[str] = None
+    created_at: datetime
+
+
+class AdminInviteListOut(BaseModel):
+    total: int
+    items: List[AdminInviteOut]
+
+
+class _InviteExpiry(BaseModel):
+    """有效期入参：带时区按时区换算，naive 视为服务器本地时间，统一存 UTC naive。"""
+
+    expires_at: Optional[datetime] = None
+
+    @field_validator("expires_at")
+    @classmethod
+    def to_utc(cls, value: Optional[datetime]) -> Optional[datetime]:
+        return local_to_utc(value) if value is not None else None
+
+
+class AdminInviteCreate(_InviteExpiry):
+    name: str = Field(min_length=1, max_length=64)
+    remark: Optional[str] = Field(None, max_length=200)
+    org_id: Optional[int] = None
+    max_uses: Optional[int] = Field(None, ge=1)
+
+
+class AdminInviteUpdate(_InviteExpiry):
+    """部分更新：只处理请求中显式出现的字段（org_id/max_uses/expires_at 传 null 表示清空）。"""
+
+    name: Optional[str] = Field(None, min_length=1, max_length=64)
+    remark: Optional[str] = Field(None, max_length=200)
+    org_id: Optional[int] = None
+    max_uses: Optional[int] = Field(None, ge=1)
+    is_enabled: Optional[bool] = None
+
+
+class AdminUserStatusRequest(BaseModel):
+    status: str = Field(pattern="^(active|disabled)$")
 
 
 class AdminMenuOut(BaseModel):
@@ -782,6 +874,10 @@ class AdminUserItem(BaseModel):
     org_name: Optional[str] = None
     has_access: bool
     roles: List[AdminUserRoleItem] = []
+    status: str = "active"
+    invite_code_id: Optional[int] = None
+    invite_name: Optional[str] = None
+    onboarded_at: Optional[datetime] = None
 
 
 class AdminUserListOut(BaseModel):

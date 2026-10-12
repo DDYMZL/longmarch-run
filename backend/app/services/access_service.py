@@ -18,6 +18,7 @@ from app.models.models import (
     AdminRoleMenu,
     AdminUserRole,
     AuditLog,
+    InviteCode,
     Organization,
     User,
 )
@@ -33,6 +34,7 @@ ALL_MENU_CODES = [
     "orgs",
     "access",
     "audit",
+    "invites",
 ]
 
 ACTOR_SUPER = "super"
@@ -103,13 +105,16 @@ def list_users(
     keyword: str = "",
     org_id: Optional[int] = None,
     has_access: Optional[bool] = None,
+    status: str = "",
 ) -> Tuple[int, List[dict]]:
-    """人员分页列表（含角色与后台授权状态）；批量取角色与组织名避免 N+1。"""
+    """人员分页列表（含角色、后台授权与准入状态）；批量取角色/组织名/邀请码名避免 N+1。"""
     query = db.query(User)
     if keyword:
         query = query.filter(User.nickname.icontains(keyword, autoescape=True))
     if org_id is not None:
         query = query.filter(User.org_id == org_id)
+    if status:
+        query = query.filter(User.status == status)
     if has_access is not None:
         enabled_ids = db.query(AdminUserRole.user_id).filter(
             AdminUserRole.enabled.is_(True)
@@ -151,6 +156,12 @@ def list_users(
         if org_ids
         else {}
     )
+    invite_ids = {user.invite_code_id for user in users if user.invite_code_id is not None}
+    invite_names = (
+        dict(db.query(InviteCode.id, InviteCode.name).filter(InviteCode.id.in_(invite_ids)).all())
+        if invite_ids
+        else {}
+    )
     items = [
         {
             "id": user.id,
@@ -160,6 +171,10 @@ def list_users(
             "org_name": org_names.get(user.org_id),
             "has_access": any(r["enabled"] for r in roles_by_user[user.id]),
             "roles": roles_by_user[user.id],
+            "status": user.status,
+            "invite_code_id": user.invite_code_id,
+            "invite_name": invite_names.get(user.invite_code_id),
+            "onboarded_at": user.onboarded_at,
         }
         for user in users
     ]

@@ -91,7 +91,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 
 ## 鉴权
 
-- **小程序令牌**（`typ=user`，`sub`=user_id）：除 `POST /api/auth/login`、`GET /api/org/children` 外，所有小程序接口都需要请求头：
+- **小程序令牌**（`typ=user`，`sub`=user_id）：除 `POST /api/auth/login`、`POST /api/auth/invite/verify`、`POST /api/auth/onboard`、`GET /api/org/children` 外，所有小程序接口都需要请求头：
   ```
   Authorization: Bearer <登录返回的 token>
   ```
@@ -102,7 +102,9 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/` | 健康检查 |
-| POST | `/api/auth/login` | 微信登录（body: `code`、可选 `nickname`/`avatar`），返回 `token` + `user` |
+| POST | `/api/auth/login` | 微信登录（body: `code`、可选 `avatar`）：仅为**已入驻**用户签发 `{status:"active", token, user}`；未入驻 `{status:"unregistered"}`、已停用 `{status:"disabled"}` 均不签发 Token；微信换取失败 502 |
+| POST | `/api/auth/invite/verify` | 校验入驻邀请码 `{inviteCode}`（不核销，限流），返回 `{name, orgId, orgName}`；不可用（无效/停用/过期/用满）400 |
+| POST | `/api/auth/onboard` | 持邀请码入驻 `{code, inviteCode, nickname, orgId, avatar?}`：原子核销 + 建号 + 签发 Token，返回 `{token, user, created}`；已入驻身份重复提交幂等返回；邀请码不可用或组织越界 400；账号已停用 403（头 `X-Account-Status: disabled`） |
 | GET | `/api/auth/me` | 当前登录用户信息 |
 | PUT | `/api/auth/nickname` | 修改昵称（body: `nickname`），每人仅一次，已修改过返回 400 |
 | PUT | `/api/auth/nickname/initial` | 首次引导设置昵称（body: `nickname`），不消耗改名机会，已改过名返回 400 |
@@ -139,7 +141,10 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | POST | `/api/admin/login` | 管理后台账号登录（body: `username`/`password`；`ADMIN_PASSWORD` 未配置时 403，仅扫码登录） |
 | POST | `/api/admin/wechat/qr` | 创建扫码登录会话（无需鉴权）：mock 模式返回明文 scene 供调试 |
 | GET | `/api/admin/wechat/qr/{qr_id}/status` | 轮询扫码状态（无需鉴权，限流）：confirmed 时单次签发管理员令牌与菜单 |
-| GET | `/api/admin/onboarding-qrcode` | 通用入驻小程序码（管理员）：落地 `pages/launch/launch`，scene 固定 `src=onboard` |
+| GET/POST | `/api/admin/invites[?keyword=&page=]` | 入驻邀请码列表（分页/关键字）/ 生成（`{name, remark?, org_id?, max_uses?, expires_at?}`，`expires_at` 带时区 ISO 存 UTC naive） |
+| PATCH | `/api/admin/invites/{id}` | 部分更新：名称/备注/组织范围/次数上限/有效期/启停（`max_uses` 不得低于 `used_count`） |
+| GET | `/api/admin/invites/{id}/qrcode` | 邀请码小程序码 `{image?, page:"pages/launch/launch", scene:"i=<code>", env_version, mock}`：码内仅含邀请码标识，不含个人信息/OpenID/Token，成功结果进程内缓存；mock 模式 image 为 None |
+| PATCH | `/api/admin/users/{uid}/status` | 启用/停用用户 `{status:"active"|"disabled"}`（即时断权；超管以外禁止改自身） |
 | GET | `/api/admin/me` | 当前管理员信息与菜单权限 |
 | GET | `/api/admin/dashboard` | 驾驶舱聚合（核心指标 + 路线总览） |
 | GET | `/api/admin/dashboard/trend?days=` | 运动趋势（近 N 日） |
@@ -161,7 +166,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | POST | `/api/admin/quotes/import-preview` / `import-confirm` | 寄语批量导入：逐行校验（定位到行与字段，库内/文件内重复判错不覆盖）→ 凭令牌一次性写入 |
 | GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 组织架构 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计）；`POST /api/admin/orgs/sync` 外部同步 |
 | GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 组织人员明细（分页）：`scope=direct` 仅直属成员，`scope=all` 含全部层级下级，与组织树两列统计口径一致 |
-| GET | `/api/admin/users?keyword=&org_id=&page=` | 人员授权列表（昵称/组织筛选、分页），每项含启用/禁用角色 |
+| GET | `/api/admin/users?keyword=&org_id=&status=&page=` | 人员授权列表（昵称/组织/账号状态筛选、分页），每项含启用/禁用角色、`status`、`invite_code_id`、`invite_name`、`onboarded_at` |
 | GET/POST | `/api/admin/roles[/{id}]` | 角色列表/新建（含菜单勾选）；PUT 编辑名称与菜单、DELETE 删除（内置/已授权 400） |
 | POST | `/api/admin/users/{uid}/roles` | 全量覆盖用户角色 `{role_ids}`（逐项审计） |
 | PATCH | `/api/admin/users/{uid}/roles/{rid}/enabled` | 启用/禁用单个角色授权（即时生效，不改授权关系） |
@@ -181,6 +186,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 - **每日寄语**：启用寄语按 `(sort_order, id)` 升序排列共 N 条，今日展示第 `(今天 − 循环起始日期).days % N` 条（起始日期存 `system_settings.quote_cycle_start`，后台可改；起始日期在未来时展示第 1 条）；同一天所有用户看到同一条，停用/新增/删除后按最新启用列表重算；无启用寄语返回 null。Excel 导入未填排序号的行接在库内与文件内已填排序号最大值之后。
 - **身份关联**：认证（JWT）/ 身份关联（user_identities）/ 后台授权（RBAC）三层分离，绑定身份成功**不等于**拥有后台权限；`wx_mini` 登录凭证身份不可解绑；同一 `provider+app_id+openid` 全局唯一，unionid 冲突**禁止自动合并**；绑定凭证只存 SHA-256 摘要，确认后单次有效。
 - **扫码登录**：L 场景创建→轮询→小程序确认（无启用角色会话置 failed 并返回原因）→PC 轮询 confirmed 后**单次签发**管理员 JWT（token_issued 原子标记防重放）。
+- **邀请码准入**：PC 后台生成邀请码（名称/可选组织范围/可选次数上限/可选有效期）；员工扫邀请码小程序码落地 `pages/launch/launch`，`scene=i=<code>`。启动页按 `wx.login` 识别微信身份：active 直接进入首页；unregistered + 有效邀请码 → 入驻页填姓名/组织（专属码仅可在允许组织范围内选）；无效邀请码或无邀请码扫描 → 准入拦截。入驻接口在一个事务中条件 UPDATE 核销（`used_count < max_uses` 且未过期未停用）+ 建号 + 审计，openid 唯一约束冲突回滚撤销核销；并发首登复用同一用户仅核销一次。历史用户（无 `invite_code_id`）保持 active 不受限。
 - **RBAC**：超管全菜单放行；微信关联管理员按启用角色的菜单并集校验，每请求查库——撤销/禁用即时生效；授权/角色变更逐项写审计。
 
 ## 数据库结构维护
@@ -198,7 +204,7 @@ backend 所需的建库、建表、索引和结构变更统一维护在根目录
 
 1. 前端 `frontend/services/auth.js` 已对接真实后端登录（`wx.login` → `POST /api/auth/login` → JWT）；`march.js` 已对接路线数据（`GET /api/march/route`，节点配置随路线统一下发）。
 2. 其余业务（sport/quiz/points/medal/org/rank）也已全量切换为真实接口（`wx.request` + JWT）；**响应字段为 camelCase，与原 Mock 返回结构一致**，前端页面层零改动。
-3. 登录流程：前端 `wx.login()` 拿 `code` → `POST /api/auth/login` → 保存 `token` 到 `lm_auth_token` → 后续请求带 `Authorization: Bearer <token>`。启动页先 `GET /api/auth/me` 后端校验 Token；401 时静默 `wx.login` 重新登录并重试原请求一次，重登失败才回到启动页。
+3. 登录流程：前端 `wx.login()` 拿 `code` → `POST /api/auth/login` → active 时保存 `token` 到 `lm_auth_token`，unregistered 走 `/auth/invite/verify` + `/auth/onboard` 入驻（扫邀请码进入启动页）。后续请求带 `Authorization: Bearer <token>`；启动页先 `GET /api/auth/me` 后端校验 Token，401 时静默 `wx.login` 重登并重试一次，重登失败回启动页；受保护接口对已停用用户返回 403（头 `X-Account-Status: disabled`），前端据此清登录态并回启动页展示准入拦截。
 4. 管理端实时推送：`GET /api/ws/updates?token=<JWT>` 建立 WebSocket 长连接（admin 与用户 token 均可），小程序侧任何用户数据写入（步数/答题/点亮/组织/登录/勋章）成功后广播 `data_changed` 事件，`user_event` 写入时额外广播 `activity`（含昵称与文案）；管理端驾驶舱/数据大屏据此自动刷新并滚动实时动态。
 
 ## 待完善（生产化 TODO）

@@ -1,47 +1,30 @@
 /**
- * 微信登录服务
- * wx.login() -> 后端换取 openid -> JWT。
- * 启动 / Token 失效时静默登录（ensureLogin、401 重登）；用户主动退出后仅允许登录页手动登录。
+ * 微信登录与入驻服务
+ * - wx.login 以 code 识别微信身份；后端仅为已入驻用户签发 JWT。
+ * - 未入驻 / 已停用用户返回 status 由上层决定进入入驻页或准入拦截页。
+ * - 启动页与 Token 失效时静默登录（ensureLogin、401 重登）；用户主动退出后不再静默登录。
  */
 const requestService = require('./request');
 const store = require('./store');
 
 const USER_KEY = 'lm_login_user';
 const LOGGED_OUT_KEY = 'lm_logged_out';
+const INVITE_KEY = 'lm_pending_invite';
 
 let reloginPending = null;
 let ensurePending = null;
 
-/**
- * 持久化头像：chooseAvatar 返回的是临时路径（重启后失效），
- * 用 FileSystemManager.saveFile 转存到用户目录，得到可长期引用的本地路径。
- * 网络头像（http/https）与已转存路径直接返回。
- * @param {string} tempPath
- * @returns {Promise<string>}
- */
+/** 持久化头像；chooseAvatar 返回的临时路径重启后失效，网络头像与已持久化路径直接返回。 */
 function persistAvatar(tempPath) {
   return new Promise((resolve) => {
-    if (!tempPath) {
-      resolve('');
-      return;
-    }
+    if (!tempPath) return resolve('');
     const userDir = (wx.env && wx.env.USER_DATA_PATH) || '';
-    // 已是持久化本地路径，直接返回
-    if (userDir && tempPath.indexOf(userDir) === 0) {
-      resolve(tempPath);
-      return;
-    }
-    // 真实网络头像（https://）直接返回
-    if (/^https:\/\//.test(tempPath)) {
-      resolve(tempPath);
-      return;
-    }
-    // chooseAvatar 临时路径（工具 http://tmp/、真机 wxfile://tmp_）转存为持久路径
+    if (userDir && tempPath.indexOf(userDir) === 0) return resolve(tempPath);
+    if (/^https:\/\//.test(tempPath)) return resolve(tempPath);
     try {
       wx.getFileSystemManager().saveFile({
         tempFilePath: tempPath,
         success: (res) => resolve(res.savedFilePath),
-        // 转存失败退回临时路径（当次会话仍可用）
         fail: () => resolve(tempPath)
       });
     } catch (e) {
@@ -59,55 +42,15 @@ function readLocalUser() {
   }
 }
 
-/**
- * 微信登录，返回后端用户。
- * @param {{nickname?:string, avatar?:string}} [profile]
- * @returns {Promise<{id:number, nickname:string, avatar:string, orgId:number|null}>}
- */
-function wxLogin(profile) {
-  const p = profile || {};
-  const previousUser = readLocalUser();
-
-  return new Promise((resolve, reject) => {
-    wx.login({
-      success: (res) => {
-        if (!res.code) {
-          reject(new Error('微信登录失败'));
-          return;
-        }
-        persistAvatar(p.avatar || '')
-          .then((avatar) =>
-            requestService.request({
-              url: '/auth/login',
-              method: 'POST',
-              skipAuthRetry: true,
-              data: {
-                code: res.code,
-                nickname: p.nickname || '',
-                avatar: avatar
-              }
-            })
-          )
-          .then((result) => {
-            wx.setStorageSync(requestService.TOKEN_KEY, result.token);
-            if (previousUser && previousUser.id !== undefined) {
-              store.migrateUserData(previousUser.id, result.user.id);
-            }
-            const user = saveServerUser(result.user, previousUser);
-            wx.removeStorageSync(LOGGED_OUT_KEY);
-            resolve(user);
-          })
-          .catch(reject);
-      },
-      fail: () => reject(new Error('微信登录失败，请重试'))
-    });
-  });
+function isLoggedOut() {
+  try {
+    return !!wx.getStorageSync(LOGGED_OUT_KEY);
+  } catch (e) {
+    return false;
+  }
 }
 
-/**
- * 以后端用户为准写入本地缓存并同步全局登录态。
- * 组织显示名（orgName/orgFullName）后端 /auth 接口不返回，同一用户且组织未变时沿用本地缓存。
- */
+/** 以后端用户为准写入本地缓存并同步全局登录态。 */
 function saveServerUser(serverUser, previousUser) {
   const prev = previousUser || {};
   const keep = prev.id === serverUser.id && prev.orgId === serverUser.orgId
@@ -119,7 +62,6 @@ function saveServerUser(serverUser, previousUser) {
   return user;
 }
 
-/** 同步全局登录态（App 未就绪时跳过）。 */
 function syncApp(user) {
   try {
     const app = getApp();
@@ -132,31 +74,72 @@ function syncApp(user) {
   }
 }
 
-function isLoggedOut() {
-  try {
-    return !!wx.getStorageSync(LOGGED_OUT_KEY);
-  } catch (e) {
-    return false;
-  }
+function admissionError(status, message) {
+  return Object.assign(new Error(message), { admission: status });
 }
 
-/** 静默重新登录（并发调用合并为一次 wx.login）；用户主动退出后拒绝。 */
+/**
+ * 调后端 /auth/login：status=active 则落 Token 并返回用户；其余状态抛出 admission 错误。
+ */
+function callLogin(avatar) {
+  const previousUser = readLocalUser();
+  return new Promise((resolve, reject) => {
+    wx.login({
+      success: (res) => {
+        if (!res.code) return reject(new Error('微信登录失败'));
+        persistAvatar(avatar || '')
+          .then((persisted) =>
+            requestService.request({
+              url: '/auth/login',
+              method: 'POST',
+              skipAuthRetry: true,
+              data: { code: res.code, avatar: persisted }
+            })
+          )
+          .then((result) => {
+            if (result.status === 'active' && result.token && result.user) {
+              wx.setStorageSync(requestService.TOKEN_KEY, result.token);
+              if (previousUser && previousUser.id !== undefined && previousUser.id !== result.user.id) {
+                store.migrateUserData(previousUser.id, result.user.id);
+              }
+              const user = saveServerUser(result.user, previousUser);
+              wx.removeStorageSync(LOGGED_OUT_KEY);
+              return resolve(user);
+            }
+            if (result.status === 'disabled') {
+              return reject(admissionError('disabled', '账号已停用，请联系活动管理员'));
+            }
+            // 其余按未入驻处理
+            reject(admissionError('unregistered', '尚未入驻'));
+          })
+          .catch(reject);
+      },
+      fail: () => reject(new Error('微信登录失败，请重试'))
+    });
+  });
+}
+
+/**
+ * 微信登录（兼容旧登录页：仅在已入驻时返回用户）。
+ * @param {{avatar?:string}} [profile]
+ */
+function wxLogin(profile) {
+  const p = profile || {};
+  return callLogin(p.avatar || '');
+}
+
+/** 静默重登（并发合并一次 wx.login）；用户主动退出 / 未入驻 / 已停用均抛错，由调用方处理。 */
 function relogin() {
   if (isLoggedOut()) return Promise.reject(Object.assign(new Error('已退出登录'), { loggedOut: true }));
   if (!reloginPending) {
-    reloginPending = wxLogin().finally(() => {
+    reloginPending = callLogin('').finally(() => {
       reloginPending = null;
     });
   }
   return reloginPending;
 }
 
-/**
- * 确保已登录：本地 Token 必须经后端 /auth/me 校验才视为有效；
- * 无 Token 或 Token 失效（401）则静默 wx.login 重登，复用同一用户并签发新 Token。
- * 网络异常时保留本地 Token 并抛出（err.network），由调用方提示重试。
- * @returns {Promise<object>} 当前用户
- */
+/** 确保已登录：/auth/me 校验失败则静默重登；admission/network 错误原样抛出供启动页处理。 */
 function ensureLogin() {
   if (ensurePending) return ensurePending;
   let task;
@@ -180,42 +163,77 @@ function ensureLogin() {
 
 requestService.setReauthHandler(relogin);
 
+/** 校验邀请码（不核销），返回 {name, orgId, orgName}。 */
+function verifyInvite(inviteCode) {
+  return requestService.request({
+    url: '/auth/invite/verify',
+    method: 'POST',
+    skipAuthRetry: true,
+    data: { inviteCode: inviteCode }
+  });
+}
+
 /**
- * 修改昵称（每个用户仅允许一次，后端校验）。
- * 成功后把后端返回的最新用户信息合并进本地缓存。
- * @param {string} nickname
- * @returns {Promise<object>} 更新后的用户
+ * 持邀请码入驻：先 wx.login 换 code，再 POST /auth/onboard。
+ * 已入驻身份重复提交后端幂等返回同一用户。
  */
+function onboard(params) {
+  const inviteCode = params.inviteCode;
+  const nickname = params.nickname;
+  const orgId = params.orgId;
+  const avatarRaw = params.avatar || '';
+  const previousUser = readLocalUser();
+  return new Promise((resolve, reject) => {
+    wx.login({
+      success: (res) => {
+        if (!res.code) return reject(new Error('微信登录失败'));
+        persistAvatar(avatarRaw)
+          .then((avatar) =>
+            requestService.request({
+              url: '/auth/onboard',
+              method: 'POST',
+              skipAuthRetry: true,
+              data: {
+                code: res.code,
+                inviteCode: inviteCode,
+                nickname: nickname,
+                orgId: orgId,
+                avatar: avatar
+              }
+            })
+          )
+          .then((result) => {
+            wx.setStorageSync(requestService.TOKEN_KEY, result.token);
+            if (previousUser && previousUser.id !== undefined && previousUser.id !== result.user.id) {
+              store.migrateUserData(previousUser.id, result.user.id);
+            }
+            const user = saveServerUser(result.user, previousUser);
+            wx.removeStorageSync(LOGGED_OUT_KEY);
+            wx.removeStorageSync(INVITE_KEY);
+            resolve({ user: user, created: !!result.created });
+          })
+          .catch(reject);
+      },
+      fail: () => reject(new Error('微信登录失败，请重试'))
+    });
+  });
+}
+
+/** 修改昵称（每个用户仅一次，后端校验）。 */
 function updateNickname(nickname) {
   return requestService
-    .request({
-      url: '/auth/nickname',
-      method: 'PUT',
-      data: { nickname: nickname }
-    })
+    .request({ url: '/auth/nickname', method: 'PUT', data: { nickname: nickname } })
     .then((user) => updateLocalUser(user));
 }
 
-/**
- * 首次引导设置昵称（组织选择页采集微信名），不消耗「每人仅一次」改名机会。
- * @param {string} nickname
- * @returns {Promise<object>} 更新后的用户
- */
+/** 首次引导设置昵称（组织选择页采集微信名，不消耗唯一改名机会）。 */
 function setInitialNickname(nickname) {
   return requestService
-    .request({
-      url: '/auth/nickname/initial',
-      method: 'PUT',
-      data: { nickname: nickname }
-    })
+    .request({ url: '/auth/nickname/initial', method: 'PUT', data: { nickname: nickname } })
     .then((user) => updateLocalUser(user));
 }
 
-/**
- * 更新本地用户缓存并返回新用户（如组织选择结果）。
- * @param {object} patch
- * @returns {object|null}
- */
+/** 更新本地用户缓存并返回新用户（如组织选择结果）。 */
 function updateLocalUser(patch) {
   try {
     const user = Object.assign({}, readLocalUser() || {}, patch);
@@ -226,20 +244,44 @@ function updateLocalUser(patch) {
   }
 }
 
-/**
- * 主动退出登录：清除登录态并标记已退出，此后不再静默登录，需在登录页手动登录。
- */
+/** 主动退出：清除登录态并标记已退出，此后不再静默登录。 */
 function clearLocalUser() {
   wx.removeStorageSync(USER_KEY);
   wx.removeStorageSync(requestService.TOKEN_KEY);
   wx.setStorageSync(LOGGED_OUT_KEY, 1);
 }
 
+/** 待入驻的邀请码缓存：扫码后进入入驻页；入驻成功或主动放弃时清除。 */
+function savePendingInvite(payload) {
+  try {
+    wx.setStorageSync(INVITE_KEY, payload || null);
+  } catch (e) {
+    // 存储失败不影响流程，下一次扫码会重新写入
+  }
+}
+
+function readPendingInvite() {
+  try {
+    return wx.getStorageSync(INVITE_KEY) || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+function clearPendingInvite() {
+  wx.removeStorageSync(INVITE_KEY);
+}
+
 module.exports = {
   wxLogin,
   ensureLogin,
+  verifyInvite,
+  onboard,
   updateNickname,
   setInitialNickname,
   updateLocalUser,
-  clearLocalUser
+  clearLocalUser,
+  savePendingInvite,
+  readPendingInvite,
+  clearPendingInvite
 };

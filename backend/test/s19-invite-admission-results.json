@@ -1,0 +1,154 @@
+{
+  "results": [
+    {
+      "id": "I01",
+      "name": "未入驻登录返回 unregistered 且不建号不签发 Token",
+      "ok": true,
+      "detail": "200 {'status': 'unregistered', 'token': None, 'user': None}"
+    },
+    {
+      "id": "I02",
+      "name": "无邀请码入驻被拒且不建号",
+      "ok": true,
+      "detail": "missing=422 empty=400 {'detail': '邀请码无效'}"
+    },
+    {
+      "id": "I03",
+      "name": "无效/非法/超长邀请码校验与入驻均拒绝",
+      "ok": true,
+      "detail": "[(400, '邀请码无效', 400, '邀请码无效'), (400, '邀请码无效', 400, '邀请码无效'), (400, '邀请码无效', 400, '邀请码无效')]"
+    },
+    {
+      "id": "I04",
+      "name": "已过期邀请码拒绝",
+      "ok": true,
+      "detail": "verify=400/{'detail': '邀请码已过期'} onboard=400/{'detail': '邀请码已过期'}"
+    },
+    {
+      "id": "I05",
+      "name": "已停用邀请码拒绝",
+      "ok": true,
+      "detail": "verify=400/{'detail': '邀请码已停用'} onboard=400/{'detail': '邀请码已停用'}"
+    },
+    {
+      "id": "I06",
+      "name": "已用满邀请码拒绝",
+      "ok": true,
+      "detail": "verify=400/{'detail': '邀请码使用次数已满'} onboard=400/{'detail': '邀请码使用次数已满'}"
+    },
+    {
+      "id": "I07",
+      "name": "校验有效码返回名称与组织范围、不核销、不回显码与次数",
+      "ok": true,
+      "detail": "{'name': '通用码', 'orgId': None, 'orgName': None} {'name': '华东专属码', 'orgId': 11, 'orgName': '华东分公司'}"
+    },
+    {
+      "id": "I08",
+      "name": "持有效码入驻建号、核销+1、审计、Token 可用、再次登录 active",
+      "ok": true,
+      "detail": "200 created=True used=1 audit=['{\"invite_id\": 4, \"invite_name\": \"通用码\", \"org_id\": 111}'] pts=1"
+    },
+    {
+      "id": "I09",
+      "name": "专属码越界/不存在组织拒绝且不核销，范围内下级组织成功",
+      "ok": true,
+      "detail": "out={'detail': '所选组织不在邀请码允许的范围内'} none={'detail': '所选组织不存在'} in=200"
+    },
+    {
+      "id": "I10",
+      "name": "已入驻身份重复入驻返回同一用户、不再核销、不覆盖资料",
+      "ok": true,
+      "detail": "again=200 bad=200 used=1"
+    },
+    {
+      "id": "I11",
+      "name": "原邀请码过期/停用/用满后已入驻用户登录仍 active",
+      "ok": true,
+      "detail": "active me=200"
+    },
+    {
+      "id": "I12",
+      "name": "同一身份 8 并发入驻：全部成功、1 个用户、仅核销 1 次",
+      "ok": true,
+      "detail": "statuses=[200, 200, 200, 200, 200, 200, 200, 200] users=1 used=1"
+    },
+    {
+      "id": "I13",
+      "name": "8 个不同身份并发抢 max_uses=3：恰好 3 个成功且 used_count=3",
+      "ok": true,
+      "detail": "statuses=[200, 200, 200, 400, 400, 400, 400, 400] details={'邀请码使用次数已满'} used=3 users=3"
+    },
+    {
+      "id": "I14",
+      "name": "建号撞唯一约束：回滚撤销核销并复用已有用户",
+      "ok": true,
+      "detail": "got=3 expect=[3] created=False used=0"
+    },
+    {
+      "id": "I15",
+      "name": "停用：登录 disabled、38 个受保护接口 403、入驻 403、WS 4403；启用后恢复",
+      "ok": true,
+      "detail": "login={'status': 'disabled', 'token': None, 'user': None} onboard=403 leaks=[] ws=4403 back=200"
+    },
+    {
+      "id": "I16",
+      "name": "历史用户（无邀请码）登录 active、改选组织不受限",
+      "ok": true,
+      "detail": "login=active select=200"
+    },
+    {
+      "id": "I17",
+      "name": "专属码用户改选组织越界 400、范围内 200、/org/mine 返回范围",
+      "ok": true,
+      "detail": "out=400 in=200 404=404 mine={'orgId': 11, 'orgName': '华东分公司', 'fullName': '总部 / 华东分公司', 'path': [{'id': 1, 'name': '总部'}, {'id': 11, 'name': '华东分公司'}], 'scopeOrgId': 11, 'scopeOrgName': '华东分公司'}"
+    },
+    {
+      "id": "I18",
+      "name": "code 换取失败：登录/入驻 502 且不建号",
+      "ok": true,
+      "detail": "login=502 onboard=502"
+    },
+    {
+      "id": "I19",
+      "name": "38 个用户受保护接口无/伪造 Token 均 401",
+      "ok": true,
+      "detail": "leaks=[]"
+    },
+    {
+      "id": "I20",
+      "name": "47 个管理接口拒绝普通用户 Token",
+      "ok": true,
+      "detail": "escalations=[]"
+    },
+    {
+      "id": "I21",
+      "name": "管理端邀请码 CRUD/启停/小程序码/UTC 存储/审计",
+      "ok": true,
+      "detail": "create=200 list=1 low={'detail': '使用次数上限不能低于已使用次数（3）'} qr={'image': None, 'page': 'pages/launch/launch', 'scene': 'i=GTkppfR5g0s0TLza', 'env_version': 'trial', 'mock': True} expires=2026-12-31 16:00:00 audits=['invite.create', 'invite.update', 'invite.update']"
+    },
+    {
+      "id": "I22",
+      "name": "用户状态：无 access 菜单 403、非法状态 422、用户不存在 404、列表含状态并可筛选、审计",
+      "ok": true,
+      "detail": "forbid=403 items=[(1, 'disabled', '通用码')] audits=['user.disable', 'user.enable', 'user.disable']"
+    },
+    {
+      "id": "I23",
+      "name": "响应与日志不含 openid/session_key/wx code/邀请码/AppSecret",
+      "ok": true,
+      "detail": "resp_hits=[] log_hits=[] log_lines=6"
+    },
+    {
+      "id": "I24",
+      "name": "WX_LOGIN_ALLOW_MOCK=true 回退 mock openid 识别，未入驻不建号",
+      "ok": true,
+      "detail": "200 {'status': 'unregistered', 'token': None, 'user': None}"
+    },
+    {
+      "id": "I25",
+      "name": "过期 Token 401，重新登录 active 并复用同一用户",
+      "ok": true,
+      "detail": "expired=401 relogin=active me=200"
+    }
+  ]
+}

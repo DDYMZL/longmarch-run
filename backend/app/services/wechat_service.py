@@ -15,13 +15,12 @@ WX_WXACODE_URL = "https://api.weixin.qq.com/wxa/getwxacodeunlimit"
 
 # PC 扫码登录/绑定确认页（scene 由后端生成，页面仅解析展示）
 WXACODE_PAGE = "pages/bind/bind"
-# 通用入驻码：落地启动页自动登录；scene 仅为渠道标记，不含任何身份信息
+# 入驻邀请码：落地启动页，scene 为 i=<邀请码>（不含任何个人身份信息）
 ONBOARD_PAGE = "pages/launch/launch"
-ONBOARD_SCENE = "src=onboard"
 
 _TOKEN_TTL_SECONDS = 7000  # 微信 access_token 有效期 7200s，提前 200s 刷新
 _token_cache: dict = {"token": "", "expires_at": 0.0}
-_onboard_image_cache: dict = {}
+_invite_image_cache: dict = {}
 
 
 def _fetch_access_token() -> Optional[str]:
@@ -74,14 +73,14 @@ def get_wxacode_png(scene: str, page: str = WXACODE_PAGE) -> Optional[bytes]:
     return None
 
 
-def get_onboarding_image() -> Optional[bytes]:
-    """通用入驻小程序码（内容固定，成功结果按版本进程内缓存）。"""
-    key = settings.WXACODE_ENV_VERSION
-    image = _onboard_image_cache.get(key)
+def get_invite_image(scene: str) -> Optional[bytes]:
+    """邀请码小程序码（同码内容固定，成功结果按版本 + scene 进程内缓存）。"""
+    key = (settings.WXACODE_ENV_VERSION, scene)
+    image = _invite_image_cache.get(key)
     if image is None:
-        image = get_wxacode_png(ONBOARD_SCENE, ONBOARD_PAGE)
+        image = get_wxacode_png(scene, ONBOARD_PAGE)
         if image is not None:
-            _onboard_image_cache[key] = image
+            _invite_image_cache[key] = image
     return image
 
 

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 人员授权：人员列表筛选、角色全量覆盖授权、单角色启用/禁用（禁用即时生效）；
+// 人员授权：人员列表筛选（支持停用筛选 + 启停切换）、角色全量覆盖授权、单角色启用/禁用（禁用即时生效）；
 // 角色管理：角色 CRUD + 菜单勾选（内置角色禁删、被引用角色删除时后端拒绝）
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -11,9 +11,11 @@ import {
   fetchRoles,
   grantUserRoles,
   setUserRoleEnabled,
+  setUserStatus,
   updateRole
 } from '../api/admin'
-import type { AdminUserItem, OrgNode, RoleItem } from '../api/admin'
+import type { AdminUserItem, OrgNode, RoleItem, UserStatus } from '../api/admin'
+import { formatDateTime } from '../utils/format'
 import { MENUS } from '../router/menus'
 
 const MENU_NAME: Record<string, string> = Object.fromEntries(MENUS.map((m) => [m.code, m.title]))
@@ -29,6 +31,7 @@ const pageSize = ref(10)
 const keyword = ref('')
 const orgId = ref<number | null>(null)
 const hasAccess = ref<boolean | null>(null)
+const statusFilter = ref<UserStatus | ''>('')
 const orgOptions = ref<{ id: number; name: string }[]>([])
 const roles = ref<RoleItem[]>([])
 
@@ -51,7 +54,8 @@ async function loadUsers() {
       page_size: pageSize.value,
       keyword: keyword.value.trim() || undefined,
       org_id: orgId.value ?? undefined,
-      has_access: hasAccess.value ?? undefined
+      has_access: hasAccess.value ?? undefined,
+      status: statusFilter.value || undefined
     })
     if (seq !== requestSeq) return
     users.value = data.items
@@ -98,6 +102,32 @@ async function saveGrant() {
 }
 
 const togglingRoleId = ref<number | null>(null)
+
+const togglingStatusId = ref<number | null>(null)
+
+async function toggleUserStatus(row: AdminUserItem, enabled: unknown) {
+  if (togglingStatusId.value !== null) return
+  const next: UserStatus = enabled ? 'active' : 'disabled'
+  if (next === 'disabled') {
+    try {
+      await ElMessageBox.confirm(
+        `确定停用「${row.nickname}」吗？停用后小程序立即无法使用，受保护接口返回 403。`,
+        '停用确认',
+        { type: 'warning', confirmButtonText: '停用', confirmButtonClass: 'el-button--danger' }
+      )
+    } catch {
+      return
+    }
+  }
+  togglingStatusId.value = row.id
+  try {
+    await setUserStatus(row.id, next)
+    ElMessage.success(next === 'active' ? '已启用' : '已停用（即时生效）')
+    row.status = next
+  } finally {
+    togglingStatusId.value = null
+  }
+}
 
 async function toggleRoleEnabled(role: { id: number; name: string }, enabled: unknown) {
   const user = grantUser.value
@@ -230,6 +260,10 @@ onMounted(async () => {
             <el-option label="有后台权限" :value="true" />
             <el-option label="无后台权限" :value="false" />
           </el-select>
+          <el-select v-model="statusFilter" placeholder="账号状态" clearable style="width: 140px">
+            <el-option label="启用中" value="active" />
+            <el-option label="已停用" value="disabled" />
+          </el-select>
           <el-button type="primary" :icon="'Search'" @click="handleSearch">查询</el-button>
           <div class="spacer" />
           <span class="total">共 {{ total }} 人</span>
@@ -272,6 +306,32 @@ onMounted(async () => {
               <el-tag size="small" :type="row.has_access ? 'success' : 'info'" effect="plain">
                 {{ row.has_access ? '可访问' : '无权限' }}
               </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="邀请码" min-width="140" show-overflow-tooltip>
+            <template #default="{ row }">
+              <span v-if="row.invite_name">{{ row.invite_name }}</span>
+              <span v-else-if="row.invite_code_id" class="none">—</span>
+              <el-tag v-else size="small" type="info" effect="plain">历史用户</el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="入驻时间" width="150" align="center">
+            <template #default="{ row }">
+              <span v-if="row.onboarded_at">{{ formatDateTime(row.onboarded_at) }}</span>
+              <span v-else class="none">—</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="账号状态" width="110" align="center">
+            <template #default="{ row }">
+              <el-switch
+                :model-value="row.status === 'active'"
+                :loading="togglingStatusId === row.id"
+                :disabled="togglingStatusId !== null && togglingStatusId !== row.id"
+                active-text="启用"
+                inactive-text="停用"
+                inline-prompt
+                @change="toggleUserStatus(row, $event)"
+              />
             </template>
           </el-table-column>
           <el-table-column label="操作" width="110" align="center" fixed="right">

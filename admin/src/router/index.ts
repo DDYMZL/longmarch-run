@@ -72,6 +72,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '人员授权', menu: 'access' }
       },
       {
+        path: 'invites',
+        name: 'invites',
+        component: () => import('../views/InvitesView.vue'),
+        meta: { title: '入驻邀请码', menu: 'invites' }
+      },
+      {
         path: 'audit',
         name: 'audit',
         component: () => import('../views/AuditView.vue'),

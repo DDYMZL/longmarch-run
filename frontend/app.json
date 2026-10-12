@@ -20,7 +20,8 @@
     "pages/ticket/ticket",
     "pages/ceremony/ceremony",
     "pages/bind/bind",
-    "pages/account/account"
+    "pages/account/account",
+    "pages/onboard/onboard"
   ],
   "window": {
     "navigationBarBackgroundColor": "#C8102E",

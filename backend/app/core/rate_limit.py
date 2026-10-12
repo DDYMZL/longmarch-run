@@ -1,6 +1,6 @@
 """进程内滑动窗口限流（单进程部署适用；多 worker 部署需替换为 Redis）。
 
-仅用于管理端登录与扫码接口的防爆破/防刷，key 取客户端 IP。
+仅用于管理端登录、扫码接口与邀请码入驻接口的防爆破/防刷，key 取客户端 IP。
 """
 import time
 from collections import defaultdict, deque
@@ -31,6 +31,8 @@ class SlidingWindowLimiter:
 login_limiter = SlidingWindowLimiter(max_calls=10, window_seconds=60)
 qr_create_limiter = SlidingWindowLimiter(max_calls=10, window_seconds=60)
 qr_poll_limiter = SlidingWindowLimiter(max_calls=60, window_seconds=60)
+# 邀请码校验/入驻 60 次/分/IP（邀请码 16 位随机，限流仅防刷；企业出口 NAT 共用 IP 留足余量）
+invite_limiter = SlidingWindowLimiter(max_calls=60, window_seconds=60)
 
 
 def client_ip(request: Request) -> str:

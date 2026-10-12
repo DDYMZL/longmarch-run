@@ -1,0 +1,30 @@
+<view class="onboard-page">
+  <view class="onboard-header">
+    <view class="title">完善入驻信息</view>
+    <view class="subtitle">扫码邀请已通过，请填写以下信息完成入驻</view>
+  </view>
+
+  <view class="form">
+    <view class="row">
+      <text class="label">姓名<text class="required">*</text></text>
+      <input class="input" type="nickname" placeholder="请输入真实姓名" value="{{nickname}}" bindinput="onNickInput" maxlength="20" />
+    </view>
+    <view class="hint">用于组织内互相识别，入驻后可在「我的」页修改一次</view>
+
+    <view class="row row-link" bindtap="onPickOrg">
+      <text class="label">所属组织<text class="required">*</text></text>
+      <view class="org-value">
+        <text class="{{orgFullName ? 'org-text' : 'org-placeholder'}}">{{orgFullName || '选择所属组织'}}</text>
+        <text class="arrow">›</text>
+      </view>
+    </view>
+    <view class="hint" wx:if="{{rootName}}">本邀请码仅可在「{{rootName}}」及其下级中选择</view>
+
+    <view class="error" wx:if="{{errorMsg}}">{{errorMsg}}</view>
+
+    <button class="btn-primary submit" bindtap="onSubmit" disabled="{{submitting}}" loading="{{submitting}}">
+      {{submitting ? '提交中…' : '完成入驻'}}
+    </button>
+    <button class="btn-cancel" bindtap="onCancel">取消</button>
+  </view>
+</view>

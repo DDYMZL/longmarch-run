@@ -47,9 +47,10 @@
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（我的长征/行军日历/组织架构/运动记录/答题记录）；「账号与绑定」入口已隐藏（account 页与后端绑定接口保留，仅无前端入口） |
 | `pages/profile/profile` | 子页 | 我的长征档案：加入天数/阶段标签、运动/答题/积分统计、成就总览六格（§18 行军/路线/情报/连续/勋章/积分，点击直达详情）、数据画像雷达（§17 五维 canvas 雷达图，仅数据不评价）、路线完成度、足迹地图（§7 点亮节点链/点击展开抵达详情：日期+当日步数+累计步数）、足迹时间轴 |
 | `pages/calendar/calendar` | 子页 | 行军日历：月视图（步数热力等级/答题/点亮标记）、月统计、当日详情弹层 |
-| `pages/launch/launch` | 首页面 | 启动页兼通用入驻二维码落地页：`auth.ensureLogin()` 后端校验 Token 或静默 wx.login 登录，成功进首页（支持 `?redirect=`），失败提示 +「重新进入」，主动退出过则转登录页 |
-| `pages/login/login` | 子页 | 主动退出后的手动登录：`chooseAvatar` 头像（页面不采集昵称），登录后发每日登录积分（后端 /auth/login 内发放）；成功直达首页（不强制选组织）；支持 `?redirect=` 参数（扫码确认等流程登录后原路返回） |
-| `pages/org-select/org-select` | 子页 | 组织选择（逐级下钻，任意层级可选）；选填：首页引导卡（from=home，未改名时顶部采集姓名 `input type="nickname"`，可跳过，提示语「请输入真实姓名」放输入框旁侧、不占 placeholder）/「我的」页修改（from=mine），选定组织后落库并返回来源页 |
+| `pages/launch/launch` | 首页面 | 启动页兼邀请码扫码落地页：`parseInviteFromScene(scene)` 取 `i=<CODE>` → `auth.ensureLogin()` 分流：active 进首页（支持 `?redirect=`）；disabled 显示停用提示；unregistered 无邀请码时 blocked 态「仅对受邀人员开放」+「重新扫码/退出」，有邀请码则 `verifyInvite` 后 redirectTo 入驻页 |
+| `pages/login/login` | 子页 | 主动退出后的手动登录：`chooseAvatar` 头像（页面不采集昵称），登录后发每日登录积分（后端 /auth/login 内发放）；status=active 直达首页，unregistered/disabled 捕获 admission 后 reLaunch 启动页；支持 `?redirect=` |
+| `pages/onboard/onboard` | 子页 | 入驻信息收集：读取 `?invite=<CODE>&rootId=&rootName=`，填写真实姓名 + 组织（点选组织跳 org-select pickMode=onboard，仅允许 rootId 及其下级，用 eventChannel orgPicked 回传）→ `auth.onboard` 一次性建号写 Token → switchTab 首页 |
+| `pages/org-select/org-select` | 子页 | 组织选择（逐级下钻）：from=home 引导卡（未改名时顶部采集姓名）/ from=mine 修改所属组织 → 落库返回来源页；pickMode=onboard 入驻态由 `rootId`/`rootName` 限定可选范围（栈底锁定为 root，不能回到更上级），不要求已登录，选定后用 `eventChannel.emit('orgPicked', {...})` 回传入驻页 |
 | `pages/node-detail/node-detail` | 子页 | 节点历史详情：图片轮播/英雄图标、关键词、历史时间/地点、一句话简介、历史故事、历史意义、相关人物（figures 文本 + persons 人物志 chip，点击进人物详情 §14）、路线位置小地图（任意状态可看，含未解锁）、「🎫 生成纪念票」入口（§19，仅已点亮节点可见）；区域氛围（§12）：hero 按节点区域主题渐变 + `#atmoCanvas` 氛围粒子（≤24 粒，onHide 停止），标题区显示区域标签 |
 | `pages/ceremony/ceremony` | 子页 | 长征完成仪式（§20）：约 8.1s 时间轴（逐段点亮 → 末节点辉光 → 金线扫过 → 全亮脉冲 → 星空展开 →「我的长征/完成了」→ 完成数据卡：行军/运动天数/答题/路线/勋章/积分，取 `/march/route` + `/profile/summary`）；可跳过；首次确认后 `POST /march/ceremony` 标记，再进为「已完成长征」静态回顾；收尾快照最终帧为静态图并移除画布，数据卡浮于快照上（原生 canvas 层会盖住 DOM） |
 | `pages/ticket/ticket` | 子页 | 节点纪念票（§19）：纯 Canvas 2d 绘制（米黄纸面/红头/虚线撕裂线/编号），数据取 `/march/node/{id}` + `/march/footprints`（点亮日期/当日步数/累计），未点亮节点显示提示；保存相册走 `canvasToTempFilePath`（传 canvas 节点）+ `saveImageToPhotosAlbum` |
@@ -69,7 +70,7 @@
 
 | 前端 service | 主要方法 | 对应后端接口 | 核心业务 |
 | --- | --- | --- | --- |
-| `auth.js` | `ensureLogin()` / `wxLogin(profile)` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` | `POST /api/auth/login`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；启动校验 Token（/auth/me）+ 静默重登（单飞，注册为 request.js 的 401 重登处理器）；主动退出标记 `lm_logged_out`；wx.login → 后端换 JWT；头像临时路径转持久路径；昵称修改（每人仅一次，后端校验）；首次引导设置昵称（不消耗改名机会） |
+| `auth.js` | `ensureLogin()` / `wxLogin(profile)` / `verifyInvite(code)` / `onboard({inviteCode,nickname,orgId,avatar})` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` / `savePendingInvite()` / `readPendingInvite()` / `clearPendingInvite()` | `POST /api/auth/login`、`POST /api/auth/invite/verify`、`POST /api/auth/onboard`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；/auth/login 返回 `{status, token?, user?}` 分流：active 写登录态；disabled/unregistered 抛 `err.admission` 由启动页处理；邀请码扫码落地由 launch 保存 `lm_pending_invite`、入驻页读取并 `verifyInvite` + `onboard`（后端条件 UPDATE 原子核销）；request.js 401 单飞重登，403 `X-Account-Status: disabled` 直接清态回启动页 |
 | `sport.js` | 今日步数 / `syncToday()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, calendar` | 步数按「用户+日期」覆盖；同步走 wx.getWeRunData 加密数据后端解密取真实步数；行军日历月聚合 |
 | `march.js` | `getRoute()` / `getNodeDetail(id)` / `lightUpNodes()` / `getGlobalGoal()` / `getFootprints()` / `markCeremony()` / `hasPlayedIntro()` / `markIntroPlayed()` | `/api/march/route, node/{id}, light-up, global, footprints, ceremony` | 路线进度与节点配置由 `/march/route` 统一下发；步数达标由后端点亮、发放勋章并广播（light-up 返回 newlyLit / newlyCompletedChapters / newMedals）；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4）；开场动画播放标记（Storage `lm_march_intro_played`，页面不直接读写 Storage） |
 | `quiz.js` | `getDaily()` / `submit()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, records, reset, knowledge` | 每日抽 5 题（同日同套，题目不含答案与解析）、提交后由后端统一判分、每日一次；知识画像分类正确率 |
@@ -110,31 +111,35 @@
 ### 4.1 登录流程
 
 ```
-【自动登录（V1.0 扫码入驻）】app.json 首页面 = launch 页（也是管理后台通用入驻小程序码落地页，scene 固定 src=onboard，不含任何身份信息）
-launch 页 → auth.ensureLogin()（单飞，启动页与重试按钮并发只登录一次）
-  ├─ 有本地 Token：GET /api/auth/me 后端校验（本地缓存不作数，app.onLaunch 不恢复 loggedIn）
-  │    ├─ 200 → 以后端用户为准合并本地缓存（同用户同组织沿用组织显示名）→ loggedIn=true
-  │    └─ 401 → 删 Token → 静默重登（下）
-  ├─ 无 Token：静默重登 auth.relogin()：wx.login → POST /api/auth/login {code}（不传头像昵称，不覆盖业务数据）
-  ├─ 成功 → 有 redirect 回原页（tab 页改 switchTab），否则 switchTab 首页（不强制选组织）
-  ├─ wx.login 失败 / 后端 502：停留启动页提示 +「重新进入」，不写入登录态（不会假登录）
-  ├─ 网络异常：提示「网络异常，请检查网络后重试」，保留本地 Token 供重试
-  └─ 用户主动退出过（lm_logged_out 标记）：不静默登录，redirectTo login 页手动登录
-使用中 Token 失效：request.js 收到 401 → 调用 auth 注册的 relogin（并发 401 合并为一次）→ 重试原请求一次；
+【扫码入驻（V1.0 邀请码准入）】app.json 首页面 = launch 页（也是管理后台「入驻邀请码」生成的小程序码落地页，scene 为 `i=<CODE>`，长度 ≤32，不含任何身份信息）
+launch 页 onLoad(options) → parseInviteFromScene(options.scene) 取 `inviteCode`（兼容 ?invite= 快捷参数、?redirect= 原路跳转）
+  → auth.ensureLogin()（单飞）
+      ├─ 有本地 Token：GET /api/auth/me 后端校验（本地缓存不代表登录）
+      │    ├─ 200 → 以后端用户为准合并缓存 → 后端若携 X-Account-Status: disabled 则 clearSession() 并抛 admission=disabled → 进 disabled 态
+      │    └─ 401 → 删 Token → 静默重登（下）
+      ├─ 无 Token：静默重登 auth.relogin()：wx.login → POST /api/auth/login {code}（不传昵称/头像）
+      │    ├─ 200 status=active：写 Token/user → loggedIn=true → 回原页 / 首页
+      │    ├─ 200 status=disabled：throw admission=disabled → 启动页 disabled 态「账号已停用，请联系活动管理员」
+      │    └─ 200 status=unregistered：throw admission=unregistered → 走准入分流
+      ├─ unregistered + 无 inviteCode：启动页 blocked 态「当前小程序仅对受邀人员开放，请联系活动管理员获取有效入驻二维码。」+「重新扫码 / 退出」
+      ├─ unregistered + 有 inviteCode：POST /api/auth/invite/verify 校验（不核销）
+      │    ├─ 400（无效/停用/过期/用满）：blocked 态同上
+      │    └─ 200 返回 {name, orgId, orgName}：redirectTo /pages/onboard/onboard?invite=<CODE>&rootId=&rootName= 填写姓名+组织（org-select pickMode=onboard 下只允许该组织及其下级）
+      │       → auth.onboard({inviteCode, nickname, orgId}) → POST /api/auth/onboard：后端条件 UPDATE 原子核销 + 建号 + 审计；openid 唯一约束冲突回滚复用已存在用户；成功写 Token/user → switchTab 首页
+      ├─ wx.login 失败 / 后端 502：启动页提示 +「重新进入」，不写入登录态
+      ├─ 网络异常：提示重试，保留本地 Token
+      └─ 用户主动退出过（lm_logged_out）：redirectTo login 页手动登录
+【使用中 Token 失效】request.js 收到 401 → 调 auth 注册的 relogin（并发 401 合并为一次）→ 重试原请求一次；
+  收到 403 且 header X-Account-Status: disabled → 不重登，clearSession + reLaunch 启动页 disabled 态
   重登失败（非网络）或重试仍 401 → 清登录态 reLaunch 启动页
 
-【手动登录】login 页（仅主动退出后使用；支持 `?redirect=` 参数：已登录直接回跳；登录成功后优先回跳，扫码确认场景凭证有效期短不打断）
+【手动登录】login 页（仅主动退出后使用；支持 `?redirect=`）
   → 点「微信授权登录」按钮(open-type="chooseAvatar")
-  → 微信弹头像选择（选完回调 bindchooseavatar）（页面不展示昵称输入框）
-  → auth.wxLogin({avatar})  // 登录页不采集昵称，新用户默认「长征小战士」
-      ├─ wx.login() 拿 code
-      ├─ persistAvatar：https:// 直返；http://tmp / wxfile://tmp_ 经 saveFile 转持久路径
-      └─ request.js POST /api/auth/login {code, nickname: "", avatar}
-         → 后端返回 {token, user}（openid 唯一建号；昵称仅首次创建时写入，后续登录不覆盖）
-  → setStorageSync('lm_auth_token', token)
-  → store.migrateUserData(oldUserId, newUserId)  // 首次切后端，旧 Mock 数据迁移
-  → setStorageSync('lm_login_user', user)、同步全局登录态、清除退出标记 → 跳转
-  → 有 redirect 时 redirectTo 原路返回（扫码确认等流程），否则 switchTab 首页（组织选填）
+  → auth.wxLogin({avatar})（内部 wx.login + POST /api/auth/login）
+      ├─ status=active：写 Token/user → 回原页 / 首页
+      └─ status=unregistered | disabled：捕获 admission 错误 → reLaunch 启动页，由启动页按准入分流
+  → setStorageSync('lm_auth_token', token)、合并 user、清退出标记 → 跳转
+```
 
 ### 4.2 组织选择（选填）
 

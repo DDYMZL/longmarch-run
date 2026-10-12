@@ -69,4 +69,26 @@
 
 .retry-btn {
   width: 100%;
+  margin-top: 16rpx;
+}
+
+.btn-secondary {
+  background: rgba(200, 16, 46, 0.08);
+  color: #C8102E;
+  border: 2rpx solid rgba(200, 16, 46, 0.35);
+}
+
+.block-title {
+  color: #C8102E;
+  font-size: 32rpx;
+  font-weight: 600;
+  margin-bottom: 16rpx;
+}
+
+.block-tip {
+  color: #666666;
+  font-size: 26rpx;
+  line-height: 1.6;
+  margin-bottom: 24rpx;
+  padding: 0 20rpx;
 }
