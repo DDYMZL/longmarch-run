@@ -44,7 +44,7 @@
 | `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、今日寄语卡（§16，有出处语录+可跳关联节点，按天循环轮换）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、🌍全员同行卡（全员累计中文大数/进度/下一阶段/里程碑✓○芯片）、抵达事件卡弹层 |
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空长征），节点点击进详情、点亮进度、到达动画（金光扩散+粒子+抵达事件卡）；星空长征（§13）：节点三态星形、星河轨迹星尘、点亮四阶段动画、拖动/捏合缩放/双击复位（view 变换+命中逆变换+边界钳制）；区域氛围（§12）：星空画布按节点区域主题生成环境粒子（每节点 3 粒封顶 30，ember/mist/snow/star），实景选中卡套主题柔和高光+区域标签；完成仪式（§20）：`ceremonyPending` 时待抵达弹窗播完自动进仪式页，完成横幅为永久入口 |
 | `pages/quiz/quiz` | tab | 今日长征情报：期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
-| `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（我的长征/行军日历/组织架构/账号与绑定/运动记录/答题记录） |
+| `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（我的长征/行军日历/组织架构/运动记录/答题记录）；「账号与绑定」入口已隐藏（account 页与后端绑定接口保留，仅无前端入口） |
 | `pages/profile/profile` | 子页 | 我的长征档案：加入天数/阶段标签、运动/答题/积分统计、成就总览六格（§18 行军/路线/情报/连续/勋章/积分，点击直达详情）、数据画像雷达（§17 五维 canvas 雷达图，仅数据不评价）、路线完成度、足迹地图（§7 点亮节点链/点击展开抵达详情：日期+当日步数+累计步数）、足迹时间轴 |
 | `pages/calendar/calendar` | 子页 | 行军日历：月视图（步数热力等级/答题/点亮标记）、月统计、当日详情弹层 |
 | `pages/launch/launch` | 首页面 | 启动页兼通用入驻二维码落地页：`auth.ensureLogin()` 后端校验 Token 或静默 wx.login 登录，成功进首页（支持 `?redirect=`），失败提示 +「重新进入」，主动退出过则转登录页 |
@@ -208,7 +208,7 @@ PC 管理后台登录页生成小程序码（POST /api/admin/wechat/qr，mock �
   → 扫码进 bind 页（?scene=B{token}）
   → qrInfo 返回 {type:'bind', status, target:{provider, appId, nickname?}} → 绑定确认卡
   → 确认 → qrConfirm(scene, 'confirm')：后端事务写 user_identities（unionid 冲突禁止自动合并）→ 完成态
-  → mine 页「账号与绑定」→ account 页：GET /api/auth/identities 列表
+  → account 页（mine 页入口已隐藏，页面与接口保留）：GET /api/auth/identities 列表
       ├─ wx_mini 登录凭证：isPrimary 标识，不渲染解绑按钮（后端 400 兜底）
       └─ wx_web：showModal 确认后 DELETE /api/auth/identities/{id} 解绑 → 空态
 ```

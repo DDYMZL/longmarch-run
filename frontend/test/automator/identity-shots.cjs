@@ -184,8 +184,7 @@ const STATES = [
     await waitData(mini, (d) => d.phase === 'done', 20000, 'bind done');
     await cmd(() => mini.switchTab('/pages/mine/mine'), 'switchTab mine 03', 2);
     await sleep(1200);
-    const mine = await waitPath(mini, 'pages/mine/mine');
-    await cmd(() => mine.callMethod('goAccount'), 'goAccount 03', 2);
+    await cmd(() => mini.navigateTo('/pages/account/account'), 'open account 03', 2);
     await waitPath(mini, 'pages/account/account');
     await waitData(mini, (d) => d.identities && d.identities.length === 1, 20000, 'account list 1');
     await sleep(1200);
@@ -195,8 +194,7 @@ const STATES = [
     await ensureLogin(mini);
     await cmd(() => mini.switchTab('/pages/mine/mine'), 'switchTab mine 04', 2);
     await sleep(1200);
-    const mine = await waitPath(mini, 'pages/mine/mine');
-    await cmd(() => mine.callMethod('goAccount'), 'goAccount 04', 2);
+    await cmd(() => mini.navigateTo('/pages/account/account'), 'open account 04', 2);
     await waitPath(mini, 'pages/account/account');
     const d = await waitData(mini, (x) => x.identities && x.identities.length === 1, 20000, 'account list 1 before unbind');
     const item = d.identities[0];
