@@ -295,15 +295,27 @@ class DailyQuestion(Base):
 
 
 class PointsLog(Base):
-    """积分流水（同日同 reason 去重，见 points_service.grant）。"""
+    """积分台账（017）：walk / quiz 每人每自然日一行，biz_key 唯一，由 points_service 按源数据重算。
+
+    source_type='legacy' 为 V2.0 之前的旧规则流水，仅追溯，不计入总积分。
+    """
 
     __tablename__ = "points_log"
+    __table_args__ = (
+        UniqueConstraint("user_id", "biz_key", name="uq_points_user_biz"),
+        Index("ix_points_log_source_user", "source_type", "user_id"),
+    )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     date: Mapped[str] = mapped_column(String(10), index=True)
     reason: Mapped[str] = mapped_column(String(50))
     delta: Mapped[int] = mapped_column(Integer, default=0)
+    source_type: Mapped[str] = mapped_column(String(16), default="legacy")
+    ref_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    biz_key: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
 class UserMedal(Base):

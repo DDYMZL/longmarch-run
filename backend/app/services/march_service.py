@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.helpers import to_local
 from app.models.models import DailySport, LitNode, RouteNode, User
-from app.services import event_service, person_service, points_service, sport_service
+from app.services import event_service, person_service, sport_service
 
 # 长征章节配置（node_ids 对应 route_nodes 主键；介绍为公开史实概述，供章节完成仪式展示）
 CHAPTERS: List[Dict] = [
@@ -350,7 +350,7 @@ def get_node_detail(db: Session, user_id: int, node_id: int) -> Optional[Dict]:
 
 
 def light_up_nodes(db: Session, user_id: int) -> Tuple[List[Dict], List[Dict]]:
-    """点亮步数达标且未点亮的节点，发放积分；全部点亮额外 +100。
+    """点亮步数达标且未点亮的节点（V2.0 起点亮/完成路线不再发放积分，gained_points 恒为 0）。
 
     返回 (本次新点亮节点, 本次新完成章节)：
     - 每个新点亮节点附带 gained_points / lit_at / next_node（下一站名称与剩余步数，
@@ -358,7 +358,7 @@ def light_up_nodes(db: Session, user_id: int) -> Tuple[List[Dict], List[Dict]]:
     - 每个新完成章节附带 id / name / title / intro，供前端「章节完成仪式」使用。
     副作用：LitNode 记录点亮时刻累计步数快照（step_snapshot），并写
     NODE_UNLOCK / CHAPTER_COMPLETE / COMPLETE_ROUTE 事件（我的足迹与管理端动态同源）。
-    章节完成不改变原有节点点亮逻辑与积分规则（需求 §4.5）。
+    章节完成不改变原有节点点亮逻辑（需求 §4.5）。
     """
     current_steps = sport_service.get_total_steps(db, user_id)
     lit = _lit_node_ids(db, user_id)
@@ -401,11 +401,10 @@ def light_up_nodes(db: Session, user_id: int) -> Tuple[List[Dict], List[Dict]]:
         else None
     )
     for item, record in zip(newly, lit_records):
-        item["gained_points"] = 10
+        item["gained_points"] = 0
         item["lit_at"] = record.lit_at
         item["next_node"] = next_node
     for item in newly:
-        points_service.grant(db, user_id, f"点亮节点：{item['name']}", 10)
         event_service.record(
             db,
             user_id,
@@ -413,7 +412,6 @@ def light_up_nodes(db: Session, user_id: int) -> Tuple[List[Dict], List[Dict]]:
             {"nodeId": item["id"], "nodeName": item["name"], "stepSnapshot": current_steps},
         )
     if len(lit) >= len(nodes_def):
-        points_service.grant(db, user_id, "完成长征路线", 100)
         event_service.record(db, user_id, "COMPLETE_ROUTE", {"totalSteps": current_steps})
 
     # 章节完成判定：本次点亮后新完成的章节写 CHAPTER_COMPLETE 事件

@@ -2,20 +2,21 @@
 
 规则：当天步数 >= settings.STREAK_GOAL_STEPS（默认 5000）即完成当日行军。
 - 写入侧（on_sport_written）：当日记录首次达标时推进连续天数、达成里程碑时
-  发放积分并写 STREAK_* 事件（一次性成就，以事件表去重）；
+  写 STREAK_* 事件（一次性成就，以事件表去重；V2.0 起里程碑不再发放积分）；
 - 读取侧（compute_streaks）：以 daily_sport.is_goal_completed 为准重算，
   「当前连续」允许今天尚未达标（连续算到昨天），今天昨天都未达标则为 0；
 - users.continuous_days / max_continuous_days 为缓存，供管理端列表免逐户重算，
   启动时 recompute_all 全量兜底。
 """
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.helpers import now_beijing
 from app.models.models import DailySport, User
-from app.services import event_service, points_service
+from app.services import event_service
 
 
 def longest_run(days: Iterable[str]) -> int:
@@ -38,7 +39,7 @@ def streaks_of(achieved_days: Set[str]) -> Tuple[int, int]:
     """
     if not achieved_days:
         return 0, 0
-    cursor = datetime.now().date()
+    cursor = now_beijing().date()
     if cursor.isoformat() not in achieved_days:
         cursor -= timedelta(days=1)
     current = 0
@@ -62,7 +63,7 @@ def on_sport_written(db: Session, user_id: int, date: str) -> Optional[int]:
     """运动记录写入后的连续行军维护。
 
     当日首次达标（is_goal_completed 由 False 翻为 True）时：
-    重算并更新 users 连续天数缓存；跨越里程碑（3/7/14/30/60）时发放积分、
+    重算并更新 users 连续天数缓存；跨越里程碑（3/7/14/30/60）时
     写 DAILY_GOAL / STREAK_* 事件。返回当日首次达标后的当前连续天数，未变化返回 None。
     """
     record = (
@@ -98,7 +99,6 @@ def on_sport_written(db: Session, user_id: int, date: str) -> Optional[int]:
         if current >= milestone and old_best < milestone and not event_service.has_event(
             db, user_id, event_type
         ):
-            points_service.grant(db, user_id, f"连续行军{milestone}天", event_service.MILESTONE_POINTS[milestone])
             event_service.record(db, user_id, event_type, {"days": milestone})
     return current
 

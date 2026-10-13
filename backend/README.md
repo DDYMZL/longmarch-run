@@ -126,13 +126,15 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/quiz/records` | 答题记录 |
 | GET | `/api/quiz/knowledge` | 知识画像（总正确率 + 分类正确率） |
 | POST | `/api/quiz/reset` | 重置今日答题（调试用） |
-| GET | `/api/points` | 积分总额与流水 |
+| GET | `/api/points` | 积分概览：`total`（= walk + quiz）/ `walk` / `quiz` / 今日两项及计分依据 / `rank`（总积分榜名次）/ `rules` |
+| GET | `/api/points/daily?page=&page_size=` | 积分明细：按自然日倒序分页，每天步行/答题积分与当日步数、答对数 |
 | GET | `/api/medal/list` | 勋章列表（含未获得） |
 | POST | `/api/medal/check` | 检查并发放勋章 |
 | GET | `/api/org/children?parentId=` | 按层级获取下级组织（留空返回顶级；无需鉴权） |
 | GET | `/api/org/mine` | 我的所属组织（含全路径） |
 | POST | `/api/org/select` | 选定/修改所属组织（body: `orgId`，可选任意层级） |
-| GET | `/api/rank/steps` | 全员工累计步数总榜（跨所有组织，标记我的名次） |
+| GET | `/api/rank/points?page=&page_size=` | 全员工总积分榜：`top` 第 1~10 名、`list` 第 11 名起分页、`me` 当前用户（始终返回） |
+| GET | `/api/rank/steps` | 旧版榜单契约（前 100 名 + 我），名次与总积分榜一致 |
 | GET | `/api/quotes/today` | 今日寄语（启用寄语按排序号自循环起始日期起每天一条循环；无启用寄语返回 null） |
 | POST | `/api/auth/qr/info` | 查询扫码场景 `{scene}`：L 登录确认 / B 绑定确认（含目标渠道信息），pending 置 scanned |
 | POST | `/api/auth/qr/confirm` | 确认/取消扫码 `{scene, action}`：L 无后台角色 403（会话置 failed），有角色置 confirmed；B 事务写身份（unionid 冲突不合并） |
@@ -151,8 +153,9 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/admin/dashboard/trend?days=` | 运动趋势（近 N 日） |
 | GET | `/api/admin/activities?limit=` | 实时动态（user_event 倒序） |
 | GET | `/api/admin/screen` | 数据大屏聚合（指标 + 路线总览 + 7 日趋势 + 动态） |
-| GET | `/api/admin/rankings` | 管理端全员排名：服务端分页与筛选（关键字/组织/已改名），全员指标与领奖台，当前页每人全部节点到达时间 |
-| GET | `/api/admin/rankings/export` | 按筛选条件流式导出排名 CSV |
+| GET | `/api/admin/rankings` | 管理端全员排名（与小程序同口径按总积分）：服务端分页与筛选（关键字/组织/已改名），全员指标（含总积分）与领奖台，当前页每人总/步行/答题积分与全部节点到达时间 |
+| POST | `/api/admin/points/verify` | 积分台账核对 `{fix?, user_ids?}`：按每日步数/答题记录重算比对，`fix=true` 修复差异并写审计 `points.recompute` |
+| GET | `/api/admin/rankings/export` | 按筛选条件流式导出排名 CSV（含总积分/步行积分/答题积分列） |
 | GET | `/api/admin/users/{id}/overview` | 人员详情聚合（运动/答题/勋章/长征/积分） |
 | GET | `/api/admin/route-nodes` | 全部路线节点列表（含停用节点） |
 | POST | `/api/admin/route-nodes` | 新增路线节点（校验坐标/步数/排序/递增） |
@@ -180,12 +183,12 @@ python run.py                 # 或 uvicorn app.main:app --reload
 - **步数**：按 `用户 + 日期` 唯一，同日同步为覆盖而非累加；步数来源为 `wx.getWeRunData` 加密数据后端解密取当日真实步数，仅 mock 用户（开发模式）或未配置微信凭证时回退按「日期+用户」稳定模拟（4000~12999），真实用户缺数据/解密失败返回 400 不写库。
 - **路线**：累计步数达到节点 `targetSteps` 即点亮，**点亮后永久保留**；节点状态分 `completed / current / unlocked`。管理后台可启停节点，停用节点不在小程序可见路线中，不参与完成判定和排名，但已有点亮记录保留。
 - **答题**：每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可完成一次；题目接口**不返回答案**。
-- **积分**：登录 +1、运动 5000/10000 步 +5/+10、答题 +5 满分额外 +10、点亮节点 +10、完成路线 +100；**同日同原因去重**。
+- **积分**（V2.0）：**总积分 = 步行积分 + 答题积分**，仅后端计算。步行：每自然日 `floor(min(步数, 20000) / 1000)`，单日最高 20；答题：每答对 1 题 +2、不扣分、单日最高 10。台账 `points_log` 每人每来源每日一行（`biz_key` = `walk:日期` / `quiz:日期` 唯一），在步数写入/答题提交的同一事务内按源数据重算覆盖，重复同步与重放请求不会重复计分；步数同步只增不减（取当日最终步数），已有记录的往日按微信最终步数校正。登录/达标/点亮/里程碑不再发放积分，旧流水标记 `legacy` 仅追溯不计入。`POST /api/admin/points/verify` 可全量核对与修复（参数见 `Settings.POINTS_*`）。
 - **勋章**：12 枚分入门/路线/挑战/完成四类：`first-step`（首次运动）、`learner`（10 次答题）、`persistence`（连续行军 7 天）、`luding`/`snow`（点亮泸定桥/雪山）、`day-10k`（单日万步）、`steps-100k`/`steps-500k`（累计 10 万/50 万步）、`streak-30`（连续行军 30 天）、`master`（积分≥500）、`fearless`（连续 7 天日万步，隐藏）、`victory`（全部**启用**节点点亮）。
 - **连续行军**：当日步数 ≥ 5000（`STREAK_GOAL_STEPS` 可配）即完成当日行军；`daily_sport.is_goal_completed` 为判定依据，`users.continuous_days/max_continuous_days` 为冗余缓存。
 - **事件系统**：用户成就（首次运动/当日达标/连续里程碑/点亮/勋章/答题等）统一落 `user_event` 并生成中文文案，小程序足迹时间轴与管理端实时动态共用此数据源。
 - **组织架构**：多级树（种子 13 个节点，4 级），用户可选定**任意层级**节点作为所属组织，登录后可随时修改；管理端组织树按节点统计直属人数与含下级累计人数。
-- **排名**：**员工个人**总榜（非组织间排名），按累计步数（`DailySport.steps` 求和）降序，跨所有组织；同分按 `user_id` 升序保证名次稳定；返回前 `TOP_LIMIT`（默认 100）条并始终包含当前用户。
+- **排名**：**员工个人**总榜（非组织间排名），按总积分降序，同分按累计步数降序、再按 `user_id` 升序保证名次稳定；小程序、管理端、CSV 与「我的」名次共用 `rank_service.ranked_users_subquery`。
 - **每日寄语**：启用寄语按 `(sort_order, id)` 升序排列共 N 条，今日展示第 `(今天 − 循环起始日期).days % N` 条（起始日期存 `system_settings.quote_cycle_start`，后台可改；起始日期在未来时展示第 1 条）；同一天所有用户看到同一条，停用/新增/删除后按最新启用列表重算；无启用寄语返回 null。Excel 导入未填排序号的行接在库内与文件内已填排序号最大值之后。
 - **身份关联**：认证（JWT）/ 身份关联（user_identities）/ 后台授权（RBAC）三层分离，绑定身份成功**不等于**拥有后台权限；`wx_mini` 登录凭证身份不可解绑；同一 `provider+app_id+openid` 全局唯一，unionid 冲突**禁止自动合并**；绑定凭证只存 SHA-256 摘要，确认后单次有效。
 - **扫码登录**：L 场景创建→轮询→小程序确认（无启用角色会话置 failed 并返回原因）→PC 轮询 confirmed 后**单次签发**管理员 JWT（token_issued 原子标记防重放）。

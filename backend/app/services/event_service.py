@@ -16,9 +16,8 @@ from app.core import ws as ws_manager
 from app.core.config import get_settings
 from app.models.models import User, UserEvent
 
-# 连续行军里程碑（天）：达成时发放积分并写 STREAK_* 事件（一次性成就）
+# 连续行军里程碑（天）：达成时写 STREAK_* 事件（一次性成就）
 STREAK_MILESTONES: List[int] = [3, 7, 14, 30, 60]
-MILESTONE_POINTS: Dict[int, int] = {3: 5, 7: 10, 14: 20, 30: 30, 60: 60}
 
 
 def build_text(event_type: str, data: Optional[dict] = None) -> str:

@@ -263,7 +263,7 @@ def main():
                and u.invite_code_id == gen_id and u.onboarded_at is not None and u.status == "active"
                and used(gen_id) == 1 and me.status_code == 200 and me.json()["orgId"] == 111
                and relog.json().get("status") == "active" and relog.json().get("token")
-               and len(audit) == 1 and gen_code not in (audit[0].detail or "") and pts == 1,
+               and len(audit) == 1 and gen_code not in (audit[0].detail or "") and pts == 0,
                f"{r.status_code} created={body.get('created')} used={used(gen_id)} audit={[a.detail for a in audit]} pts={pts}")
         uid_li = u.id if u else None
 

@@ -2,7 +2,8 @@
 
 规则：
   每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可完成一次；
-  提交后由后端按正确答案判分并发放积分（每日答题 +5，满分额外 +10）。
+  提交后由后端按正确答案判分；答题积分 = 答对数 × 2（单日上限 10，不扣分），
+  与答题记录同一事务写入积分台账（见 points_service）。
 安全：作答阶段题目接口不返回 answer / analysis，也不提供单题判题；
   提交须恰好覆盖今日全部题目且不重复（防重复提交同一道已知答案的题刷分），
   对错与逐题得分只在提交后由后端从题库判定并随记录返回。
@@ -193,7 +194,7 @@ def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
         )
 
     score = correct_count * SCORE_PER_QUESTION
-    earned = 15 if score == 100 else 5  # 每日答题 +5，满分额外 +10
+    earned = points_service.quiz_points(correct_count)
     record = QuizRecord(
         user_id=user_id,
         date=date,
@@ -207,18 +208,18 @@ def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
     )
     db.add(record)
     try:
+        db.flush()
+        points_service.sync_quiz_day(db, user_id, date, correct_count, cache.id)
         db.commit()
     except IntegrityError:
         db.rollback()
         raise ValueError(ALREADY_DONE)
 
-    points_service.grant(db, user_id, "每日答题", 5)
     event_service.record(
         db, user_id, "QUIZ_COMPLETE",
         {"date": date, "score": score, "correctCount": correct_count},
     )
     if score == 100:
-        points_service.grant(db, user_id, "答题满分", 10)
         event_service.record(db, user_id, "QUIZ_FULL_SCORE", {"date": date})
 
     return _record_out(record)
@@ -279,7 +280,7 @@ def get_knowledge(db: Session, user_id: int) -> Dict:
 
 
 def reset_today(db: Session, user_id: int) -> None:
-    """重置今日答题（调试用）：删记录、撤销今日答题相关积分、清题目缓存。"""
+    """重置今日答题（调试用）：删记录、撤销今日答题积分、清题目缓存。"""
     date = today_str()
     db.query(QuizRecord).filter(
         QuizRecord.user_id == user_id, QuizRecord.date == date
@@ -289,7 +290,6 @@ def reset_today(db: Session, user_id: int) -> None:
     ).delete(synchronize_session=False)
     db.query(PointsLog).filter(
         PointsLog.user_id == user_id,
-        PointsLog.date == date,
-        PointsLog.reason.in_(["每日答题", "答题满分"]),
+        PointsLog.biz_key == points_service.biz_key(points_service.QUIZ, date),
     ).delete(synchronize_session=False)
     db.commit()

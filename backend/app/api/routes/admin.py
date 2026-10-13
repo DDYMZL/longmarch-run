@@ -37,6 +37,8 @@ from app.schemas.schemas import (
     AdminInviteUpdate,
     AdminOrgNodeOut,
     AdminOrgUserListOut,
+    AdminPointsVerifyOut,
+    AdminPointsVerifyRequest,
     AdminQrCreateOut,
     AdminQrStatusOut,
     AdminRankListOut,
@@ -74,10 +76,12 @@ from app.services import (
     access_service,
     activity_service,
     admin_service,
+    audit_service,
     dashboard_service,
     identity_service,
     import_service,
     invite_service,
+    points_service,
     quote_service,
     wechat_service,
 )
@@ -311,6 +315,24 @@ def rankings(
     db: Session = Depends(get_db),
 ):
     return admin_service.get_rank_overview(db, page, page_size, keyword, org_id, only_changed)
+
+
+@router.post("/points/verify", response_model=AdminPointsVerifyOut, summary="积分台账核对 / 重算")
+def verify_points(
+    payload: AdminPointsVerifyRequest,
+    admin: AdminPrincipal = Depends(require_menu("rankings")),
+    db: Session = Depends(get_db),
+):
+    """按源数据（每日步数 / 答题记录）核对积分台账；fix=True 时修复差异并写审计。"""
+    result = points_service.recompute_all(db, fix=payload.fix, user_ids=payload.user_ids)
+    if payload.fix:
+        actor_type, actor_id = _actor(admin)
+        audit_service.record(
+            db, actor_type, actor_id, "points.recompute", None,
+            {"operator": admin.username, **{k: result[k] for k in ("users", "checked_days", "fixed")}},
+        )
+        db.commit()
+    return result
 
 
 @router.get(

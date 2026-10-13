@@ -19,7 +19,7 @@ from app.models.models import (
     UserEvent,
     UserMedal,
 )
-from app.services import event_service, march_service, org_service, points_service, streak_service
+from app.services import event_service, march_service, org_service, points_service, rank_service, streak_service
 
 # 数据画像归一化配置（需求 §17.3：画像必须基于真实统计数据，各维度 0~100）。
 # 满分参照值集中在此，调整口径只改配置。
@@ -162,7 +162,10 @@ def get_summary(db: Session, user: User) -> Dict:
             "full_score_count": full_score_count,
         },
         "medals": {"owned_count": owned_count, "total_count": medal_total},
-        "points": {"total": points_service.get_total(db, user.id)},
+        "points": {
+            **points_service.get_breakdown(db, user.id),
+            "rank": rank_service.get_user_rank(db, user.id),
+        },
         "portrait": _portrait(
             total_steps=total_steps,
             sport_days=sport_days,

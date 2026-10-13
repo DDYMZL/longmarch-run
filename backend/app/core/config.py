@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     ACTIVITY_START_DATE: str = "2026-09-01"  # 活动起始日（答题「第 N 期」等的基准）
     ACTIVITY_MASK_NICKNAME: bool = False  # 实时行动态昵称脱敏（需求 §8.5，开启后对外动态展示如「王*明」）
 
+    # 积分规则（V2.0）：总积分 = 步行积分 + 答题积分
+    POINTS_WALK_STEP_CAP: int = 20000  # 单日计分步数上限
+    POINTS_WALK_STEPS_PER_POINT: int = 1000  # 每满多少步得 1 分（不足不计）
+    POINTS_QUIZ_PER_CORRECT: int = 2  # 每答对 1 题得分
+    POINTS_QUIZ_DAILY_CAP: int = 10  # 单日答题积分上限
+
     # 跨域来源
     CORS_ORIGINS: List[str] = ["*"]
 

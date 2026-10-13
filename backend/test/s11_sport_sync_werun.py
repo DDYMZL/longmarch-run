@@ -188,7 +188,8 @@ def main():
                 record("W07", "解密数据缺当日步数抛错", "缺少今日步数" in str(e), str(e))
 
             got = sport_service._resolve_steps("real_x", "c", encrypted2, iv, today, 999999)
-            record("W08", "_resolve_steps 取当日真实步数", got == 6543, f"steps={got}")
+            record("W08", "_resolve_steps 按北京时间解析各日真实步数（含今日）",
+                   got.get(today) == 6543 and 111 in got.values(), f"steps={got}")
         finally:
             sport_service.code2session = orig_code2session
             settings.WX_APPID, settings.WX_SECRET = orig_appid, orig_secret

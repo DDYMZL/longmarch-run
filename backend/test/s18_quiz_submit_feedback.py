@@ -13,7 +13,7 @@ S18 V1.2 答题提交后统一反馈 后端冒烟脚本（TestClient + SQLite �
   Q08 正常提交：后端判分，返回逐题 details（我的答案/正确答案/对错/每题得分）与 wrongList
   Q09 每日仅一次：重复提交 400，积分不重复发放
   Q10 已完成后 /quiz/daily 返回记录含 details；/quiz/records 不含 details
-  Q11 满分提交：100 分、积分 15、全部 details correct
+  Q11 满分提交：100 分、积分 10（5 题 × 2，单日上限 10）、全部 details correct
   Q12 并发提交（8 线程）仅 1 个成功、仅 1 次积分
   Q13 历史记录（无 details）不重算，原样返回 score / wrongList，details 为空
   Q14 未登录访问答题接口 401
@@ -80,8 +80,7 @@ def headers(uid, openid):
 def quiz_points(uid):
     db = SessionLocal()
     try:
-        rows = db.query(PointsLog).filter(PointsLog.user_id == uid,
-                                          PointsLog.reason.in_(["每日答题", "答题满分"])).all()
+        rows = db.query(PointsLog).filter(PointsLog.user_id == uid, PointsLog.source_type == "quiz").all()
         return sum(r.delta for r in rows), len(rows)
     finally:
         db.close()
@@ -175,7 +174,7 @@ def main():
         )
         record("Q08", "后端判分返回逐题结果（60 分 3 对 2 错）",
                r.status_code == 200 and res["score"] == 60 and res["correctCount"] == 3 and res["totalCount"] == 5
-               and res["points"] == 5 and det_ok and [w["index"] for w in res["wrongList"]] == [4, 5],
+               and res["points"] == 6 and det_ok and [w["index"] for w in res["wrongList"]] == [4, 5],
                f"status={r.status_code} score={res.get('score')} det_ok={det_ok}")
 
         # Q09
@@ -183,7 +182,7 @@ def main():
         pts, rows = quiz_points(u1)
         record("Q09", "重复提交 400 且积分不重复",
                r.status_code == 400 and r.json().get("detail") == "今日答题已完成" and record_count(u1) == 1
-               and (pts, rows) == (5, 1), f"status={r.status_code} points={pts} rows={rows}")
+               and (pts, rows) == (6, 1), f"status={r.status_code} points={pts} rows={rows}")
 
         # Q10
         d = client.get("/api/quiz/daily", headers=h1).json()
@@ -200,9 +199,9 @@ def main():
                         json={"answers": [{"questionId": q["id"], "answer": answer_map[q["id"]]} for q in qs2]})
         res = r.json()
         pts, rows = quiz_points(u2)
-        record("Q11", "满分 100 分、积分 15、逐题全对",
-               r.status_code == 200 and res["score"] == 100 and res["points"] == 15 and res["wrongList"] == []
-               and all(x["correct"] and x["score"] == 20 for x in res["details"]) and (pts, rows) == (15, 2),
+        record("Q11", "满分 100 分、积分 10、逐题全对",
+               r.status_code == 200 and res["score"] == 100 and res["points"] == 10 and res["wrongList"] == []
+               and all(x["correct"] and x["score"] == 20 for x in res["details"]) and (pts, rows) == (10, 1),
                f"status={r.status_code} score={res.get('score')} points={pts}/{rows}")
 
         # Q12 并发提交
@@ -225,7 +224,7 @@ def main():
             t.join(30)
         pts, rows = quiz_points(u3)
         record("Q12", "8 并发提交仅 1 成功、积分仅发一次",
-               statuses.count(200) == 1 and statuses.count(400) == 7 and record_count(u3) == 1 and (pts, rows) == (15, 2),
+               statuses.count(200) == 1 and statuses.count(400) == 7 and record_count(u3) == 1 and (pts, rows) == (10, 1),
                f"statuses={sorted(statuses)} records={record_count(u3)} points={pts}/{rows}")
 
         # Q13 历史记录不重算

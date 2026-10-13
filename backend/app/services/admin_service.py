@@ -32,7 +32,7 @@ from app.models.models import (
     User,
     UserMedal,
 )
-from app.services import org_service, rank_service, sport_service
+from app.services import org_service, points_service, rank_service, sport_service
 
 
 # ---------------- 路线节点维护 ----------------
@@ -277,6 +277,9 @@ def _ranked_user_query(db: Session, keyword: str = "", org_id: Optional[int] = N
         db.query(
             ranked.c.rank,
             ranked.c.steps,
+            ranked.c.points,
+            ranked.c.walk_points,
+            ranked.c.quiz_points,
             User.id.label("user_id"),
             User.nickname,
             User.avatar,
@@ -320,6 +323,9 @@ def _rank_items(db: Session, rows: List, route_nodes: List, org_names: Dict[int,
                 "original_nickname": r.original_nickname or r.nickname,
                 "nickname_changed_at": r.nickname_changed_at,
                 "total_steps": int(r.steps),
+                "total_points": int(r.points),
+                "walk_points": int(r.walk_points),
+                "quiz_points": int(r.quiz_points),
                 "completed_nodes": len(reached),
                 "node_count": len(route_nodes),
                 "last_reached_at": max(reached.values()) if reached else None,
@@ -340,9 +346,15 @@ def _rank_items(db: Session, rows: List, route_nodes: List, org_names: Dict[int,
 
 
 def _rank_summary(db: Session, node_ids: List[int]) -> Dict:
-    """全员指标：人数、总步数、完成全程人数、平均路线进度（各人进度四舍五入后取平均）。"""
+    """全员指标：人数、总步数、总积分、完成全程人数、平均路线进度（各人进度四舍五入后取平均）。"""
     total = db.query(func.count(User.id)).scalar() or 0
     total_steps = db.query(func.coalesce(func.sum(DailySport.steps), 0)).scalar() or 0
+    total_points = (
+        db.query(func.coalesce(func.sum(PointsLog.delta), 0))
+        .filter(PointsLog.source_type.in_(points_service.SOURCES))
+        .scalar()
+        or 0
+    )
     node_count = len(node_ids)
     completed_users, avg_progress = 0, 0
     if node_count and total:
@@ -360,6 +372,7 @@ def _rank_summary(db: Session, node_ids: List[int]) -> Dict:
     return {
         "total": int(total),
         "total_steps": int(total_steps),
+        "total_points": int(total_points),
         "completed_users": int(completed_users),
         "avg_progress": int(avg_progress),
     }
@@ -438,7 +451,7 @@ def iter_rank_csv(keyword: str = "", org_id: Optional[int] = None, only_changed:
         node_ids = [n.id for n in route_nodes]
         org_names = org_service.get_full_name_map(db, [oid for (oid,) in db.query(Organization.id).all()])
         writer.writerow(
-            ["排名", "人员ID", "姓名", "曾用名", "改名时间", "所属组织", "累计步数", "到达节点数"]
+            ["排名", "人员ID", "姓名", "曾用名", "改名时间", "所属组织", "总积分", "步行积分", "答题积分", "累计步数", "到达节点数"]
             + [_csv_text(f"{n.name}到达时间") for n in route_nodes]
         )
         yield "\ufeff" + flush()
@@ -460,6 +473,9 @@ def iter_rank_csv(keyword: str = "", org_id: Optional[int] = None, only_changed:
                         _csv_text((r.original_nickname or r.nickname) if changed else ""),
                         _export_time(r.nickname_changed_at, ""),
                         _csv_text(org_names.get(r.org_id) or "未分配组织"),
+                        int(r.points),
+                        int(r.walk_points),
+                        int(r.quiz_points),
                         int(r.steps),
                         len(reached),
                     ]
@@ -519,11 +535,10 @@ def get_user_overview(db: Session, user_id: int) -> Optional[Dict]:
 
     points_logs = (
         db.query(PointsLog)
-        .filter(PointsLog.user_id == user_id)
+        .filter(PointsLog.user_id == user_id, PointsLog.source_type.in_(points_service.SOURCES))
         .order_by(PointsLog.date.desc(), PointsLog.id.desc())
         .all()
     )
-    total_points = sum(item.delta for item in points_logs)
 
     today = sport_service.get_today(db, user_id)
     quiz_records = (
@@ -570,9 +585,15 @@ def get_user_overview(db: Session, user_id: int) -> Optional[Dict]:
             "nodes": march_nodes,
         },
         "points": {
-            "total": total_points,
+            **points_service.get_breakdown(db, user_id),
+            "rank": rank_service.get_user_rank(db, user_id),
             "logs": [
-                {"date": item.date, "reason": item.reason, "delta": item.delta}
+                {
+                    "date": item.date,
+                    "reason": item.reason,
+                    "delta": item.delta,
+                    "source_type": item.source_type,
+                }
                 for item in points_logs
             ],
         },

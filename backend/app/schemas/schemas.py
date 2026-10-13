@@ -480,19 +480,41 @@ class SubmitRequest(BaseModel):
 
 
 # ---------------- 积分 ----------------
-class PointsOut(CamelModel):
+class PointsRules(CamelModel):
+    walk_steps_per_point: int
+    walk_step_cap: int
+    walk_daily_cap: int
+    quiz_per_correct: int
+    quiz_daily_cap: int
+
+
+class PointsSummaryOut(CamelModel):
+    """积分概览：total 恒等于 walk + quiz；rank 为总积分榜名次。"""
+
     total: int
+    walk: int
+    quiz: int
+    today_walk: int = 0
+    today_quiz: int = 0
+    today_steps: int = 0
+    today_correct: int = 0
+    rank: Optional[int] = None
+    rules: PointsRules
 
 
-class PointsLogItem(CamelModel):
+class PointsDailyItem(CamelModel):
     date: str
-    reason: str
-    delta: int
-
-
-class PointsDetail(CamelModel):
+    walk: int
+    quiz: int
     total: int
-    logs: List[PointsLogItem] = []
+    steps: int = 0
+    correct_count: int = 0
+    updated_at: Optional[datetime] = None
+
+
+class PointsDailyOut(CamelModel):
+    total: int
+    items: List[PointsDailyItem] = []
 
 
 # ---------------- 勋章 ----------------
@@ -569,7 +591,12 @@ class ProfileMedalStats(CamelModel):
 
 
 class ProfilePointsStats(CamelModel):
+    """与「我的」积分卡同源（points_service.get_breakdown），rank 为总积分榜名次。"""
+
     total: int = 0
+    walk: int = 0
+    quiz: int = 0
+    rank: Optional[int] = None
 
 
 class ProfilePortrait(CamelModel):
@@ -735,6 +762,9 @@ class RankItem(CamelModel):
     avatar: str
     org_name: str = ""
     steps: int
+    points: int = 0
+    walk_points: int = 0
+    quiz_points: int = 0
     is_me: bool
 
     @field_validator("avatar", mode="before")
@@ -747,6 +777,18 @@ class RankListOut(CamelModel):
     list: List[RankItem]
     my_rank: Optional[int] = None
     my_steps: int = 0
+    total: int = 0
+
+
+class PointsRankOut(CamelModel):
+    """总积分榜：top 第 1~10 名；list 第 11 名起分页；me 当前用户。"""
+
+    top: List[RankItem] = []
+    list: List[RankItem] = []
+    me: Optional[RankItem] = None
+    page: int = 1
+    page_size: int = 20
+    has_more: bool = False
     total: int = 0
 
 
@@ -1249,6 +1291,9 @@ class AdminRankItemOut(BaseModel):
     original_nickname: str = ""
     nickname_changed_at: Optional[datetime] = None
     total_steps: int
+    total_points: int = 0
+    walk_points: int = 0
+    quiz_points: int = 0
     completed_nodes: int
     node_count: int
     last_reached_at: Optional[datetime] = None
@@ -1272,6 +1317,7 @@ class AdminRankListOut(BaseModel):
 
     total: int = 0
     total_steps: int = 0
+    total_points: int = 0
     completed_users: int = 0
     avg_progress: int = 0
     match_total: int = 0
@@ -1349,18 +1395,44 @@ class AdminOverviewMarch(BaseModel):
 
 
 class AdminOverviewPoint(BaseModel):
-    """人员详情：积分流水条目。"""
+    """人员详情：积分台账条目（步行/答题，每来源每日一行）。"""
 
     date: str
     reason: str
     delta: int
+    source_type: str = ""
 
 
 class AdminOverviewPoints(BaseModel):
-    """人员详情：积分聚合。"""
+    """人员详情：积分聚合（与小程序同源，total = walk + quiz）。"""
 
     total: int = 0
+    walk: int = 0
+    quiz: int = 0
+    rank: Optional[int] = None
     logs: List[AdminOverviewPoint] = []
+
+
+class AdminPointsVerifyRequest(BaseModel):
+    """fix=False 只核对不修改；user_ids 为空时全员核对。"""
+
+    fix: bool = False
+    user_ids: Optional[List[int]] = None
+
+
+class AdminPointsDiff(BaseModel):
+    user_id: int
+    biz_key: str
+    expected: int
+    actual: int
+
+
+class AdminPointsVerifyOut(BaseModel):
+    users: int
+    checked_days: int
+    mismatches: int
+    fixed: int
+    samples: List[AdminPointsDiff] = []
 
 
 class AdminUserOverviewOut(BaseModel):

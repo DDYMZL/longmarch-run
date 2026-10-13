@@ -17,13 +17,12 @@ from app.schemas.schemas import (
     OnboardResponse,
     UserOut,
 )
-from app.services import auth_service, invite_service, org_service, points_service
+from app.services import auth_service, invite_service, org_service
 
 router = APIRouter(tags=["auth"])
 
 
-def _after_sign_in(db: Session, user: User, event: str) -> None:
-    points_service.grant_daily_login(db, user.id)
+def _after_sign_in(user: User, event: str) -> None:
     ws_manager.broadcast(ws_manager.build_event(event, user.id))
 
 
@@ -31,7 +30,7 @@ def _after_sign_in(db: Session, user: User, event: str) -> None:
 def login(payload: LoginRequest, db: Session = Depends(get_db)):
     """用 wx.login 的 code 识别微信身份；不自动建号。
 
-    已入驻（active）返回 token/user 并发放每日登录积分（同日去重）；未入驻返回
+    已入驻（active）返回 token/user；未入驻返回
     status=unregistered、已停用返回 status=disabled，均不签发令牌。
     微信换取失败返回 502（未识别）。
     """
@@ -41,7 +40,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=502, detail=str(exc))
     if user is None:
         return LoginResponse(status=status)
-    _after_sign_in(db, user, "auth.login")
+    _after_sign_in(user, "auth.login")
     return LoginResponse(status=status, token=token, user=UserOut.model_validate(user))
 
 
@@ -81,7 +80,7 @@ def onboard(payload: OnboardRequest, request: Request, db: Session = Depends(get
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    _after_sign_in(db, user, "auth.onboard" if created else "auth.login")
+    _after_sign_in(user, "auth.onboard" if created else "auth.login")
     return OnboardResponse(token=token, user=UserOut.model_validate(user), created=created)
 
 
