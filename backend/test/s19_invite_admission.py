@@ -18,8 +18,8 @@ S19 邀请码准入 后端测试脚本（TestClient + SQLite 临时库；取代 
   I13 并发：8 个不同身份抢 max_uses=3 的邀请码 → 恰好 3 个成功、used_count=3
   I14 竞态分支：建号撞 openid 唯一约束 → 回滚（核销撤销）并复用已有用户
   I15 停用用户：登录 disabled 无 Token；旧 Token 访问全部受保护接口 403 + X-Account-Status；入驻接口 403；WebSocket 4403；重新启用恢复
-  I16 历史用户（invite_code_id 为空）登录 active，改选组织不受限
-  I17 专属码用户 /org/select 越界 400、范围内 200；/org/mine 返回 scopeOrgId
+  I16 历史用户（invite_code_id 为空）登录 active，已有组织改选 403 锁定
+  I17 专属码用户首次 /org/select 越界 400、范围内 200、再选 403；/org/mine 返回 scopeOrgId 与 locked
   I18 已配置微信凭证但 code 换取失败：登录/入驻均 502，不建号
   I19 全部用户受保护接口无/伪造 Token → 401
   I20 普通用户 Token 访问全部管理接口 → 401/403
@@ -434,20 +434,27 @@ def main():
         wx_as("o_s19_legacy")
         r = login(client)
         r_sel = client.post("/api/org/select", headers=bearer(r.json().get("token") or ""), json={"orgId": 2})
-        record("I16", "历史用户（无邀请码）登录 active、改选组织不受限",
-               r.json().get("status") == "active" and r.json()["user"]["id"] == legacy_id and r_sel.status_code == 200,
+        record("I16", "历史用户（无邀请码）登录 active、已有组织改选被锁定 403",
+               r.json().get("status") == "active" and r.json()["user"]["id"] == legacy_id
+               and r_sel.status_code == 403 and q(lambda db: db.get(User, legacy_id).org_id) == 1,
                f"login={r.json().get('status')} select={r_sel.status_code}")
 
-        # I17 专属码用户改选组织
+        # I17 专属码用户（组织尚未确定）首次选组织受范围约束，选定后锁定
+        def _clear_scoped_org(db):
+            db.query(User).filter(User.openid == "o_s19_scope_0001").update({User.org_id: None})
+            db.commit()
+        q(_clear_scoped_org)
         h = bearer(scoped_token)
         r_out = client.post("/api/org/select", headers=h, json={"orgId": 2})
-        r_in = client.post("/api/org/select", headers=h, json={"orgId": 11})
         r_404 = client.post("/api/org/select", headers=h, json={"orgId": 9999})
+        r_in = client.post("/api/org/select", headers=h, json={"orgId": 11})
+        r_again = client.post("/api/org/select", headers=h, json={"orgId": 111})
         r_mine = client.get("/api/org/mine", headers=h)
-        record("I17", "专属码用户改选组织越界 400、范围内 200、/org/mine 返回范围",
+        record("I17", "专属码用户首次选组织越界 400、范围内 200、再选 403 锁定、/org/mine 返回范围与 locked",
                r_out.status_code == 400 and r_in.status_code == 200 and r_404.status_code == 404
+               and r_again.status_code == 403 and r_mine.json().get("orgId") == 11 and r_mine.json().get("locked") is True
                and r_mine.json().get("scopeOrgId") == 11 and r_mine.json().get("scopeOrgName") == "华东分公司",
-               f"out={r_out.status_code} in={r_in.status_code} 404={r_404.status_code} mine={r_mine.json()}")
+               f"out={r_out.status_code} in={r_in.status_code} 404={r_404.status_code} again={r_again.status_code} mine={r_mine.json()}")
 
         # I18 微信换取失败
         auth_service.code2session = lambda code: None

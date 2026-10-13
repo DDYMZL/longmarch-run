@@ -170,7 +170,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET | `/api/org/mine` | 是 | 我的组织 `{orgId, orgName, fullName, path}` |
 | GET | `/api/org/companions?limit=` | 是 | 同组织同行者（需求 §9）：`{org, memberCount, todayTotalSteps, companions[]}`；口径为用户所选组织的整棵子树，同行者按今日步数倒序限量（≤50），条目仅昵称/头像/今日步数/isSelf（§9.4 隐私） |
 | GET | `/api/org/march` | 是 | 组织共同长征目标（需求 §10）：`{org, memberCount, totalSteps, progressPct, currentNodeName, nextNodeName, finished, litCount, totalCount, nodes[]}`；组织累计步数=子树成员累计有效步数之和，`currentNodeName`=第一个未完成节点、`nextNodeName`=其后一个（§10.2），节点 pct 已完成100/当前按累计占目标比例/其余0（§10.3） |
-| POST | `/api/org/select` | 是 | 选定/修改组织 `{orgId}`；组织不存在 404 |
+| POST | `/api/org/select` | 是 | 首次选定组织 `{orgId}`（之后锁定，再选 403）；组织不存在 404 |
 | GET | `/api/rank/steps` | 是 | 全员工累计步数榜 `{list: [{rank, userId, nickname, avatar, orgName, steps, isMe}], myRank, mySteps, total}` |
 | GET | `/api/auth/identities` | 是 | 已绑定身份列表 `[{id, provider, appId, openid, verifiedAt, createdAt, isPrimary}]`（wx_mini 主身份 isPrimary=true） |
 | DELETE | `/api/auth/identities/{identity_id}` | 是 | 解绑身份：主身份（wx_mini）400「微信登录凭证不可解绑」，非本人身份 400「身份不存在」，成功写审计 |
@@ -182,6 +182,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | PATCH | `/api/admin/invites/{id}` | 管理员(invites) | 编辑邀请码：`{name?,remark?,orgId?,maxUses?,expiresAt?,isEnabled?}`，`maxUses` 不能低于已用次数，审计（不下发原码） |
 | GET | `/api/admin/invites/{id}/qrcode` | 管理员(invites) | 下发邀请小程序码 `{image?, page, scene, envVersion, mock}`：页面 `pages/launch/launch`、scene `i=<CODE>`（≤32 字符，不含敏感信息）；mock 模式 image=None 返回明文 scene 供调试 |
 | PATCH | `/api/admin/users/{user_id}/status` | 管理员(access) | 启用/禁用账号 `{status: "active"|"disabled"}`：禁用后下次请求返回 403 `X-Account-Status: disabled`，审计记录操作人 |
+| PUT | `/api/admin/users/{user_id}/org` | 管理员(access) | 调整用户所属组织 `{org_id}`，审计 `user.org_change`（操作人/原组织/新组织/时间） |
 | GET | `/api/admin/me` | 管理员 | 当前管理员信息与菜单权限 `{is_super, username, menus}` |
 | GET | `/api/admin/users` | 管理员(access) | 人员授权列表（昵称/组织/`status`筛选、分页）：每项含启用/禁用角色、授权人、邀请码来源（inviteCodeId/inviteName）、onboardedAt、status |
 | GET | `/api/admin/roles` | 管理员(access) | 角色列表（含菜单勾选与是否内置） |

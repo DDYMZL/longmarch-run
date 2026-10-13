@@ -1,6 +1,7 @@
 """组织架构服务：逐级下钻、路径回溯、用户所属组织设定。
 
-组织为多级树（Organization.parent_id 为空即顶级）。用户可选定任意层级节点。
+组织为多级树（Organization.parent_id 为空即顶级）。用户可选定任意层级节点；
+所属组织首次确定（入驻或首次选择）后即锁定，用户侧不可再改，仅管理员可调整并留审计。
 """
 from typing import Dict, List, Optional
 
@@ -9,7 +10,9 @@ from sqlalchemy.orm import Session
 
 from app.core.helpers import today_str
 from app.models.models import DailySport, Organization, User
-from app.services import march_service
+from app.services import audit_service, march_service
+
+ORG_LOCKED = "所属部门已锁定，如需调整请联系管理员"
 
 
 def _child_counts(db: Session, parent_ids: List[int]) -> Dict[int, int]:
@@ -92,30 +95,70 @@ def get_full_name_map(db: Session, org_ids: List[Optional[int]]) -> Dict[int, st
     return result
 
 
-def set_user_org(db: Session, user_id: int, org_id: int) -> Optional[User]:
-    """设定用户所属组织；组织不存在返回 None。"""
-    org = get_org(db, org_id)
-    if org is None:
+def claim_user_org(db: Session, user_id: int, org_id: int) -> Optional[User]:
+    """用户首次认领所属组织（之后锁定）；组织不存在返回 None，已有组织抛 ORG_LOCKED。
+
+    以「org_id IS NULL」为条件的原子更新兜底并发：多个请求同时认领只有一个生效。
+    """
+    if get_org(db, org_id) is None:
         return None
-    user = db.query(User).filter(User.id == user_id).first()
-    if user is None:
-        return None
-    user.org_id = org_id
+    updated = (
+        db.query(User)
+        .filter(User.id == user_id, User.org_id.is_(None))
+        .update({User.org_id: org_id}, synchronize_session=False)
+    )
+    if not updated:
+        db.rollback()
+        raise ValueError(ORG_LOCKED)
     db.commit()
-    db.refresh(user)
-    return user
+    return db.query(User).filter(User.id == user_id).first()
+
+
+def admin_set_user_org(
+    db: Session,
+    user_id: int,
+    org_id: int,
+    operator: str,
+    actor_type: str,
+    actor_id: Optional[int],
+) -> bool:
+    """管理员调整用户所属组织并写审计（操作人/原组织/新组织/时间）。返回是否实际变更。"""
+    if get_org(db, org_id) is None:
+        raise ValueError("组织不存在")
+    user = db.query(User).filter(User.id == user_id).with_for_update().first()
+    if user is None:
+        raise ValueError("用户不存在")
+    before = user.org_id
+    if before == org_id:
+        db.rollback()
+        return False
+    user.org_id = org_id
+    names = get_full_name_map(db, [before, org_id])
+    audit_service.record(
+        db, actor_type, actor_id, "user.org_change", user_id,
+        {
+            "operator": operator,
+            "before_org_id": before,
+            "before_org_name": names.get(before, "") if before else "",
+            "after_org_id": org_id,
+            "after_org_name": names.get(org_id, ""),
+        },
+    )
+    db.commit()
+    return True
 
 
 def get_user_org(db: Session, user: User) -> Dict:
-    """当前用户所属组织信息（未选择时 org_id 为 None）。"""
+    """当前用户所属组织信息（未选择时 org_id 为 None；已选即锁定）。"""
     if not user.org_id:
-        return {"org_id": None, "org_name": "", "full_name": "", "path": []}
+        return {"org_id": None, "org_name": "", "full_name": "", "path": [], "locked": False}
     path = get_path(db, user.org_id)
     return {
         "org_id": user.org_id,
         "org_name": path[-1]["name"] if path else "",
         "full_name": " / ".join(p["name"] for p in path),
         "path": path,
+        "locked": True,
     }
 
 

@@ -131,8 +131,8 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/medal/list` | 勋章列表（含未获得） |
 | POST | `/api/medal/check` | 检查并发放勋章 |
 | GET | `/api/org/children?parentId=` | 按层级获取下级组织（留空返回顶级；无需鉴权） |
-| GET | `/api/org/mine` | 我的所属组织（含全路径） |
-| POST | `/api/org/select` | 选定/修改所属组织（body: `orgId`，可选任意层级） |
+| GET | `/api/org/mine` | 我的所属组织（含全路径、`locked` 是否已锁定、专属码范围 `scopeOrgId`） |
+| POST | `/api/org/select` | 首次选定所属组织（body: `orgId`，可选任意层级）；已有组织 403「所属部门已锁定」，`org_id IS NULL` 条件更新防并发 |
 | GET | `/api/rank/points?page=&page_size=` | 全员工总积分榜：`top` 第 1~10 名、`list` 第 11 名起分页、`me` 当前用户（始终返回） |
 | GET | `/api/rank/steps` | 旧版榜单契约（前 100 名 + 我），名次与总积分榜一致 |
 | GET | `/api/quotes/today` | 今日寄语（启用寄语按排序号自循环起始日期起每天一条循环；无启用寄语返回 null） |
@@ -171,6 +171,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 组织架构 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计）；`POST /api/admin/orgs/sync` 外部同步 |
 | GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 组织人员明细（分页）：`scope=direct` 仅直属成员，`scope=all` 含全部层级下级，与组织树两列统计口径一致 |
 | GET | `/api/admin/users?keyword=&org_id=&status=&page=` | 人员授权列表（昵称/组织/账号状态筛选、分页），每项含启用/禁用角色、`status`、`invite_code_id`、`invite_name`、`onboarded_at` |
+| PUT | `/api/admin/users/{user_id}/org` | 管理员调整用户所属组织 `{org_id}`（菜单 access）；写审计 `user.org_change`（操作人/原组织/新组织/时间），未变化不写；用户或组织不存在 404 |
 | GET/POST | `/api/admin/roles[/{id}]` | 角色列表/新建（含菜单勾选）；PUT 编辑名称与菜单、DELETE 删除（内置/已授权 400） |
 | POST | `/api/admin/users/{uid}/roles` | 全量覆盖用户角色 `{role_ids}`（逐项审计） |
 | PATCH | `/api/admin/users/{uid}/roles/{rid}/enabled` | 启用/禁用单个角色授权（即时生效，不改授权关系） |
@@ -187,7 +188,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 - **勋章**：12 枚分入门/路线/挑战/完成四类：`first-step`（首次运动）、`learner`（10 次答题）、`persistence`（连续行军 7 天）、`luding`/`snow`（点亮泸定桥/雪山）、`day-10k`（单日万步）、`steps-100k`/`steps-500k`（累计 10 万/50 万步）、`streak-30`（连续行军 30 天）、`master`（积分≥500）、`fearless`（连续 7 天日万步，隐藏）、`victory`（全部**启用**节点点亮）。
 - **连续行军**：当日步数 ≥ 5000（`STREAK_GOAL_STEPS` 可配）即完成当日行军；`daily_sport.is_goal_completed` 为判定依据，`users.continuous_days/max_continuous_days` 为冗余缓存。
 - **事件系统**：用户成就（首次运动/当日达标/连续里程碑/点亮/勋章/答题等）统一落 `user_event` 并生成中文文案，小程序足迹时间轴与管理端实时动态共用此数据源。
-- **组织架构**：多级树（种子 13 个节点，4 级），用户可选定**任意层级**节点作为所属组织，登录后可随时修改；管理端组织树按节点统计直属人数与含下级累计人数。
+- **组织架构**：多级树（种子 13 个节点，4 级），用户可选定**任意层级**节点作为所属组织，**首次确定（入驻或首次选择）后锁定**，用户侧无修改入口，仅管理员可调整并留审计；管理端组织树按节点统计直属人数与含下级累计人数。
 - **排名**：**员工个人**总榜（非组织间排名），按总积分降序，同分按累计步数降序、再按 `user_id` 升序保证名次稳定；小程序、管理端、CSV 与「我的」名次共用 `rank_service.ranked_users_subquery`。
 - **每日寄语**：启用寄语按 `(sort_order, id)` 升序排列共 N 条，今日展示第 `(今天 − 循环起始日期).days % N` 条（起始日期存 `system_settings.quote_cycle_start`，后台可改；起始日期在未来时展示第 1 条）；同一天所有用户看到同一条，停用/新增/删除后按最新启用列表重算；无启用寄语返回 null。Excel 导入未填排序号的行接在库内与文件内已填排序号最大值之后。
 - **身份关联**：认证（JWT）/ 身份关联（user_identities）/ 后台授权（RBAC）三层分离，绑定身份成功**不等于**拥有后台权限；`wx_mini` 登录凭证身份不可解绑；同一 `provider+app_id+openid` 全局唯一，unionid 冲突**禁止自动合并**；绑定凭证只存 SHA-256 摘要，确认后单次有效。

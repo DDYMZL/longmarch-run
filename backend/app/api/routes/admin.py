@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import AdminPrincipal, get_current_admin, require_menu
 from app.core import rate_limit
+from app.core import ws as ws_manager
 from app.core.config import settings
 from app.core.database import get_db
 from app.core.helpers import today_str
@@ -67,6 +68,7 @@ from app.schemas.schemas import (
     AdminScreenOut,
     AdminTrendOut,
     AdminUserListOut,
+    AdminUserOrgRequest,
     AdminUserOverviewOut,
     AdminUserRolesRequest,
     AdminUserStatusRequest,
@@ -81,6 +83,7 @@ from app.services import (
     identity_service,
     import_service,
     invite_service,
+    org_service,
     points_service,
     quote_service,
     wechat_service,
@@ -743,6 +746,29 @@ def set_user_status(
         status_code = 404 if str(exc) == "用户不存在" else 400
         raise HTTPException(status_code=status_code, detail=str(exc))
     return {"message": "已更新"}
+
+
+@router.put(
+    "/users/{user_id}/org",
+    response_model=MessageOut,
+    summary="调整用户所属组织（用户侧已锁定，仅管理员可改，写审计）",
+)
+def set_user_org(
+    user_id: int,
+    payload: AdminUserOrgRequest,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("access")),
+):
+    actor_type, actor_id = _actor(admin)
+    try:
+        changed = org_service.admin_set_user_org(
+            db, user_id, payload.org_id, admin.username, actor_type, actor_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    if changed:
+        ws_manager.broadcast(ws_manager.build_event("org.select", user_id))
+    return {"message": "已更新" if changed else "组织未变化"}
 
 
 # ---------------- 入驻邀请码 ----------------

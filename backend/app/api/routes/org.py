@@ -1,4 +1,4 @@
-"""组织架构路由：逐级下钻、我的组织、选定/修改组织。"""
+"""组织架构路由：逐级下钻、我的组织、首次选定组织（之后锁定）。"""
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -55,22 +55,27 @@ def org_march(current: User = Depends(require_activity_view), db: Session = Depe
     return org_service.get_org_march(db, current)
 
 
-@router.post("/select", response_model=UserOrgOut, summary="选定/修改所属组织")
+@router.post("/select", response_model=UserOrgOut, summary="首次选定所属组织（选定后锁定）")
 def select(
     payload: SelectOrgRequest,
     current: User = Depends(require_activity_participation),
     db: Session = Depends(get_db),
 ):
-    """可选定任意层级组织；组织不存在返回 404。
+    """仅未确定组织的用户可选定一次，之后锁定（403），调整需联系管理员。
 
-    专属邀请码入驻的用户只能改选该邀请码组织及其下级（越界 400）。
+    组织不存在返回 404；专属邀请码入驻的用户只能选该邀请码组织及其下级（越界 400）。
     """
+    if current.org_id is not None:
+        raise HTTPException(status_code=403, detail=org_service.ORG_LOCKED)
     try:
         invite_service.check_user_org_scope(db, current, payload.org_id)
     except invite_service.InviteError as exc:
         status_code = 404 if str(exc) == "所选组织不存在" else 400
         raise HTTPException(status_code=status_code, detail=str(exc))
-    user = org_service.set_user_org(db, current.id, payload.org_id)
+    try:
+        user = org_service.claim_user_org(db, current.id, payload.org_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail=str(exc))
     if user is None:
         raise HTTPException(status_code=404, detail="组织不存在")
     ws_manager.broadcast(ws_manager.build_event("org.select", current.id))

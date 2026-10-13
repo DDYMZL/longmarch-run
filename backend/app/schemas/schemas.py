@@ -701,6 +701,7 @@ class UserOrgOut(CamelModel):
     org_name: str = ""
     full_name: str = ""
     path: List[OrgPathItem] = []
+    locked: bool = False
     scope_org_id: Optional[int] = None
     scope_org_name: Optional[str] = None
 
@@ -876,6 +877,10 @@ class AdminInviteUpdate(_InviteExpiry):
 
 class AdminUserStatusRequest(BaseModel):
     status: str = Field(pattern="^(active|disabled)$")
+
+
+class AdminUserOrgRequest(BaseModel):
+    org_id: int
 
 
 class AdminMenuOut(BaseModel):
