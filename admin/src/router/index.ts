@@ -1,5 +1,5 @@
 // 路由：登录页 + 后台布局（驾驶舱 / 数据大屏 / 排名洞察 / 路线点位 / 题库 / 寄语 /
-// 组织架构 / 人员授权 / 审计日志），带登录守卫与菜单权限守卫
+// 组织架构 / 人员授权 / 审计日志 / 活动设置），带登录守卫与菜单权限守卫
 import { createRouter, createWebHistory } from 'vue-router'
 import type { RouteRecordRaw } from 'vue-router'
 import { hasMenu, isLoggedIn } from '../store/auth'
@@ -82,6 +82,12 @@ const routes: RouteRecordRaw[] = [
         name: 'audit',
         component: () => import('../views/AuditView.vue'),
         meta: { title: '审计日志', menu: 'audit' }
+      },
+      {
+        path: 'activity',
+        name: 'activity',
+        component: () => import('../views/ActivityView.vue'),
+        meta: { title: '活动设置', menu: 'activity' }
       }
     ]
   },

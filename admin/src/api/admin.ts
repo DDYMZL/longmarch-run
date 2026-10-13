@@ -256,10 +256,15 @@ export interface OverviewPoint {
   date: string
   reason: string
   delta: number
+  source_type: string
 }
 
+// 与小程序同源：total = walk + quiz，rank 为总积分榜名次
 export interface OverviewPoints {
   total: number
+  walk: number
+  quiz: number
+  rank: number | null
   logs: OverviewPoint[]
 }
 
@@ -276,10 +281,11 @@ export function fetchUserOverview(userId: number) {
   return request.get<UserOverview>(`/admin/users/${userId}/overview`)
 }
 
-// ---------------- 排名洞察（服务端分页/筛选/流式导出） ----------------
+// ---------------- 排名洞察（服务端分页/筛选/流式导出；名次按总积分，与小程序同口径） ----------------
 export interface RankNode { id: number; name: string; target_steps: number; reached: boolean; reached_at: string | null }
-export interface RankItem { rank: number; user_id: number; nickname: string; avatar: string; org_name: string; original_nickname: string; nickname_changed_at: string | null; total_steps: number; completed_nodes: number; node_count: number; last_reached_at: string | null; nodes: RankNode[] }
-export interface RankResult { total: number; total_steps: number; completed_users: number; avg_progress: number; match_total: number; org_options: { id: number; name: string }[]; route_nodes: RankNode[]; podium: RankItem[]; items: RankItem[] }
+export interface RankItem { rank: number; user_id: number; nickname: string; avatar: string; org_name: string; original_nickname: string; nickname_changed_at: string | null; total_steps: number; total_points: number; walk_points: number; quiz_points: number; completed_nodes: number; node_count: number; last_reached_at: string | null; nodes: RankNode[] }
+// podium：全员前 10 名（1~3 领奖台、4~10 荣誉卡），不受筛选影响
+export interface RankResult { total: number; total_steps: number; total_points: number; completed_users: number; avg_progress: number; match_total: number; org_options: { id: number; name: string }[]; route_nodes: RankNode[]; podium: RankItem[]; items: RankItem[] }
 export interface RankFilter { keyword?: string; org_id?: number | null; only_changed?: boolean }
 
 function rankParams(filter: RankFilter) {
@@ -292,6 +298,55 @@ export function fetchRankings(page: number, pageSize: number, filter: RankFilter
 
 export function exportRankings(filter: RankFilter) {
   return request.get<Blob>('/admin/rankings/export', { params: rankParams(filter), responseType: 'blob', timeout: 0 })
+}
+
+// ---------------- 积分台账核对 / 修复 ----------------
+export interface PointsDiff { user_id: number; biz_key: string; expected: number; actual: number }
+export interface PointsVerifyResult { users: number; checked_days: number; mismatches: number; fixed: number; samples: PointsDiff[] }
+
+export function verifyPoints(fix: boolean) {
+  return request.post<PointsVerifyResult>('/admin/points/verify', { fix }, { timeout: 0 })
+}
+
+// ---------------- 活动设置 ----------------
+export type ActivityStatus = 'unpublished' | 'not_started' | 'ongoing' | 'ended'
+
+// start_at / end_at：读取为带 +08:00 的 ISO 时间，保存时传北京时间 YYYY-MM-DDTHH:mm
+export interface ActivityForm {
+  name: string
+  start_at: string
+  end_at: string
+  restrict_enabled: boolean
+  allow_view_after_end: boolean
+  end_title: string
+  end_message: string
+}
+
+export interface ActivitySetting extends Omit<ActivityForm, 'start_at' | 'end_at'> {
+  start_at: string | null
+  end_at: string | null
+  status: ActivityStatus
+  status_text: string
+  allow_participate: boolean
+  allow_view: boolean
+  message: string
+  server_time: string
+  is_published: boolean
+  updated_at: string | null
+  updated_by: string | null
+  configured: boolean
+}
+
+export function fetchActivity() {
+  return request.get<ActivitySetting>('/admin/activity')
+}
+
+export function saveActivity(data: ActivityForm) {
+  return request.put<ActivitySetting>('/admin/activity', data)
+}
+
+export function publishActivity(published: boolean) {
+  return request.post<ActivitySetting>('/admin/activity/publish', { published })
 }
 
 // ---------------- 登录 ----------------
@@ -443,6 +498,11 @@ export function fetchAdminUsers(params: AdminUserQuery) {
 
 export function setUserStatus(userId: number, status: UserStatus) {
   return request.patch<MessageResult>(`/admin/users/${userId}/status`, { status })
+}
+
+// 用户侧所属组织首次确定后锁定，仅管理员可调整（写审计 user.org_change）
+export function setUserOrg(userId: number, orgId: number) {
+  return request.put<MessageResult>(`/admin/users/${userId}/org`, { org_id: orgId })
 }
 
 export interface RoleItem {

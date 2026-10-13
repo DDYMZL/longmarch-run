@@ -386,7 +386,7 @@ def get_rank_overview(
     org_id: Optional[int] = None,
     only_changed: bool = False,
 ) -> Dict:
-    """排名洞察：全员指标 + 领奖台 + 筛选后的当前页明细（含每个启用节点的到达时间）。"""
+    """排名洞察：全员指标 + 荣誉榜前 10 名（不受筛选影响）+ 筛选后的当前页明细（含每个启用节点的到达时间）。"""
     route_nodes = _enabled_route_nodes(db)
     summary = _rank_summary(db, [n.id for n in route_nodes])
     filtered = bool((keyword or "").strip()) or org_id is not None or only_changed
@@ -396,7 +396,12 @@ def get_rank_overview(
         .limit(page_size)
         .all()
     )
-    podium_rows = _ranked_user_query(db).limit(3).all() if filtered or page != 1 else rows[:3]
+    elite = rank_service.ELITE_SIZE
+    podium_rows = (
+        _ranked_user_query(db).limit(elite).all()
+        if filtered or page != 1 or page_size < elite
+        else rows[:elite]
+    )
     match_total = (
         _filter_rank_users(db.query(func.count(User.id)), keyword, org_id, only_changed).scalar()
         if filtered

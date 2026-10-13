@@ -206,7 +206,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET | `/api/admin/dashboard/trend?days=` | 管理员(dashboard) | 运动趋势：近 N 日每日总步数/运动人数/新增用户/新点亮节点数 |
 | GET | `/api/admin/activities?limit=` | 管理员(dashboard) | 实时动态：`user_event` 关联昵称倒序 |
 | GET | `/api/admin/screen` | 管理员(screen) | 数据大屏单接口聚合：指标 + 路线总览 + 7 日趋势 + 实时动态（整体口径，无组织维度） |
-| GET | `/api/admin/rankings` | 管理员(rankings) | 全员排名（服务端分页）：`page`、`page_size`（≤200）、`keyword`（昵称/人员 ID 包含匹配）、`org_id`（所属组织精确匹配）、`only_changed`。全员指标（total/total_steps/total_points/completed_users/avg_progress）和领奖台 podium 不受筛选影响；`match_total` 为命中人数；`org_options` 为有成员的组织；items 只返回当前页，每人含总/步行/答题积分与全部启用节点的到达时间，名次与小程序总积分榜同口径 |
+| GET | `/api/admin/rankings` | 管理员(rankings) | 全员排名（服务端分页）：`page`、`page_size`（≤200）、`keyword`（昵称/人员 ID 包含匹配）、`org_id`（所属组织精确匹配）、`only_changed`。全员指标（total/total_steps/total_points/completed_users/avg_progress）和荣誉榜 podium（前 10 名：1~3 领奖台、4~10 荣誉卡）不受筛选影响；`match_total` 为命中人数；`org_options` 为有成员的组织；items 只返回当前页，每人含总/步行/答题积分与全部启用节点的到达时间，名次与小程序总积分榜同口径 |
 | GET | `/api/admin/rankings/export` | 管理员(rankings) | 按相同筛选条件流式导出 CSV（UTF-8 BOM，防公式注入，按批读取，每批 1000 人），时间为本地 `YYYY/MM/DD HH:mm` |
 | GET | `/api/admin/users/{id}/overview` | 管理员(rankings) | 人员详情聚合（运动/答题/勋章/长征/积分） |
 | GET | `/api/admin/route-nodes` | 管理员(route_nodes) | 全部路线节点列表（含停用） |

@@ -156,7 +156,7 @@ def main():
     _, page2 = http("/admin/rankings?page=2&page_size=5&keyword=%s" % word, token)
     record("P6", "rankings 关键字筛选 + 第 2 页与全量暴力过滤一致，名次为全员口径",
            page2["match_total"] == len(expect) and page2["items"] == expect[5:10]
-           and page2["podium"] == items[:3] and page2["total"] == len(items),
+           and page2["podium"] == items[:10] and page2["total"] == len(items),
            f"match_total={page2['match_total']} expect={len(expect)}")
     progress = [round(it["completed_nodes"] / it["node_count"] * 100 + 1e-9) if it["node_count"] else 0 for it in items]
     record("P7", "rankings 全员指标（总步数/完成全程/平均进度）与全量计算一致",

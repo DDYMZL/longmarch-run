@@ -340,7 +340,7 @@ def consistency_cases(c, users):
     pts = [p for _, p in top]
     record("C01", "总积分榜降序，前 10 与管理端同序同分",
            pts == sorted(pts, reverse=True) and top == admin_top
-           and [x["user_id"] for x in ar["podium"]] == [u for u, _ in top[:3]],
+           and [x["user_id"] for x in ar["podium"]] == [u for u, _ in top],
            f"mini={top[:5]} admin={admin_top[:5]}")
 
     p = c.get("/api/points", headers=H(me)).json()

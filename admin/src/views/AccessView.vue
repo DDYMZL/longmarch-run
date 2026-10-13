@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 人员授权：人员列表筛选（支持停用筛选 + 启停切换）、角色全量覆盖授权、单角色启用/禁用（禁用即时生效）；
+// 人员授权：人员列表筛选（支持停用筛选 + 启停切换）、角色全量覆盖授权、单角色启用/禁用（禁用即时生效）、
+// 调整所属组织（小程序首次入驻后锁定，仅管理员可改并留审计）；
 // 角色管理：角色 CRUD + 菜单勾选（内置角色禁删、被引用角色删除时后端拒绝）
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
@@ -10,6 +11,7 @@ import {
   fetchOrgTree,
   fetchRoles,
   grantUserRoles,
+  setUserOrg,
   setUserRoleEnabled,
   setUserStatus,
   updateRole
@@ -157,6 +159,36 @@ function onGrantCheck(role: RoleItem, checked: unknown) {
     }
   } else {
     checkedRoleIds.value = checkedRoleIds.value.filter((id) => id !== role.id)
+  }
+}
+
+// ---- 调整所属组织 ----
+const orgDialog = ref(false)
+const orgUser = ref<AdminUserItem | null>(null)
+const targetOrgId = ref<number | null>(null)
+const savingOrg = ref(false)
+
+function openOrgChange(row: AdminUserItem) {
+  orgUser.value = row
+  targetOrgId.value = row.org_id
+  orgDialog.value = true
+}
+
+async function saveOrgChange() {
+  const user = orgUser.value
+  if (!user || targetOrgId.value === null || savingOrg.value) return
+  if (targetOrgId.value === user.org_id) {
+    orgDialog.value = false
+    return
+  }
+  savingOrg.value = true
+  try {
+    await setUserOrg(user.id, targetOrgId.value)
+    ElMessage.success('已调整所属组织')
+    orgDialog.value = false
+    await loadUsers()
+  } finally {
+    savingOrg.value = false
   }
 }
 
@@ -334,9 +366,14 @@ onMounted(async () => {
               />
             </template>
           </el-table-column>
-          <el-table-column label="操作" width="110" align="center" fixed="right">
+          <el-table-column label="操作" width="170" align="center" fixed="right">
             <template #default="{ row }">
               <el-button link type="primary" @click="openGrant(row)">设置角色</el-button>
+              <el-tooltip :disabled="!!orgOptions.length" content="需同时拥有「组织架构」菜单权限">
+                <span>
+                  <el-button link type="primary" :disabled="!orgOptions.length" @click="openOrgChange(row)">调整组织</el-button>
+                </span>
+              </el-tooltip>
             </template>
           </el-table-column>
         </el-table>
@@ -373,6 +410,30 @@ onMounted(async () => {
           <template #footer>
             <el-button @click="grantDialog = false">取消</el-button>
             <el-button type="primary" :loading="savingGrant" @click="saveGrant">保存授权</el-button>
+          </template>
+        </el-dialog>
+
+        <el-dialog v-model="orgDialog" :title="`调整组织 · ${orgUser?.nickname || ''}`" width="480px" destroy-on-close>
+          <p class="dialog-tip">小程序端组织在首次入驻后锁定，仅管理员可在此调整；调整即时生效并记录审计日志。</p>
+          <el-form label-width="80px">
+            <el-form-item label="当前组织">
+              <span v-if="orgUser?.org_name">{{ orgUser.org_name }}</span>
+              <span v-else class="none">未分配组织</span>
+            </el-form-item>
+            <el-form-item label="调整为" required>
+              <el-select v-model="targetOrgId" filterable placeholder="选择组织" style="width: 100%">
+                <el-option v-for="o in orgOptions" :key="o.id" :label="o.name" :value="o.id" />
+              </el-select>
+            </el-form-item>
+          </el-form>
+          <template #footer>
+            <el-button @click="orgDialog = false">取消</el-button>
+            <el-button
+              type="primary"
+              :loading="savingOrg"
+              :disabled="targetOrgId === null || targetOrgId === orgUser?.org_id"
+              @click="saveOrgChange"
+            >确认调整</el-button>
           </template>
         </el-dialog>
       </el-tab-pane>

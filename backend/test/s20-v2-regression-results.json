@@ -88,7 +88,7 @@
       "id": "P06",
       "name": "总积分 = 步行 + 答题（概览与明细一致）",
       "ok": true,
-      "detail": "summary=7=7+0 daily={'date': '2026-10-13', 'walk': 7, 'quiz': 0, 'total': 7, 'steps': 7500, 'correctCount': 0, 'updatedAt': '2026-10-13T03:59:35.622822'}"
+      "detail": "summary=7=7+0 daily={'date': '2026-10-13', 'walk': 7, 'quiz': 0, 'total': 7, 'steps': 7500, 'correctCount': 0, 'updatedAt': '2026-10-13T04:06:20.029691'}"
     },
     {
       "id": "P07",

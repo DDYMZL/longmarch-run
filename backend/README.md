@@ -154,7 +154,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/admin/dashboard/trend?days=` | 运动趋势（近 N 日） |
 | GET | `/api/admin/activities?limit=` | 实时动态（user_event 倒序） |
 | GET | `/api/admin/screen` | 数据大屏聚合（指标 + 路线总览 + 7 日趋势 + 动态） |
-| GET | `/api/admin/rankings` | 管理端全员排名（与小程序同口径按总积分）：服务端分页与筛选（关键字/组织/已改名），全员指标（含总积分）与领奖台，当前页每人总/步行/答题积分与全部节点到达时间 |
+| GET | `/api/admin/rankings` | 管理端全员排名（与小程序同口径按总积分）：服务端分页与筛选（关键字/组织/已改名），全员指标（含总积分）与前 10 名荣誉榜，当前页每人总/步行/答题积分与全部节点到达时间 |
 | POST | `/api/admin/points/verify` | 积分台账核对 `{fix?, user_ids?}`：按每日步数/答题记录重算比对，`fix=true` 修复差异并写审计 `points.recompute` |
 | GET | `/api/admin/rankings/export` | 按筛选条件流式导出排名 CSV（含总积分/步行积分/答题积分列） |
 | GET | `/api/admin/users/{id}/overview` | 人员详情聚合（运动/答题/勋章/长征/积分） |

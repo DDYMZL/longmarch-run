@@ -48,9 +48,33 @@ function handlePageChange(next: number) {
   loadLogs()
 }
 
-function actionTagType(name: string): 'success' | 'warning' | 'danger' | 'info' {
-  if (name.startsWith('access.')) return 'danger'
-  if (name.includes('identity')) return 'warning'
+const ACTION_TEXT: Record<string, string> = {
+  'admin.login.qr': '扫码登录后台',
+  'identity.bind.confirm': '绑定管理员身份',
+  'identity.unbind': '解绑管理员身份',
+  'access.roles.grant': '授予角色',
+  'access.roles.revoke': '回收角色',
+  'access.role.create': '新建角色',
+  'access.role.update': '编辑角色',
+  'access.role.delete': '删除角色',
+  'access.role.enable': '启用角色',
+  'access.role.disable': '禁用角色',
+  'activity.update': '保存活动设置',
+  'activity.publish': '发布活动',
+  'activity.unpublish': '撤回活动',
+  'points.recompute': '积分核对修复',
+  'user.org_change': '调整所属组织',
+  'user.onboard': '邀请码入驻',
+  'user.enable': '启用账号',
+  'user.disable': '停用账号',
+  'invite.create': '新建邀请码',
+  'invite.update': '修改邀请码'
+}
+
+function actionTagType(name: string): 'success' | 'warning' | 'danger' | 'info' | 'primary' {
+  if (name.startsWith('access.') || name === 'user.disable') return 'danger'
+  if (name.startsWith('activity.') || name.startsWith('points.')) return 'primary'
+  if (name.includes('identity') || name === 'user.org_change') return 'warning'
   if (name.includes('admin.login')) return 'success'
   return 'info'
 }
@@ -69,13 +93,17 @@ onMounted(loadLogs)
         style="width: 160px"
         clearable
       />
-      <el-input
+      <el-select
         v-model="action"
-        placeholder="按动作筛选（如 access.roles.grant）"
+        placeholder="按动作筛选"
         clearable
-        style="width: 260px"
-        @keyup.enter="handleSearch"
-      />
+        filterable
+        allow-create
+        default-first-option
+        style="width: 220px"
+      >
+        <el-option v-for="(text, code) in ACTION_TEXT" :key="code" :label="text" :value="code" />
+      </el-select>
       <el-select v-model="actorType" placeholder="操作人类型" clearable style="width: 150px">
         <el-option label="超级管理员" value="super" />
         <el-option label="微信关联管理员" value="user" />
@@ -100,7 +128,8 @@ onMounted(loadLogs)
       </el-table-column>
       <el-table-column label="动作" min-width="180">
         <template #default="{ row }">
-          <el-tag size="small" :type="actionTagType(row.action)" effect="plain">{{ row.action }}</el-tag>
+          <el-tag size="small" :type="actionTagType(row.action)" effect="plain">{{ ACTION_TEXT[row.action] || row.action }}</el-tag>
+          <span v-if="ACTION_TEXT[row.action]" class="action-code">{{ row.action }}</span>
         </template>
       </el-table-column>
       <el-table-column label="目标用户" min-width="120">
@@ -147,6 +176,12 @@ onMounted(loadLogs)
 
 .none {
   color: #c0c4cc;
+}
+
+.action-code {
+  margin-left: 6px;
+  color: #a0a7b3;
+  font-size: 11px;
 }
 
 .pager {
