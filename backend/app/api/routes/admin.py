@@ -21,6 +21,9 @@ from app.core.security import create_admin_token, create_admin_token_for_user
 from app.models.models import User
 from app.schemas.schemas import (
     AdminActivityListOut,
+    AdminActivityPublishRequest,
+    AdminActivitySettingOut,
+    AdminActivitySettingUpdate,
     AdminAuditLogListOut,
     AdminDashboardOut,
     AdminLoginOut,
@@ -69,6 +72,7 @@ from app.schemas.schemas import (
 )
 from app.services import (
     access_service,
+    activity_service,
     admin_service,
     dashboard_service,
     identity_service,
@@ -934,3 +938,54 @@ def audit_logs(
         db, page, page_size, action, actor_type, date
     )
     return {"total": total, "items": items}
+
+
+# ---------------- 活动设置（V2.0 需求一） ----------------
+@router.get(
+    "/activity",
+    response_model=AdminActivitySettingOut,
+    summary="活动设置与当前状态",
+)
+def get_activity(
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("activity")),
+):
+    return activity_service.get_admin_view(db)
+
+
+@router.put(
+    "/activity",
+    response_model=AdminActivitySettingOut,
+    summary="保存活动设置（即时生效，写审计）",
+)
+def save_activity(
+    payload: AdminActivitySettingUpdate,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("activity")),
+):
+    actor_type, actor_id = _actor(admin)
+    try:
+        return activity_service.update(
+            db, payload.model_dump(), admin.username, actor_type, actor_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/activity/publish",
+    response_model=AdminActivitySettingOut,
+    summary="发布或撤回活动（即时生效，写审计）",
+)
+def publish_activity(
+    payload: AdminActivityPublishRequest,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("activity")),
+):
+    actor_type, actor_id = _actor(admin)
+    try:
+        return activity_service.set_published(
+            db, payload.published, admin.username, actor_type, actor_id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))

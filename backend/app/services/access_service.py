@@ -35,6 +35,7 @@ ALL_MENU_CODES = [
     "access",
     "audit",
     "invites",
+    "activity",
 ]
 
 ACTOR_SUPER = "super"

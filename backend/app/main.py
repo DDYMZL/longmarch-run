@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.api.routes import (
+    activity,
     admin,
     auth,
     broadcast,
@@ -63,6 +64,7 @@ app.add_middleware(
 )
 
 _prefix = settings.API_PREFIX
+app.include_router(activity.router, prefix=_prefix)
 app.include_router(auth.router, prefix=_prefix)
 app.include_router(identity.router, prefix=_prefix)
 app.include_router(sport.router, prefix=_prefix)

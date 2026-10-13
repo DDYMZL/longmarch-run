@@ -1375,3 +1375,56 @@ class AdminUserOverviewOut(BaseModel):
 
 
 AdminOrgNodeOut.model_rebuild()
+
+
+# ---------------- 活动时间控制（V2.0 需求一） ----------------
+class ActivityStatusOut(CamelModel):
+    """status：unpublished 未发布 / not_started 未开始 / ongoing 进行中 / ended 已结束；时间均为 +08:00。"""
+
+    name: str
+    status: str
+    status_text: str
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    allow_participate: bool
+    allow_view: bool
+    restrict_enabled: bool = False
+    end_title: str = ""
+    message: str = ""
+    server_time: datetime
+
+
+class AdminActivitySettingOut(BaseModel):
+    name: str
+    status: str
+    status_text: str
+    start_at: Optional[datetime] = None
+    end_at: Optional[datetime] = None
+    allow_participate: bool
+    allow_view: bool
+    restrict_enabled: bool
+    end_title: str = ""
+    message: str = ""
+    server_time: datetime
+    is_published: bool
+    allow_view_after_end: bool
+    end_message: str = ""
+    updated_at: Optional[datetime] = None
+    updated_by: Optional[str] = None
+    configured: bool
+
+
+class AdminActivitySettingUpdate(BaseModel):
+    """时间入参按北京时间解释（naive 视为 +08:00，带时区按时区换算），精确到分钟。"""
+
+    name: str = Field(min_length=1, max_length=64)
+    start_at: datetime
+    end_at: datetime
+    restrict_enabled: bool = True
+    allow_view_after_end: bool = True
+    end_title: Optional[str] = Field(None, max_length=64)
+    end_message: Optional[str] = Field(None, max_length=500)
+
+
+class AdminActivityPublishRequest(BaseModel):
+    published: bool

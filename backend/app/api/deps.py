@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.core.database import get_db  # 在此重新导出，作为 API 层统一入口
 from app.core.security import decode_token
 from app.models.models import User
-from app.services import access_service, auth_service, invite_service
+from app.services import access_service, activity_service, auth_service, invite_service
 
 
 _bearer = HTTPBearer(auto_error=False)
@@ -51,6 +51,34 @@ def _ensure_active(user: User) -> None:
             detail=auth_service.ACCOUNT_DISABLED_MESSAGE,
             headers={"X-Account-Status": "disabled"},
         )
+
+
+def _activity_guard(need_participate: bool):
+    """活动时间准入：先完成用户鉴权（401/停用 403 优先），再按活动状态拒绝。
+
+    拒绝时 403 + X-Activity-Status 头（unpublished/not_started/ended），
+    小程序据此跳转活动状态页；直接调接口同样被拦截。
+    """
+
+    def _check(
+        user: User = Depends(get_current_user), db: Session = Depends(get_db)
+    ) -> User:
+        blocked = activity_service.check(db, need_participate)
+        if blocked is not None:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=blocked["message"],
+                headers={"X-Activity-Status": blocked["status"]},
+            )
+        return user
+
+    return _check
+
+
+# 产生新业务数据（步数、答题、积分、勋章、点亮）的接口
+require_activity_participation = _activity_guard(need_participate=True)
+# 读取成绩/排行等活动数据的接口（结束后按 allow_view_after_end 放行）
+require_activity_view = _activity_guard(need_participate=False)
 
 
 class AdminPrincipal:

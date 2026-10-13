@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import require_activity_participation, require_activity_view
 from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
@@ -25,19 +25,19 @@ router = APIRouter(prefix="/march", tags=["march"])
     summary="启用的路线节点配置",
 )
 def route_nodes(
-    current: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current: User = Depends(require_activity_view), db: Session = Depends(get_db)
 ):
     return {"nodes": march_service.get_route_nodes(db)}
 
 
 @router.get("/route", response_model=RouteOut, summary="长征路线进度")
-def route(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def route(current: User = Depends(require_activity_view), db: Session = Depends(get_db)):
     return march_service.get_route(db, current.id)
 
 
 @router.get("/global", response_model=GlobalGoalOut, summary="全员共同长征目标")
 def global_goal(
-    current: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current: User = Depends(require_activity_view), db: Session = Depends(get_db)
 ):
     """全员共同目标（需求 §11）：全员累计步数对 2 亿步总目标的进度与阶段里程碑。"""
     return march_service.get_global_goal(db)
@@ -45,7 +45,7 @@ def global_goal(
 
 @router.get("/footprints", response_model=FootprintsOut, summary="我的长征足迹")
 def footprints(
-    current: User = Depends(get_current_user), db: Session = Depends(get_db)
+    current: User = Depends(require_activity_view), db: Session = Depends(get_db)
 ):
     """我的长征足迹（需求 §7）：已点亮节点的点亮日期/当日步数/累计步数（时间+路线结合）。"""
     return march_service.get_footprints(db, current.id)
@@ -54,7 +54,7 @@ def footprints(
 @router.get("/node/{node_id}", response_model=NodeDetailOut, summary="节点详情")
 def node_detail(
     node_id: int,
-    current: User = Depends(get_current_user),
+    current: User = Depends(require_activity_view),
     db: Session = Depends(get_db),
 ):
     """任意状态节点均可查看历史详情（含未解锁）。"""
@@ -65,7 +65,7 @@ def node_detail(
 
 
 @router.post("/light-up", response_model=LightUpResult, summary="点亮达标节点")
-def light_up(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def light_up(current: User = Depends(require_activity_participation), db: Session = Depends(get_db)):
     """按当前累计步数点亮达标节点、发放积分，并刷新勋章（返回本次新获得勋章）；同时判定章节完成。"""
     newly, new_chapters = march_service.light_up_nodes(db, current.id)
     new_medals = medal_service.check_and_grant(db, current.id)
@@ -74,7 +74,7 @@ def light_up(current: User = Depends(get_current_user), db: Session = Depends(ge
 
 
 @router.post("/ceremony", summary="标记长征完成仪式已观看")
-def ceremony(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def ceremony(current: User = Depends(require_activity_view), db: Session = Depends(get_db)):
     """完成仪式（需求 §20.4）：仅第一次完成路线触发完整动画；观看后调用本接口标记，
     之后 /march/route 不再下发 ceremony_pending，前端仅展示「已完成长征」。幂等。"""
     march_service.mark_ceremony_seen(db, current.id)

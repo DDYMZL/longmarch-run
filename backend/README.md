@@ -91,7 +91,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 
 ## 鉴权
 
-- **小程序令牌**（`typ=user`，`sub`=user_id）：除 `POST /api/auth/login`、`POST /api/auth/invite/verify`、`POST /api/auth/onboard`、`GET /api/org/children` 外，所有小程序接口都需要请求头：
+- **小程序令牌**（`typ=user`，`sub`=user_id）：除 `POST /api/auth/login`、`POST /api/auth/invite/verify`、`POST /api/auth/onboard`、`GET /api/org/children`、`GET /api/activity/status` 外，所有小程序接口都需要请求头：
   ```
   Authorization: Bearer <登录返回的 token>
   ```
@@ -102,6 +102,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/` | 健康检查 |
+| GET | `/api/activity/status` | 活动状态（公开，启动页登录前判定）：`{name, status, statusText, startAt, endAt, allowParticipate, allowView, restrictEnabled, endTitle, message, serverTime}`，时间均为 +08:00 |
 | POST | `/api/auth/login` | 微信登录（body: `code`、可选 `avatar`）：仅为**已入驻**用户签发 `{status:"active", token, user}`；未入驻 `{status:"unregistered"}`、已停用 `{status:"disabled"}` 均不签发 Token；微信换取失败 502 |
 | POST | `/api/auth/invite/verify` | 校验入驻邀请码 `{inviteCode}`（不核销，限流），返回 `{name, orgId, orgName}`；不可用（无效/停用/过期/用满）400 |
 | POST | `/api/auth/onboard` | 持邀请码入驻 `{code, inviteCode, nickname, orgId, avatar?}`：原子核销 + 建号 + 签发 Token，返回 `{token, user, created}`；已入驻身份重复提交幂等返回；邀请码不可用或组织越界 400；账号已停用 403（头 `X-Account-Status: disabled`） |
@@ -171,6 +172,8 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | POST | `/api/admin/users/{uid}/roles` | 全量覆盖用户角色 `{role_ids}`（逐项审计） |
 | PATCH | `/api/admin/users/{uid}/roles/{rid}/enabled` | 启用/禁用单个角色授权（即时生效，不改授权关系） |
 | GET | `/api/admin/audit-logs?date=&action=&actor=` | 审计日志分页（日期/动作/操作人筛选，倒序） |
+| GET/PUT | `/api/admin/activity` | 活动设置（菜单 `activity`）：查看当前配置与实时状态 / 保存 `{name, start_at, end_at, restrict_enabled, allow_view_after_end, end_title?, end_message?}`（北京时间、精确到分钟、开始须早于结束，写审计 `activity.update`） |
+| POST | `/api/admin/activity/publish` | 发布/撤回活动 `{published}`（审计 `activity.publish`/`activity.unpublish`），即时生效 |
 
 ## 业务规则（与前端 Mock 完全一致）
 
@@ -188,6 +191,8 @@ python run.py                 # 或 uvicorn app.main:app --reload
 - **扫码登录**：L 场景创建→轮询→小程序确认（无启用角色会话置 failed 并返回原因）→PC 轮询 confirmed 后**单次签发**管理员 JWT（token_issued 原子标记防重放）。
 - **邀请码准入**：PC 后台生成邀请码（名称/可选组织范围/可选次数上限/可选有效期）；员工扫邀请码小程序码落地 `pages/launch/launch`，`scene=i=<code>`。启动页按 `wx.login` 识别微信身份：active 直接进入首页；unregistered + 有效邀请码 → 入驻页填姓名/组织（专属码仅可在允许组织范围内选）；无效邀请码或无邀请码扫描 → 准入拦截。入驻接口在一个事务中条件 UPDATE 核销（`used_count < max_uses` 且未过期未停用）+ 建号 + 审计，openid 唯一约束冲突回滚撤销核销；并发首登复用同一用户仅核销一次。历史用户（无 `invite_code_id`）保持 active 不受限。
 - **RBAC**：超管全菜单放行；微信关联管理员按启用角色的菜单并集校验，每请求查库——撤销/禁用即时生效；授权/角色变更逐项写审计。
+
+- **活动时间控制**：`activity_settings` 单行配置，状态按服务器时间实时计算（未发布/未开始/进行中/已结束，北京时间）。启用访问限制时：非进行中拒绝全部写接口（步数同步/补充、答题、点亮、勋章检查、组织选择），403 + 头 `X-Activity-Status`；读接口（排行/积分/档案/路线/答题记录等）在活动结束后按 `allow_view_after_end` 放行；`/medal/list` 在不可参与时只读不发放。鉴权先于活动校验（无 Token 仍 401）。业务日期统一按北京时间（UTC+8）。
 
 ## 数据库结构维护
 

@@ -4,7 +4,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
-from app.api.deps import get_current_user
+from app.api.deps import get_current_user, require_activity_participation, require_activity_view
 from app.core import ws as ws_manager
 from app.core.database import get_db
 from app.models.models import User
@@ -42,7 +42,7 @@ def mine(current: User = Depends(get_current_user), db: Session = Depends(get_db
 @router.get("/companions", response_model=OrgCompanionsOut, summary="同组织同行者")
 def companions(
     limit: int = Query(6, description="同行者列表条数（1~50）"),
-    current: User = Depends(get_current_user),
+    current: User = Depends(require_activity_view),
     db: Session = Depends(get_db),
 ):
     """我的组织同行概况（需求 §9）：同行人数 / 今日共同前进 / 同行者（今日步数倒序，限量）。"""
@@ -50,7 +50,7 @@ def companions(
 
 
 @router.get("/march", response_model=OrgMarchOut, summary="组织共同长征目标")
-def org_march(current: User = Depends(get_current_user), db: Session = Depends(get_db)):
+def org_march(current: User = Depends(require_activity_view), db: Session = Depends(get_db)):
     """组织集体长征（需求 §10）：组织累计步数 = 子树成员累计有效步数之和，路线进度按此计算。"""
     return org_service.get_org_march(db, current)
 
@@ -58,7 +58,7 @@ def org_march(current: User = Depends(get_current_user), db: Session = Depends(g
 @router.post("/select", response_model=UserOrgOut, summary="选定/修改所属组织")
 def select(
     payload: SelectOrgRequest,
-    current: User = Depends(get_current_user),
+    current: User = Depends(require_activity_participation),
     db: Session = Depends(get_db),
 ):
     """可选定任意层级组织；组织不存在返回 404。

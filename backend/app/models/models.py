@@ -105,6 +105,24 @@ class SystemSetting(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
 
+class ActivitySetting(Base):
+    """活动时间控制（单行，id=1；016 迁移）。时间列 UTC naive 存储，状态由 activity_service 实时计算。"""
+
+    __tablename__ = "activity_settings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    name: Mapped[str] = mapped_column(String(64))
+    start_at: Mapped[datetime] = mapped_column(DateTime)
+    end_at: Mapped[datetime] = mapped_column(DateTime)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=False)
+    restrict_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
+    allow_view_after_end: Mapped[bool] = mapped_column(Boolean, default=True)
+    end_title: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    end_message: Mapped[Optional[str]] = mapped_column(String(500), nullable=True, default=None)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+
+
 class Question(Base):
     """题库（15 题）。type: single 单选 / judge 判断。
 
