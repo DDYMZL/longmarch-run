@@ -1,8 +1,12 @@
 /**
  * 答题页（V2.0 逐题限时）
- * 流程：进入即 quiz.start 开题（幂等，中途返回继续当前题）-> 90 秒环形倒计时 -> 选择并提交（每题一次，即时判定）
- * -> 反馈（对错/正确答案/解析/得分）-> 下一题再 start；倒计时归零进入超时态，不再允许提交。
+ * 流程：进入即 quiz.start 开题（幂等，中途返回继续当前题）-> 90 秒环形倒计时 -> 选择并提交（每题一次）
+ * -> 下一题再 start；倒计时归零进入超时态，不再允许提交。
  * 计时以服务器为准：本地截止时间 = 收到响应时刻 + 服务器 remainingMs，切后台/锁屏回来按 Date.now 重算，不累计误差。
+ *
+ * 两种交互模式（由 info tab 通过 ?mode= 传入）：
+ * - instant 即时判定（情报1）：提交后立即反馈对错/正确答案/解析/得分；
+ * - review 交卷看解析（情报2）：作答中不揭示对错，逐题静默推进，全部提交后进入交卷态，跳结果页统一查看全部解析。
  */
 const app = getApp();
 const quiz = require('../../services/quiz');
@@ -44,7 +48,9 @@ function answerText(labels, options) {
 
 Page({
   data: {
-    // loading / answering / feedback / timeout / error
+    // instant 即时判定 | review 交卷看解析（见文件头说明）
+    mode: 'instant',
+    // loading / answering / feedback / timeout / submitted / error
     phase: 'loading',
     errorMsg: '',
     seq: 0,
@@ -63,11 +69,16 @@ Page({
     questionAnim: ''
   },
 
-  onLoad() {
+  onLoad(options) {
     if (!app.globalData.loggedIn) {
       wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
+    this.mode = options && options.mode === 'review' ? 'review' : 'instant';
+    if (this.mode === 'review') {
+      wx.setNavigationBarTitle({ title: '情报2 · 交卷看解析' });
+    }
+    this.setData({ mode: this.mode });
     this.startQuestion();
   },
 
@@ -116,7 +127,7 @@ Page({
       total: state.totalCount,
       timeLimit: state.timeLimit,
       isLast: current.seq >= state.totalCount,
-      dots: util.quizDots(state.progress),
+      dots: util.quizDots(state.progress, this.mode !== 'review'),
       question: current.question,
       options: buildOptions(current.question.options, ''),
       selected: '',
@@ -173,6 +184,20 @@ Page({
       .answer(this._question.id, selected)
       .then((res) => {
         this.stopTimer();
+        if (this.mode === 'review') {
+          // 交卷模式：不揭示对错，逐题静默推进；最后一题提交后进入交卷态
+          if (res.finished) {
+            this.setData({
+              phase: 'submitted',
+              isLast: true,
+              options: buildOptions(this._question.options, selected),
+              [`dots[${res.seq - 1}].cls`]: 'done'
+            });
+          } else {
+            this.startQuestion();
+          }
+          return;
+        }
         this.setData({
           phase: 'feedback',
           isLast: res.finished,
@@ -206,6 +231,11 @@ Page({
   /** 反馈/超时后：下一题（后端开题）或查看结果 */
   handleNext() {
     this.startQuestion();
+  },
+
+  /** 交卷模式：全部提交后查看完整解析（结果页逐题展示对错与解析） */
+  handleViewResult() {
+    wx.redirectTo({ url: '/pages/quiz-result/quiz-result' });
   },
 
   handleBack() {

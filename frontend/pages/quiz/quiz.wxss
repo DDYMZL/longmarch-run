@@ -2,6 +2,32 @@
   padding-bottom: 60rpx;
 }
 
+/* 答题交互模式切换 */
+.mode-switch {
+  display: flex;
+  margin: 24rpx 30rpx 0;
+  padding: 6rpx;
+  background: #F0E6D2;
+  border-radius: 48rpx;
+}
+
+.mode-item {
+  flex: 1;
+  text-align: center;
+  font-size: 26rpx;
+  color: #8C6B1F;
+  padding: 16rpx 0;
+  border-radius: 40rpx;
+  transition: background 0.25s ease, color 0.25s ease;
+}
+
+.mode-item.active {
+  background: #C8102E;
+  color: #FFFFFF;
+  font-weight: 600;
+  box-shadow: 0 4rpx 12rpx rgba(200, 16, 46, 0.28);
+}
+
 .quiz-hero {
   background: linear-gradient(135deg, #A00D26, #C8102E);
   color: #FFFFFF;

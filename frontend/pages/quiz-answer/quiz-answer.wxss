@@ -234,6 +234,18 @@
   border-left-color: #8A8A8A;
 }
 
+.feedback-card.submitted {
+  border-left-color: #2E9E5B;
+}
+
+/* 交卷模式：作答中不揭示对错的提示 */
+.review-tip {
+  text-align: center;
+  font-size: 24rpx;
+  color: #B8860B;
+  padding: 24rpx 60rpx 0;
+}
+
 .fb-head {
   display: flex;
   justify-content: space-between;

@@ -1,4 +1,10 @@
 <view class="quiz-page">
+  <!-- 答题交互模式切换：情报1 即时判定 / 情报2 交卷看解析 -->
+  <view class="mode-switch">
+    <view class="mode-item {{mode === 'instant' ? 'active' : ''}}" data-mode="instant" bindtap="handleModeChange">情报1 · 即时判定</view>
+    <view class="mode-item {{mode === 'review' ? 'active' : ''}}" data-mode="review" bindtap="handleModeChange">情报2 · 交卷看解析</view>
+  </view>
+
   <view wx:if="{{loading}}" class="empty-tip">加载中…</view>
 
   <!-- 未完成：开始/继续破译 -->
@@ -16,7 +22,9 @@
     <view class="card rule-card anim-card" style="animation-delay: 120ms">
       <view class="card-title">破译规则</view>
       <view class="rule-line">· 逐题作答，每题限时 {{timeLimit}} 秒，以服务器时间为准</view>
-      <view class="rule-line">· 每题仅可提交一次，提交后立即判定对错</view>
+      <view wx:if="{{mode === 'instant'}}" class="rule-line">· 每题仅可提交一次，提交后立即判定对错</view>
+      <view wx:else class="rule-line">· 每题仅可提交一次，作答过程不显示对错</view>
+      <view wx:if="{{mode === 'review'}}" class="rule-line">· 全部题目交卷后，统一查看完整解析</view>
       <view class="rule-line">· 超时未提交视为未答对，不得分</view>
       <view class="rule-line">· 答对 1 题 +2 积分，单日答题积分上限 10 分</view>
     </view>

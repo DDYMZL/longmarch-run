@@ -44,7 +44,7 @@
 | --- | --- | --- |
 | `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、今日寄语卡（§16，有出处语录+可跳关联节点，按天循环轮换）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、🌍全员同行卡（全员累计中文大数/进度/下一阶段/里程碑✓○芯片）、抵达事件卡弹层 |
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空长征），节点点击进详情、点亮进度、到达动画（金光扩散+粒子+抵达事件卡）；星空长征（§13）：节点三态星形、星河轨迹星尘、点亮四阶段动画、拖动/捏合缩放/双击复位（view 变换+命中逆变换+边界钳制）；区域氛围（§12）：星空画布按节点区域主题生成环境粒子（每节点 3 粒封顶 30，ember/mist/snow/star），实景选中卡套主题柔和高光+区域标签；完成仪式（§20）：`ceremonyPending` 时待抵达弹窗播完自动进仪式页，完成横幅为永久入口 |
-| `pages/quiz/quiz` | tab | 今日长征情报：期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
+| `pages/quiz/quiz` | tab | 今日长征情报：顶部答题交互模式切换（情报1 即时判定 / 情报2 交卷看解析，规则文案随模式变化，进度点交卷模式不揭示对错）、期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、V2.0「我的积分」卡（总积分 = 步行 + 答题、今日获得、积分排名，点卡进积分明细、点排名进排行榜）、勋章、组织（已选定显示 🔒，仅管理员可改），入口（积分明细/我的长征/行军日历/组织架构/运动记录/答题记录）；「账号与绑定」入口已隐藏（account 页与后端绑定接口保留，仅无前端入口） |
 | `pages/points/points` | 子页 | 积分明细（V2.0）：总积分/排名/步行/答题/今日获得、今日进度（规则文案由 `/points` 的 `rules` 下发拼装，前端不写死数值）、每日明细表（日期/步数/步行/答题/合计）分页触底加载，下拉刷新 |
 | `pages/activity/activity` | 子页 | 活动状态页（V2.0）：未发布/未开始/进行中/已结束四态（图标、状态标签、活动时间、结束标题与提示）；`allowView` 时可进首页/查看排行，否则仅「刷新状态」；查看类请求被活动守卫拦截（403 + `X-Activity-Status`）时统一 reLaunch 至此 |
@@ -58,7 +58,7 @@
 | `pages/ceremony/ceremony` | 子页 | 长征完成仪式（§20）：约 8.1s 时间轴（逐段点亮 → 末节点辉光 → 金线扫过 → 全亮脉冲 → 星空展开 →「我的长征/完成了」→ 完成数据卡：行军/运动天数/答题/路线/勋章/积分，取 `/march/route` + `/profile/summary`）；可跳过；首次确认后 `POST /march/ceremony` 标记，再进为「已完成长征」静态回顾；收尾快照最终帧为静态图并移除画布，数据卡浮于快照上（原生 canvas 层会盖住 DOM） |
 | `pages/ticket/ticket` | 子页 | 节点纪念票（§19）：纯 Canvas 2d 绘制（米黄纸面/红头/虚线撕裂线/编号），数据取 `/march/node/{id}` + `/march/footprints`（点亮日期/当日步数/累计），未点亮节点显示提示；保存相册走 `canvasToTempFilePath`（传 canvas 节点）+ `saveImageToPhotosAlbum` |
 | `pages/person/person` | 子页 | 长征人物志详情（§14）：头像（无图姓名首字占位）/名称/简介、相关历史事件卡（节点事件+历史时间+简述），点击事件卡回跳节点详情（人物 → 节点双向） |
-| `pages/quiz-answer/quiz-answer` | 子页 | V2.0 逐题限时：进入即 `quiz.start()` 开题（幂等，中途返回继续当前题）→ 90 秒环形倒计时（最后 10 秒警示色，截止时间 = 收到响应时刻 + 服务器 `remainingMs`，切后台回来按 `Date.now` 重算）→ 选择并提交（每题一次，即时判定）→ 反馈（对错/正确答案/解析/得分）→ 下一题；倒计时归零进入超时态不可提交；进度点 right/wrong/timeout 三态 |
+| `pages/quiz-answer/quiz-answer` | 子页 | V2.0 逐题限时，两种交互模式（由情报 tab 经 `?mode=` 传入）：进入即 `quiz.start()` 开题（幂等，中途返回继续当前题）→ 90 秒环形倒计时（最后 10 秒警示色，截止时间 = 收到响应时刻 + 服务器 `remainingMs`，切后台回来按 `Date.now` 重算）→ 选择并提交（每题一次）；`instant` 即时判定：提交后反馈对错/正确答案/解析/得分 → 下一题，进度点 right/wrong/timeout 三态；`review` 交卷看解析（情报2）：作答中不揭示对错（进度点 answered 显示 done 中性态）、提交后逐题静默推进，最后一题提交进入交卷态 → 跳 quiz-result 统一查看全部解析；倒计时归零进入超时态不可提交 |
 | `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（V2.0）：答对题数、正确率滚动、答题积分、超时题数、逐题结果（题干/我的答案/正确答案/正确·错误·超时/本题积分/解析）；历史记录无 details 时回退错题解析；全对彩带 |
 | `pages/sport-records/sport-records` | 子页 | 最近运动记录 |
 | `pages/quiz-records/quiz-records` | 子页 | 答题历史记录 |
@@ -176,10 +176,11 @@ home/march 触发 → sport.syncToday()（授权 scope.werun → wx.login 取 co
 ### 4.5 每日答题链路
 
 ```
-quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 题、按用户+日期固定，返回逐题进度）
-  → quiz-answer：quiz.start()（POST /api/quiz/start，幂等开当前题，返回 remainingMs）→ 90s 倒计时内选择并 quiz.answer()（POST /api/quiz/answer，服务端判超时/对错/记分，每题仅一次）
-      → 反馈（对错/正确答案/解析/本题积分）→ 下一题再 start；倒计时归零进入超时态（后端在下次 start 时判该题超时）
-  → 5 题结束 redirectTo quiz-result 展示答对数/正确率/积分/超时数与逐题结果 → 返回后 quiz 页 refresh() 显示已完成
+quiz 页（顶部切模式：情报1 即时判定 / 情报2 交卷看解析）→ quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 题、按用户+日期固定，返回逐题进度）
+  → quiz-answer（?mode=instant|review，后端链路完全一致）：quiz.start()（POST /api/quiz/start，幂等开当前题，返回 remainingMs）→ 90s 倒计时内选择并 quiz.answer()（POST /api/quiz/answer，服务端判超时/对错/记分，每题仅一次）
+      → instant：反馈（对错/正确答案/解析/本题积分）→ 下一题再 start；review：不揭示对错，静默推进下一题
+      → 倒计时归零进入超时态（后端在下次 start 时判该题超时）
+  → 5 题结束 redirectTo quiz-result 展示答对数/正确率/积分/超时数与逐题结果（即情报2 的「统一解析」）→ 返回后 quiz 页 refresh() 显示已完成
 ```
 
 ### 4.5b 活动时间窗口（V2.0）

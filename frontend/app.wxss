@@ -143,6 +143,11 @@ page {
   box-shadow: 0 0 0 6rpx rgba(212, 160, 23, 0.3);
 }
 
+.quiz-dot.done {
+  color: #FFFFFF;
+  background: #8C97A3;
+}
+
 .quiz-dot.right {
   color: #FFFFFF;
   background: #2E9E5B;

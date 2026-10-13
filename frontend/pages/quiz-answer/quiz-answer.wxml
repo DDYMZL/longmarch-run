@@ -12,7 +12,7 @@
     <!-- 顶部：进度 + 环形倒计时 -->
     <view class="answer-head">
       <view class="head-left">
-        <view class="progress-count">情报破译 {{seq}} / {{total}}</view>
+        <view class="progress-count">{{mode === 'review' ? '情报2 破译' : '情报破译'}} {{seq}} / {{total}}</view>
         <view class="quiz-dots head-dots">
           <view wx:for="{{dots}}" wx:key="seq" class="quiz-dot {{item.cls}}">{{item.seq}}</view>
         </view>
@@ -33,7 +33,7 @@
       <view class="question-text">{{question.question}}</view>
     </view>
 
-    <!-- 选项：作答中中性高亮；提交后标出正确项与我的错误项 -->
+    <!-- 选项：作答中中性高亮；即时判定模式提交后标出正确项与我的错误项，交卷模式提交后直接进入下一题不揭示 -->
     <view class="options">
       <view
         wx:for="{{options}}"
@@ -47,6 +47,9 @@
         <view class="option-mark">{{item.state === 'right' ? '✓' : (item.state === 'wrong' ? '✗' : '')}}</view>
       </view>
     </view>
+
+    <!-- 交卷模式提示：作答中不揭示对错 -->
+    <view wx:if="{{mode === 'review' && phase === 'answering'}}" class="review-tip">作答中不显示对错，交卷后统一查看解析</view>
 
     <!-- 反馈 -->
     <view wx:if="{{phase === 'feedback'}}" class="card feedback-card {{feedback.correct ? 'ok' : 'bad'}}">
@@ -67,6 +70,15 @@
       <view class="fb-line">超过 {{timeLimit}} 秒未提交，本题已锁定，不能再作答。</view>
     </view>
 
+    <!-- 交卷态（review 模式全部提交后） -->
+    <view wx:if="{{phase === 'submitted'}}" class="card feedback-card submitted">
+      <view class="fb-head">
+        <text class="fb-verdict">✓ 全部题目已提交</text>
+        <text class="fb-points">共 {{total}} 题</text>
+      </view>
+      <view class="fb-line">辛苦啦！点击下方按钮查看全部题目的对错与解析。</view>
+    </view>
+
     <!-- 操作 -->
     <view class="answer-actions">
       <button
@@ -76,6 +88,7 @@
         disabled="{{submitting || !selected}}"
         bindtap="handleSubmit"
       >{{submitting ? '提交中' : '提交答案'}}</button>
+      <button wx:elif="{{phase === 'submitted'}}" class="btn-primary main-btn" bindtap="handleViewResult">查看全部解析</button>
       <button wx:else class="btn-primary main-btn" bindtap="handleNext">{{isLast ? '查看本期结果' : '下一题'}}</button>
     </view>
   </block>

@@ -11,6 +11,8 @@ Page({
   data: {
     completed: false,
     started: false,
+    // 答题交互模式：instant 即时判定（情报1） | review 交卷看解析（情报2）
+    mode: 'instant',
     record: null,
     stars: [],
     dots: [],
@@ -41,7 +43,7 @@ Page({
           stars: record
             ? Array.from({ length: record.totalCount }, (_, i) => ({ id: i, on: i < record.correctCount }))
             : [],
-          dots: util.quizDots(daily.progress),
+          dots: util.quizDots(daily.progress, this.data.mode !== 'review'),
           issueNo: daily.issueNo,
           timeLimit: daily.timeLimit,
           knowledge: results[1],
@@ -55,10 +57,22 @@ Page({
   },
 
   /**
-   * 开始答题
+   * 切换答题交互模式：即时判定（情报1）/ 交卷看解析（情报2）。
+   * 切换后按新模式重刷进度点着色（交卷模式不显示对错）。
+   */
+  handleModeChange(e) {
+    const mode = e.currentTarget.dataset.mode;
+    if (mode === this.data.mode) return;
+    this.setData({ mode });
+    this.refresh();
+  },
+
+  /**
+   * 开始答题（交卷模式带 mode=review 参数进入）
    */
   handleStart() {
-    wx.navigateTo({ url: '/pages/quiz-answer/quiz-answer' });
+    const suffix = this.data.mode === 'review' ? '?mode=review' : '';
+    wx.navigateTo({ url: '/pages/quiz-answer/quiz-answer' + suffix });
   },
 
   /** 已完成：查看本期逐题结果 */
