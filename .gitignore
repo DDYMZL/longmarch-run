@@ -5,6 +5,8 @@ __pycache__/
 venv/
 *.db
 .env
+# 本机覆盖的环境变量（如 admin/.env.development.local 指向本机后端）
+.env*.local
 .pytest_cache/
 
 # 微信开发者工具
