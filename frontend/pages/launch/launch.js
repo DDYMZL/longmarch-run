@@ -8,14 +8,16 @@
  *
  * 流程：
  *  1. wx.login 调 /auth/login 识别微信身份。
- *  2. active → 直接进入首页（或 redirect 原页）。
+ *  2. active → 查询活动状态：不可查看则进活动状态页，否则进入首页（或 redirect 原页）。
  *  3. disabled → 显示停用拦截。
  *  4. unregistered + 有效邀请码 → 跳入驻页；无邀请码或邀请码不可用 → 显示准入拦截。
  */
 const auth = require('../../services/auth');
+const activity = require('../../services/activity');
 
 const HOME_PAGE = '/pages/home/home';
 const ONBOARD_PAGE = '/pages/onboard/onboard';
+const ACTIVITY_PAGE = '/pages/activity/activity';
 const DISABLED_MSG = '账号已停用，请联系活动管理员';
 const BLOCKED_MSG = '当前小程序仅对受邀人员开放，请联系活动管理员获取有效入驻二维码。';
 
@@ -103,6 +105,20 @@ Page({
   },
 
   enterHome() {
+    // 活动不可查看（已结束且关闭查看）→ 活动状态页；状态获取失败不阻塞进入（后端接口仍会拦截）
+    activity
+      .getStatus()
+      .then((s) => s.allowView, () => true)
+      .then((allowView) => {
+        if (!allowView) {
+          wx.reLaunch({ url: ACTIVITY_PAGE });
+          return;
+        }
+        this.enterTarget();
+      });
+  },
+
+  enterTarget() {
     if (!this.redirect) {
       wx.switchTab({ url: HOME_PAGE });
       return;

@@ -2,32 +2,86 @@
   padding-bottom: 60rpx;
 }
 
-/* 顶部进度 */
-.progress-header {
-  background: #FFFFFF;
+/* 顶部：进度 + 环形倒计时 */
+.answer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: linear-gradient(135deg, #7D0B20, #C8102E);
   padding: 30rpx 40rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.head-left {
+  flex: 1;
+  min-width: 0;
 }
 
 .progress-count {
-  font-size: 26rpx;
-  color: #C8102E;
+  font-size: 28rpx;
+  color: #F8D477;
   font-weight: 600;
-  margin-bottom: 14rpx;
+  letter-spacing: 2rpx;
+  margin-bottom: 16rpx;
 }
 
-.progress-bar {
-  height: 14rpx;
-  background: #F0E6D2;
-  border-radius: 8rpx;
-  overflow: hidden;
+.head-dots {
+  justify-content: flex-start;
 }
 
-.progress-inner {
-  height: 100%;
-  background: linear-gradient(90deg, #C8102E, #E05A6A);
-  border-radius: 8rpx;
-  transition: width 0.3s ease;
+.head-dots .quiz-dot {
+  margin: 0 16rpx 0 0;
+}
+
+.ring {
+  width: 150rpx;
+  height: 150rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  transition: background 0.25s linear;
+}
+
+.ring-inner {
+  width: 122rpx;
+  height: 122rpx;
+  border-radius: 50%;
+  background: #7D0B20;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.ring-num {
+  font-size: 48rpx;
+  font-weight: 700;
+  color: #FFFFFF;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.ring-unit {
+  font-size: 20rpx;
+  color: #F5D9A0;
+}
+
+.ring-warn {
+  animation: ringPulse 1s ease-in-out infinite;
+}
+
+.ring-warn .ring-num {
+  color: #FFD2CC;
+}
+
+.ring-done {
+  opacity: 0.75;
+}
+
+@keyframes ringPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(224, 69, 58, 0.55); }
+  50% { box-shadow: 0 0 0 14rpx rgba(224, 69, 58, 0); }
 }
 
 /* 题目卡片 */
@@ -35,7 +89,6 @@
   margin-top: 30rpx;
 }
 
-/* 题目切换滑入动画 */
 .q-slide-in {
   animation: qSlideIn 0.38s cubic-bezier(0.25, 0.8, 0.35, 1) both;
 }
@@ -49,12 +102,6 @@
     opacity: 1;
     transform: translateX(0);
   }
-}
-
-.question-head {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
 }
 
 .question-type {
@@ -99,6 +146,20 @@
   animation: pickPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
+.option.right {
+  border-color: #2E9E5B;
+  background: #EEF8F1;
+}
+
+.option.wrong {
+  border-color: #C8102E;
+  background: #FFF0F1;
+}
+
+.option.locked {
+  opacity: 0.92;
+}
+
 @keyframes pickPop {
   0% { transform: scale(1); }
   45% { transform: scale(1.045); }
@@ -121,7 +182,16 @@
 .option.selected .option-label {
   background: #C8102E;
   color: #FFFFFF;
-  animation: popIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.option.right .option-label {
+  background: #2E9E5B;
+  color: #FFFFFF;
+}
+
+.option.wrong .option-label {
+  background: #C8102E;
+  color: #FFFFFF;
 }
 
 .option-text {
@@ -130,36 +200,134 @@
   color: #333333;
 }
 
-.option-radio {
-  width: 32rpx;
-  height: 32rpx;
-  border-radius: 50%;
-  border: 3rpx solid #DDDDDD;
-  box-sizing: border-box;
+.option-mark {
+  width: 40rpx;
+  text-align: center;
+  font-size: 32rpx;
+  font-weight: 700;
   flex-shrink: 0;
 }
 
-.option-radio.on {
-  border: 10rpx solid #C8102E;
-  background: #FFFFFF;
+.option.right .option-mark {
+  color: #2E9E5B;
+}
+
+.option.wrong .option-mark {
+  color: #C8102E;
+}
+
+/* 反馈 */
+.feedback-card {
+  border-left: 8rpx solid #D4A017;
+  animation: fadeUp 0.35s ease both;
+}
+
+.feedback-card.ok {
+  border-left-color: #2E9E5B;
+}
+
+.feedback-card.bad {
+  border-left-color: #C8102E;
+}
+
+.feedback-card.timeout {
+  border-left-color: #8A8A8A;
+}
+
+.fb-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.fb-verdict {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #5A1A1A;
+}
+
+.ok .fb-verdict {
+  color: #2E9E5B;
+}
+
+.bad .fb-verdict {
+  color: #C8102E;
+}
+
+.fb-points {
+  font-size: 26rpx;
+  color: #B8860B;
+  background: rgba(212, 160, 23, 0.12);
+  border-radius: 24rpx;
+  padding: 4rpx 20rpx;
+}
+
+.fb-line {
+  font-size: 28rpx;
+  color: #333333;
+  padding: 6rpx 0;
+}
+
+.fb-analysis {
+  font-size: 26rpx;
+  color: #666666;
+  line-height: 1.7;
+  background: #FBF6EC;
+  border-radius: 12rpx;
+  padding: 16rpx 20rpx;
+  margin-top: 10rpx;
+}
+
+.fb-sum {
+  margin-top: 16rpx;
+  font-size: 24rpx;
+  color: #999999;
 }
 
 /* 操作 */
 .answer-actions {
-  display: flex;
-  align-items: center;
   padding: 30rpx 60rpx;
 }
 
-.prev-btn {
-  flex: 0 0 auto;
-  width: 220rpx !important;
-  margin: 0 24rpx 0 0;
-  padding: 20rpx 0;
-}
-
-.next-btn {
-  flex: 1;
+.main-btn {
   width: 100%;
   margin: 0;
+}
+
+/* 异常态 */
+.state-box {
+  text-align: center;
+  padding: 160rpx 60rpx 0;
+}
+
+.state-icon {
+  font-size: 88rpx;
+}
+
+.state-text {
+  margin: 24rpx 0 40rpx;
+  font-size: 28rpx;
+  color: #666666;
+}
+
+.state-btn {
+  width: 100%;
+}
+
+.state-link {
+  margin-top: 28rpx;
+  font-size: 26rpx;
+  color: #8C6B1F;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring,
+  .ring-warn,
+  .q-slide-in,
+  .option.selected,
+  .feedback-card {
+    animation: none !important;
+    transition: none !important;
+  }
 }

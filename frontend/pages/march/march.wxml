@@ -26,7 +26,6 @@
       <view class="lit-title">🎉 恭喜抵达</view>
       <view class="lit-name">{{litPopup.icon}} {{litPopup.name}}</view>
       <view class="lit-time" wx:if="{{litPopup.historicalTime}}">{{litPopup.historicalTime}}</view>
-      <view class="lit-points">+{{litPopup.gainedPoints}} 积分</view>
       <view class="lit-next" wx:if="{{litPopup.nextName}}">距下一站「{{litPopup.nextName}}」还需 {{litPopup.nextRemain}} 步</view>
       <view class="lit-next" wx:else>🏆 长征路线已全部完成！</view>
     </view>

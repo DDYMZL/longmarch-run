@@ -7,7 +7,8 @@
  *  - 无下级的组织点击整行即选定；
  *  - 已下钻到某组织时，顶部提供「选择当前组织」按钮，任意层级均可选中。
  *
- * 入口：首页「选择所属组织」引导（from=home，选填）/ 我的页修改（from=mine）
+ * 入口：首页「选择所属组织」引导（from=home，选填）/ 我的页（from=mine）/ 入驻页（from=onboard，仅回传）
+ * 组织首次选定后锁定：再次进入只读展示，提示联系管理员调整。
  */
 const app = getApp();
 const org = require('../../services/org');
@@ -22,7 +23,9 @@ Page({
     selectedId: null, // 用户已选定的组织 id（回显）
     rootId: null, // pick 模式下的组织范围根 id，限制不得越界
     showNickInput: false, // 首次登录（未改名）时展示微信昵称采集
-    nickname: '' // 昵称输入框内容
+    nickname: '', // 昵称输入框内容
+    locked: false, // 已选定组织：只读，调整需联系管理员
+    lockedName: ''
   },
 
   onLoad(options) {
@@ -47,7 +50,18 @@ Page({
       selectedId: user.orgId || null,
       showNickInput: from === 'home' && !user.nicknameChangedAt
     });
-    this.loadLevel(null);
+    // 组织选定后锁定：已锁定只读展示，未锁定才加载选择列表（后端同样拒绝二次修改）
+    org
+      .getMine()
+      .then((mine) => {
+        if (!mine.locked) {
+          this.loadLevel(null);
+          return;
+        }
+        auth.updateLocalUser({ orgId: mine.orgId, orgName: mine.orgName, orgFullName: mine.fullName });
+        this.setData({ locked: true, lockedName: mine.fullName || mine.orgName, showNickInput: false });
+      })
+      .catch(() => this.loadLevel(null));
   },
 
   /** 加载某层级列表；parentId 为 null 表示顶级（快速连点下钻/回跳时只采纳最后一次请求） */

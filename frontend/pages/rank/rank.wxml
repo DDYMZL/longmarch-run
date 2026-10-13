@@ -1,50 +1,114 @@
-<view class="rank-page">
-  <!-- 我的成绩概览 -->
-  <view class="my-card">
-    <view class="my-rank">
-      <text class="my-rank-num">{{myRank || '-'}}</text>
-      <text class="my-rank-label">我的名次</text>
-    </view>
-    <view class="my-divider"></view>
-    <view class="my-steps">
-      <text class="my-steps-num">{{mySteps}}</text>
-      <text class="my-steps-label">累计步数</text>
-    </view>
-    <view class="my-divider"></view>
-    <view class="my-total">
-      <text class="my-total-num">{{total}}</text>
-      <text class="my-total-label">参与人数</text>
+<view class="rank-page {{me && me.rank > 10 ? 'with-me-bar' : ''}}">
+  <!-- 荣耀征程 Hero -->
+  <view class="hero">
+    <view class="hero-grid"></view>
+    <view class="hero-title">长征步迹 · 荣耀征程</view>
+    <view class="hero-sub">总积分 = 步行积分 + 答题积分 · 全员工同榜</view>
+    <view class="my-strip">
+      <view class="my-cell">
+        <text class="my-num">{{me ? me.rank : '-'}}</text>
+        <text class="my-label">我的名次</text>
+      </view>
+      <view class="my-divider"></view>
+      <view class="my-cell">
+        <text class="my-num gold">{{me ? me.points : 0}}</text>
+        <text class="my-label">我的总积分</text>
+      </view>
+      <view class="my-divider"></view>
+      <view class="my-cell">
+        <text class="my-num">{{total}}</text>
+        <text class="my-label">参与人数</text>
+      </view>
     </view>
   </view>
 
-  <view class="rank-title">全员工步数总榜 · 跨所有组织</view>
+  <view wx:if="{{loading}}" class="skeleton">
+    <view class="sk-podium"></view>
+    <view class="sk-row"></view>
+    <view class="sk-row"></view>
+    <view class="sk-row"></view>
+  </view>
 
-  <!-- 榜单 -->
-  <view class="rank-list">
-    <view class="rank-item {{item.rank <= 3 ? 'rank-item-top' : ''}} rank-item-top-{{item.rank}} {{item.isMe ? 'rank-item-me' : ''}}" wx:for="{{list}}" wx:key="userId">
-      <view class="rank-position">
-        <view class="rank-badge rank-badge-{{item.rank <= 3 ? item.rank : 'n'}}">
-          <text class="rank-badge-num">{{item.rank}}</text>
+  <view wx:elif="{{errorMsg}}" class="state-box">
+    <view class="state-icon">📶</view>
+    <view class="state-text">{{errorMsg}}</view>
+    <button class="btn-primary state-btn" bindtap="handleRetry">重新加载</button>
+  </view>
+
+  <view wx:elif="{{podium.length === 0}}" class="state-box">
+    <view class="state-icon">🏁</view>
+    <view class="state-text">暂无排名数据，同步步数或完成答题即可上榜</view>
+  </view>
+
+  <block wx:else>
+    <!-- 前 3 名领奖台 -->
+    <view class="podium">
+      <view wx:for="{{podium}}" wx:key="userId" class="podium-col {{item.medal}} {{item.isMe ? 'is-me' : ''}}">
+        <view class="podium-crown">{{item.rank === 1 ? '👑' : ''}}</view>
+        <view class="podium-avatar">
+          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
+          <text wx:else class="avatar-ph">{{item.initial}}</text>
         </view>
-        <text class="rank-top-label" wx:if="{{item.rank === 1}}">冠军</text>
-        <text class="rank-top-label" wx:elif="{{item.rank === 2}}">亚军</text>
-        <text class="rank-top-label" wx:elif="{{item.rank === 3}}">季军</text>
-      </view>
-      <view class="rank-avatar">
-        <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
-        <text wx:else class="rank-avatar-ph">跑</text>
-      </view>
-      <view class="rank-info">
-        <view class="rank-name">
-          <text>{{item.nickname}}</text>
-          <text class="rank-me-tag" wx:if="{{item.isMe}}">我</text>
+        <view class="podium-name">{{item.nickname}}<text wx:if="{{item.isMe}}" class="me-tag">我</text></view>
+        <view class="podium-org">{{item.orgName}}</view>
+        <view class="podium-points">{{item.points}}<text class="unit"> 分</text></view>
+        <view class="podium-stand">
+          <text class="stand-rank">{{item.rank}}</text>
+          <text class="stand-label">{{item.rank === 1 ? '冠军' : (item.rank === 2 ? '亚军' : '季军')}}</text>
         </view>
-        <view class="rank-org">{{item.orgName || '未选择组织'}}</view>
-      </view>
-      <view class="rank-steps-wrap">
-        <text class="rank-steps">{{item.steps}}</text>
-        <text class="rank-steps-unit">步</text>
       </view>
     </view>
+
+    <!-- 第 4~10 名荣誉卡 -->
+    <view wx:if="{{elite.length > 0}}" class="section-title"><text class="line"></text>荣誉榜 · 第 4~10 名<text class="line"></text></view>
+    <view class="elite">
+      <view wx:for="{{elite}}" wx:key="userId" class="elite-card {{item.isMe ? 'is-me' : ''}}">
+        <view class="elite-rank">{{item.rank}}</view>
+        <view class="row-avatar">
+          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
+          <text wx:else class="avatar-ph">{{item.initial}}</text>
+        </view>
+        <view class="row-info">
+          <view class="row-name">{{item.nickname}}<text wx:if="{{item.isMe}}" class="me-tag">我</text></view>
+          <view class="row-org">{{item.orgName}}</view>
+          <view class="row-split">步行 {{item.walkPoints}} · 答题 {{item.quizPoints}}</view>
+        </view>
+        <view class="row-points">{{item.points}}<text class="unit">分</text></view>
+      </view>
+    </view>
+
+    <!-- 第 11 名起分页 -->
+    <view wx:if="{{list.length > 0}}" class="section-title"><text class="line"></text>征程榜 · 第 11 名起<text class="line"></text></view>
+    <view wx:if="{{list.length > 0}}" class="rank-list">
+      <view wx:for="{{list}}" wx:key="userId" class="rank-row {{item.isMe ? 'is-me' : ''}}">
+        <view class="list-rank">{{item.rank}}</view>
+        <view class="row-avatar small">
+          <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
+          <text wx:else class="avatar-ph">{{item.initial}}</text>
+        </view>
+        <view class="row-info">
+          <view class="row-name">{{item.nickname}}<text wx:if="{{item.isMe}}" class="me-tag">我</text></view>
+          <view class="row-org">{{item.orgName}}</view>
+        </view>
+        <view class="row-points small">{{item.points}}<text class="unit">分</text></view>
+      </view>
+    </view>
+    <view wx:if="{{list.length > 0 || elite.length > 0}}" class="load-tip">
+      {{loadingMore ? '加载中…' : (hasMore ? '上拉加载更多' : '— 已显示全部 —')}}
+    </view>
+  </block>
+
+  <!-- 名次在 10 名以外：底部常驻我的名次 -->
+  <view wx:if="{{me && me.rank > 10 && !loading}}" class="me-bar">
+    <view class="list-rank">{{me.rank}}</view>
+    <view class="row-avatar small">
+      <image wx:if="{{me.avatar}}" src="{{me.avatar}}" mode="aspectFill" />
+      <text wx:else class="avatar-ph">{{me.initial}}</text>
+    </view>
+    <view class="row-info">
+      <view class="row-name">{{me.nickname}}<text class="me-tag">我</text></view>
+      <view class="row-org">步行 {{me.walkPoints}} · 答题 {{me.quizPoints}}</view>
+    </view>
+    <view class="row-points small">{{me.points}}<text class="unit">分</text></view>
   </view>
 </view>

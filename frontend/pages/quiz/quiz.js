@@ -1,16 +1,21 @@
 /**
  * 情报 Tab（今日长征情报）
- * 状态：本期未完成（开始破译）/ 已完成（展示得分）/ 无题目（异常场景）
+ * 状态：未开始（开始破译）/ 作答中（继续破译，逐题进度点）/ 已完成（答对数、正确率、答题积分、超时数）/ 无题目
  * 附加：知识画像（按题目分类聚合历史正确率）
  */
 const app = getApp();
 const quiz = require('../../services/quiz');
+const util = require('../../utils/util');
 
 Page({
   data: {
     completed: false,
+    started: false,
     record: null,
+    stars: [],
+    dots: [],
     issueNo: 1,
+    timeLimit: 90,
     loading: true,
     errorMsg: '',
     knowledge: null
@@ -28,18 +33,24 @@ Page({
     Promise.all([quiz.getDaily(), quiz.getKnowledge().catch(() => null)])
       .then((results) => {
         const daily = results[0];
-        const knowledge = results[1];
+        const record = daily.record;
         this.setData({
           completed: daily.completed,
-          record: daily.record,
+          started: daily.progress.some((p) => p.status !== 'pending'),
+          record,
+          stars: record
+            ? Array.from({ length: record.totalCount }, (_, i) => ({ id: i, on: i < record.correctCount }))
+            : [],
+          dots: util.quizDots(daily.progress),
           issueNo: daily.issueNo,
-          knowledge,
+          timeLimit: daily.timeLimit,
+          knowledge: results[1],
           loading: false,
-          errorMsg: daily.questions === null && !daily.completed ? '本期情报正在准备中，请稍后再来。' : ''
+          errorMsg: !daily.completed && daily.totalCount === 0 ? '本期情报正在准备中，请稍后再来。' : ''
         });
       })
-      .catch(() => {
-        this.setData({ loading: false, errorMsg: '网络连接异常，请检查网络后重试。' });
+      .catch((err) => {
+        this.setData({ loading: false, errorMsg: (err && err.message) || '网络连接异常，请检查网络后重试。' });
       });
   },
 
@@ -48,6 +59,17 @@ Page({
    */
   handleStart() {
     wx.navigateTo({ url: '/pages/quiz-answer/quiz-answer' });
+  },
+
+  /** 已完成：查看本期逐题结果 */
+  handleViewResult() {
+    wx.navigateTo({ url: '/pages/quiz-result/quiz-result' });
+  },
+
+  /** 加载失败重试 */
+  handleRetry() {
+    this.setData({ loading: true, errorMsg: '' });
+    this.refresh();
   },
 
   /**

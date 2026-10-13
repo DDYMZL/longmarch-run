@@ -124,18 +124,82 @@
   color: rgba(255, 255, 255, 0.85);
 }
 
-/* 统计 */
-.stats-card {
-  margin-top: -30rpx;
+/* 积分卡（荣耀红金） */
+.points-card {
+  position: relative;
+  margin: -30rpx 30rpx 20rpx;
+  padding: 30rpx 30rpx 24rpx;
+  border-radius: 24rpx;
+  color: #FFF6DC;
+  background: linear-gradient(135deg, #5A0A16 0%, #8E1023 55%, #B5122C 100%);
+  border: 2rpx solid rgba(232, 199, 106, 0.55);
+  box-shadow: 0 10rpx 28rpx rgba(90, 10, 22, 0.28);
+  overflow: hidden;
 }
 
+.points-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.points-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  letter-spacing: 4rpx;
+  color: #E8C76A;
+}
+
+.points-more {
+  font-size: 24rpx;
+  color: rgba(255, 246, 220, 0.8);
+}
+
+.points-total {
+  margin-top: 8rpx;
+  font-size: 76rpx;
+  font-weight: 800;
+  line-height: 1.2;
+  color: #FFD766;
+  text-shadow: 0 0 18rpx rgba(255, 215, 102, 0.45);
+}
+
+.points-today {
+  font-size: 24rpx;
+  color: rgba(255, 246, 220, 0.85);
+}
+
+.points-split {
+  display: flex;
+  margin-top: 22rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid rgba(232, 199, 106, 0.3);
+}
+
+.points-cell {
+  flex: 1;
+  text-align: center;
+}
+
+.points-num {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #FFF6DC;
+}
+
+.points-label {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  color: rgba(255, 246, 220, 0.7);
+}
+
+/* 统计 */
 .stat-grid {
   display: flex;
-  flex-wrap: wrap;
 }
 
 .stat-cell {
-  width: 50%;
+  flex: 1;
   text-align: center;
   padding: 20rpx 0;
 }

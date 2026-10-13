@@ -14,9 +14,17 @@ function getChildren(parentId) {
 }
 
 /**
- * 选定/修改所属组织，返回选定后的组织信息。
+ * 我的所属组织：locked 为 true 表示已选定并锁定（调整需联系管理员）。
+ * @returns {Promise<{orgId:number|null, orgName:string, fullName:string, path:Array, locked:boolean, scopeOrgId:number|null, scopeOrgName:string|null}>}
+ */
+function getMine() {
+  return requestService.request({ url: '/org/mine' });
+}
+
+/**
+ * 首次选定所属组织（选定后锁定，后端拒绝二次修改），返回选定后的组织信息。
  * @param {number} orgId
- * @returns {Promise<{orgId:number, orgName:string, fullName:string, path:Array}>}
+ * @returns {Promise<{orgId:number, orgName:string, fullName:string, path:Array, locked:boolean}>}
  */
 function select(orgId) {
   return requestService.request({ url: '/org/select', method: 'POST', data: { orgId } });
@@ -40,6 +48,7 @@ function getOrgMarch() {
 
 module.exports = {
   getChildren,
+  getMine,
   select,
   getCompanions,
   getOrgMarch

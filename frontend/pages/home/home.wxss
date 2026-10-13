@@ -3,6 +3,46 @@
 }
 
 /* 用户信息栏 */
+/* 活动未进行中横幅 */
+.activity-banner {
+  position: relative;
+  display: flex;
+  align-items: center;
+  margin: -40rpx 30rpx 0;
+  padding: 18rpx 24rpx;
+  border-radius: 16rpx;
+  color: #FFF6DC;
+  background: linear-gradient(90deg, #3D0610, #7D0B20);
+  border: 2rpx solid rgba(232, 199, 106, 0.6);
+  font-size: 24rpx;
+}
+
+.activity-banner + .sport-card {
+  margin-top: 20rpx;
+}
+
+.activity-banner-tag {
+  flex: none;
+  margin-right: 14rpx;
+  padding: 2rpx 14rpx;
+  border-radius: 8rpx;
+  font-size: 22rpx;
+  color: #5A0A16;
+  background: #E8C76A;
+}
+
+.activity-banner-text {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.activity-banner-more {
+  margin-left: 10rpx;
+  color: #E8C76A;
+}
+
 .user-bar {
   background: linear-gradient(135deg, #A00D26, #C8102E);
   padding: 30rpx 40rpx 60rpx;
@@ -482,16 +522,6 @@
   margin-top: 8rpx;
   font-size: 24rpx;
   color: #B8860B;
-}
-
-.lit-points {
-  margin-top: 14rpx;
-  display: inline-block;
-  font-size: 26rpx;
-  color: #B8860B;
-  background: rgba(212, 160, 23, 0.12);
-  border-radius: 24rpx;
-  padding: 8rpx 28rpx;
 }
 
 .lit-next {

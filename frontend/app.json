@@ -21,7 +21,9 @@
     "pages/ceremony/ceremony",
     "pages/bind/bind",
     "pages/account/account",
-    "pages/onboard/onboard"
+    "pages/onboard/onboard",
+    "pages/points/points",
+    "pages/activity/activity"
   ],
   "window": {
     "navigationBarBackgroundColor": "#C8102E",

@@ -65,6 +65,27 @@
   line-height: 1.2;
 }
 
+.done-score-unit {
+  font-size: 36rpx;
+  font-weight: 600;
+  color: #8C6B1F;
+  margin-left: 6rpx;
+}
+
+.hero-dots {
+  margin-top: 26rpx;
+}
+
+.retry-link {
+  margin-top: 10rpx;
+  color: #8C6B1F;
+  text-decoration: underline;
+}
+
+.tomorrow-btn {
+  margin-top: 24rpx;
+}
+
 .done-stars {
   margin: 10rpx 0;
 }

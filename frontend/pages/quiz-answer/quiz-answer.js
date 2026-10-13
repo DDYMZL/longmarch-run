@@ -1,19 +1,66 @@
 /**
- * 答题页
- * 交互：选择答案（仅中性选中高亮，作答中不判题）-> 上一题/下一题可回看修改 -> 第5题 -> 提交答卷
- * -> 后端统一判分 -> 结果页展示逐题对错与得分
- * 单选/判断题共用单选交互（第一阶段不支持多选）
+ * 答题页（V2.0 逐题限时）
+ * 流程：进入即 quiz.start 开题（幂等，中途返回继续当前题）-> 90 秒环形倒计时 -> 选择并提交（每题一次，即时判定）
+ * -> 反馈（对错/正确答案/解析/得分）-> 下一题再 start；倒计时归零进入超时态，不再允许提交。
+ * 计时以服务器为准：本地截止时间 = 收到响应时刻 + 服务器 remainingMs，切后台/锁屏回来按 Date.now 重算，不累计误差。
  */
 const app = getApp();
 const quiz = require('../../services/quiz');
+const util = require('../../utils/util');
+
+const WARN_SECONDS = 10; // 最后 10 秒进入警示色
+const TICK_MS = 250;
+
+/** 环形进度（conic-gradient）：剩余比例 -> 样式串 */
+function ringStyle(remainSec, limit, warn) {
+  const deg = limit > 0 ? Math.round((remainSec / limit) * 360) : 0;
+  const color = warn ? '#E0453A' : '#D4A017';
+  return 'background: conic-gradient(' + color + ' ' + deg + 'deg, rgba(240, 230, 210, 0.9) 0deg);';
+}
+
+/** 选项展示态：提交后标记正确项与我的错误项 */
+function buildOptions(options, picked, correctLabels) {
+  return (options || []).map((o) => {
+    let state = '';
+    if (correctLabels) {
+      if (correctLabels.indexOf(o.label) >= 0) state = 'right';
+      else if (o.label === picked) state = 'wrong';
+    } else if (o.label === picked) {
+      state = 'selected';
+    }
+    return { label: o.label, text: o.text, state };
+  });
+}
+
+/** 答案标签 -> "B. 遵义会议" */
+function answerText(labels, options) {
+  return (labels || [])
+    .map((label) => {
+      const opt = (options || []).find((o) => o.label === label);
+      return opt ? label + '. ' + opt.text : label;
+    })
+    .join('；');
+}
 
 Page({
   data: {
-    currentIndex: 0,
+    // loading / answering / feedback / timeout / error
+    phase: 'loading',
+    errorMsg: '',
+    seq: 0,
     total: 0,
-    current: null,
+    dots: [],
+    question: null,
+    options: [],
     selected: '',
-    submitting: false
+    submitting: false,
+    remainSec: 0,
+    timeLimit: 90,
+    warn: false,
+    ring: '',
+    feedback: null,
+    isLast: false,
+    questionAnim: ''
   },
 
   onLoad() {
@@ -21,103 +68,133 @@ Page({
       wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
-    // 题目与作答仅逻辑层使用，不进 data（避免每次选择都整体 setData）
-    this._questions = [];
-    this._answers = {}; // { questionId: [label] }
+    this.startQuestion();
+  },
+
+  onShow() {
+    // 切后台回来：按本地截止时间立即重算剩余秒数
+    if (this.data.phase === 'answering') this.tick();
+  },
+
+  onUnload() {
+    this.stopTimer();
+    if (this._animTimer) clearTimeout(this._animTimer);
+  },
+
+  /** 开始/继续当前题（后端幂等；当前题已截止则后端判超时并开下一题） */
+  startQuestion() {
+    if (this._starting) return;
+    this._starting = true;
+    this.setData({ phase: 'loading', errorMsg: '' });
     quiz
-      .getDaily()
-      .then((daily) => {
-        // 今日已完成 -> 直接去结果页
-        if (daily.completed) {
-          wx.redirectTo({ url: '/pages/quiz-result/quiz-result' });
-          return;
-        }
-        if (!daily.questions || daily.questions.length === 0) {
-          wx.showToast({ title: '今日题目正在准备中', icon: 'none' });
-          setTimeout(() => wx.navigateBack(), 800);
-          return;
-        }
-
-        this._questions = daily.questions;
-        daily.questions.forEach((q) => (this._answers[q.id] = []));
-
-        this.setData({
-          total: daily.questions.length,
-          current: daily.questions[0],
-          selected: '',
-          questionAnim: 'q-slide-in'
-        });
+      .start()
+      .then((state) => this.applyState(state))
+      .catch((err) => {
+        this.setData({ phase: 'error', errorMsg: (err && err.message) || '题目加载失败，请重试' });
       })
-      .catch(() => {
-        wx.showToast({ title: '题目加载失败，请重试', icon: 'none' });
-        setTimeout(() => wx.navigateBack(), 800);
+      .finally(() => {
+        this._starting = false;
       });
   },
 
-  /** 选择答案：仅记录并中性高亮，提交前可随时修改 */
-  handleSelect(e) {
-    const label = e.currentTarget.dataset.label;
-    this._answers[this.data.current.id] = [label]; // 单选/判断：直接覆盖
-    this.setData({ selected: label });
-  },
-
-  /** 切换到指定题目（回显已选答案） */
-  goTo(index) {
-    const q = this._questions[index];
+  /** 应用后端答题状态 */
+  applyState(state) {
+    if (state.completed) {
+      wx.redirectTo({ url: '/pages/quiz-result/quiz-result' });
+      return;
+    }
+    const current = state.current;
+    if (!current) {
+      this.setData({ phase: 'error', errorMsg: '今日题目正在准备中，请稍后再来' });
+      return;
+    }
+    this._question = current.question;
+    this._deadline = Date.now() + current.remainingMs;
     this.setData({
-      currentIndex: index,
-      current: q,
-      selected: this._answers[q.id][0] || '',
+      phase: 'answering',
+      seq: current.seq,
+      total: state.totalCount,
+      timeLimit: state.timeLimit,
+      isLast: current.seq >= state.totalCount,
+      dots: util.quizDots(state.progress),
+      question: current.question,
+      options: buildOptions(current.question.options, ''),
+      selected: '',
+      feedback: null,
       questionAnim: ''
     });
-    // 重置类名以重新触发题目切换动画
-    this._animTimer = setTimeout(() => {
-      this.setData({ questionAnim: 'q-slide-in' });
-    }, 30);
+    this._animTimer = setTimeout(() => this.setData({ questionAnim: 'q-slide-in' }), 30);
+    this.stopTimer();
+    this.tick();
+    this._timer = setInterval(() => this.tick(), TICK_MS);
   },
 
-  handlePrev() {
-    if (this.data.currentIndex > 0) this.goTo(this.data.currentIndex - 1);
+  /** 倒计时：只在整秒变化时 setData，归零进入超时态 */
+  tick() {
+    const remainMs = Math.max(0, this._deadline - Date.now());
+    const remainSec = Math.ceil(remainMs / 1000);
+    if (remainSec !== this.data.remainSec || !this.data.ring) {
+      const warn = remainSec <= WARN_SECONDS;
+      this.setData({ remainSec, warn, ring: ringStyle(remainSec, this.data.timeLimit, warn) });
+    }
+    if (remainMs <= 0 && !this.data.submitting) this.enterTimeout();
   },
 
-  /** 下一题 / 提交：当前题未作答不可前进 */
-  handleNext() {
-    const { currentIndex, total, selected } = this.data;
+  stopTimer() {
+    if (this._timer) clearInterval(this._timer);
+    this._timer = null;
+  },
+
+  enterTimeout() {
+    this.stopTimer();
+    this.setData({
+      phase: 'timeout',
+      [`dots[${this.data.seq - 1}].cls`]: 'timeout'
+    });
+  },
+
+  /** 选择答案（仅作答中可选，提交前可改） */
+  handleSelect(e) {
+    if (this.data.phase !== 'answering' || this.data.submitting) return;
+    const label = e.currentTarget.dataset.label;
+    this.setData({ selected: label, options: buildOptions(this._question.options, label) });
+  },
+
+  /** 提交当前题（每题一次；提交中禁止重复点击） */
+  handleSubmit() {
+    const { phase, selected, submitting } = this.data;
+    if (phase !== 'answering' || submitting) return;
     if (!selected) {
       wx.showToast({ title: '请先选择答案', icon: 'none' });
       return;
     }
-    if (currentIndex < total - 1) {
-      this.goTo(currentIndex + 1);
-      return;
-    }
-    this.handleSubmit();
-  },
-
-  /** 提交答卷（按题目顺序提交，判分与对错均由后端计算） */
-  handleSubmit() {
-    if (this.data.submitting) return;
-    const missing = this._questions.findIndex((q) => !this._answers[q.id].length);
-    if (missing >= 0) {
-      wx.showToast({ title: `第${missing + 1}题尚未作答`, icon: 'none' });
-      this.goTo(missing);
-      return;
-    }
     this.setData({ submitting: true });
-
-    const payload = this._questions.map((q) => ({ questionId: q.id, answer: this._answers[q.id] }));
-
     quiz
-      .submit(payload)
-      .then(() => {
-        wx.redirectTo({ url: '/pages/quiz-result/quiz-result' });
+      .answer(this._question.id, selected)
+      .then((res) => {
+        this.stopTimer();
+        this.setData({
+          phase: 'feedback',
+          isLast: res.finished,
+          options: buildOptions(this._question.options, selected, res.correctAnswer),
+          [`dots[${res.seq - 1}].cls`]: res.correct ? 'right' : 'wrong',
+          feedback: {
+            correct: res.correct,
+            points: res.points,
+            correctText: answerText(res.correctAnswer, this._question.options),
+            analysis: res.analysis,
+            correctCount: res.correctCount,
+            todayPoints: res.todayPoints
+          }
+        });
       })
       .catch((err) => {
         const msg = (err && err.message) || '提交失败，请重试';
-        // 并发/重复提交：后端已有记录，直接去结果页查看
-        if (msg === '今日答题已完成') {
-          wx.redirectTo({ url: '/pages/quiz-result/quiz-result' });
-          return;
+        if (msg.indexOf('超时') >= 0) {
+          this.enterTimeout();
+        } else if (msg.indexOf('重复提交') >= 0) {
+          // 已在其他端/并发提交：以后端状态为准继续
+          this.startQuestion();
         }
         wx.showToast({ title: msg, icon: 'none' });
       })
@@ -126,7 +203,12 @@ Page({
       });
   },
 
-  onUnload() {
-    if (this._animTimer) clearTimeout(this._animTimer);
+  /** 反馈/超时后：下一题（后端开题）或查看结果 */
+  handleNext() {
+    this.startQuestion();
+  },
+
+  handleBack() {
+    wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/quiz/quiz' }) });
   }
 });

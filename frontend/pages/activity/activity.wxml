@@ -1,0 +1,35 @@
+<view class="activity-page">
+  <view class="bg-grid"></view>
+  <view class="bg-glow"></view>
+
+  <view wx:if="{{loading && !status}}" class="state-text">正在获取活动状态…</view>
+
+  <view wx:elif="{{errorMsg && !status}}" class="panel">
+    <view class="state-text">{{errorMsg}}</view>
+    <button class="btn-gold" bindtap="refresh">重新获取</button>
+  </view>
+
+  <view wx:else class="panel">
+    <view class="emblem anim-pop">{{icon}}</view>
+    <view class="brand">{{status.name}}</view>
+    <view class="title">{{title}}</view>
+    <view class="status-chip status-{{status.status}}">{{status.statusText}}</view>
+    <view class="message" wx:if="{{status.message}}">{{status.message}}</view>
+    <view class="range" wx:if="{{rangeText}}">
+      <view class="range-label">活动时间</view>
+      <view class="range-text">{{rangeText}}</view>
+    </view>
+
+    <view class="note" wx:if="{{status.status === 'ended' && status.allowView}}">活动已结束，成绩与排行可继续查看，不再产生新的步数、答题与积分。</view>
+    <view class="note" wx:elif="{{status.status === 'ended'}}">活动已结束，成绩查看通道已关闭，感谢您的参与。</view>
+    <view class="note" wx:elif="{{!status.allowParticipate}}">活动开始后即可同步步数、参与答题并获得积分。</view>
+
+    <view class="actions">
+      <block wx:if="{{status.allowView}}">
+        <button class="btn-gold" bindtap="goHome">{{status.allowParticipate ? '进入征程' : '进入首页'}}</button>
+        <button class="btn-line" bindtap="goRank">查看积分排行</button>
+      </block>
+      <button wx:else class="btn-line" bindtap="refresh">刷新状态</button>
+    </view>
+  </view>
+</view>

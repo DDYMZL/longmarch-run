@@ -22,7 +22,6 @@
       <view class="lit-title">🎉 恭喜抵达</view>
       <view class="lit-name">{{litPopup.icon}} {{litPopup.name}}</view>
       <view class="lit-time" wx:if="{{litPopup.historicalTime}}">{{litPopup.historicalTime}}</view>
-      <view class="lit-points">+{{litPopup.gainedPoints}} 积分</view>
       <view class="lit-next" wx:if="{{litPopup.nextName}}">距下一站「{{litPopup.nextName}}」还需 {{litPopup.nextRemain}} 步</view>
       <view class="lit-next" wx:else>🏆 长征路线已全部完成！</view>
     </view>
@@ -38,6 +37,13 @@
       <view class="user-name">{{user.nickname}}</view>
       <view class="user-sub">行万里路 · 学长征历史</view>
     </view>
+  </view>
+
+  <!-- 活动未在进行中：只读横幅（点击查看活动状态） -->
+  <view wx:if="{{activityBanner}}" class="activity-banner" bindtap="goActivity">
+    <text class="activity-banner-tag">{{activityBanner.tag}}</text>
+    <text class="activity-banner-text">{{activityBanner.text}}</text>
+    <text class="activity-banner-more">›</text>
   </view>
 
   <!-- 今日行军卡 -->
@@ -146,18 +152,18 @@
   <view class="card quiz-card anim-card" style="animation-delay: 260ms">
     <view class="card-title">
       <text>今日长征情报 · 第 {{issueNo}} 期</text>
-      <text class="quiz-badge">{{quizCompleted ? '已完成' : quizRemain + ' 道题'}}</text>
+      <text class="quiz-badge">{{quizCompleted ? '已完成' : (quizStarted ? '剩 ' + quizRemain + ' 题' : quizRemain + ' 道题')}}</text>
     </view>
 
     <block wx:if="{{quizCompleted}}">
       <view class="quiz-done">
-        <view class="quiz-done-score">本期得分：{{quizScore}} 分</view>
+        <view class="quiz-done-score">答对 {{quizCorrect}}/{{quizTotal}} 题 · 答题积分 +{{quizPoints}}</view>
         <view class="quiz-done-tip">明天继续挑战新一期情报</view>
       </view>
     </block>
     <block wx:else>
-      <view class="quiz-tip">破译 {{quizRemain}} 道情报题，赢取积分</view>
-      <button class="btn-primary quiz-btn" bindtap="goQuiz">开始破译</button>
+      <view class="quiz-tip">每题限时 90 秒，答对 1 题 +2 积分（每日上限 10 分）</view>
+      <button class="btn-primary quiz-btn" bindtap="goQuiz">{{quizStarted ? '继续破译' : '开始破译'}}</button>
     </block>
   </view>
 

@@ -1,12 +1,13 @@
 /**
  * 个人中心
- * 数据区改引 profile summary 口径（累计步数/点亮节点/答题/积分），
- * 入口：我的长征 / 行军日历 / 组织架构 / 运动记录 / 答题记录 / 我的勋章 / 退出登录
+ * 数据区：profile summary（累计步数/点亮节点/答题）+ 积分卡（总积分 = 步行 + 答题，后端统一计算），
+ * 入口：积分明细 / 我的长征 / 行军日历 / 组织架构 / 运动记录 / 答题记录 / 我的勋章 / 退出登录
  */
 const app = getApp();
 const auth = require('../../services/auth');
 const profile = require('../../services/profile');
 const medal = require('../../services/medal');
+const points = require('../../services/points');
 
 Page({
   data: {
@@ -15,7 +16,7 @@ Page({
     litCount: 0,
     totalCount: 10,
     quizCount: 0,
-    points: 0,
+    points: null,
     medalIcons: [],
     medalCount: 0,
     medalTotal: 0
@@ -31,19 +32,34 @@ Page({
 
   refresh() {
     // 档案聚合 + 勋章图标条（勋章列表接口会自动评估发放）
-    Promise.all([profile.getSummary(), medal.getMedalList()])
+    Promise.all([profile.getSummary(), medal.getMedalList(), points.getSummary()])
       .then((results) => {
         const summary = results[0];
         const medalList = results[1];
+        const pts = results[2];
         const ownedMedals = medalList.filter((m) => m.owned);
+        // 组织全称以后端为准回填缓存（重新登录或管理员调整组织后本地无/旧名称）
+        const orgFullName = summary.user.orgName || '';
+        const cached = app.globalData.user || {};
+        const user = orgFullName && cached.orgFullName !== orgFullName
+          ? auth.updateLocalUser({ orgFullName }) || cached
+          : cached;
 
         this.setData({
-          user: app.globalData.user,
+          user,
           totalSteps: summary.stats.totalSteps,
           litCount: summary.stats.litCount,
           totalCount: summary.stats.totalCount,
           quizCount: summary.quiz.totalCount,
-          points: summary.points.total,
+          points: {
+            total: pts.total,
+            walk: pts.walk,
+            quiz: pts.quiz,
+            today: pts.todayWalk + pts.todayQuiz,
+            todayWalk: pts.todayWalk,
+            todayQuiz: pts.todayQuiz,
+            rank: pts.rank
+          },
           medalIcons: ownedMedals.slice(0, 6).map((m) => ({ id: m.id, icon: m.icon })),
           medalCount: ownedMedals.length,
           medalTotal: medalList.length
@@ -52,6 +68,14 @@ Page({
       .catch(() => {
         this.setData({ user: app.globalData.user });
       });
+  },
+
+  goPoints() {
+    wx.navigateTo({ url: '/pages/points/points' });
+  },
+
+  goRank() {
+    wx.switchTab({ url: '/pages/rank/rank' });
   },
 
   /** 我的长征（档案页） */
@@ -76,7 +100,7 @@ Page({
     wx.navigateTo({ url: '/pages/medals/medals' });
   },
 
-  /** 选择 / 修改组织架构 */
+  /** 组织架构：未选定进入选择；已选定锁定只读（org-select 页展示并提示联系管理员） */
   goOrgSelect() {
     wx.navigateTo({ url: '/pages/org-select/org-select?from=mine' });
   },

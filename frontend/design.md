@@ -16,7 +16,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  pages/（20 页，5 tab + 15 子页）                           │
+│  pages/（24 页，5 tab + 19 子页/首页面）                    │
 │  展示与交互；onShow + refresh() 刷新；未登录守卫            │
 └───────────────┬──────────────────────────────────────────┘
                 │ 调用服务层 API（只依赖返回值结构）
@@ -24,8 +24,9 @@
 │  services/（真实后端封装层）                                │
 │  auth / sport / march / quiz / points / medal / org /     │
 │  rank / profile / person / quote / broadcast / ws /       │
-│  identity（扫码确认 + 身份绑定）                            │
-│  + request.js（统一 wx.request 封装、JWT、401 清理）        │
+│  activity / identity（扫码确认 + 身份绑定）                 │
+│  + request.js（统一 wx.request 封装、JWT、401 清理、        │
+│    活动守卫 403 跳活动状态页）                              │
 │  + config.js（API 地址集中配置）                            │
 │  + store.js（遗留：登录数据迁移 migrateUserData）           │
 └───────┬──────────────────────────┘
@@ -44,8 +45,10 @@
 | `pages/home/home` | tab | 首页：今日行军卡（状态分档文案/击败百分比/下一站提示/连续行军行）、今日寄语卡（§16，有出处语录+可跳关联节点，按天循环轮换）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、🌍全员同行卡（全员累计中文大数/进度/下一阶段/里程碑✓○芯片）、抵达事件卡弹层 |
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空长征），节点点击进详情、点亮进度、到达动画（金光扩散+粒子+抵达事件卡）；星空长征（§13）：节点三态星形、星河轨迹星尘、点亮四阶段动画、拖动/捏合缩放/双击复位（view 变换+命中逆变换+边界钳制）；区域氛围（§12）：星空画布按节点区域主题生成环境粒子（每节点 3 粒封顶 30，ember/mist/snow/star），实景选中卡套主题柔和高光+区域标签；完成仪式（§20）：`ceremonyPending` 时待抵达弹窗播完自动进仪式页，完成横幅为永久入口 |
 | `pages/quiz/quiz` | tab | 今日长征情报：期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
-| `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、积分、勋章、组织，入口（我的长征/行军日历/组织架构/运动记录/答题记录）；「账号与绑定」入口已隐藏（account 页与后端绑定接口保留，仅无前端入口） |
-| `pages/profile/profile` | 子页 | 我的长征档案：加入天数/阶段标签、运动/答题/积分统计、成就总览六格（§18 行军/路线/情报/连续/勋章/积分，点击直达详情）、数据画像雷达（§17 五维 canvas 雷达图，仅数据不评价）、路线完成度、足迹地图（§7 点亮节点链/点击展开抵达详情：日期+当日步数+累计步数）、足迹时间轴 |
+| `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、V2.0「我的积分」卡（总积分 = 步行 + 答题、今日获得、积分排名，点卡进积分明细、点排名进排行榜）、勋章、组织（已选定显示 🔒，仅管理员可改），入口（积分明细/我的长征/行军日历/组织架构/运动记录/答题记录）；「账号与绑定」入口已隐藏（account 页与后端绑定接口保留，仅无前端入口） |
+| `pages/points/points` | 子页 | 积分明细（V2.0）：总积分/排名/步行/答题/今日获得、今日进度（规则文案由 `/points` 的 `rules` 下发拼装，前端不写死数值）、每日明细表（日期/步数/步行/答题/合计）分页触底加载，下拉刷新 |
+| `pages/activity/activity` | 子页 | 活动状态页（V2.0）：未发布/未开始/进行中/已结束四态（图标、状态标签、活动时间、结束标题与提示）；`allowView` 时可进首页/查看排行，否则仅「刷新状态」；查看类请求被活动守卫拦截（403 + `X-Activity-Status`）时统一 reLaunch 至此 |
+| `pages/profile/profile` | 子页 | 我的长征档案：V2.0 荣誉卡（长征步迹·荣耀征程、积分排名徽章、总积分与步行/答题拆分、点亮/勋章/连续，点击进积分明细）、加入天数/阶段标签、运动/答题/勋章统计、成就总览六格（§18 行军/路线/情报/连续/勋章/积分，点击直达详情）、数据画像雷达（§17 五维 canvas 雷达图，仅数据不评价）、路线完成度、足迹地图（§7 点亮节点链/点击展开抵达详情：日期+当日步数+累计步数）、足迹时间轴 |
 | `pages/calendar/calendar` | 子页 | 行军日历：月视图（步数热力等级/答题/点亮标记）、月统计、当日详情弹层 |
 | `pages/launch/launch` | 首页面 | 启动页兼邀请码扫码落地页：`parseInviteFromScene(scene)` 取 `i=<CODE>` → `auth.ensureLogin()` 分流：active 进首页（支持 `?redirect=`）；disabled 显示停用提示；unregistered 无邀请码时 blocked 态「仅对受邀人员开放」+「重新扫码/退出」，有邀请码则 `verifyInvite` 后 redirectTo 入驻页 |
 | `pages/login/login` | 子页 | 主动退出后的手动登录：`chooseAvatar` 头像（页面不采集昵称），登录后发每日登录积分（后端 /auth/login 内发放）；status=active 直达首页，unregistered/disabled 捕获 admission 后 reLaunch 启动页；支持 `?redirect=` |
@@ -55,12 +58,12 @@
 | `pages/ceremony/ceremony` | 子页 | 长征完成仪式（§20）：约 8.1s 时间轴（逐段点亮 → 末节点辉光 → 金线扫过 → 全亮脉冲 → 星空展开 →「我的长征/完成了」→ 完成数据卡：行军/运动天数/答题/路线/勋章/积分，取 `/march/route` + `/profile/summary`）；可跳过；首次确认后 `POST /march/ceremony` 标记，再进为「已完成长征」静态回顾；收尾快照最终帧为静态图并移除画布，数据卡浮于快照上（原生 canvas 层会盖住 DOM） |
 | `pages/ticket/ticket` | 子页 | 节点纪念票（§19）：纯 Canvas 2d 绘制（米黄纸面/红头/虚线撕裂线/编号），数据取 `/march/node/{id}` + `/march/footprints`（点亮日期/当日步数/累计），未点亮节点显示提示；保存相册走 `canvasToTempFilePath`（传 canvas 节点）+ `saveImageToPhotosAlbum` |
 | `pages/person/person` | 子页 | 长征人物志详情（§14）：头像（无图姓名首字占位）/名称/简介、相关历史事件卡（节点事件+历史时间+简述），点击事件卡回跳节点详情（人物 → 节点双向） |
-| `pages/quiz-answer/quiz-answer` | 子页 | 情报破译过程（单选/判断、逐题作答，可「上一题」回看改选）；作答中仅中性选中高亮，不显示对错/连胜/得分（V1.2 移除 `/quiz/check` 即时判题）；提交前校验全部作答，未答题定位提示 |
-| `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（得分、答对/答错/积分统计、逐题「答题详情」：题干/我的答案/正确答案/对错/每题得分/解析；V1.2 前历史记录无 details 时回退错题解析）；满分效果（§15.3：「🎉 今日情报完美通关」标题 + 5/5 · 100 分 + 彩带，积分/事件/勋章规则不变） |
+| `pages/quiz-answer/quiz-answer` | 子页 | V2.0 逐题限时：进入即 `quiz.start()` 开题（幂等，中途返回继续当前题）→ 90 秒环形倒计时（最后 10 秒警示色，截止时间 = 收到响应时刻 + 服务器 `remainingMs`，切后台回来按 `Date.now` 重算）→ 选择并提交（每题一次，即时判定）→ 反馈（对错/正确答案/解析/得分）→ 下一题；倒计时归零进入超时态不可提交；进度点 right/wrong/timeout 三态 |
+| `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（V2.0）：答对题数、正确率滚动、答题积分、超时题数、逐题结果（题干/我的答案/正确答案/正确·错误·超时/本题积分/解析）；历史记录无 details 时回退错题解析；全对彩带 |
 | `pages/sport-records/sport-records` | 子页 | 最近运动记录 |
 | `pages/quiz-records/quiz-records` | 子页 | 答题历史记录 |
 | `pages/medals/medals` | 子页 | 勋章墙：按入门/路线/挑战/完成分组，隐藏勋章未获得时显示「神秘勋章」，点击查看详情弹层 |
-| `pages/rank/rank` | 子页 | 全员工累计步数总榜 |
+| `pages/rank/rank` | tab | 积分排行榜（V2.0，与 PC 同源 `/rank/points`）：前三名金银铜领奖台（2-1-3 排布）、4-10 名卡片、11 名起分页列表（触底加载）、本人高亮，本人 >10 名时底部常驻「我的排名」条；下拉刷新/错误重试 |
 | `pages/bind/bind` | 子页 | 扫码确认：解析 `?scene=`（L{token} PC 登录 / B{token} 身份绑定），未登录先经启动页自动登录（redirect 返回）；`qrInfo` 查询后按状态渲染确认卡（pending/scanned）/完成态（confirmed/used/cancelled）/错误态（failed 展示后端原因、凭证失效/格式非法）；确认/取消提交防重复 |
 | `pages/account/account` | 子页 | 账号与绑定：已绑定身份列表（渠道名/AppID/验证时间/绑定时间），wx_mini 登录凭证不可解绑，wx_web 可解绑（showModal 确认），空态提示 |
 
@@ -73,18 +76,20 @@
 | `auth.js` | `ensureLogin()` / `wxLogin(profile)` / `verifyInvite(code)` / `onboard({inviteCode,nickname,orgId,avatar})` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` / `savePendingInvite()` / `readPendingInvite()` / `clearPendingInvite()` | `POST /api/auth/login`、`POST /api/auth/invite/verify`、`POST /api/auth/onboard`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；/auth/login 返回 `{status, token?, user?}` 分流：active 写登录态；disabled/unregistered 抛 `err.admission` 由启动页处理；邀请码扫码落地由 launch 保存 `lm_pending_invite`、入驻页读取并 `verifyInvite` + `onboard`（后端条件 UPDATE 原子核销）；`updateLocalUser(patch)` 同时写 `lm_login_user` 与 `app.globalData.user`（组织名称等仅前端缓存字段由此回显到「我的」页）；request.js 401 单飞重登，403 `X-Account-Status: disabled` 直接清态回启动页 |
 | `sport.js` | 今日步数 / `syncToday()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, calendar` | 步数按「用户+日期」覆盖；同步走 wx.getWeRunData 加密数据后端解密取真实步数；行军日历月聚合 |
 | `march.js` | `getRoute()` / `getNodeDetail(id)` / `lightUpNodes()` / `getGlobalGoal()` / `getFootprints()` / `markCeremony()` / `hasPlayedIntro()` / `markIntroPlayed()` | `/api/march/route, node/{id}, light-up, global, footprints, ceremony` | 路线进度与节点配置由 `/march/route` 统一下发；步数达标由后端点亮、发放勋章并广播（light-up 返回 newlyLit / newlyCompletedChapters / newMedals）；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4）；开场动画播放标记（Storage `lm_march_intro_played`，页面不直接读写 Storage） |
-| `quiz.js` | `getDaily()` / `submit()` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, submit, records, reset, knowledge` | 每日抽 5 题（同日同套，题目不含答案与解析）、提交后由后端统一判分、每日一次；知识画像分类正确率 |
+| `quiz.js` | `getDaily()` / `start()` / `answer(questionId, label)` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, start, answer, records, reset, knowledge` | V2.0 逐题限时：每日抽 5 题（同日同套，题目不含答案与解析）；`start` 幂等开当前题并下发服务器剩余毫秒（当前题已截止由后端判超时并开下一题）；`answer` 每题仅一次、服务端判定是否超时与对错；每答对 1 题 2 积分、每日上限 10；知识画像分类正确率 |
+| `points.js` | `getSummary()` / `getDaily(page, pageSize)` | `/api/points, /api/points/daily` | V2.0 积分：总积分/步行/答题/今日/排名 + 规则参数 `rules`；每日明细分页（积分只由后端计算，前端仅展示） |
+| `activity.js` | `getStatus()` / `formatRange(status)` | `/api/activity/status`（公开） | 活动状态（未发布/未开始/进行中/已结束 + allowParticipate/allowView/结束标题与提示），写 `app.globalData.activity`；请求带 `skipActivityRedirect` 避免自身被守卫重定向 |
 | `medal.js` | `getMedalList()` | `/api/medal/list` | 勋章墙（分类/隐藏/排序由后端下发；判定发放由后端在同步/点亮/答题副链路完成） |
 | `profile.js` | `getSummary()` / `getTimeline(limit)` | `/api/profile/summary, timeline` | 我的长征档案聚合与足迹时间轴 |
 | `person.js` | `getPerson(id)` | `/api/persons/{id}` | 长征人物志详情（§14，含相关历史事件节点） |
 | `quote.js` | `getToday()` | `/api/quotes/today` | 今日寄语（§16、V1.1）：后台启用寄语按排序号自循环起始日期起每天轮换一条，同一天所有用户相同；无启用寄语返回 null（首页寄语卡隐藏） |
 | `broadcast.js` | `getToday()` / `getActivities(limit)` / `toActivityView(item)` | `/api/broadcast/today, activities` | 今日长征播报（期号/全局汇总/彩蛋/个人状态）；实时行军动态（REST 快照与 WS 消息共用视图模型：图标/昵称/相对时间） |
 | `ws.js` | `subscribe(fn)` | `WS /api/ws/updates?token=` | 实时推送客户端：单连接全局复用、断线指数退避重连（1s 起封顶 15s）；页面订阅 `activity` 等消息，全部退订后 30s 空闲自动断开且不再重连，再次订阅时重建 |
-| `org.js` | 组织树下钻 / 我的组织 / 选定组织 / `getCompanions(limit)` / `getOrgMarch()` | `/api/org/children, mine, select, companions, march` | 组织树（任意层级可选）；同组织同行者（组织信息/同行人数/今日共同前进/同行者列表）；组织共同长征目标（组织累计步数/路线进度/节点pct） |
-| `rank.js` | `getStepsRank()` | `/api/rank/steps` | 全员工累计步数总榜 |
+| `org.js` | 组织树下钻 / `getMine()` / 选定组织 / `getCompanions(limit)` / `getOrgMarch()` | `/api/org/children, mine, select, companions, march` | 组织树（任意层级可选）；V2.0 组织锁定：`/org/mine` 返回 `locked`，已选定后 `POST /org/select` 返回 403 `ORG_LOCKED`，仅管理员可在后台调整（留审计）；同组织同行者；组织共同长征目标 |
+| `rank.js` | `getPointsRank(page, pageSize)` | `/api/rank/points?page=&page_size=` | V2.0 积分总榜（与 PC 同源）：`top`（1-10）、`list`（11 名起分页）、`me`、`hasMore`、`total` |
 | `identity.js` | `qrInfo(scene)` / `qrConfirm(scene, action)` / `listIdentities()` / `unbind(id)` | `/api/auth/qr/info, qr/confirm, identities, identities/{id}` | 扫码确认（L 登录/B 绑定场景查询与确认取消）与身份绑定管理（列表/解绑，主身份禁解绑） |
 | `store.js` | `migrateUserData()` | （后端无对应，落库到 DB） | 遗留：登录时 Mock→真实用户 ID 数据迁移 |
-| `request.js` | `request(options)` / `getToken()` / `setReauthHandler(fn)` | — | 统一 wx.request 封装：Bearer JWT、401 静默重登并重试一次（`skipAuthRetry` 跳过）、失败清理回启动页、错误分类（`statusCode` / `network`）、FastAPI 错误解析 |
+| `request.js` | `request(options)` / `getToken()` / `setReauthHandler(fn)` | — | 统一 wx.request 封装：Bearer JWT、401 静默重登并重试一次（`skipAuthRetry` 跳过）、失败清理回启动页、错误分类（`statusCode` / `network` / `activityStatus`）、FastAPI 错误解析；活动守卫 403（header `X-Activity-Status`）：GET 查看类请求 3s 防抖 reLaunch 活动状态页（`skipActivityRedirect` 跳过），写操作仅抛错由页面展示后端提示 |
 | `config.js` | `API_BASE_URL` | — | API 地址集中配置：开发者工具用 `127.0.0.1:8010/api`，真机自动切换 `http://<电脑局域网IP>:8010/api`（LAN_IP 常量，电脑 IP 变化时需同步更新） |
 
 ## 3. 核心数据模型
@@ -149,6 +154,7 @@ org-select 页（from=home 引导入口）→ 未改名时顶部展示姓名采�
   → 确认选定：先 `auth.setInitialNickname(昵称)`（PUT /api/auth/nickname/initial，不消耗改名机会，失败不阻塞）
     → `org.select(orgId)`（POST /api/org/select 后端落库）
     → 合并最新用户进本地登录态与全局 user → navigateBack 返回来源页
+  → V2.0 锁定：非 pickMode 进入时先 `org.getMine()`，`locked=true` 则只读展示「我的所属组织」+ 🔒「所属组织选定后已锁定，如需调整请联系管理员」，不再渲染下钻列表
 
 ### 4.3 昵称修改（每人仅一次）
 
@@ -162,7 +168,7 @@ mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为
 
 ```
 home/march 触发 → sport.syncToday()（授权 scope.werun → wx.login 取 code → wx.getWeRunData 取加密数据，POST /api/sport/sync {code, encryptedData, iv} 后端解密落库并维护连续行军；授权/取数失败即报错不发请求）
-  → march.lightUpNodes()（POST /api/march/light-up，后端点亮、发放积分并判定勋章，返回 newlyLit + newlyCompletedChapters + newMedals，一次请求完成，不再单独调 /medal/check）
+  → march.lightUpNodes()（POST /api/march/light-up，后端点亮并判定勋章，返回 newlyLit + newlyCompletedChapters + newMedals，一次请求完成，不再单独调 /medal/check；V2.0 起点亮不再发积分）
   → 有新点亮/新完成章节时按队列播放「节点抵达事件卡 → 章节完成仪式卡」（utils/arrivePopup.js 共用播放器；march 页另有 Canvas 金光扩散动画）
   → 页面 onShow 时 refresh() 拉最新数据展示；后端同步向管理端广播 data_changed / activity
 ```
@@ -170,9 +176,20 @@ home/march 触发 → sport.syncToday()（授权 scope.werun → wx.login 取 co
 ### 4.5 每日答题链路
 
 ```
-quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 题、按用户+日期固定）
-  → quiz-answer 逐题作答（仅本地记录选择，作答中无对错反馈）→ quiz.submit(answers)（POST /api/quiz/submit 后端校验题目集合、判分、记分、发积分；每日仅一次）
-  → quiz-result 展示得分与逐题答题详情 → 返回后 quiz 页 refresh() 显示已完成
+quiz 页 → quiz.getDaily()（GET /api/quiz/daily，后端从题库随机抽 5 题、按用户+日期固定，返回逐题进度）
+  → quiz-answer：quiz.start()（POST /api/quiz/start，幂等开当前题，返回 remainingMs）→ 90s 倒计时内选择并 quiz.answer()（POST /api/quiz/answer，服务端判超时/对错/记分，每题仅一次）
+      → 反馈（对错/正确答案/解析/本题积分）→ 下一题再 start；倒计时归零进入超时态（后端在下次 start 时判该题超时）
+  → 5 题结束 redirectTo quiz-result 展示答对数/正确率/积分/超时数与逐题结果 → 返回后 quiz 页 refresh() 显示已完成
+```
+
+### 4.5b 活动时间窗口（V2.0）
+
+```
+launch 登录成功 → activity.getStatus()（失败按可进入处理，后端守卫兜底）
+  ├─ allowView=false（已结束且不允许结束后查看 / 未发布等）→ reLaunch 活动状态页
+  └─ 否则进入首页；首页 activityBanner：非进行中时展示状态条（已结束：「成绩可查看，不再计分」）
+使用中：GET 查看类 403 + X-Activity-Status → request.js 防抖 reLaunch 活动状态页；
+        POST 参与类（同步步数/答题/选组织）403 → 页面展示后端提示，不跳转
 ```
 
 ### 4.5a 实时行军动态（P1-1，需求 §8）
@@ -225,8 +242,10 @@ PC 管理后台登录页生成小程序码（POST /api/admin/wechat/qr，mock �
 | 步数 | 「用户+日期」唯一，同日同步**覆盖**；步数来源为 wx.getWeRunData 加密数据后端解密取当日真实步数，仅开发模式（mock 用户或未配置微信凭证）由后端按「日期+用户」稳定模拟（4000~12999） |
 | 路线 | 累计步数 ≥ `targetSteps` 即点亮，**永久保留**；节点状态 `completed / current / unlocked`；后台可启停节点，停用节点不可见但已有 `LitNode` 记录保留 |
 | 章节 | 5 章配置于后端 `march_service.CHAPTERS`（每章 2 节点，划分可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`；完成写 `CHAPTER_COMPLETE` 事件并触发前端章节完成仪式，不改变既有节点点亮与积分规则 |
-| 答题 | 每日随机 5 题、每题 20 分、满分 100；同用户同日仅一次提交；题目按 event/route/figure 分类支撑知识画像 |
-| 积分 | 登录 +1；运动 5000 步 +5、10000 步 +10；答题 +5、满分 +10；点亮节点 +10；完成路线 +100；同日同 reason 去重 |
+| 答题 | V2.0 每日随机 5 题，逐题 90 秒限时（服务器计时），每题仅提交一次；超时记为超时不得分；题目按 event/route/figure 分类支撑知识画像 |
+| 积分 | V2.0 总积分 = 步行积分 + 答题积分（仅此两项，登录/点亮/完成路线不再计分）：步行每日 floor(min(步数, 20000) / 1000)，上限 20；答题每答对 1 题 2 分，每日上限 10；按「用户+日期」幂等台账，后端可重算校验；仅活动进行中计分 |
+| 组织 | 入驻/首次选定后锁定，用户端不可再改（403 `ORG_LOCKED`），仅管理员后台调整并留审计 |
+| 活动 | 后台配置活动时间窗口；未开始/已结束不允许参与（同步、答题、选组织 403）；结束后是否可查看由 `allow_view_after_end` 控制 |
 | 连续行军 | 当日步数 ≥ 5000 即完成当日行军；连续天数/最长连续由后端维护并下发 |
 | 勋章 | 12 枚分入门/路线/挑战/完成四类（详见 `../backend/design.md` §5）；`fearless` 为隐藏勋章，未获得时展示「神秘勋章」 |
 | 身份关联 | 认证（JWT）/身份关联/后台授权三层分离，绑定身份成功**不等于**拥有后台权限；绑定确认页按 scene 前缀分流 L/B 场景；场景凭证单次有效（终态后确认/取消返回错误态）；bind/account 页未登录守卫先经启动页自动登录 |

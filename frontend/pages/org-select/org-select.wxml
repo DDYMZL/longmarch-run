@@ -1,4 +1,13 @@
-<view class="org-page">
+<view class="org-page" wx:if="{{locked}}">
+  <view class="locked-card">
+    <view class="locked-icon">🔒</view>
+    <view class="locked-label">我的所属组织</view>
+    <view class="locked-name">{{lockedName}}</view>
+    <view class="locked-tip">所属组织选定后已锁定，如需调整请联系管理员</view>
+  </view>
+</view>
+
+<view class="org-page" wx:else>
   <!-- 面包屑：点击任意一级回跳 -->
   <scroll-view class="crumb-bar" scroll-x="true">
     <view class="crumb-inner">
@@ -54,5 +63,5 @@
     <view class="empty-tip" wx:if="{{list.length === 0}}">该组织暂无下级</view>
   </view>
 
-  <view class="org-tip">提示：点击组织名进入下级，点击「选定」选择该级；每一级都可作为您的所属组织。</view>
+  <view class="org-tip">提示：点击组织名进入下级，点击「选定」选择该级；每一级都可作为您的所属组织。组织选定后将锁定，如需调整请联系管理员。</view>
 </view>

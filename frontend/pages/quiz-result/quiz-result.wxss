@@ -186,6 +186,24 @@
   color: #C8102E;
 }
 
+.detail-verdict.timeout {
+  color: #8A8A8A;
+}
+
+.result-score-unit {
+  font-size: 40rpx;
+  font-weight: 600;
+}
+
+.stat-rule {
+  margin-top: 20rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #F0E6D2;
+  text-align: center;
+  font-size: 22rpx;
+  color: #B8A27A;
+}
+
 .detail-question {
   font-size: 28rpx;
   color: #333333;

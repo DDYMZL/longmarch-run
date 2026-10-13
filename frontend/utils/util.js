@@ -85,6 +85,18 @@ function eventIcon(eventType) {
   return '📌';
 }
 
+/**
+ * 答题逐题进度 -> 进度点展示数据（答题 tab 与答题页共用）。
+ * @param {Array<{seq:number, status:string, correct:boolean}>} progress 后端 progress
+ * @returns {Array<{seq:number, cls:string}>} cls：right / wrong / timeout / answering / pending
+ */
+function quizDots(progress) {
+  return (progress || []).map((p) => ({
+    seq: p.seq,
+    cls: p.status === 'answered' ? (p.correct ? 'right' : 'wrong') : p.status
+  }));
+}
+
 module.exports = {
   pad,
   formatDate,
@@ -92,5 +104,6 @@ module.exports = {
   formatCn,
   formatTime,
   formatRelative,
-  eventIcon
+  eventIcon,
+  quizDots
 };

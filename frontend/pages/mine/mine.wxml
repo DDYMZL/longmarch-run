@@ -10,11 +10,11 @@
       <!-- 修改入口：仅未修改过时展示，已改名（nicknameChangedAt 有值）则隐藏 -->
       <view wx:if="{{!user.nicknameChangedAt}}" class="mine-name-edit" bindtap="handleEditNickname">✎ 修改昵称</view>
     </view>
-    <!-- 组织架构：显示在昵称下方，点击可修改 -->
+    <!-- 组织架构：显示在昵称下方；未选定可点击选择，选定后锁定只读 -->
     <view class="mine-org" bindtap="goOrgSelect">
       <text class="mine-org-icon">🏢</text>
       <text class="mine-org-text">{{user.orgFullName || '点击选择组织架构'}}</text>
-      <text class="mine-org-edit">›</text>
+      <text class="mine-org-edit">{{user.orgId ? '🔒' : '›'}}</text>
     </view>
     <!-- 勋章：展示在组织下方，点击进入勋章墙 -->
     <view class="mine-medals" bindtap="goMedals">
@@ -26,8 +26,32 @@
     </view>
   </view>
 
+  <!-- 积分卡：总积分 = 步行积分 + 答题积分（后端统一计算） -->
+  <view class="points-card anim-card" style="animation-delay: 60ms" bindtap="goPoints">
+    <view class="points-head">
+      <text class="points-title">我的积分</text>
+      <text class="points-more">积分明细 ›</text>
+    </view>
+    <view class="points-total">{{points ? points.total : '--'}}</view>
+    <view class="points-today" wx:if="{{points}}">今日 +{{points.today}}（步行 +{{points.todayWalk}} · 答题 +{{points.todayQuiz}}）</view>
+    <view class="points-split">
+      <view class="points-cell">
+        <view class="points-num">{{points ? points.walk : '--'}}</view>
+        <view class="points-label">步行积分</view>
+      </view>
+      <view class="points-cell">
+        <view class="points-num">{{points ? points.quiz : '--'}}</view>
+        <view class="points-label">答题积分</view>
+      </view>
+      <view class="points-cell" catchtap="goRank">
+        <view class="points-num">{{points && points.rank ? '第 ' + points.rank + ' 名' : '--'}}</view>
+        <view class="points-label">积分排名 ›</view>
+      </view>
+    </view>
+  </view>
+
   <!-- 数据统计 -->
-  <view class="card stats-card anim-card" style="animation-delay: 80ms">
+  <view class="card stats-card anim-card" style="animation-delay: 140ms">
     <view class="stat-grid">
       <view class="stat-cell">
         <view class="stat-num">{{totalSteps}}</view>
@@ -41,15 +65,15 @@
         <view class="stat-num">{{quizCount}}</view>
         <view class="stat-label">累计答题(次)</view>
       </view>
-      <view class="stat-cell">
-        <view class="stat-num text-gold">{{points}}</view>
-        <view class="stat-label">答题积分</view>
-      </view>
     </view>
   </view>
 
   <!-- 功能入口 -->
   <view class="card menu-card anim-card" style="animation-delay: 280ms">
+    <view class="menu-item" bindtap="goPoints">
+      <text>积分明细</text>
+      <text class="menu-arrow">›</text>
+    </view>
     <view class="menu-item" bindtap="goProfile">
       <text>我的长征</text>
       <text class="menu-arrow">›</text>

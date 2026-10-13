@@ -27,9 +27,9 @@ function getNodeDetail(nodeId) {
 }
 
 /**
- * 按当前累计步数点亮达标节点（后端发放积分、判定章节完成并刷新勋章）。
+ * 按当前累计步数点亮达标节点（后端判定章节完成并刷新勋章；点亮不再发放积分）。
  * @returns {Promise<{newlyLit:Array, newlyCompletedChapters:Array, newMedals:Array<string>}>}
- *   newlyLit 本次新点亮节点（含 gainedPoints/nextNode，供抵达事件卡）；
+ *   newlyLit 本次新点亮节点（含 nextNode，供抵达事件卡）；
  *   newlyCompletedChapters 本次新完成章节（含 title/intro，供章节完成仪式）；
  *   newMedals 本次新获得勋章 id。
  */

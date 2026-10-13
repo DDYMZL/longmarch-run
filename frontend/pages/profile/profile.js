@@ -108,7 +108,7 @@ Page({
     this.setData({ fpSelected: this.data.fpSelected === id ? 0 : id });
   },
 
-  /** 成就总览：按格跳转对应详情页（§18.3；积分无独立详情页不跳转） */
+  /** 成就总览：按格跳转对应详情页（§18.3） */
   goAchievement(e) {
     const key = e.currentTarget.dataset.key;
     const nav = {
@@ -116,9 +116,14 @@ Page({
       route: () => wx.switchTab({ url: '/pages/march/march' }),
       quiz: () => wx.navigateTo({ url: '/pages/quiz-records/quiz-records' }),
       streak: () => wx.navigateTo({ url: '/pages/sport-records/sport-records' }),
-      medal: () => wx.navigateTo({ url: '/pages/medals/medals' })
+      medal: () => wx.navigateTo({ url: '/pages/medals/medals' }),
+      points: () => this.goPoints()
     };
     if (nav[key]) nav[key]();
+  },
+
+  goPoints() {
+    wx.navigateTo({ url: '/pages/points/points' });
   },
 
   /** 数据画像雷达图（§17）：三层五边形网格 + 五维数值多边形，仅呈现数据（§17.4） */

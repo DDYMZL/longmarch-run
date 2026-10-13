@@ -1,0 +1,73 @@
+<view class="points-page">
+  <view wx:if="{{loading}}" class="state-box">积分数据加载中…</view>
+
+  <view wx:elif="{{errorMsg && !summary}}" class="state-box">
+    <view>{{errorMsg}}</view>
+    <button class="btn-ghost retry-btn" bindtap="handleRetry">重新加载</button>
+  </view>
+
+  <block wx:else>
+    <!-- 汇总 -->
+    <view class="hero">
+      <view class="hero-label">总积分</view>
+      <view class="hero-total">{{summary.total}}</view>
+      <view class="hero-rank" wx:if="{{summary.rank}}">积分排名 第 {{summary.rank}} 名</view>
+      <view class="hero-split">
+        <view class="hero-cell">
+          <view class="hero-num">{{summary.walk}}</view>
+          <view class="hero-cap">步行积分</view>
+        </view>
+        <view class="hero-sep"></view>
+        <view class="hero-cell">
+          <view class="hero-num">{{summary.quiz}}</view>
+          <view class="hero-cap">答题积分</view>
+        </view>
+        <view class="hero-sep"></view>
+        <view class="hero-cell">
+          <view class="hero-num">+{{summary.today}}</view>
+          <view class="hero-cap">今日获得</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 今日与规则 -->
+    <view class="card anim-card" style="animation-delay: 80ms">
+      <view class="card-title">今日进度</view>
+      <view class="today-row">
+        <text>今日步数 {{summary.todaySteps}} 步</text>
+        <text class="text-gold">步行 +{{summary.todayWalk}}/{{rules.walkDailyCap}}</text>
+      </view>
+      <view class="today-row">
+        <text>今日答对 {{summary.todayCorrect}} 题</text>
+        <text class="text-gold">答题 +{{summary.todayQuiz}}/{{rules.quizDailyCap}}</text>
+      </view>
+      <view class="divider"></view>
+      <view class="rule-line">· 步行：每 {{rules.walkStepsPerPoint}} 步 1 分，单日步数按 {{rules.walkStepCap}} 步封顶，每日最多 {{rules.walkDailyCap}} 分</view>
+      <view class="rule-line">· 答题：每答对 1 题 {{rules.quizPerCorrect}} 分，每日最多 {{rules.quizDailyCap}} 分；超时不计分</view>
+      <view class="rule-line">· 总积分 = 步行积分 + 答题积分，由服务端统一计算</view>
+    </view>
+
+    <!-- 按日明细 -->
+    <view class="card anim-card" style="animation-delay: 160ms">
+      <view class="card-title">每日明细</view>
+      <block wx:if="{{items.length > 0}}">
+        <view class="table-head">
+          <text class="col-date">日期</text>
+          <text class="col-num">步数</text>
+          <text class="col-num">步行</text>
+          <text class="col-num">答题</text>
+          <text class="col-num">合计</text>
+        </view>
+        <view class="table-row" wx:for="{{items}}" wx:key="date">
+          <text class="col-date">{{item.text}}</text>
+          <text class="col-num">{{item.steps}}</text>
+          <text class="col-num">+{{item.walk}}</text>
+          <text class="col-num">+{{item.quiz}}<text class="col-sub" wx:if="{{item.correctCount > 0}}">（对{{item.correctCount}}）</text></text>
+          <text class="col-num gold">+{{item.total}}</text>
+        </view>
+        <view class="load-tip">{{loadingMore ? '加载中…' : (hasMore ? '上拉加载更多' : '— 已显示全部 —')}}</view>
+      </block>
+      <view wx:else class="empty-tip">暂无积分记录，去走路或答题赢取积分吧</view>
+    </view>
+  </block>
+</view>

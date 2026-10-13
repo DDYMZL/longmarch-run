@@ -2,7 +2,7 @@
  * 首页
  * 结构：用户信息 → 今日行军卡（步数/击败比例/距下一站）→ 今日寄语卡 → 迷你长征路线
  *       → 连续行军卡 → 今日长征情报卡（第 N 期）→ 长征记忆卡 → 勋章行
- * 点亮弹层升级为「抵达事件卡」：恭喜抵达 + 历史时间 + 积分 + 下一站距离。
+ * 点亮弹层升级为「抵达事件卡」：恭喜抵达 + 历史时间 + 下一站距离。
  */
 const app = getApp();
 const sport = require('../../services/sport');
@@ -12,6 +12,7 @@ const medal = require('../../services/medal');
 const broadcast = require('../../services/broadcast');
 const org = require('../../services/org');
 const quote = require('../../services/quote');
+const activity = require('../../services/activity');
 const ws = require('../../services/ws');
 const util = require('../../utils/util');
 const arrivePopup = require('../../utils/arrivePopup');
@@ -23,6 +24,14 @@ const arrivePopup = require('../../utils/arrivePopup');
  *   [goal, target)  -> 今日行军目标已完成
  *   >= target       -> 今日完成一次长距离行军（target=10000）
  */
+/** 活动未进行中时的首页横幅（进行中或不限制时返回 null） */
+function activityBanner(s) {
+  if (!s || s.allowParticipate) return null;
+  if (s.status === 'ended') return { tag: '已结束', text: s.endTitle + ' · 成绩可查看，不再计分' };
+  const range = activity.formatRange(s);
+  return { tag: s.statusText, text: s.message + (range ? '（' + range + '）' : '') };
+}
+
 function marchStatusText(steps, goal, target) {
   if (steps <= 0) return '今天还没有开始行军';
   if (steps >= target) return '今日完成一次长距离行军';
@@ -59,8 +68,11 @@ Page({
     streakRemain: 0,
     // 今日长征情报
     quizCompleted: false,
-    quizScore: 0,
+    quizCorrect: 0,
+    quizTotal: 5,
+    quizPoints: 0,
     quizRemain: 5,
+    quizStarted: false,
     issueNo: 1,
     // 长征记忆
     memory: null,
@@ -94,7 +106,9 @@ Page({
     ggAllDone: false,
     ggMilestones: [],
     // 抵达事件卡弹层
-    litPopup: null
+    litPopup: null,
+    // 活动未进行中横幅
+    activityBanner: null
   },
 
   onShow() {
@@ -148,7 +162,8 @@ Page({
       org.getCompanions(6).catch(() => null), // 组织同行失败同上
       org.getOrgMarch().catch(() => null), // 集体长征失败同上
       march.getGlobalGoal().catch(() => null), // 全员同行失败同上
-      quote.getToday().catch(() => null) // 今日寄语失败同上
+      quote.getToday().catch(() => null), // 今日寄语失败同上
+      activity.getStatus().catch(() => null) // 活动状态失败不展示横幅
     ])
       .then((results) => {
         if (requestId !== this._refreshRequestId) return;
@@ -162,6 +177,7 @@ Page({
         const orgMarch = results[7];
         const globalGoal = results[8];
         const todayQuote = results[9];
+        const activityStatus = results[10];
         const percent = today.target > 0 ? Math.min(100, Math.round((today.steps / today.target) * 100)) : 0;
 
         // 勋章行：已获得的排前面（按获得时间倒序取最近 6 枚展示）
@@ -195,15 +211,19 @@ Page({
           routeNodesPreview: route.nodes.slice(0, 6),
           // 情报
           quizCompleted: daily.completed,
-          quizScore: daily.record ? daily.record.score : 0,
-          quizRemain: quiz.DAILY_COUNT,
+          quizCorrect: daily.correctCount,
+          quizTotal: daily.totalCount,
+          quizPoints: daily.points,
+          quizRemain: daily.progress.filter((p) => p.status === 'pending' || p.status === 'answering').length,
+          quizStarted: daily.progress.some((p) => p.status !== 'pending'),
           issueNo: daily.issueNo,
           // 勋章
           medalPreview: owned,
           medalOwned: ownedAll.length,
           medalTotal: medals.length,
           // 今日寄语（需求 §16：无寄语时隐藏卡片）
-          quote: todayQuote && todayQuote.content ? todayQuote : null
+          quote: todayQuote && todayQuote.content ? todayQuote : null,
+          activityBanner: activityBanner(activityStatus)
         };
         // 实时行军动态：REST 为权威快照（WS 期间的事件已落库，快照自含）
         if (activities !== null) {
@@ -318,6 +338,10 @@ Page({
       .finally(() => {
         this.setData({ syncing: false });
       });
+  },
+
+  goActivity() {
+    wx.navigateTo({ url: '/pages/activity/activity' });
   },
 
   /**

@@ -1,8 +1,8 @@
 /**
- * 答题结果页
- * 展示：得分 / 星级 / 对错统计 / 获得积分 / 逐题结果（题干、我的答案、正确答案、对错、得分）
+ * 答题结果页（V2.0）
+ * 展示：答对题数 / 正确率 / 答题积分 / 超时题数 / 逐题结果（题干、我的答案、正确答案、对错或超时、本题积分）
  * 历史记录无 details 时回退展示错题回顾（wrongList）
- * 动画：分数滚动、星星逐个点亮、满分彩带庆贺
+ * 动画：正确率滚动、星星逐个点亮、全对彩带庆贺
  */
 const app = getApp();
 const quiz = require('../../services/quiz');
@@ -28,9 +28,10 @@ function buildDetails(details) {
     index: d.index,
     typeText: d.type === 'judge' ? '判断题' : '单选题',
     question: d.question,
-    correct: d.correct,
-    score: d.score,
-    userAnswerText: answerText(d.userAnswer, d.options),
+    verdict: d.timeout ? 'timeout' : (d.correct ? 'right' : 'wrong'),
+    verdictText: d.timeout ? '⏱ 超时' : (d.correct ? '✓ 正确' : '✗ 错误'),
+    pointsText: d.points > 0 ? '+' + d.points + ' 积分' : '0 积分',
+    userAnswerText: d.timeout ? '超时未作答' : answerText(d.userAnswer, d.options),
     correctAnswerText: answerText(d.correctAnswer, d.options),
     analysis: d.analysis || ''
   }));
@@ -40,12 +41,11 @@ Page({
   data: {
     record: null,
     details: [],
-    stars: [0, 1, 2, 3, 4].map((id) => ({ id, on: false })),
+    stars: [],
     wrongCount: 0,
-    displayScore: 0,
+    displayAccuracy: 0,
     confetti: [],
-    isPerfect: false,
-    perfectLine: ''
+    isPerfect: false
   },
 
   onLoad() {
@@ -65,27 +65,27 @@ Page({
           return;
         }
 
+        const isPerfect = record.totalCount > 0 && record.correctCount === record.totalCount;
         this.setData({
           record,
           details: buildDetails(record.details),
-          wrongCount: record.totalCount - record.correctCount,
-          isPerfect: record.score === 100,
-          perfectLine: record.correctCount + ' / ' + record.totalCount + ' · ' + record.score + ' 分'
+          stars: Array.from({ length: record.totalCount }, (_, i) => ({ id: i, on: false })),
+          wrongCount: record.totalCount - record.correctCount - record.timeoutCount,
+          isPerfect
         });
 
-        // 1. 分数滚动动画
-        this.animateScore(record.score);
+        // 1. 正确率滚动动画
+        this.animateAccuracy(record.accuracy);
 
-        // 2. 星星逐个点亮（间隔 220ms）
-        const starCount = Math.round(record.score / 20);
-        for (let i = 1; i <= starCount; i++) {
+        // 2. 星星逐个点亮（每答对 1 题点亮 1 颗，间隔 220ms）
+        for (let i = 1; i <= record.correctCount; i++) {
           this._timers.push(setTimeout(() => {
             this.setData({ ['stars[' + (i - 1) + '].on']: true });
           }, 500 + i * 220));
         }
 
-        // 3. 满分彩带
-        if (record.score === 100) {
+        // 3. 全对彩带
+        if (isPerfect) {
           const confetti = [];
           for (let i = 0; i < 14; i++) {
             confetti.push({
@@ -107,15 +107,15 @@ Page({
   },
 
   /**
-   * 分数数字滚动动画
+   * 正确率数字滚动动画
    */
-  animateScore(target) {
+  animateAccuracy(target) {
     const duration = 1100;
     const start = Date.now();
     const step = () => {
       const p = Math.min(1, (Date.now() - start) / duration);
       const eased = 1 - Math.pow(1 - p, 3);
-      this.setData({ displayScore: Math.round(target * eased) });
+      this.setData({ displayAccuracy: Math.round(target * eased) });
       if (p < 1) {
         this._scoreTimer = setTimeout(step, 30);
       }

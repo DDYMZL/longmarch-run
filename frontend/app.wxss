@@ -119,6 +119,45 @@ page {
   font-weight: normal;
 }
 
+/* 答题逐题进度点（情报 tab / 答题页共用） */
+.quiz-dots {
+  display: flex;
+  justify-content: center;
+}
+
+.quiz-dot {
+  width: 44rpx;
+  height: 44rpx;
+  line-height: 44rpx;
+  border-radius: 50%;
+  margin: 0 10rpx;
+  font-size: 22rpx;
+  text-align: center;
+  color: #B8A27A;
+  background: rgba(240, 230, 210, 0.9);
+}
+
+.quiz-dot.answering {
+  color: #FFFFFF;
+  background: #D4A017;
+  box-shadow: 0 0 0 6rpx rgba(212, 160, 23, 0.3);
+}
+
+.quiz-dot.right {
+  color: #FFFFFF;
+  background: #2E9E5B;
+}
+
+.quiz-dot.wrong {
+  color: #FFFFFF;
+  background: #C8102E;
+}
+
+.quiz-dot.timeout {
+  color: #FFFFFF;
+  background: #8A8A8A;
+}
+
 /* ==================== 全局动画体系 ==================== */
 
 /* 卡片滑入 */
@@ -268,4 +307,15 @@ page {
 
 .anim-glow {
   animation: pulseGlow 2.4s ease-in-out infinite;
+}
+
+/* 系统开启「减弱动态效果」时关闭装饰性动画（内容直接可见） */
+@media (prefers-reduced-motion: reduce) {
+  .anim-card,
+  .anim-pop,
+  .anim-float,
+  .anim-glow {
+    animation: none !important;
+    opacity: 1 !important;
+  }
 }

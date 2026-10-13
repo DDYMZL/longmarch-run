@@ -1,5 +1,5 @@
 /**
- * 答题记录页：日期 / 答题数 / 正确数 / 得分 / 获得积分
+ * 答题记录页：日期 / 答对题数 / 正确率 / 超时题数 / 答题积分
  */
 const app = getApp();
 const quiz = require('../../services/quiz');
@@ -28,7 +28,8 @@ Page({
           text: r.date.slice(5),
           totalCount: r.totalCount,
           correctCount: r.correctCount,
-          score: r.score,
+          accuracy: r.accuracy,
+          timeoutCount: r.timeoutCount,
           points: r.points
         }));
         this.setData({ records });

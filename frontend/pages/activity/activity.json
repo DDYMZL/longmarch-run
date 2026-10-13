@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "活动状态",
+  "navigationBarBackgroundColor": "#2A040B",
+  "navigationBarTextStyle": "white",
+  "enablePullDownRefresh": true,
+  "backgroundTextStyle": "light",
+  "backgroundColor": "#2A040B"
+}

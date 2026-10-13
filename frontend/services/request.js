@@ -3,9 +3,12 @@ const { API_BASE_URL } = require('./config');
 const TOKEN_KEY = 'lm_auth_token';
 const USER_KEY = 'lm_login_user';
 const LAUNCH_PAGE = '/pages/launch/launch';
+const ACTIVITY_PAGE = '/pages/activity/activity';
+const ACTIVITY_REDIRECT_GAP_MS = 3000;
 
 // 401 静默重登处理器，由 auth 模块注册（避免 request ↔ auth 循环依赖）
 let reauthHandler = null;
+let lastActivityRedirect = 0;
 
 /** 获取本地 JWT。 */
 function getToken() {
@@ -81,6 +84,11 @@ function send(opts) {
         if (res.statusCode === 403 && accountStatus === 'disabled') {
           err.admission = 'disabled';
         }
+        // 活动时间拦截：X-Activity-Status 为 unpublished / not_started / ended
+        const activityStatus = headers['X-Activity-Status'] || headers['x-activity-status'];
+        if (res.statusCode === 403 && activityStatus) {
+          err.activityStatus = activityStatus;
+        }
         reject(err);
       },
       fail: (err) => {
@@ -95,15 +103,36 @@ function send(opts) {
 }
 
 /**
+ * 查看类请求（GET）被活动时间拦截 → 不可查看，统一跳活动状态页（并发请求只跳一次）；
+ * 参与类请求（POST 等）只抛错，由页面提示 err.message。
+ */
+function redirectActivityClosed() {
+  const now = Date.now();
+  if (now - lastActivityRedirect < ACTIVITY_REDIRECT_GAP_MS) return;
+  lastActivityRedirect = now;
+  try {
+    wx.reLaunch({ url: ACTIVITY_PAGE });
+  } catch (e) {
+    // App 尚未初始化时由启动页查询活动状态后跳转
+  }
+}
+
+/**
  * 发起后端请求并统一附加 JWT。
  * 401 时静默重新登录并重试一次；重登或重试仍失败则清登录态回启动页。
  * skipAuthRetry：登录相关请求自行处理 401，不触发重登与跳转。
- * @param {{url:string, method?:string, data?:object, header?:object, timeout?:number, skipAuthRetry?:boolean}} options
+ * skipActivityRedirect：活动拦截时不自动跳转活动状态页。
+ * @param {{url:string, method?:string, data?:object, header?:object, timeout?:number, skipAuthRetry?:boolean, skipActivityRedirect?:boolean}} options
  * @returns {Promise<any>}
  */
 function request(options) {
   const opts = options || {};
   return send(opts).catch((err) => {
+    if (err.activityStatus) {
+      const isView = (opts.method || 'GET').toUpperCase() === 'GET';
+      if (isView && !opts.skipActivityRedirect) redirectActivityClosed();
+      throw err;
+    }
     // 账号停用：清登录态并回启动页由其显示准入拦截，不再做静默重登
     if (err.admission === 'disabled') {
       if (!opts.skipAuthRetry) clearSession();

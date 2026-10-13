@@ -14,7 +14,6 @@ function buildQueue(newlyLit, newChapters) {
       name: n.name,
       icon: n.icon || '★',
       historicalTime: n.historicalTime || '',
-      gainedPoints: n.gainedPoints || 0,
       nextName: n.nextNode ? n.nextNode.name : '',
       nextRemain: n.nextNode ? n.nextNode.remain : 0
     }))
@@ -25,7 +24,7 @@ function buildQueue(newlyLit, newChapters) {
 
 /**
  * @param {Object} page 页面实例（使用其 setData 与 popupTimer）
- * @param {Array} newlyLit light-up 返回的新点亮节点（含 gainedPoints/nextNode）
+ * @param {Array} newlyLit light-up 返回的新点亮节点（含 nextNode）
  * @param {Array} newChapters light-up 返回的新完成章节（含 title/intro）
  * @returns {number} 队列总播放时长（ms），供页面安排后续跳转
  */

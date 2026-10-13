@@ -1,16 +1,43 @@
 /**
- * 答题服务：今日题目、提交答卷、答题记录、重置（数据全部来自后端）。
+ * 答题服务（V2.0 逐题限时）：今日状态、开题、逐题提交、记录、知识画像、重置。
+ *
+ * 规则（以后端为准）：每日 5 题逐题开题，每题 timeLimit（90）秒，计时只认服务器时间；
+ * 每题仅可提交一次，超时不得分；答对 1 题 +2 积分，单日答题积分上限 10。
  */
 const requestService = require('./request');
 
-const DAILY_COUNT = 5; // 每日题量（后端从题库随机抽取）
-
 /**
- * 今日答题状态；未完成时携带题目（不含答案），已完成时携带记录。
- * @returns {Promise<{date:string, issueNo:number, completed:boolean, questions:Array|null, record:object|null}>}
+ * 今日答题状态（不开题）：未开题时 current 为空；已完成时 record 含逐题结果。
+ * @returns {Promise<{date:string, issueNo:number, completed:boolean, totalCount:number, timeLimit:number,
+ *   serverTime:number, progress:Array<{seq:number, status:string, correct:boolean}>,
+ *   current:{seq:number, question:object, startedAt:number, deadlineAt:number, remainingMs:number}|null,
+ *   correctCount:number, points:number, record:object|null}>}
  */
 function getDaily() {
   return requestService.request({ url: '/quiz/daily' });
+}
+
+/**
+ * 开始或继续当前题（幂等）：作答中返回同一题与服务器剩余毫秒；当前题已截止则判超时并开下一题。
+ * @returns {Promise<object>} 结构同 getDaily
+ */
+function start() {
+  return requestService.request({ url: '/quiz/start', method: 'POST' });
+}
+
+/**
+ * 提交当前题答案（每题一次，即时判定）。
+ * @param {number} questionId
+ * @param {string} label 选项标签
+ * @returns {Promise<{seq:number, status:string, correct:boolean, userAnswer:Array<string>, correctAnswer:Array<string>,
+ *   analysis:string, points:number, correctCount:number, todayPoints:number, totalCount:number, finished:boolean, record:object|null}>}
+ */
+function answer(questionId, label) {
+  return requestService.request({
+    url: '/quiz/answer',
+    method: 'POST',
+    data: { questionId, answer: [label] }
+  });
 }
 
 /**
@@ -22,16 +49,7 @@ function getKnowledge() {
 }
 
 /**
- * 提交答卷（后端判分并发放积分；作答过程中不提供单题判题）。
- * @param {Array<{questionId:number, answer:Array<string>}>} answers
- * @returns {Promise<object>} 答题记录（含 details 逐题结果）
- */
-function submit(answers) {
-  return requestService.request({ url: '/quiz/submit', method: 'POST', data: { answers } });
-}
-
-/**
- * 答题记录（新到旧）。
+ * 答题记录（新到旧），含正确率 accuracy 与超时题数 timeoutCount。
  * @returns {Promise<Array>}
  */
 function getRecords() {
@@ -47,10 +65,10 @@ function resetToday() {
 }
 
 module.exports = {
-  DAILY_COUNT,
   getDaily,
+  start,
+  answer,
   getKnowledge,
-  submit,
   getRecords,
   resetToday
 };

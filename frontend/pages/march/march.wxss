@@ -430,16 +430,6 @@
   color: #B8860B;
 }
 
-.lit-points {
-  margin-top: 14rpx;
-  display: inline-block;
-  font-size: 26rpx;
-  color: #B8860B;
-  background: rgba(212, 160, 23, 0.12);
-  border-radius: 24rpx;
-  padding: 8rpx 28rpx;
-}
-
 .lit-next {
   margin-top: 18rpx;
   font-size: 24rpx;

@@ -19,6 +19,32 @@
       </view>
     </view>
 
+    <!-- 荣誉卡：总积分 / 排名 / 步行与答题拆分（与「我的」积分卡同源） -->
+    <view class="honor-card anim-card" bindtap="goPoints">
+      <view class="honor-glow"></view>
+      <view class="honor-head">
+        <text class="honor-brand">长征步迹 · 荣耀征程</text>
+        <text class="honor-stage">{{stage}}</text>
+      </view>
+      <view class="honor-body">
+        <view class="honor-rank">
+          <view class="honor-rank-label">积分排名</view>
+          <view class="honor-rank-num">{{summary.points.rank || '--'}}</view>
+        </view>
+        <view class="honor-main">
+          <view class="honor-total-label">荣誉总积分</view>
+          <view class="honor-total">{{summary.points.total}}</view>
+          <view class="honor-split">步行 {{summary.points.walk}} · 答题 {{summary.points.quiz}}</view>
+        </view>
+      </view>
+      <view class="honor-foot">
+        <text>🚩 点亮 {{summary.stats.litCount}}/{{summary.stats.totalCount}}</text>
+        <text>🏅 勋章 {{summary.medals.ownedCount}}</text>
+        <text>🔥 连续 {{summary.stats.currentStreak}} 天</text>
+        <text class="honor-more">积分明细 ›</text>
+      </view>
+    </view>
+
     <!-- 核心数据 5 格 -->
     <view class="card anim-card" style="animation-delay: 60ms">
       <view class="stat-grid">
@@ -61,8 +87,8 @@
           <view class="stat-label">满分次数</view>
         </view>
         <view class="stat-cell">
-          <view class="stat-num text-gold">{{summary.points.total}}</view>
-          <view class="stat-label">积分</view>
+          <view class="stat-num">{{summary.medals.ownedCount}}</view>
+          <view class="stat-label">已获勋章</view>
         </view>
       </view>
     </view>

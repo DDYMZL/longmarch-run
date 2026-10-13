@@ -9,11 +9,11 @@
     ></view>
   </view>
 
-  <!-- 得分 -->
+  <!-- 成绩 -->
   <view class="result-hero">
-    <view class="result-title">{{isPerfect ? '🎉 今日情报完美通关' : '情报任务完成'}}</view>
-    <view class="result-score">{{displayScore}} 分</view>
-    <view wx:if="{{isPerfect}}" class="result-perfect-line">{{perfectLine}}</view>
+    <view class="result-title">{{isPerfect ? '🎉 今日情报完美破译' : '情报任务完成'}}</view>
+    <view class="result-score">{{record.correctCount}}<text class="result-score-unit"> / {{record.totalCount}} 题</text></view>
+    <view class="result-perfect-line">正确率 {{displayAccuracy}}%</view>
     <view class="result-stars">
       <text wx:for="{{stars}}" wx:key="id" class="star {{item.on ? 'on' : ''}}">★</text>
     </view>
@@ -23,8 +23,8 @@
   <view class="card stats-card anim-card" style="animation-delay: 300ms">
     <view class="stat-row">
       <view class="stat-item">
-        <view class="stat-value">{{record.correctCount}} 题</view>
-        <view class="stat-label">答对</view>
+        <view class="stat-value text-gold">+{{record.points}}</view>
+        <view class="stat-label">答题积分</view>
       </view>
       <view class="stat-divider"></view>
       <view class="stat-item">
@@ -33,22 +33,23 @@
       </view>
       <view class="stat-divider"></view>
       <view class="stat-item">
-        <view class="stat-value text-gold">{{record.points}}</view>
-        <view class="stat-label">获得积分</view>
+        <view class="stat-value">{{record.timeoutCount}} 题</view>
+        <view class="stat-label">超时</view>
       </view>
     </view>
+    <view class="stat-rule">答对 1 题 +2 积分，单日答题积分上限 10 分</view>
   </view>
 
-  <!-- 逐题结果（提交后统一展示） -->
+  <!-- 逐题结果 -->
   <view class="card anim-card" style="animation-delay: 420ms" wx:if="{{details.length > 0}}">
     <view class="card-title">答题详情</view>
     <view class="detail-item {{index === 0 ? 'first' : ''}}" wx:for="{{details}}" wx:key="key">
       <view class="detail-head">
         <text class="detail-index">第 {{item.index}} 题 · {{item.typeText}}</text>
-        <text class="detail-verdict {{item.correct ? 'right' : 'wrong'}}">{{item.correct ? '✓ 正确' : '✗ 错误'}} · {{item.score}} 分</text>
+        <text class="detail-verdict {{item.verdict}}">{{item.verdictText}} · {{item.pointsText}}</text>
       </view>
       <view class="detail-question">{{item.question}}</view>
-      <view class="detail-line">我的答案：<text class="{{item.correct ? 'ans-right' : 'ans-wrong'}}">{{item.userAnswerText}}</text></view>
+      <view class="detail-line">我的答案：<text class="{{item.verdict === 'right' ? 'ans-right' : 'ans-wrong'}}">{{item.userAnswerText}}</text></view>
       <view class="detail-line">正确答案：<text class="ans-right">{{item.correctAnswerText}}</text></view>
       <view wx:if="{{item.analysis}}" class="wrong-analysis">解析：{{item.analysis}}</view>
     </view>
