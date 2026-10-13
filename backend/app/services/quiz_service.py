@@ -1,33 +1,40 @@
-"""每日答题服务（迁移自前端 services/quiz.js）。
+"""每日答题服务（每题限时作答，V2.0 需求六）。
 
 规则：
-  每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可完成一次；
-  提交后由后端按正确答案判分；答题积分 = 答对数 × 2（单日上限 10，不扣分），
-  与答题记录同一事务写入积分台账（见 points_service）。
-安全：作答阶段题目接口不返回 answer / analysis，也不提供单题判题；
-  提交须恰好覆盖今日全部题目且不重复（防重复提交同一道已知答案的题刷分），
-  对错与逐题得分只在提交后由后端从题库判定并随记录返回。
+  每日随机 5 题；逐题开题，每题 settings.QUIZ_QUESTION_SECONDS（90）秒，计时只认服务器时间；
+  每题仅可提交一次，提交即判定；超时不得分且之后不可再提交；全部题目结束后生成当日答题记录。
+  答题积分 = 答对数 × 2（单日上限 10，不扣分），每次判定与积分台账同一事务写入（见 points_service）。
+安全：
+  只下发「当前已开题」的题目（不预先下发整套题，防止提前查答案），且不含 answer / analysis；
+  开题时间、截止时间、提交时间、作答内容、判定与超时全部落库（quiz_answers）；
+  判定与超时均以 status='answering' 为条件更新，并发重复提交 / 提交与超时竞态只有一个生效；
+  截止后 QUIZ_ANSWER_GRACE_SECONDS 内到达的提交视为网络延迟仍受理，被动查询亦按此宽限判定超时；
+  主动「开始下一题」视为放弃当前题，截止即判超时。
 
 情报化扩展（功能 8）：
-  get_daily 返回 issue_no（第 N 期，以 Settings.ACTIVITY_START_DATE 为第 1 期）；
+  返回 issue_no（第 N 期，以 Settings.ACTIVITY_START_DATE 为第 1 期）；
   get_knowledge 按题目 category 聚合历史答题正确率（知识画像）。
 """
 import random
 import time
-from datetime import datetime
-from typing import Dict, List
+from datetime import datetime, timedelta, timezone
+from typing import Dict, List, Optional, Tuple
 
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.helpers import today_str
-from app.models.models import DailyQuestion, PointsLog, Question, QuizRecord
+from app.models.models import DailyQuestion, PointsLog, Question, QuizAnswer, QuizRecord
 from app.services import event_service, points_service
 
 DAILY_COUNT = 5
 SCORE_PER_QUESTION = 20
-ALREADY_DONE = "今日答题已完成"
+ANSWERING, ANSWERED, TIMEOUT = "answering", "answered", "timeout"
+
+NOT_STARTED = "该题尚未开始作答"
+ALREADY_ANSWERED = "本题已作答，不能重复提交"
+ANSWER_TIMEOUT = "本题作答已超时，不能再提交"
 
 # 知识画像分类（key -> 展示名），与 questions.category 取值对应
 KNOWLEDGE_CATEGORIES = [
@@ -44,6 +51,15 @@ def _issue_no(date: str) -> int:
     return max((day - start).days + 1, 1)
 
 
+def _ms(dt: datetime) -> int:
+    """UTC naive 时间 -> 毫秒时间戳。"""
+    return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
+
+
+def _grace() -> timedelta:
+    return timedelta(seconds=settings.QUIZ_ANSWER_GRACE_SECONDS)
+
+
 def _public_question(q: Question) -> Dict:
     """作答阶段题目结构（不含 answer 与 analysis）。"""
     return {
@@ -56,152 +72,133 @@ def _public_question(q: Question) -> Dict:
 
 
 def _record_out(r: QuizRecord, with_details: bool = True) -> Dict:
+    details = r.details or []
     return {
         "date": r.date,
         "total_count": r.total_count,
         "correct_count": r.correct_count,
         "score": r.score,
         "points": r.points,
+        "accuracy": round(r.correct_count / r.total_count * 100) if r.total_count else 0,
+        "timeout_count": sum(1 for d in details if d.get("timeout")),
         "wrong_list": r.wrong_list or [],
-        "details": (r.details or []) if with_details else [],
+        "details": details if with_details else [],
         "answer_at": r.answer_at,
     }
 
 
-def get_daily(db: Session, user_id: int) -> Dict:
-    """获取今日题目。同一天内多次调用返回同一套题；已完成则返回记录。"""
-    date = today_str()
-    issue_no = _issue_no(date)
-    record = (
+def _get_record(db: Session, user_id: int, date: str) -> Optional[QuizRecord]:
+    return (
         db.query(QuizRecord)
         .filter(QuizRecord.user_id == user_id, QuizRecord.date == date)
         .first()
     )
-    if record is not None:
-        return {
-            "date": date,
-            "issue_no": issue_no,
-            "completed": True,
-            "questions": None,
-            "record": _record_out(record),
-        }
 
-    # 当天题目缓存（保证同一天抽到同一套题）
-    cache = (
-        db.query(DailyQuestion)
-        .filter(DailyQuestion.user_id == user_id, DailyQuestion.date == date)
-        .first()
+
+def _session(db: Session, user_id: int, date: str, create: bool) -> Optional[DailyQuestion]:
+    """当日答题会话（抽题缓存，保证同一天同一套题）；create=True 时不存在则抽题创建。"""
+    query = db.query(DailyQuestion).filter(
+        DailyQuestion.user_id == user_id, DailyQuestion.date == date
     )
-    if cache is None or not cache.question_ids:
-        # 只取主键抽样，题库再大也不加载题干/选项
-        all_ids = [r[0] for r in db.query(Question.id).all()]
-        ids = random.sample(all_ids, min(DAILY_COUNT, len(all_ids)))
-        if cache is None:
-            db.add(DailyQuestion(user_id=user_id, date=date, question_ids=ids))
-        else:
-            cache.question_ids = ids
-        db.commit()
+    cache = query.first()
+    if not create or (cache is not None and cache.question_ids):
+        return cache
+    # 只取主键抽样，题库再大也不加载题干/选项
+    all_ids = [r[0] for r in db.query(Question.id).all()]
+    ids = random.sample(all_ids, min(DAILY_COUNT, len(all_ids)))
+    if cache is None:
+        db.add(DailyQuestion(user_id=user_id, date=date, question_ids=ids))
     else:
-        ids = cache.question_ids
+        cache.question_ids = ids
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()  # 并发首次获取：以先写入的抽题为准
+    return query.first()
 
-    qmap = {q.id: q for q in db.query(Question).filter(Question.id.in_(ids)).all()}
-    questions = [_public_question(qmap[i]) for i in ids if i in qmap]
+
+def _answers(db: Session, session_id: int) -> List[QuizAnswer]:
+    return (
+        db.query(QuizAnswer)
+        .filter(QuizAnswer.session_id == session_id)
+        .order_by(QuizAnswer.seq)
+        .populate_existing()
+        .all()
+    )
+
+
+def _expire(db: Session, rows: List[QuizAnswer], cutoff: datetime) -> bool:
+    """截止时间早于 cutoff 的作答中题目标记超时（条件更新，与提交竞态只有一方生效）。"""
+    changed = 0
+    for r in rows:
+        if r.status == ANSWERING and r.deadline_at < cutoff:
+            changed += (
+                db.query(QuizAnswer)
+                .filter(QuizAnswer.id == r.id, QuizAnswer.status == ANSWERING)
+                .update({QuizAnswer.status: TIMEOUT}, synchronize_session=False)
+            )
+    if changed:
+        db.commit()
+    return bool(changed)
+
+
+def _plan(db: Session, session: DailyQuestion, rows: List[QuizAnswer]) -> Tuple[int, Optional[int]]:
+    """(本场总题数, 下一道待开题的题目 id)。抽题后被删除的题目不再开题、不计入总数。"""
+    done = {r.question_id for r in rows}
+    ids = list(session.question_ids or [])
+    existing = {qid for (qid,) in db.query(Question.id).filter(Question.id.in_(ids)).all()}
+    remaining = [qid for qid in ids if qid in existing and qid not in done]
+    return len(rows) + len(remaining), (remaining[0] if remaining else None)
+
+
+def _detail(r: QuizAnswer, q: Optional[Question]) -> Dict:
     return {
-        "date": date,
-        "issue_no": issue_no,
-        "completed": False,
-        "questions": questions,
-        "record": None,
+        "index": r.seq,
+        "question_id": r.question_id,
+        "type": q.type if q else "single",
+        "question": q.question if q else "",
+        "options": (q.options or []) if q else [],
+        "user_answer": r.user_answer or [],
+        "correct_answer": sorted(q.answer or []) if q else [],
+        "correct": bool(r.is_correct),
+        "timeout": r.status == TIMEOUT,
+        "score": SCORE_PER_QUESTION if r.is_correct else 0,
+        "points": r.points or 0,
+        "analysis": (q.analysis or "") if q else "",
     }
 
 
-def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
-    """提交答卷（每日仅一次）。answers: [{question_id, answer: []}]。
-
-    须恰好覆盖今日全部题目、每题一次且已作答；判分按今日抽题顺序逐题进行，
-    结果（含逐题对错/得分）落库后返回。并发重复提交由唯一约束兜底，
-    只有首个提交成功写记录并发放积分，其余返回「今日答题已完成」。
-    """
-    date = today_str()
-    existing = (
-        db.query(QuizRecord.id)
-        .filter(QuizRecord.user_id == user_id, QuizRecord.date == date)
-        .first()
-    )
+def _finalize(db: Session, user_id: int, session: DailyQuestion, rows: List[QuizAnswer]) -> QuizRecord:
+    """全部题目结束后生成当日答题记录（user+date 唯一，并发只写一次）并记录事件。"""
+    existing = _get_record(db, user_id, session.date)
     if existing is not None:
-        raise ValueError(ALREADY_DONE)
-
-    cache = (
-        db.query(DailyQuestion)
-        .filter(DailyQuestion.user_id == user_id, DailyQuestion.date == date)
-        .first()
-    )
-    if cache is None:
-        raise ValueError("今日题目尚未生成，请先获取题目")
-    cache_ids = list(cache.question_ids or [])
-    qmap = {q.id: q for q in db.query(Question).filter(Question.id.in_(cache_ids)).all()}
-    # 抽题后被删除的题目不下发、不计分（与 get_daily 一致）
-    ordered_ids = [qid for qid in cache_ids if qid in qmap]
-
-    submitted: Dict[int, List[str]] = {}
-    for a in answers:
-        qid = a.get("question_id")
-        if qid not in qmap:
-            raise ValueError("提交的答案包含不属于今日抽题的题目")
-        if qid in submitted:
-            raise ValueError("提交的答案包含重复题目")
-        submitted[qid] = list(a.get("answer") or [])
-    if len(submitted) != len(ordered_ids) or any(not v for v in submitted.values()):
-        raise ValueError("请完成全部题目后提交")
-
-    correct_count = 0
-    wrong_list: List[Dict] = []
-    details: List[Dict] = []
-    for idx, qid in enumerate(ordered_ids, start=1):
-        q = qmap[qid]
-        labels = {o.get("label") for o in (q.options or [])}
-        user_ans = sorted(submitted[qid])
-        if any(label not in labels for label in user_ans):
-            raise ValueError("答案选项无效")
-        right = sorted(q.answer or [])
-        is_right = bool(right) and user_ans == right
-        if is_right:
-            correct_count += 1
-        else:
-            wrong_list.append(
-                {
-                    "index": idx,
-                    "question_id": q.id,
-                    "category": q.category or "",
-                    "question": q.question,
-                    "correct_answer": "".join(right),
-                    "analysis": q.analysis or "",
-                }
-            )
-        details.append(
-            {
-                "index": idx,
-                "question_id": q.id,
-                "type": q.type,
-                "question": q.question,
-                "options": q.options or [],
-                "user_answer": user_ans,
-                "correct_answer": right,
-                "correct": is_right,
-                "score": SCORE_PER_QUESTION if is_right else 0,
-                "analysis": q.analysis or "",
-            }
-        )
-
+        return existing
+    qmap = {
+        q.id: q
+        for q in db.query(Question).filter(Question.id.in_([r.question_id for r in rows])).all()
+    }
+    details = [_detail(r, qmap.get(r.question_id)) for r in rows]
+    wrong_list = [
+        {
+            "index": d["index"],
+            "question_id": d["question_id"],
+            "category": (qmap[d["question_id"]].category or "") if d["question_id"] in qmap else "",
+            "question": d["question"],
+            "correct_answer": "".join(d["correct_answer"]),
+            "analysis": d["analysis"],
+        }
+        for d in details
+        if not d["correct"]
+    ]
+    correct_count = sum(1 for r in rows if r.is_correct)
     score = correct_count * SCORE_PER_QUESTION
-    earned = points_service.quiz_points(correct_count)
     record = QuizRecord(
         user_id=user_id,
-        date=date,
-        total_count=len(ordered_ids),
+        date=session.date,
+        total_count=len(rows),
         correct_count=correct_count,
         score=score,
-        points=earned,
+        points=points_service.quiz_points(correct_count),
         wrong_list=wrong_list,
         details=details,
         answer_at=int(time.time() * 1000),
@@ -209,20 +206,215 @@ def submit(db: Session, user_id: int, answers: List[Dict]) -> Dict:
     db.add(record)
     try:
         db.flush()
-        points_service.sync_quiz_day(db, user_id, date, correct_count, cache.id)
+        points_service.sync_quiz_day(db, user_id, session.date, correct_count, session.id)
         db.commit()
     except IntegrityError:
         db.rollback()
-        raise ValueError(ALREADY_DONE)
+        return _get_record(db, user_id, session.date)
 
     event_service.record(
         db, user_id, "QUIZ_COMPLETE",
-        {"date": date, "score": score, "correctCount": correct_count},
+        {"date": session.date, "score": score, "correctCount": correct_count},
     )
-    if score == 100:
-        event_service.record(db, user_id, "QUIZ_FULL_SCORE", {"date": date})
+    if correct_count == record.total_count:
+        event_service.record(db, user_id, "QUIZ_FULL_SCORE", {"date": session.date})
+    return record
 
-    return _record_out(record)
+
+def _state(
+    db: Session,
+    date: str,
+    now: datetime,
+    total: int,
+    rows: List[QuizAnswer],
+    record: Optional[QuizRecord],
+) -> Dict:
+    """今日答题状态：逐题进度、当前题（含服务器截止时间与剩余毫秒）、已完成记录。"""
+    current = next((r for r in rows if r.status == ANSWERING), None)
+    current_out = None
+    if current is not None and record is None:
+        q = db.query(Question).filter(Question.id == current.question_id).first()
+        if q is not None:
+            current_out = {
+                "seq": current.seq,
+                "question": _public_question(q),
+                "started_at": _ms(current.started_at),
+                "deadline_at": _ms(current.deadline_at),
+                "remaining_ms": max(0, int((current.deadline_at - now).total_seconds() * 1000)),
+            }
+    progress = [
+        {"seq": r.seq, "status": r.status, "correct": bool(r.is_correct)} for r in rows
+    ] + [
+        {"seq": seq, "status": "pending", "correct": False}
+        for seq in range(len(rows) + 1, total + 1)
+    ]
+    correct_count = record.correct_count if record else sum(1 for r in rows if r.is_correct)
+    return {
+        "date": date,
+        "issue_no": _issue_no(date),
+        "completed": record is not None,
+        "total_count": record.total_count if record else total,
+        "time_limit": settings.QUIZ_QUESTION_SECONDS,
+        "server_time": _ms(now),
+        "progress": progress,
+        "current": current_out,
+        "correct_count": correct_count,
+        "points": points_service.quiz_points(correct_count),
+        "record": _record_out(record) if record else None,
+    }
+
+
+def _completed_state(db: Session, record: QuizRecord, now: datetime) -> Dict:
+    session = _session(db, record.user_id, record.date, create=False)
+    rows = _answers(db, session.id) if session else []
+    return _state(db, record.date, now, record.total_count, rows, record)
+
+
+def get_daily(db: Session, user_id: int) -> Dict:
+    """今日答题状态：已过截止+宽限的题目判超时；全部结束则生成记录。
+
+    未开题时 current 为空，需调用 start 开题后才下发题目。
+    """
+    date, now = today_str(), datetime.utcnow()
+    record = _get_record(db, user_id, date)
+    if record is not None:
+        return _completed_state(db, record, now)
+    session = _session(db, user_id, date, create=True)
+    rows = _answers(db, session.id)
+    if _expire(db, rows, now - _grace()):
+        rows = _answers(db, session.id)
+    total, next_qid = _plan(db, session, rows)
+    if rows and next_qid is None and all(r.status != ANSWERING for r in rows):
+        return _state(db, date, now, total, rows, _finalize(db, user_id, session, rows))
+    return _state(db, date, now, total, rows, None)
+
+
+def start(db: Session, user_id: int) -> Dict:
+    """开始（或继续）当前题，幂等：作答中且未截止则返回同一题与剩余时间；
+
+    当前题已截止则判超时并开下一题；全部结束则生成记录返回。开题/截止时间取服务器时间。
+    """
+    date, now = today_str(), datetime.utcnow()
+    record = _get_record(db, user_id, date)
+    if record is not None:
+        return _completed_state(db, record, now)
+    session = _session(db, user_id, date, create=True)
+    for _ in range(3):
+        rows = _answers(db, session.id)
+        if _expire(db, rows, now):
+            rows = _answers(db, session.id)
+        total, next_qid = _plan(db, session, rows)
+        if any(r.status == ANSWERING for r in rows):
+            return _state(db, date, now, total, rows, None)
+        if next_qid is None:
+            record = _finalize(db, user_id, session, rows) if rows else None
+            return _state(db, date, now, total, rows, record)
+        db.add(
+            QuizAnswer(
+                session_id=session.id,
+                user_id=user_id,
+                date=date,
+                seq=len(rows) + 1,
+                question_id=next_qid,
+                started_at=now,
+                deadline_at=now + timedelta(seconds=settings.QUIZ_QUESTION_SECONDS),
+                status=ANSWERING,
+            )
+        )
+        try:
+            db.commit()
+        except IntegrityError:
+            db.rollback()  # 并发开题：以先写入的为准，重新读取
+    rows = _answers(db, session.id)
+    return _state(db, date, now, _plan(db, session, rows)[0], rows, None)
+
+
+def answer(db: Session, user_id: int, question_id: int, labels: List[str]) -> Dict:
+    """提交当前题答案（每题一次）。服务器时间超过截止+宽限即判超时并拒绝。
+
+    判定与当日答题积分同一事务写入；最后一题提交后生成当日记录。
+    """
+    date, now = today_str(), datetime.utcnow()
+    session = _session(db, user_id, date, create=False)
+    row = (
+        db.query(QuizAnswer)
+        .filter(QuizAnswer.session_id == session.id, QuizAnswer.question_id == question_id)
+        .first()
+        if session is not None
+        else None
+    )
+    if row is None:
+        raise ValueError(NOT_STARTED)
+    if row.status == ANSWERED:
+        raise ValueError(ALREADY_ANSWERED)
+    if row.status == TIMEOUT:
+        raise ValueError(ANSWER_TIMEOUT)
+    q = db.query(Question).filter(Question.id == question_id).first()
+    if q is None:
+        raise ValueError("题目已下线")
+    user_ans = sorted(set(labels or []))
+    if len(user_ans) != 1:
+        raise ValueError("请选择一个答案后提交")
+    if user_ans[0] not in {o.get("label") for o in (q.options or [])}:
+        raise ValueError("答案选项无效")
+
+    right = sorted(q.answer or [])
+    is_right = bool(right) and user_ans == right
+    prior = (
+        db.query(QuizAnswer.id)
+        .filter(QuizAnswer.session_id == session.id, QuizAnswer.is_correct.is_(True))
+        .count()
+    )
+    gained = (
+        points_service.quiz_points(prior + 1) - points_service.quiz_points(prior) if is_right else 0
+    )
+    updated = (
+        db.query(QuizAnswer)
+        .filter(
+            QuizAnswer.id == row.id,
+            QuizAnswer.status == ANSWERING,
+            QuizAnswer.deadline_at >= now - _grace(),
+        )
+        .update(
+            {
+                QuizAnswer.status: ANSWERED,
+                QuizAnswer.submitted_at: now,
+                QuizAnswer.user_answer: user_ans,
+                QuizAnswer.is_correct: is_right,
+                QuizAnswer.points: gained,
+            },
+            synchronize_session=False,
+        )
+    )
+    if not updated:
+        db.rollback()
+        rows = _answers(db, session.id)
+        if next(r for r in rows if r.id == row.id).status == ANSWERED:
+            raise ValueError(ALREADY_ANSWERED)
+        _expire(db, rows, now - _grace())
+        raise ValueError(ANSWER_TIMEOUT)
+    correct_count = prior + (1 if is_right else 0)
+    points_service.sync_quiz_day(db, user_id, date, correct_count, session.id)
+    db.commit()
+
+    rows = _answers(db, session.id)
+    total, next_qid = _plan(db, session, rows)
+    record = _finalize(db, user_id, session, rows) if next_qid is None else None
+    return {
+        "seq": row.seq,
+        "question_id": question_id,
+        "status": ANSWERED,
+        "correct": is_right,
+        "user_answer": user_ans,
+        "correct_answer": right,
+        "analysis": q.analysis or "",
+        "points": gained,
+        "correct_count": correct_count,
+        "today_points": points_service.quiz_points(correct_count),
+        "total_count": total,
+        "finished": record is not None,
+        "record": _record_out(record) if record else None,
+    }
 
 
 def get_records(db: Session, user_id: int) -> List[Dict]:
@@ -280,14 +472,12 @@ def get_knowledge(db: Session, user_id: int) -> Dict:
 
 
 def reset_today(db: Session, user_id: int) -> None:
-    """重置今日答题（调试用）：删记录、撤销今日答题积分、清题目缓存。"""
+    """重置今日答题（调试用）：删逐题作答、记录、今日答题积分与题目缓存。"""
     date = today_str()
-    db.query(QuizRecord).filter(
-        QuizRecord.user_id == user_id, QuizRecord.date == date
-    ).delete(synchronize_session=False)
-    db.query(DailyQuestion).filter(
-        DailyQuestion.user_id == user_id, DailyQuestion.date == date
-    ).delete(synchronize_session=False)
+    for model in (QuizAnswer, QuizRecord, DailyQuestion):
+        db.query(model).filter(model.user_id == user_id, model.date == date).delete(
+            synchronize_session=False
+        )
     db.query(PointsLog).filter(
         PointsLog.user_id == user_id,
         PointsLog.biz_key == points_service.biz_key(points_service.QUIZ, date),

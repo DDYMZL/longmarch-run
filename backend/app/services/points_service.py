@@ -7,7 +7,7 @@
   业务写入时在同一事务内按源数据重算覆盖（set_daily 不提交，由调用方统一提交），
   重复同步/重放请求/并发只会得到同一结果，不会重复计分。
   V2.0 之前的旧规则流水（source_type=legacy）保留追溯，不计入总积分。
-校验：recompute_all 按源数据（daily_sport / quiz_records）全量核对并可修复台账。
+校验：recompute_all 按源数据（daily_sport / quiz_answers，历史日回退 quiz_records）全量核对并可修复台账。
 """
 from datetime import datetime
 from typing import Dict, Iterable, List, Optional, Tuple
@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.helpers import today_str
-from app.models.models import DailyQuestion, DailySport, PointsLog, QuizRecord, User
+from app.models.models import DailyQuestion, DailySport, PointsLog, QuizAnswer, QuizRecord, User
 
 WALK = "walk"
 QUIZ = "quiz"
@@ -84,6 +84,27 @@ def sync_quiz_day(
     return set_daily(db, user_id, QUIZ, date, quiz_points(correct_count), ref_id)
 
 
+def quiz_correct_counts(
+    db: Session, user_ids: List[int], dates: Optional[List[str]] = None
+) -> Dict[Tuple[int, str], int]:
+    """{(user_id, 日期): 答对题数}：以逐题作答（quiz_answers，含未完成的当日答题）为准，
+    无逐题数据的历史日期回退到答题记录。"""
+    answers = db.query(QuizAnswer.user_id, QuizAnswer.date, func.count(QuizAnswer.id)).filter(
+        QuizAnswer.user_id.in_(user_ids), QuizAnswer.is_correct.is_(True)
+    )
+    records = db.query(QuizRecord.user_id, QuizRecord.date, QuizRecord.correct_count).filter(
+        QuizRecord.user_id.in_(user_ids)
+    )
+    if dates is not None:
+        answers = answers.filter(QuizAnswer.date.in_(dates))
+        records = records.filter(QuizRecord.date.in_(dates))
+    counts = {(uid, d): int(c or 0) for uid, d, c in records}
+    counts.update(
+        {(uid, d): int(c) for uid, d, c in answers.group_by(QuizAnswer.user_id, QuizAnswer.date)}
+    )
+    return counts
+
+
 def points_subquery(db: Session):
     """每人积分汇总子查询：列 user_id / walk / quiz / total（只统计 walk + quiz）。"""
     walk = func.coalesce(func.sum(case((PointsLog.source_type == WALK, PointsLog.delta), else_=0)), 0)
@@ -130,17 +151,13 @@ def get_summary(db: Session, user_id: int) -> Dict:
         .filter(DailySport.user_id == user_id, DailySport.date == date)
         .scalar()
     )
-    correct = (
-        db.query(QuizRecord.correct_count)
-        .filter(QuizRecord.user_id == user_id, QuizRecord.date == date)
-        .scalar()
-    )
+    correct = quiz_correct_counts(db, [user_id], [date]).get((user_id, date), 0)
     return {
         **get_breakdown(db, user_id),
         "today_walk": today[WALK],
         "today_quiz": today[QUIZ],
         "today_steps": int(sport or 0),
-        "today_correct": int(correct or 0),
+        "today_correct": correct,
         "rules": rules(),
     }
 
@@ -190,11 +207,7 @@ def get_daily_details(db: Session, user_id: int, page: int = 1, page_size: int =
         .filter(DailySport.user_id == user_id, DailySport.date.in_(dates))
         .all()
     )
-    correct = dict(
-        db.query(QuizRecord.date, QuizRecord.correct_count)
-        .filter(QuizRecord.user_id == user_id, QuizRecord.date.in_(dates))
-        .all()
-    )
+    correct = quiz_correct_counts(db, [user_id], dates)
     items = [
         {
             "date": d,
@@ -202,7 +215,7 @@ def get_daily_details(db: Session, user_id: int, page: int = 1, page_size: int =
             "quiz": by_date[d][QUIZ],
             "total": by_date[d][WALK] + by_date[d][QUIZ],
             "steps": int(steps.get(d) or 0),
-            "correct_count": int(correct.get(d) or 0),
+            "correct_count": correct.get((user_id, d), 0),
             "updated_at": updated.get(d),
         }
         for d in dates
@@ -224,9 +237,7 @@ def _expected_for(db: Session, user_ids: List[int]) -> Dict[Tuple[int, str], Tup
             DailyQuestion.id, DailyQuestion.user_id, DailyQuestion.date
         ).filter(DailyQuestion.user_id.in_(user_ids))
     )
-    for uid, date, correct in db.query(
-        QuizRecord.user_id, QuizRecord.date, QuizRecord.correct_count
-    ).filter(QuizRecord.user_id.in_(user_ids)):
+    for (uid, date), correct in quiz_correct_counts(db, user_ids).items():
         expected[(uid, biz_key(QUIZ, date))] = (quiz_points(correct), sessions.get((uid, date)))
     return expected
 

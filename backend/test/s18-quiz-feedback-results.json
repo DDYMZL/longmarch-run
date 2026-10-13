@@ -1,88 +1,130 @@
 {
   "results": [
     {
-      "id": "Q01",
-      "name": "今日 5 题每题 20 分，不下发答案与解析",
+      "id": "T01",
+      "name": "未开题不下发题目，5 题 pending，限时 90 秒",
       "ok": true,
-      "detail": "status=200 n=5 leaked=[]"
+      "detail": "status=200 body={\"date\": \"2026-10-13\", \"issueNo\": 43, \"completed\": false, \"totalCount\": 5, \"timeLimit\": 90, \"serverTime\": 1791863450232, \"progress\": [{\"seq\": 1, \"status\": \"pend"
     },
     {
-      "id": "Q02",
-      "name": "同日多次获取同一套题",
+      "id": "T02",
+      "name": "开题仅下发当前题、不含答案，截止 = 开题 + 90 秒",
       "ok": true,
-      "detail": ""
+      "detail": "status=200 cur={\"seq\": 1, \"question\": {\"id\": 10, \"type\": \"judge\", \"question\": \"S18 题目 10\", \"options\": [{\"label\": \"A\", \"text\": \"正确\"}, {\"label\": \"B\", \"text\": \"错误\"}], \"score\": 20 leaked=[]"
     },
     {
-      "id": "Q03",
-      "name": "/api/quiz/check 已移除",
+      "id": "T03",
+      "name": "重复开题幂等",
       "ok": true,
-      "detail": "status=404"
+      "detail": "rows=[(1, 'answering')]"
     },
     {
-      "id": "Q04",
-      "name": "缺题/空答案提交 400 且不写记录",
+      "id": "T04",
+      "name": "提交未开题的题目 400",
       "ok": true,
-      "detail": "missing=400 empty=400 detail=请完成全部题目后提交"
+      "detail": "status=400 detail=该题尚未开始作答"
     },
     {
-      "id": "Q05",
-      "name": "非今日题目提交 400",
+      "id": "T05",
+      "name": "非法选项/多选/空答案 400 且状态不变",
       "ok": true,
-      "detail": "status=400 detail=提交的答案包含不属于今日抽题的题目"
+      "detail": "codes=[400, 400, 400] rows=[(1, 'answering')]"
     },
     {
-      "id": "Q06",
-      "name": "重复同题伪造满分 400",
+      "id": "T06",
+      "name": "答对即时判定，积分 +2 写入台账",
       "ok": true,
-      "detail": "status=400 detail=提交的答案包含重复题目"
+      "detail": "status=200 body={\"seq\": 1, \"questionId\": 10, \"status\": \"answered\", \"correct\": true, \"userAnswer\": [\"A\"], \"correctAnswer\": [\"A\"], \"analysis\": \"解析 10\", \"points\": 2, \"correctCount pts=(2, 1)"
     },
     {
-      "id": "Q07",
-      "name": "非法选项 400",
+      "id": "T07",
+      "name": "同一题重复提交 400，积分不变",
       "ok": true,
-      "detail": "status=400 detail=答案选项无效"
+      "detail": "status=400 detail=本题已作答，不能重复提交"
     },
     {
-      "id": "Q08",
-      "name": "后端判分返回逐题结果（60 分 3 对 2 错）",
+      "id": "T08",
+      "name": "作答后 daily 不自动开下一题",
       "ok": true,
-      "detail": "status=200 score=60 det_ok=True"
+      "detail": "progress=[{'seq': 1, 'status': 'answered', 'correct': True}, {'seq': 2, 'status': 'pending', 'correct': False}]"
     },
     {
-      "id": "Q09",
-      "name": "重复提交 400 且积分不重复",
+      "id": "T09",
+      "name": "超时提交 400 不得分，之后再提交仍 400",
       "ok": true,
-      "detail": "status=400 points=5 rows=1"
+      "detail": "status=400/400 rows=[(1, 'answered'), (2, 'timeout')] pts=(2, 1)"
     },
     {
-      "id": "Q10",
-      "name": "已完成 daily 含 details，records 不含 details",
+      "id": "T10",
+      "name": "截止后宽限期内提交仍受理",
       "ok": true,
-      "detail": "daily_details=5 records_details=[]"
+      "detail": "status=200 pts=(4, 1)"
     },
     {
-      "id": "Q11",
-      "name": "满分 100 分、积分 15、逐题全对",
+      "id": "T11",
+      "name": "被动查询时超时题判超时",
       "ok": true,
-      "detail": "status=200 score=100 points=15/2"
+      "detail": "progress=[{'seq': 1, 'status': 'answered', 'correct': True}, {'seq': 2, 'status': 'timeout', 'correct': False}, {'seq': 3, 'status': 'answered', 'correct': True}, {'seq': 4, 'status': 'timeout', 'correct': False}, {'seq': 5, 'status': 'pending', 'correct': False}]"
     },
     {
-      "id": "Q12",
-      "name": "8 并发提交仅 1 成功、积分仅发一次",
+      "id": "T12",
+      "name": "最后一题后生成记录（2 对 1 错 2 超时，积分 4，正确率 40%）",
       "ok": true,
-      "detail": "statuses=[200, 400, 400, 400, 400, 400, 400, 400] records=1 points=15/2"
+      "detail": "status=200 rec={\"date\": \"2026-10-13\", \"totalCount\": 5, \"correctCount\": 2, \"score\": 40, \"points\": 4, \"accuracy\": 40, \"timeoutCount\": 2, \"wrongList\": [{\"index\": 2, \"questionId\": 7, \"category\": \"event\", \"question\": \"S1"
     },
     {
-      "id": "Q13",
-      "name": "历史无 details 记录原样返回不重算",
+      "id": "T13",
+      "name": "完成后 start 返回记录、再提交 400；records 无明细",
       "ok": true,
-      "detail": "record={\"date\": \"2026-10-12\", \"totalCount\": 5, \"correctCount\": 2, \"score\": 40, \"points\": 5, \"wrongList\": [{\"index\": 1, \"questionId\": 1, \"category\": \"\", \"question\": \"旧题"
+      "detail": "completed=True answer=400 recs=[{'date': '2026-10-13', 'totalCount': 5, 'correctCount': 2, 'score': 40, 'points': 4, 'accuracy': 40, 'timeoutCount': 2, 'wrongList': [{'index': 2, 'questionId': 7, 'category': 'event', 'question': 'S18 题目 7', 'correctAnswer': 'D', 'analysis': '解析 7'}, {'index': 4, 'qu"
     },
     {
-      "id": "Q14",
+      "id": "T14",
+      "name": "全对积分 10、正确率 100",
+      "ok": true,
+      "detail": "rec={\"date\": \"2026-10-13\", \"totalCount\": 5, \"correctCount\": 5, \"score\": 100, \"points\": 10, \"accuracy\": 100, \"timeoutCount\": 0, \"wrongList\": [], \"details\": [{\"index\" pts=(10, 1)"
+    },
+    {
+      "id": "T15",
+      "name": "同题 8 并发提交仅 1 成功、积分只发一次",
+      "ok": true,
+      "detail": "codes=[200, 400, 400, 400, 400, 400, 400, 400] pts=(2, 1)"
+    },
+    {
+      "id": "T16",
+      "name": "8 并发开题只生成 1 条作答行",
+      "ok": true,
+      "detail": "codes=[200, 200, 200, 200, 200, 200, 200, 200] seqs={1} rows=[(1, 'answering')]"
+    },
+    {
+      "id": "T17",
+      "name": "截止后主动开下一题：当前题判超时并开新题",
+      "ok": true,
+      "detail": "rows=[(1, 'answered'), (2, 'timeout'), (3, 'answering')]"
+    },
+    {
+      "id": "T18",
+      "name": "未完成会话积分计入概览与明细，全量核对无差异",
+      "ok": true,
+      "detail": "summary=1/2 check={'users': 6, 'checked_days': 3, 'mismatches': 0, 'fixed': 0, 'samples': []}"
+    },
+    {
+      "id": "T19",
+      "name": "历史无明细记录原样返回",
+      "ok": true,
+      "detail": "record={\"date\": \"2026-10-13\", \"totalCount\": 5, \"correctCount\": 2, \"score\": 40, \"points\": 4, \"accuracy\": 40, \"timeoutCount\": 0, \"wrongList\": [{\"index\": 1, \"questionId\":"
+    },
+    {
+      "id": "T20",
+      "name": "/quiz/submit 与 /quiz/check 已移除",
+      "ok": true,
+      "detail": "codes=[404, 404]"
+    },
+    {
+      "id": "T21",
       "name": "未登录访问答题接口 401",
       "ok": true,
-      "detail": "codes=[401, 401]"
+      "detail": "codes=[401, 401, 401]"
     }
   ]
 }

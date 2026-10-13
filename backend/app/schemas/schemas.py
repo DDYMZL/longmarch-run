@@ -422,7 +422,7 @@ class WrongItem(CamelModel):
 
 
 class QuizDetailItem(CamelModel):
-    """提交后逐题结果：题干、我的答案、正确答案、对错与本题得分。"""
+    """逐题结果：题干、我的答案、正确答案、对错、是否超时与本题积分。"""
 
     index: int
     question_id: int
@@ -432,7 +432,9 @@ class QuizDetailItem(CamelModel):
     user_answer: List[str] = []
     correct_answer: List[str] = []
     correct: bool
+    timeout: bool = False
     score: int
+    points: int = 0
     analysis: str = ""
 
 
@@ -442,16 +444,56 @@ class QuizRecordOut(CamelModel):
     correct_count: int
     score: int
     points: int
+    accuracy: int = 0
+    timeout_count: int = 0
     wrong_list: List[WrongItem] = []
     details: List[QuizDetailItem] = []
     answer_at: int
+
+
+class QuizProgressItem(CamelModel):
+    seq: int
+    status: str  # answering / answered / timeout / pending
+    correct: bool = False
+
+
+class QuizCurrentOut(CamelModel):
+    """当前作答题：开题与截止时间为服务器毫秒时间戳，剩余时间以服务器为准。"""
+
+    seq: int
+    question: QuestionOut
+    started_at: int
+    deadline_at: int
+    remaining_ms: int
 
 
 class QuizDailyOut(CamelModel):
     date: str
     issue_no: int = 1
     completed: bool
-    questions: Optional[List[QuestionOut]] = None
+    total_count: int = 0
+    time_limit: int
+    server_time: int
+    progress: List[QuizProgressItem] = []
+    current: Optional[QuizCurrentOut] = None
+    correct_count: int = 0
+    points: int = 0
+    record: Optional[QuizRecordOut] = None
+
+
+class QuizAnswerOut(CamelModel):
+    seq: int
+    question_id: int
+    status: str
+    correct: bool
+    user_answer: List[str] = []
+    correct_answer: List[str] = []
+    analysis: str = ""
+    points: int = 0
+    correct_count: int = 0
+    today_points: int = 0
+    total_count: int = 0
+    finished: bool = False
     record: Optional[QuizRecordOut] = None
 
 
@@ -468,15 +510,11 @@ class QuizKnowledgeOut(CamelModel):
     overall_rate: int = 0
 
 
-class AnswerItem(BaseModel):
+class QuizAnswerRequest(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
 
     question_id: int = Field(alias="questionId")
-    answer: List[str] = Field(default_factory=list)
-
-
-class SubmitRequest(BaseModel):
-    answers: List[AnswerItem]
+    answer: List[str] = Field(default_factory=list, max_length=4)
 
 
 # ---------------- 积分 ----------------

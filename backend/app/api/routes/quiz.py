@@ -1,4 +1,4 @@
-"""答题路由：今日题目、提交答卷、记录、重置。"""
+"""答题路由：今日状态、开题、逐题提交、记录、重置。"""
 from typing import List
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -10,37 +10,47 @@ from app.core.database import get_db
 from app.models.models import User
 from app.schemas.schemas import (
     MessageOut,
+    QuizAnswerOut,
+    QuizAnswerRequest,
     QuizDailyOut,
     QuizKnowledgeOut,
     QuizRecordOut,
-    SubmitRequest,
 )
 from app.services import medal_service, quiz_service
 
 router = APIRouter(prefix="/quiz", tags=["quiz"])
 
 
-@router.get("/daily", response_model=QuizDailyOut, summary="今日题目")
+@router.get("/daily", response_model=QuizDailyOut, summary="今日答题状态")
 def daily(current: User = Depends(require_activity_view), db: Session = Depends(get_db)):
-    """同一天多次调用返回同一套题（不含答案与解析）；已完成则返回含逐题结果的答题记录。"""
+    """逐题进度与当前作答题（含服务器截止时间）；未开题时 current 为空，已完成返回含逐题结果的记录。"""
     return quiz_service.get_daily(db, current.id)
 
 
-@router.post("/submit", response_model=QuizRecordOut, summary="提交答卷")
-def submit(
-    payload: SubmitRequest,
+@router.post("/start", response_model=QuizDailyOut, summary="开始/继续当前题")
+def start(current: User = Depends(require_activity_participation), db: Session = Depends(get_db)):
+    """幂等：作答中则返回同一题与剩余时间；当前题已截止则判超时并开下一题（每题 90 秒，服务器计时）。"""
+    state = quiz_service.start(db, current.id)
+    if state["completed"]:
+        medal_service.check_and_grant(db, current.id)
+    return state
+
+
+@router.post("/answer", response_model=QuizAnswerOut, summary="提交当前题答案")
+def answer(
+    payload: QuizAnswerRequest,
     current: User = Depends(require_activity_participation),
     db: Session = Depends(get_db),
 ):
-    """每日仅可提交一次；后端判分并发放积分，返回逐题结果，随后刷新勋章。"""
-    answers = [{"question_id": a.question_id, "answer": a.answer} for a in payload.answers]
+    """每题仅可提交一次，超时（服务器时间）拒绝；即时判定并同步答题积分，最后一题后生成当日记录。"""
     try:
-        record = quiz_service.submit(db, current.id, answers)
+        result = quiz_service.answer(db, current.id, payload.question_id, payload.answer)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
-    medal_service.check_and_grant(db, current.id)
-    ws_manager.broadcast(ws_manager.build_event("quiz.submit", current.id))
-    return record
+    if result["finished"]:
+        medal_service.check_and_grant(db, current.id)
+    ws_manager.broadcast(ws_manager.build_event("quiz.answer", current.id))
+    return result
 
 
 @router.get("/records", response_model=List[QuizRecordOut], summary="答题记录")

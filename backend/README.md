@@ -121,8 +121,9 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/march/route-nodes` | 启用节点配置列表（含经纬度） |
 | GET | `/api/march/node/{node_id}` | 节点详情（任意状态可查看） |
 | POST | `/api/march/light-up` | 点亮达标节点、发放积分并判定勋章（返回 newMedals） |
-| GET | `/api/quiz/daily` | 今日题目（同一天同一套题） |
-| POST | `/api/quiz/submit` | 提交答卷（每日一次，body: `answers`） |
+| GET | `/api/quiz/daily` | 今日答题状态（逐题进度、当前题与服务器截止时间；不开题） |
+| POST | `/api/quiz/start` | 开始/继续当前题（幂等，每题 90 秒服务器计时） |
+| POST | `/api/quiz/answer` | 提交当前题（body: `questionId`、`answer`；每题一次，超时拒绝） |
 | GET | `/api/quiz/records` | 答题记录 |
 | GET | `/api/quiz/knowledge` | 知识画像（总正确率 + 分类正确率） |
 | POST | `/api/quiz/reset` | 重置今日答题（调试用） |
@@ -183,7 +184,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 
 - **步数**：按 `用户 + 日期` 唯一，同日同步为覆盖而非累加；步数来源为 `wx.getWeRunData` 加密数据后端解密取当日真实步数，仅 mock 用户（开发模式）或未配置微信凭证时回退按「日期+用户」稳定模拟（4000~12999），真实用户缺数据/解密失败返回 400 不写库。
 - **路线**：累计步数达到节点 `targetSteps` 即点亮，**点亮后永久保留**；节点状态分 `completed / current / unlocked`。管理后台可启停节点，停用节点不在小程序可见路线中，不参与完成判定和排名，但已有点亮记录保留。
-- **答题**：每日随机 5 题、每题 20 分、满分 100；同一用户同一天仅可完成一次；题目接口**不返回答案**。
+- **答题**：每日随机 5 题、每题 20 分、满分 100；逐题开题，每题 90 秒（`QUIZ_QUESTION_SECONDS`，只认服务器时间，截止后 `QUIZ_ANSWER_GRACE_SECONDS` 宽限网络延迟），每题仅提交一次、即时判定，超时不得分且不可再提交；开题/截止/提交时间、作答与判定落库 `quiz_answers`；只下发当前题且**不返回答案**；全部结束生成当日记录（含正确率、超时数、逐题明细）。
 - **积分**（V2.0）：**总积分 = 步行积分 + 答题积分**，仅后端计算。步行：每自然日 `floor(min(步数, 20000) / 1000)`，单日最高 20；答题：每答对 1 题 +2、不扣分、单日最高 10。台账 `points_log` 每人每来源每日一行（`biz_key` = `walk:日期` / `quiz:日期` 唯一），在步数写入/答题提交的同一事务内按源数据重算覆盖，重复同步与重放请求不会重复计分；步数同步只增不减（取当日最终步数），已有记录的往日按微信最终步数校正。登录/达标/点亮/里程碑不再发放积分，旧流水标记 `legacy` 仅追溯不计入。`POST /api/admin/points/verify` 可全量核对与修复（参数见 `Settings.POINTS_*`）。
 - **勋章**：12 枚分入门/路线/挑战/完成四类：`first-step`（首次运动）、`learner`（10 次答题）、`persistence`（连续行军 7 天）、`luding`/`snow`（点亮泸定桥/雪山）、`day-10k`（单日万步）、`steps-100k`/`steps-500k`（累计 10 万/50 万步）、`streak-30`（连续行军 30 天）、`master`（积分≥500）、`fearless`（连续 7 天日万步，隐藏）、`victory`（全部**启用**节点点亮）。
 - **连续行军**：当日步数 ≥ 5000（`STREAK_GOAL_STEPS` 可配）即完成当日行军；`daily_sport.is_goal_completed` 为判定依据，`users.continuous_days/max_continuous_days` 为冗余缓存。

@@ -2,7 +2,7 @@
 
 分两类：
 1. 静态配置数据（RouteNode / Question / MedalDef）——由 app.data.seed 在启动时幂等写入；
-2. 用户业务数据（User / DailySport / LitNode / QuizRecord / DailyQuestion / PointsLog / UserMedal）。
+2. 用户业务数据（User / DailySport / LitNode / QuizRecord / DailyQuestion / QuizAnswer / PointsLog / UserMedal）。
 
 对应前端 services/store.js 的用户数据结构：
     dailySport / litNodes / quizRecords / pointsLog / medals / firstSyncAt
@@ -292,6 +292,33 @@ class DailyQuestion(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
     date: Mapped[str] = mapped_column(String(10), index=True)
     question_ids: Mapped[list] = mapped_column(JSON, default=list)
+
+
+class QuizAnswer(Base):
+    """每题限时作答（018）：会话(daily_questions) 内逐题的服务器计时、作答与判定，时间为 UTC。
+
+    status：answering 作答中 / answered 已作答 / timeout 已超时（不得分、不可再提交）。
+    """
+
+    __tablename__ = "quiz_answers"
+    __table_args__ = (
+        UniqueConstraint("session_id", "seq", name="uq_quiz_answer_session_seq"),
+        Index("ix_quiz_answers_user_date", "user_id", "date"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[int] = mapped_column(ForeignKey("daily_questions.id"))
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    date: Mapped[str] = mapped_column(String(10))
+    seq: Mapped[int] = mapped_column(Integer)
+    question_id: Mapped[int] = mapped_column(Integer)
+    started_at: Mapped[datetime] = mapped_column(DateTime)
+    deadline_at: Mapped[datetime] = mapped_column(DateTime)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)
+    user_answer: Mapped[Optional[list]] = mapped_column(JSON, nullable=True)
+    is_correct: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[str] = mapped_column(String(16), default="answering")
+    points: Mapped[int] = mapped_column(Integer, default=0)
 
 
 class PointsLog(Base):
