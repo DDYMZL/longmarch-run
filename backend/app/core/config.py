@@ -1,13 +1,18 @@
 """应用配置：基于 pydantic-settings，从环境变量 / .env 读取。"""
 from functools import lru_cache
+from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# .env 锚定到 backend 根目录，不依赖启动时的工作目录（本地 run.py 与服务器
+# uvicorn/systemd 从不同 cwd 启动都能读到同一份配置）。
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=_ENV_FILE, env_file_encoding="utf-8", extra="ignore"
     )
 
     # 应用
@@ -16,7 +21,9 @@ class Settings(BaseSettings):
     DEBUG: bool = True
 
     # 数据库（openGauss 兼容 PostgreSQL 协议，使用 psycopg2 驱动）
-    DATABASE_URL: str = "postgresql+psycopg2://gaussdb:LongMarch%40123@127.0.0.1:5118/longmarch"
+    # 必填：不提供任何默认连接串，缺失时启动即报错，避免回退到错误/过期的库或泄露内置凭证。
+    # 本地开发模板见 backend/.env.example；生产由部署环境注入（systemd EnvironmentFile / 环境变量）。
+    DATABASE_URL: str
 
     # JWT
     JWT_SECRET: str = "longmarch-dev-secret-change-me-please"
