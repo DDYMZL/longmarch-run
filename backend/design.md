@@ -61,10 +61,11 @@
 | `sport_service` | `sport.js` | 今日步数查询/同步（同日覆盖）、最近 n 天记录、手动补步、行军日历聚合（按月） |
 | `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段 + persons 关联人物）、按累计步数点亮；`_route_state` 为节点状态/进度计算共用内核（个人路线与组织路线复用）；`get_global_goal` 全员共同长征目标（全员累计步数对 GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES 配置，里程碑实时计算）；`get_footprints` 我的长征足迹（lit_nodes 点亮日期/快照 + daily_sport 当日步数，无冗余存储）；`mark_ceremony_seen` 长征完成仪式标记（§20.4，幂等写入 users.route_ceremony_at） |
 | `quiz_service` | `quiz.js` | 每日抽 5 题（同用户同日同套，缓存于 `daily_questions`）、逐题限时作答（`start` 开题 / `answer` 提交，每题 90 秒服务器计时，`quiz_answers` 落库）、全部结束生成记录、重置、知识画像（按题目分类统计正确率） |
-| `points_service` | — | 积分总额、流水；`grant` 按「同日同 reason」去重；`grant_daily_login` 等快捷方法 |
+| `points_service` | — | V2.0 积分台账：总积分 = 步行 + 答题；`set_daily` 按「用户 + biz_key（walk/quiz:日期）」行锁覆盖，业务事务内按源数据重算（幂等）；`get_summary` / `get_daily_details` 概览与按日明细；`points_subquery` 供排名复用；`recompute_all` 按源数据分批核对/修复 |
+| `activity_service` | — | 活动时间窗口：按服务器时间实时计算 unpublished/not_started/ongoing/ended，`check` 供 `require_activity_participation` / `require_activity_view` 守卫；管理端保存/发布/撤回写审计 |
 | `medal_service` | `medal.js` | 12 枚勋章的判定与发放（`check_and_grant` 返回新获列表），含连续行军/步数里程碑/隐藏勋章 |
 | `org_service` | `org.js` | 组织树逐级下钻、用户组织查询/选定（任意层级）；`get_companions` 同组织同行者（子树口径人数/今日总步数/同行者列表，隐私只下发昵称/头像/步数）；`get_org_march` 组织共同长征目标（子树成员累计步数映射组织路线，复用 `march_service._route_state` 现算无持久点亮） |
-| `rank_service` | `rank.js` | 全员工累计步数总榜（跨组织，降序，标记我的名次）；名次由库内窗口函数 `row_number()` 计算，只取前 100 名 + 本人，`ranked_users_subquery` 供管理端排名复用 |
+| `rank_service` | `rank.js` | 全员工总积分榜（跨组织；总积分降序 → 累计步数降序 → user_id 升序）；名次由库内窗口函数 `row_number()` 计算，`get_points_rank` 返回前 10 名 + 第 11 名起分页 + 本人，`ranked_users_subquery` 供管理端排名与导出复用（两端同口径） |
 | `event_service` | —（足迹时间轴/实时动态数据源） | 统一事件系统：`record` 写 `user_event` 并向 WS 广播 `activity`；`build_text` 生成与小程序足迹同源的中文文案；`list_public_activities` 提供小程序实时动态（脱敏由 `ACTIVITY_MASK_NICKNAME` 控制，`mask_nickname` 实现）；事件类型如 FIRST_STEP/DAILY_GOAL/STREAK_*/NODE_LIT/MEDAL_GRANTED/QUIZ_DONE 等 |
 | `streak_service` | —（内嵌于 sport 写入链） | 连续行军：写入侧 `on_sport_upsert` 在当日首次达标时维护 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件；读取侧 `compute_streaks` 以 `daily_sport.is_goal_completed` 重算（纯函数 `streaks_of` / `longest_run` 按自然日连续计算，缺记录的日期视为中断；勋章判定复用同一套函数）；启动兜底 `recompute_all` 流式分组计算、只批量回写变化用户 |
 | `person_service` | `person.js` | 长征人物志（需求 §14）：`get_persons_by_node` 节点反查人物（节点详情 → 人物）；`get_person_detail` 人物详情（简介 + 关联节点即历史事件/历史时间，人物详情 → 节点） |
@@ -105,13 +106,14 @@
 | `quiz_records` | id, user_id, date, total_count, correct_count, score, points, wrong_list(JSON), details(JSON, 可空，014), answer_at | `uq_quiz_user_date`(user_id+date) | 每日答题记录，**每日仅一次**，当日全部题目作答或超时后生成；wrong_list 元素含 questionId/category 供知识画像推导（超时计入）；details 为逐题结果（我的答案/正确答案/对错/是否超时/得分/本题积分），历史记录不回填 |
 | `daily_questions` | id, user_id, date, question_ids(JSON) | `uq_dailyq_user_date`(user_id+date) | 当日抽题缓存（即答题会话），保证同一天返回同一套题 |
 | `quiz_answers` | id, session_id(→daily_questions), user_id, date, seq, question_id, started_at, deadline_at, submitted_at(可空), user_answer(JSON), is_correct, status(answering/answered/timeout), points | `uq_quiz_answer_session_seq`(session_id+seq)；索引 (user_id, date) | 逐题限时作答（018）：开题/截止/提交时间均为服务器 UTC 时间；status 条件更新保证每题只判定一次；答题积分按该表答对数实时同步台账 |
-| `points_log` | id, user_id, date, reason(50), delta | 无表级唯一（去重在 service 层） | 积分流水；**同日同 reason 去重** |
+| `points_log` | id, user_id, date, reason(50), delta, source_type(walk/quiz/legacy), ref_id(可空), biz_key(64,可空), created_at, updated_at | `uq_points_user_biz`(user_id+biz_key)；索引 (source_type, user_id) | 积分台账（017）：每人每来源每日一行（biz_key=walk:日期 / quiz:日期），按源数据覆盖重算；ref_id 指向 daily_sport / daily_questions；V2.0 前旧规则流水为 legacy，仅追溯不计入总积分 |
+| `activity_settings` | id(固定 1), name, start_at, end_at, is_published, restrict_enabled, allow_view_after_end, end_title, end_message, updated_at, updated_by | 主键 | 活动时间配置（016）：时间 UTC naive 存储；状态不落库，按服务器时间实时计算；无配置行时视为进行中、不拦截 |
 | `user_medals` | id, user_id, medal_id(50), granted_at | `uq_user_medal`(user_id+medal_id) | 用户已获勋章 |
 | `user_event` | id, user_id, event_type(50), event_time, data(JSON) | 无（一次性事件靠 service 层 `has_event` 去重） | 统一事件流水：FIRST_STEP/DAILY_GOAL/STREAK_*/NODE_LIT/MEDAL_GRANTED/QUIZ_DONE 等；小程序足迹时间轴与管理端实时动态共用此表，`data` 存文案参数（节点名、连续天数等） |
 | `user_identities` | id, user_id, provider(wx_mini/wx_web), app_id, openid, unionid(可空), verified_at(可空), created_at, updated_at | `uq_identity_provider_openid`(provider+app_id+openid)、`uq_identity_user_channel`(user_id+provider+app_id) | 微信身份关联（010）：登录时采集；「一个 unionid 只属一个用户」无索引约束，由 identity_service 事务内校验，冲突身份禁止自动合并 |
 | `bind_requests` | id, token_hash(唯一), user_id(可空), provider, app_id, openid, unionid(可空), status(pending/confirmed/used/cancelled/expired), expires_at, used_at, confirmed_at, created_at | token_hash 唯一 | 身份绑定请求（010）：绑定凭证仅存 SHA-256 摘要，不存可重放明文；目标身份来自微信服务端而非前端提交 |
 | `qr_login_sessions` | id(qrId), scene_token_hash(唯一), status(pending/scanned/confirmed/failed/cancelled/expired), fail_reason, user_id, token_issued, created_at, expires_at, confirmed_at | scene_token_hash 唯一 | PC 扫码登录会话（010）：id 为轮询凭证，与小程序码内嵌 scene 凭证分离；token_issued 保证管理员 JWT 仅签发一次（防轮询重放） |
-| `admin_menus` | id, code(唯一), name, sort_order | code 唯一 | 后台菜单（010）：code 与 `require_menu` 依赖一一对应，共 9 项（dashboard/screen/rankings/route_nodes/questions/quotes/orgs/access/audit） |
+| `admin_menus` | id, code(唯一), name, sort_order | code 唯一 | 后台菜单（010）：code 与 `require_menu` 依赖一一对应，共 11 项（dashboard/screen/rankings/route_nodes/questions/quotes/orgs/access/audit，015 增 invites，016 增 activity） |
 | `admin_roles` | id, code(唯一), name, is_builtin, created_at | code 唯一 | 后台角色（010）：内置角色不可删除 |
 | `admin_role_menus` | role_id(FK), menu_id(FK) | 复合主键 (role_id, menu_id) | 角色↔菜单关联（010） |
 | `admin_user_roles` | id, user_id, role_id, enabled, granted_by, granted_at, updated_at | `uq_admin_user_role`(user_id+role_id) | 用户角色授权（010）：enabled=False 即时生效（get_current_admin 每请求查库） |
@@ -122,7 +124,7 @@
 
 ### 3.3 数据库部署与结构变更
 
-本地 openGauss 使用数据库 `longmarch`、用户 `gaussdb`、端口 `5118`。`../docker/init/init-db.sh` 创建数据库及 `schema_migrations`，再按文件名顺序执行尚未登记的 SQL。`001_schema.sql` 是当前基线；`002_route_node_config.sql` 增加路线节点经纬度、排序和启用字段；`003_optional_user_avatar.sql` 将 avatar 改为可空（适配 openGauss 空串→NULL）；`004_nickname_change.sql` 增加曾用名与改名时间；`005_upgrade.sql` 为高级化升级：users 连续行军字段、daily_sport 距离/达标/补签预留、lit_nodes 步数快照、route_nodes 历史事件卡 7 字段、questions 分类、medal_defs 分类/隐藏/排序、新建 user_event 表。`006_persons.sql` 新建 persons（长征人物志）与 person_nodes（人物-节点关联）两表。`007_daily_quotes.sql` 新建 daily_quotes（每日寄语）。`008_route_ceremony.sql` 为 users 增加 route_ceremony_at（长征完成仪式标记）。`009_org_serial.sql` 组织主键自增。`010_admin_identity.sql` 新建 user_identities/bind_requests/qr_login_sessions/admin_menus/admin_roles/admin_role_menus/admin_user_roles/audit_logs 八表并种入菜单与内置角色。`011_import_previews.sql` 新建 Excel 导入预览暂存表。`012_perf_indexes.sql` 补充热点查询索引。`013_daily_quote_cycle.sql` 将每日寄语改为循环模型（按原日期顺序回填排序号、全部置为启用、新建 system_settings 并写入循环起始日期、删除 date 列）。后续变更新增递增编号脚本，并同步修改 SQLAlchemy ORM，FastAPI 不自动建表。
+本地 openGauss 使用数据库 `longmarch`、用户 `gaussdb`、端口 `5118`。`../docker/init/init-db.sh` 创建数据库及 `schema_migrations`，再按文件名顺序执行尚未登记的 SQL。`001_schema.sql` 是当前基线；`002_route_node_config.sql` 增加路线节点经纬度、排序和启用字段；`003_optional_user_avatar.sql` 将 avatar 改为可空（适配 openGauss 空串→NULL）；`004_nickname_change.sql` 增加曾用名与改名时间；`005_upgrade.sql` 为高级化升级：users 连续行军字段、daily_sport 距离/达标/补签预留、lit_nodes 步数快照、route_nodes 历史事件卡 7 字段、questions 分类、medal_defs 分类/隐藏/排序、新建 user_event 表。`006_persons.sql` 新建 persons（长征人物志）与 person_nodes（人物-节点关联）两表。`007_daily_quotes.sql` 新建 daily_quotes（每日寄语）。`008_route_ceremony.sql` 为 users 增加 route_ceremony_at（长征完成仪式标记）。`009_org_serial.sql` 组织主键自增。`010_admin_identity.sql` 新建 user_identities/bind_requests/qr_login_sessions/admin_menus/admin_roles/admin_role_menus/admin_user_roles/audit_logs 八表并种入菜单与内置角色。`011_import_previews.sql` 新建 Excel 导入预览暂存表。`012_perf_indexes.sql` 补充热点查询索引。`013_daily_quote_cycle.sql` 将每日寄语改为循环模型（按原日期顺序回填排序号、全部置为启用、新建 system_settings 并写入循环起始日期、删除 date 列）。`014_quiz_result_details.sql` 为答题记录增加逐题结果。`015_invite_admission.sql` 邀请码准入。`016_activity_settings.sql` 新建活动配置表（默认已发布进行中）与 activity 菜单。`017_points_ledger.sql` 积分台账化：points_log 增来源/业务键/唯一索引，按 daily_sport / quiz_records 回填步行与答题积分，旧流水标记 legacy。`018_quiz_answers.sql` 新建逐题限时作答表。后续变更新增递增编号脚本，并同步修改 SQLAlchemy ORM，FastAPI 不自动建表。
 
 ## 4. 关键接口定义
 
@@ -133,7 +135,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | 方法 | 路径 | 鉴权 | 说明 |
 | --- | --- | --- | --- |
 | GET | `/` | 否 | 健康检查 |
-| POST | `/api/auth/login` | 否 | 微信登录：`{code, avatar?}` → 仅为**已入驻**用户签发 `{status:"active", token, user}`；未入驻 `{status:"unregistered"}`、已停用 `{status:"disabled"}` 均不签发 Token；active 登录顺带发放每日登录积分（同日去重）与采集 unionid 身份行（幂等）；同一 openid 重复/并发登录复用同一用户；微信换取失败 502 |
+| POST | `/api/auth/login` | 否 | 微信登录：`{code, avatar?}` → 仅为**已入驻**用户签发 `{status:"active", token, user}`；未入驻 `{status:"unregistered"}`、已停用 `{status:"disabled"}` 均不签发 Token；active 登录顺带采集 unionid 身份行（幂等，V2.0 起登录不再发放积分）；同一 openid 重复/并发登录复用同一用户；微信换取失败 502 |
 | POST | `/api/auth/invite/verify` | 否 | 校验入驻邀请码 `{inviteCode}`（不核销，`invite_limiter` 限流），返回 `{name, orgId, orgName}`；邀请码不可用返回 400（无效/停用/过期/用满） |
 | POST | `/api/auth/onboard` | 否 | 持邀请码入驻 `{code, inviteCode, nickname, orgId, avatar?}`：同一事务内条件 UPDATE 核销（used_count + 1，未过期未停用）+ 建号 + 审计 `user.onboard`；openid 唯一约束冲突回滚撤销核销复用已有用户。返回 `{token, user, created}`；邀请码不可用或组织越界 400；账号已停用 403（头 `X-Account-Status: disabled`）；微信换取失败 502 |
 | GET | `/api/auth/me` | 是 | 当前用户 `{id, nickname, avatar, orgId, nicknameChangedAt}` |
@@ -155,7 +157,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET | `/api/march/footprints` | 是 | 我的长征足迹（需求 §7）：`{nodes[{id,name,icon,litAt,litDate,daySteps,cumSteps}]}`，按路线顺序的已点亮节点；litDate 为本地日期（与 DailySport.date 同口径），cumSteps 为点亮时刻累计快照（历史回填为 0 前端判空） |
 | GET | `/api/march/route-nodes` | 是 | 启用节点配置列表（含经纬度） |
 | GET | `/api/march/node/{node_id}` | 是 | 节点详情（任意状态可看，含未解锁），不存在 404；含 `persons[{id,name}]` 关联人物（§14 节点 → 人物入口） |
-| POST | `/api/march/light-up` | 是 | 点亮达标节点，返回 `{newlyLit: [...], newlyCompletedChapters: [...], newMedals: [...]}`，发放积分并刷新勋章（newMedals 为本次新获勋章 id） |
+| POST | `/api/march/light-up` | 是 | 点亮达标节点，返回 `{newlyLit: [...], newlyCompletedChapters: [...], newMedals: [...]}` 并刷新勋章（newMedals 为本次新获勋章 id；V2.0 起点亮不发放积分，gainedPoints 恒为 0） |
 | POST | `/api/march/ceremony` | 是 | 标记长征完成仪式已观看（§20.4）：幂等写入 users.route_ceremony_at；仅首次完成触发完整动画，之后仪式页为静态回顾 |
 | GET | `/api/quiz/daily` | 是 | 今日答题状态 `{date, issueNo, completed, totalCount, timeLimit, serverTime, progress[], current?, correctCount, points, record?}`：不开题、不下发未开题目；已过截止 + 宽限的题目判超时；已完成时 record 含 details 逐题结果 |
 | POST | `/api/quiz/start` | 是 | 开始/继续当前题（幂等）：作答中返回同一题与 `current{seq, question, startedAt, deadlineAt, remainingMs}`（题目不含答案与解析）；当前题已截止则判超时并开下一题；全部结束返回记录 |
@@ -165,15 +167,18 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET | `/api/quiz/records` | 是 | 答题记录列表 |
 | GET | `/api/quiz/knowledge` | 是 | 知识画像：总正确率 + 按题目分类（event/route/figure）的答题数与正确率 |
 | POST | `/api/quiz/reset` | 是 | 重置今日答题（调试用） |
-| GET | `/api/points` | 是 | 积分总额与流水 `{total, logs: [{date, reason, delta}]}` |
+| GET | `/api/points` | 是 | 积分概览 `{total, walk, quiz, todayWalk, todayQuiz, todaySteps, todayCorrect, rank, rules}`，total 恒等于 walk + quiz，rank 为总积分榜名次 |
+| GET | `/api/points/daily?page=&page_size=` | 是 | 积分明细（按自然日倒序分页）`{total, items[{date, walk, quiz, total, steps, correctCount, updatedAt}]}` |
 | GET | `/api/medal/list` | 是 | 勋章列表 `{medals: [{id, name, icon, desc, owned}], ownedCount}`（先触发检查发放） |
 | POST | `/api/medal/check` | 是 | 检查并发放勋章，返回 `{newly: [medalId...]}` |
 | GET | `/api/org/children?parent_id=` | 否 | 按层级下钻组织树（留空返回顶级） |
-| GET | `/api/org/mine` | 是 | 我的组织 `{orgId, orgName, fullName, path}` |
+| GET | `/api/org/mine` | 是 | 我的组织 `{orgId, orgName, fullName, path, locked}`（locked=已归属组织，小程序不可再改） |
 | GET | `/api/org/companions?limit=` | 是 | 同组织同行者（需求 §9）：`{org, memberCount, todayTotalSteps, companions[]}`；口径为用户所选组织的整棵子树，同行者按今日步数倒序限量（≤50），条目仅昵称/头像/今日步数/isSelf（§9.4 隐私） |
 | GET | `/api/org/march` | 是 | 组织共同长征目标（需求 §10）：`{org, memberCount, totalSteps, progressPct, currentNodeName, nextNodeName, finished, litCount, totalCount, nodes[]}`；组织累计步数=子树成员累计有效步数之和，`currentNodeName`=第一个未完成节点、`nextNodeName`=其后一个（§10.2），节点 pct 已完成100/当前按累计占目标比例/其余0（§10.3） |
-| POST | `/api/org/select` | 是 | 首次选定组织 `{orgId}`（之后锁定，再选 403）；组织不存在 404 |
-| GET | `/api/rank/steps` | 是 | 全员工累计步数榜 `{list: [{rank, userId, nickname, avatar, orgName, steps, isMe}], myRank, mySteps, total}` |
+| POST | `/api/org/select` | 是 | 首次选定组织 `{orgId}`：条件 UPDATE（org_id 为空才写入）保证并发只成功一次，之后锁定再选 403「所属部门已锁定…」；组织不存在 404 |
+| GET | `/api/rank/points?page=&page_size=` | 是 | 全员工总积分榜 `{top[第1~10名], list[第11名起分页], me, page, pageSize, hasMore, total}`，条目 `{rank, userId, nickname, avatar, orgName, steps, points, walkPoints, quizPoints, isMe}` |
+| GET | `/api/rank/steps` | 是 | 旧版契约（兼容保留，名次同总积分口径）`{list, myRank, mySteps, total}` |
+| GET | `/api/activity/status` | 否 | 活动状态（公开）`{name, status, statusText, startAt, endAt, allowParticipate, allowView, restrictEnabled, endTitle, message, serverTime}`，status∈unpublished/not_started/ongoing/ended |
 | GET | `/api/auth/identities` | 是 | 已绑定身份列表 `[{id, provider, appId, openid, verifiedAt, createdAt, isPrimary}]`（wx_mini 主身份 isPrimary=true） |
 | DELETE | `/api/auth/identities/{identity_id}` | 是 | 解绑身份：主身份（wx_mini）400「微信登录凭证不可解绑」，非本人身份 400「身份不存在」，成功写审计 |
 | WS | `/api/ws/updates?token=` | 是 | 实时推送长连接：数据写入广播 `data_changed`；`user_event` 写入广播 `activity`（含文案） |
@@ -184,7 +189,10 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | PATCH | `/api/admin/invites/{id}` | 管理员(invites) | 编辑邀请码：`{name?,remark?,orgId?,maxUses?,expiresAt?,isEnabled?}`，`maxUses` 不能低于已用次数，审计（不下发原码） |
 | GET | `/api/admin/invites/{id}/qrcode` | 管理员(invites) | 下发邀请小程序码 `{image?, page, scene, envVersion, mock}`：页面 `pages/launch/launch`、scene `i=<CODE>`（≤32 字符，不含敏感信息）；mock 模式 image=None 返回明文 scene 供调试 |
 | PATCH | `/api/admin/users/{user_id}/status` | 管理员(access) | 启用/禁用账号 `{status: "active"|"disabled"}`：禁用后下次请求返回 403 `X-Account-Status: disabled`，审计记录操作人 |
-| PUT | `/api/admin/users/{user_id}/org` | 管理员(access) | 调整用户所属组织 `{org_id}`，审计 `user.org_change`（操作人/原组织/新组织/时间） |
+| PUT | `/api/admin/users/{user_id}/org` | 管理员(access) | 调整用户所属组织 `{org_id}`，审计 `user.org_change`（操作人/原组织/新组织/时间）；组织未变化不写审计；用户或组织不存在 404 |
+| GET/PUT | `/api/admin/activity` | 管理员(activity) | 活动设置与当前状态；PUT `{name, start_at, end_at, restrict_enabled, allow_view_after_end, end_title, end_message}`（时间按北京时间解释，开始须早于结束，否则 400），即时生效，审计 `activity.update`（before/after） |
+| POST | `/api/admin/activity/publish` | 管理员(activity) | 发布/撤回 `{published}`，审计 `activity.publish` / `activity.unpublish`；未保存配置 400 |
+| POST | `/api/admin/points/verify` | 管理员(rankings) | 积分台账核对 `{fix?, user_ids?}` → `{users, checked_days, mismatches, fixed, samples[{user_id, biz_key, expected, actual}]}`；fix=true 按源数据修复并写审计 `points.recompute` |
 | GET | `/api/admin/me` | 管理员 | 当前管理员信息与菜单权限 `{is_super, username, menus}` |
 | GET | `/api/admin/users` | 管理员(access) | 人员授权列表（昵称/组织/`status`筛选、分页）：每项含启用/禁用角色、授权人、邀请码来源（inviteCodeId/inviteName）、onboardedAt、status |
 | GET | `/api/admin/roles` | 管理员(access) | 角色列表（含菜单勾选与是否内置） |
@@ -198,7 +206,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET | `/api/admin/dashboard/trend?days=` | 管理员(dashboard) | 运动趋势：近 N 日每日总步数/运动人数/新增用户/新点亮节点数 |
 | GET | `/api/admin/activities?limit=` | 管理员(dashboard) | 实时动态：`user_event` 关联昵称倒序 |
 | GET | `/api/admin/screen` | 管理员(screen) | 数据大屏单接口聚合：指标 + 路线总览 + 7 日趋势 + 实时动态（整体口径，无组织维度） |
-| GET | `/api/admin/rankings` | 管理员(rankings) | 全员排名（服务端分页）：`page`、`page_size`（≤200）、`keyword`（昵称/人员 ID 包含匹配）、`org_id`（所属组织精确匹配）、`only_changed`。全员指标（total/total_steps/completed_users/avg_progress）和领奖台 podium 不受筛选影响；`match_total` 为命中人数；`org_options` 为有成员的组织；items 只返回当前页，每人含全部启用节点的到达时间 |
+| GET | `/api/admin/rankings` | 管理员(rankings) | 全员排名（服务端分页）：`page`、`page_size`（≤200）、`keyword`（昵称/人员 ID 包含匹配）、`org_id`（所属组织精确匹配）、`only_changed`。全员指标（total/total_steps/total_points/completed_users/avg_progress）和领奖台 podium 不受筛选影响；`match_total` 为命中人数；`org_options` 为有成员的组织；items 只返回当前页，每人含总/步行/答题积分与全部启用节点的到达时间，名次与小程序总积分榜同口径 |
 | GET | `/api/admin/rankings/export` | 管理员(rankings) | 按相同筛选条件流式导出 CSV（UTF-8 BOM，防公式注入，按批读取，每批 1000 人），时间为本地 `YYYY/MM/DD HH:mm` |
 | GET | `/api/admin/users/{id}/overview` | 管理员(rankings) | 人员详情聚合（运动/答题/勋章/长征/积分） |
 | GET | `/api/admin/route-nodes` | 管理员(route_nodes) | 全部路线节点列表（含停用） |
@@ -301,13 +309,14 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | 路线 | 累计步数 ≥ 节点 `targetSteps` 即点亮，点亮**永久保留**；节点状态 `completed`（已点亮）/ `current`（下一目标）/ `unlocked`（未解锁）；停用节点不在小程序可见路线中，不参与完成判定和排名，已有 lit_nodes 记录保留 |
 | 章节 | 5 章配置于 `march_service.CHAPTERS`（每章 2 个 route_nodes 主键，划分与介绍可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`（全部停用的章节不下发）；`light_up_nodes` 对比点亮前后完成集，新完成章写 `CHAPTER_COMPLETE` 事件并随响应返回（含 title/intro 供前端仪式展示），不改变节点点亮与积分规则 |
 | 答题 | 每日随机 5 题、每题 20 分、满分 100；逐题开题、每题 90 秒（服务器计时），每题仅可提交一次、提交即判定，超时不得分且不可再提交；全部题目结束生成当日记录（每日一次）；只下发当前题且**不含答案与解析**；`/quiz/reset` 仅供调试 |
-| 积分 | 登录 +1；运动 5000 步 +5、10000 步 +10；答题 +5、满分额外 +10；点亮节点 +10；完成路线 +100；**同日同 reason 去重** |
+| 积分 | 总积分 = 步行积分 + 答题积分，只由后端计算：步行每日 `floor(min(当日步数, 20000) / 1000)`（单日最高 20）；答题每答对 1 题 +2、不扣分、单日最高 10。台账每人每来源每日一行（biz_key 唯一），在业务事务内按源数据覆盖重算，重复同步/重放/并发不重复计分，往日步数校正同步修正积分；登录、达标、点亮、完成路线等旧规则不再发放，旧流水（legacy）仅追溯不计入；`/api/admin/points/verify` 按源数据核对与修复（参数见 `Settings.POINTS_*`） |
 | 勋章 | 12 枚分四类：入门（first-step 首次运动 / learner 答题 10 次 / persistence 连续行军 7 天）、路线（luding 点亮泸定桥 / snow 点亮雪山）、挑战（day-10k 单日万步 / steps-100k / steps-500k / streak-30 连续 30 天 / master 积分≥500 / fearless 连续 7 天日万步，隐藏）、完成（victory 全部**启用**节点点亮）；隐藏勋章未获得时不公开条件 |
 | 连续行军 | 当日步数 ≥ `STREAK_GOAL_STEPS`（默认 5000）即完成当日行军；写入侧在 `is_goal_completed` 由 False 翻 True 时更新 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件（一次性成就按事件表去重）；读取侧以 `daily_sport.is_goal_completed` 重算为准 |
 | 事件 | 所有用户侧成就（首次运动/当日达标/连续里程碑/点亮节点/获得勋章/完成答题等）统一写 `user_event`，文案由 `event_service.build_text` 生成；写事件即向 WS 广播 `activity`，任何数据写入广播 `data_changed`；小程序公开动态流（`/api/broadcast/activities` + WS）只暴露昵称/文案/类型/时间，`ACTIVITY_MASK_NICKNAME` 可开启昵称脱敏 |
-| 组织 | 树形逐级下钻；用户可选定任意层级节点；`/org/children` 不鉴权可浏览 |
+| 组织 | 树形逐级下钻；用户可选定任意层级节点；`/org/children` 不鉴权可浏览；所属组织首次确定（入驻或首次选择）后即锁定，用户侧再选 403，仅管理员可调整并写审计 `user.org_change` |
+| 活动窗口 | 管理端配置活动名称/起止时间（北京时间）/访问限制/结束后可查看/结束文案，发布后生效；状态按服务器时间实时计算。产生业务数据的接口（同步步数、开题答题、点亮、选组织等）挂 `require_activity_participation`，仅进行中放行；成绩/排行等读取接口挂 `require_activity_view`，结束后按 `allow_view_after_end` 放行；拒绝统一 403 + `X-Activity-Status`；鉴权先于活动校验（无 Token 恒 401）；`restrict_enabled=false` 或无配置时不拦截 |
 | 昵称 | 登录时以微信昵称建号（记为曾用名）；登录**不再覆盖**昵称（头像仍随登录更新）；首次引导可经 `PUT /auth/nickname/initial` 设置昵称（不消耗改名机会）；应用内 `PUT /auth/nickname` 修改，**每人仅一次**（改后 nickname_changed_at 记录时间，再改返回 400）；曾用名与修改时间在管理端排名洞察可见 |
-| 排名 | 跨组织员工个人总榜，按累计步数降序；小程序用 `isMe` 标记本人行，管理端返回全量人员及 `lit_nodes.lit_at` 节点到达时间 |
+| 排名 | 跨组织员工个人总榜，按总积分降序、同分按累计步数降序、再按 user_id 升序（名次稳定、两端一致）；小程序 `/rank/points` 返回前 10 名 + 第 11 名起分页，`isMe` 标记本人；管理端返回全量人员（分页）及 `lit_nodes.lit_at` 节点到达时间 |
 | 身份关联 | 认证（JWT）、身份关联（user_identities）、后台授权（RBAC）三层分离——绑定身份成功**不等于**拥有后台权限；`wx_mini` 登录凭证身份不可解绑；同一 `provider+app_id+openid` 全局唯一，unionid 冲突**禁止自动合并**（事务内校验，冲突时不写入不合并）；绑定凭证只存 SHA-256 摘要，确认后单次有效 |
 | 扫码登录 | L 场景：创建→轮询→小程序确认（无启用角色时会话置 failed 并返回原因，有角色置 confirmed）→PC 轮询到 confirmed 后**单次签发**管理员 JWT（token_issued 原子标记防重放）；B 场景：确认后事务写 user_identities（provider 目标身份来自微信服务端） |
 | RBAC 授权 | 超管（`typ=super`）全菜单放行；微信关联管理员（`typ=user`）按启用角色的菜单并集校验，`get_current_admin` **每请求查库**——角色撤销/禁用即时生效（WS 管理端分支建连查库校验，失效 4403 关闭）；授权/角色变更逐项写审计（区分 super/user 操作人） |

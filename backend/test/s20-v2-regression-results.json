@@ -1,0 +1,154 @@
+{
+  "results": [
+    {
+      "id": "A01",
+      "name": "未配置活动不拦截",
+      "ok": true,
+      "detail": "status=ongoing write=200"
+    },
+    {
+      "id": "A02",
+      "name": "开始不早于结束 400",
+      "ok": true,
+      "detail": "{\"detail\":\"开始时间必须早于结束时间\"}"
+    },
+    {
+      "id": "A03",
+      "name": "未发布：写 403 unpublished，读放行",
+      "ok": true,
+      "detail": "write=403/unpublished read=200"
+    },
+    {
+      "id": "A04",
+      "name": "未开始：同步/开题/选组织均 403 not_started",
+      "ok": true,
+      "detail": "status=not_started codes=[403, 403, 403]"
+    },
+    {
+      "id": "A05",
+      "name": "进行中放行",
+      "ok": true,
+      "detail": "write=200"
+    },
+    {
+      "id": "A06",
+      "name": "已结束：写 403，读按 allow_view_after_end 放行/拒绝",
+      "ok": true,
+      "detail": "write=403 read=200 read_closed=403"
+    },
+    {
+      "id": "A07",
+      "name": "关闭访问限制后放行",
+      "ok": true,
+      "detail": "write=200"
+    },
+    {
+      "id": "A08",
+      "name": "无 Token 恒 401",
+      "ok": true,
+      "detail": "codes=[401, 401]"
+    },
+    {
+      "id": "A09",
+      "name": "保存/发布/撤回写审计",
+      "ok": true,
+      "detail": "update=6 publish=1 unpublish=1"
+    },
+    {
+      "id": "P01",
+      "name": "步行积分边界",
+      "ok": true,
+      "detail": "got=[(999, 0, 0, 0), (1000, 1, 1, 1), (1999, 1, 1, 1), (20000, 20, 20, 20), (25000, 20, 20, 20)]"
+    },
+    {
+      "id": "P02",
+      "name": "多次补步只保留一行、按最终步数计分",
+      "ok": true,
+      "detail": "walk=7 rows=[('walk:2026-10-13', 7)]"
+    },
+    {
+      "id": "P03",
+      "name": "重复同步幂等",
+      "ok": true,
+      "detail": "steps=11084 rows=[('walk:2026-10-13', 11)]"
+    },
+    {
+      "id": "P04",
+      "name": "重复同步取最大步数，往日按最终步数校正",
+      "ok": true,
+      "detail": "steps=[4200, 12345, 12345] walk=20/12"
+    },
+    {
+      "id": "P05",
+      "name": "答题积分：4 对 8 分、5 对封顶 10、全错 0 不扣分",
+      "ok": true,
+      "detail": "record=[8, 10, 0] ledger=[8, 10, 0]"
+    },
+    {
+      "id": "P06",
+      "name": "总积分 = 步行 + 答题（概览与明细一致）",
+      "ok": true,
+      "detail": "summary=7=7+0 daily={'date': '2026-10-13', 'walk': 7, 'quiz': 0, 'total': 7, 'steps': 7500, 'correctCount': 0, 'updatedAt': '2026-10-13T03:59:35.622822'}"
+    },
+    {
+      "id": "P07",
+      "name": "legacy 流水不计入",
+      "ok": true,
+      "detail": "total=11"
+    },
+    {
+      "id": "P08",
+      "name": "核对检出 2 处差异，修复后无差异并写审计",
+      "ok": true,
+      "detail": "verify=2 fixed=2 after=0"
+    },
+    {
+      "id": "C01",
+      "name": "总积分榜降序，前 10 与管理端同序同分",
+      "ok": true,
+      "detail": "mini=[(4, 20), (3, 11), (6, 10), (5, 8), (2, 7)] admin=[(4, 20), (3, 11), (6, 10), (5, 8), (2, 7)]"
+    },
+    {
+      "id": "C02",
+      "name": "我的名次与积分三处一致",
+      "ok": true,
+      "detail": "points=1/20 rank={'rank': 1, 'userId': 4, 'nickname': 'S20用户4', 'avatar': '', 'orgName': '', 'steps': 21145, 'points': 20, 'walkPoints': 20, 'quizPoints': 0, 'isMe': True} profile={'total': 20, 'walk': 20, 'quiz': 0, 'rank': 1}"
+    },
+    {
+      "id": "C03",
+      "name": "管理端人员详情与导出同口径积分",
+      "ok": true,
+      "detail": "overview={'total': 20, 'walk': 20, 'quiz': 0, 'rank': 1, 'logs': [{'date': '2026-10-13', 'reason': '步行积分', 'delta': 12, 'source_type': 'walk'}, {'date': '2026-10-12', 'reason': '步行积分', 'delta': 8, 'source_type': 'walk'}]} csv=﻿\"排名\",\"人员ID\",\"姓名\",\"曾用名\",\"改名时间\",\"所属组织\",\"总积分\",\"步行积分\",\"答题积分\",\"累计步数\",\"到达节点数\""
+    },
+    {
+      "id": "D01",
+      "name": "首次选择成功并锁定，再次选择 403",
+      "ok": true,
+      "detail": "first=200 second=403"
+    },
+    {
+      "id": "D02",
+      "name": "已入驻用户选择 403，mine.locked=true",
+      "ok": true,
+      "detail": "select=403 mine={'orgId': 2, 'orgName': '华东', 'fullName': '总部 / 华东', 'path': [{'id': 1, 'name': '总部'}, {'id': 2, 'name': '华东'}], 'locked': True, 'scopeOrgId': None, 'scopeOrgName': None}"
+    },
+    {
+      "id": "D03",
+      "name": "8 并发首次选择仅 1 成功",
+      "ok": true,
+      "detail": "codes=[200, 403, 403, 403, 403, 403, 403, 403]"
+    },
+    {
+      "id": "D04",
+      "name": "管理员调整写审计（操作人/原/新组织），未变化不写",
+      "ok": true,
+      "detail": "status=200 logs=[{'operator': 'admin', 'before_org_id': 2, 'before_org_name': '总部 / 华东', 'after_org_id': 3, 'after_org_name': '总部 / 华南'}]"
+    },
+    {
+      "id": "D05",
+      "name": "不存在 404，用户 Token 无权",
+      "ok": true,
+      "detail": "codes=[404, 404, 401]"
+    }
+  ]
+}
