@@ -114,7 +114,7 @@ function callLogin(avatar) {
           })
           .catch(reject);
       },
-      fail: () => reject(new Error('微信登录失败，请重试'))
+      fail: (err) => reject(new Error('微信登录失败：' + ((err && err.errMsg) || '未知原因')))
     });
   });
 }
@@ -214,7 +214,7 @@ function onboard(params) {
           })
           .catch(reject);
       },
-      fail: () => reject(new Error('微信登录失败，请重试'))
+      fail: (err) => reject(new Error('微信登录失败：' + ((err && err.errMsg) || '未知原因')))
     });
   });
 }

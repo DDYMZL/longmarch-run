@@ -73,8 +73,9 @@ Page({
       this.handleUnregistered();
       return;
     }
-    const network = err && err.network;
-    const msg = network ? '网络异常，请检查网络后重试' : (err && err.message) || '登录失败，请重试';
+    // 网络类错误直接用 request.js 给出的详细原因（含原始 errMsg），不再统一覆盖为笼统文案
+    const fallback = err && err.network ? '网络异常，请检查网络后重试' : '登录失败，请重试';
+    const msg = (err && err.message) || fallback;
     this.setData({ phase: 'blocked', message: msg, errorMsg: msg });
   },
 
@@ -99,7 +100,8 @@ Page({
           this.setData({ phase: 'blocked', message: (err && err.message) || BLOCKED_MSG });
           return;
         }
-        const msg = err && err.network ? '网络异常，请检查网络后重试' : (err && err.message) || BLOCKED_MSG;
+        const fallback = err && err.network ? '网络异常，请检查网络后重试' : BLOCKED_MSG;
+        const msg = (err && err.message) || fallback;
         this.setData({ phase: 'blocked', message: msg });
       });
   },

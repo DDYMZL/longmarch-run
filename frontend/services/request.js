@@ -93,10 +93,11 @@ function send(opts) {
       },
       fail: (err) => {
         const raw = (err && err.errMsg) || '';
-        const msg = /url not in domain list/i.test(raw)
-          ? '请求域名未通过校验：真机调试请在手机调试面板开启「不校验合法域名」'
-          : '网络连接失败：真机调试请确认手机与电脑同一局域网，且 config.js 中 LAN_IP 为电脑局域网 IP';
-        reject(buildError(msg, { network: true }));
+        const hint = /url not in domain list/i.test(raw)
+          ? '请求域名未通过校验：请在公众平台把接口域名加入 request 合法域名（「不校验合法域名」对体验版/正式版无效）'
+          : '网络连接失败：请检查手机网络，或确认后端服务可访问（本机联调需手机与电脑同一局域网）';
+        // 附加原始 errMsg：真机看不了 console，只能靠它定位（如 request:fail url not in domain list）
+        reject(buildError(raw ? hint + '｜' + raw : hint, { network: true, rawErrMsg: raw }));
       }
     });
   });
