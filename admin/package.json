@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vue-tsc --noEmit -p tsconfig.app.json && vite build",
+    "build": "vue-tsc --noEmit -p tsconfig.app.json && vite build && node scripts/zip-dist.mjs",
+    "zip": "node scripts/zip-dist.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

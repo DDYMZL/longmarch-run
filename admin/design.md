@@ -82,3 +82,10 @@ WS /api/ws/updates?token=<admin token>
 1. **无状态库**：登录态是唯一全局状态，localStorage 足矣，不引 Pinia。
 2. **大屏单接口聚合**：`/admin/screen` 一次返回指标 + 路线总览 + 7 日趋势 + 动态，减少大屏首屏请求数；后续变更靠 WS 推送触发整页防抖重拉。
 3. **composable 复用**：WS 连接/重连逻辑抽为 `useLiveUpdates`，驾驶舱与大屏共享，避免重复实现。
+
+## 6. 构建与打包
+
+- `npm run build` = 类型检查 + `vite build` + 自动打包，产物为 `dist/` 与 `dist.zip`。
+- `npm run zip` 仅重新打包（依赖已有 `dist/`），用于构建产物未变时快速出包。
+- `scripts/zip-dist.mjs` 用 Node 内置 `zlib` 手写 Zip 结构（本地文件头 / 中央目录 / EOCD，CRC-32 校验），**零第三方依赖**且跨平台，规避环境无 `zip`/`7z` 可执行文件的问题；压缩后体积不减的资源自动按存储方式写入。Zip 内为 `dist` 的**内容**（`index.html`、`assets/...` 位于压缩包根目录），可直接解压部署。
+- `dist.zip` 属构建产物，已在根 `.gitignore` 忽略。

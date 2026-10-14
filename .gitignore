@@ -15,6 +15,7 @@ project.private.config.json
 
 # 管理后台构建产物
 admin/dist/
+admin/dist.zip
 
 # 支付宝开发者工具（误用生成的配置）
 mini.project.json
