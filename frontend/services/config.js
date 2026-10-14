@@ -4,7 +4,7 @@
 // 切到 'local' 时若电脑 IP 变化需同步更新 LAN_IP；手机须与电脑连同一局域网（Wi-Fi）。
 const ENV = 'remote';
 
-const REMOTE_HOST = '120.25.171.125';
+const REMOTE_HOST = 'swkjdj.sz-watech.com';
 const REMOTE_PORT = 8010;
 
 const LAN_IP = '10.1.171.137';
