@@ -90,7 +90,7 @@
 | `identity.js` | `qrInfo(scene)` / `qrConfirm(scene, action)` / `listIdentities()` / `unbind(id)` | `/api/auth/qr/info, qr/confirm, identities, identities/{id}` | 扫码确认（L 登录/B 绑定场景查询与确认取消）与身份绑定管理（列表/解绑，主身份禁解绑） |
 | `store.js` | `migrateUserData()` | （后端无对应，落库到 DB） | 遗留：登录时 Mock→真实用户 ID 数据迁移 |
 | `request.js` | `request(options)` / `getToken()` / `setReauthHandler(fn)` | — | 统一 wx.request 封装：Bearer JWT、401 静默重登并重试一次（`skipAuthRetry` 跳过）、失败清理回启动页、错误分类（`statusCode` / `network` / `activityStatus`）、FastAPI 错误解析；活动守卫 403（header `X-Activity-Status`）：GET 查看类请求 3s 防抖 reLaunch 活动状态页（`skipActivityRedirect` 跳过），写操作仅抛错由页面展示后端提示 |
-| `config.js` | `API_BASE_URL` | — | API 地址集中配置：`ENV` 常量一键切换联调环境——`'remote'`（默认）直连已部署后端 `http://swkjdj.sz-watech.com:8010/api`，开发者工具与真机一致；`'local'` 走本机后端，开发者工具用 `127.0.0.1:8010/api`，真机自动切换 `http://<电脑局域网IP>:8010/api`（LAN_IP 常量，电脑 IP 变化时需同步更新） |
+| `config.js` | `API_BASE_URL` | — | API 地址集中配置：`ENV` 常量一键切换联调环境——`'remote'`（默认）直连已部署后端 `https://swkjdj.sz-watech.com/api`（HTTPS，走默认 443；域名须与公众平台「服务器域名 → request 合法域名」一致，否则体验版/正式版报「网络异常」），开发者工具与真机一致；`'local'` 走本机后端，开发者工具用 `127.0.0.1:8010/api`，真机自动切换 `http://<电脑局域网IP>:8010/api`（LAN_IP 常量，电脑 IP 变化时需同步更新） |
 
 ## 3. 核心数据模型
 

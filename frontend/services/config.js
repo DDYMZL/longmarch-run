@@ -2,10 +2,11 @@
 //   'remote' —— 已部署的后端（默认）：开发者工具与真机调试都直连远程，本地无需起后端即可联调
 //   'local'  —— 本机后端：开发者工具用 127.0.0.1，真机调试自动改用电脑局域网 IP（LAN_IP）
 // 切到 'local' 时若电脑 IP 变化需同步更新 LAN_IP；手机须与电脑连同一局域网（Wi-Fi）。
+// 远程必须为 HTTPS，且域名与微信公众平台「服务器域名 → request 合法域名」完全一致：
+// 体验版/正式版强制域名校验，「不校验合法域名」仅对开发者工具与开发版生效，否则真机报「网络异常」。
 const ENV = 'remote';
 
-const REMOTE_HOST = 'swkjdj.sz-watech.com';
-const REMOTE_PORT = 8010;
+const REMOTE_ORIGIN = 'https://swkjdj.sz-watech.com';
 
 const LAN_IP = '10.1.171.137';
 const LOCAL_PORT = 8010;
@@ -13,7 +14,7 @@ const LOCAL_PORT = 8010;
 /** 按当前 ENV 解析接口根地址（含 /api 前缀）。 */
 function resolveBaseUrl() {
   if (ENV === 'remote') {
-    return 'http://' + REMOTE_HOST + ':' + REMOTE_PORT + '/api';
+    return REMOTE_ORIGIN + '/api';
   }
   let host = '127.0.0.1';
   try {
