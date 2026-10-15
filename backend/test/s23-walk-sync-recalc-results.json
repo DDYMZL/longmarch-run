@@ -6,7 +6,7 @@
       "id": "R01",
       "name": "复现 bug：累计 2611 步但步行积分仅 1 分（旧逐日取整台账）",
       "ok": true,
-      "detail": "points={'total': 8, 'walk': 1, 'quiz': 7, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 1, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'quizDailyCap': 10}} profile={'totalSteps': 2611, 'totalDistance': 1.71, 'sportDays': 3, 'currentStreak': 0, 'maxStreak': 0, 'maxDaySteps': 1611, 'avgDailySteps'"
+      "detail": "points={'total': 8, 'walk': 1, 'quiz': 7, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 1, 'rules': {'walkStepsPerPoint': 1000, 'quizPerCorrect': 2, 'quizDailyCap': 10}} profile={'totalSteps': 2611, 'totalDistance': 1.71, 'sportDays': 3, 'currentStreak': 0, 'maxStreak': 0, 'maxDaySteps': 1611, 'avgDailySteps': 870, 'progress': 0, 'litCount': 0, 'tota"
     },
     {
       "id": "R02",
@@ -66,19 +66,19 @@
       "id": "R11",
       "name": "答题/legacy 流水不受同步修复影响，total = walk + quiz",
       "ok": true,
-      "detail": "pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 3, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'quizDailyCap': 10}} u1={'total': 9, 'walk': 2, 'quiz': 7, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 1, 'rules':"
+      "detail": "pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 3, 'rules': {'walkStepsPerPoint': 1000, 'quizPerCorrect': 2, 'quizDailyCap': 10}} u1={'total': 9, 'walk': 2, 'quiz': 7, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 1, 'rules': {'walkStepsPerPoint': 1000, 'quizPerCorre"
     },
     {
       "id": "R12",
       "name": "个人中心/积分概览/积分明细/总积分榜四处步行积分一致",
       "ok": true,
-      "detail": "prof={'total': 2, 'walk': 2, 'quiz': 0, 'rank': 3} pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 3, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'quizDailyCap': 10}} me={'rank': 3, 'userId': 2, 'nickname': 'S23r02', 'avatar': '', 'orgName': '', 'steps': 2611"
+      "detail": "prof={'total': 2, 'walk': 2, 'quiz': 0, 'rank': 3} pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 3, 'rules': {'walkStepsPerPoint': 1000, 'quizPerCorrect': 2, 'quizDailyCap': 10}} me={'rank': 3, 'userId': 2, 'nickname': 'S23r02', 'avatar': '', 'orgName': '', 'steps': 2611, 'points': 2, 'walkPoints': 2, 'quizPoint"
     },
     {
       "id": "R13",
       "name": "重新请求（模拟刷新/退出重进）积分仍为 2 分",
       "ok": true,
-      "detail": "pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 3, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'quizDailyCap': 10}} prof={'total': 2, 'walk': 2, 'quiz': 0, 'rank': 3}"
+      "detail": "pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 3, 'rules': {'walkStepsPerPoint': 1000, 'quizPerCorrect': 2, 'quizDailyCap': 10}} prof={'total': 2, 'walk': 2, 'quiz': 0, 'rank': 3}"
     }
   ]
 }

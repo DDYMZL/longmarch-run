@@ -2,7 +2,7 @@
  * 积分服务：积分概览与按日明细（全部由后端台账计算，前端只展示）。
  *
  * 规则（以后端 rules 为准）：总积分 = 步行积分 + 答题积分；
- * 步行按日期累计有效步数每满 1000 步计 1 分、每日最多 20000 步参与累计，答题每答对 1 题 +2、单日上限 10。
+ * 步行按日期累计步数每满 1000 步计 1 分、不设单日上限（零头结余累计），答题每答对 1 题 +2、单日上限 10。
  */
 const requestService = require('./request');
 
@@ -10,7 +10,7 @@ const requestService = require('./request');
  * 积分概览。
  * @returns {Promise<{total:number, walk:number, quiz:number, todayWalk:number, todayQuiz:number,
  *   todaySteps:number, todayCorrect:number, rank:number|null,
- *   rules:{walkStepsPerPoint:number, walkStepCap:number, walkDailyCap:number, quizPerCorrect:number, quizDailyCap:number}}>}
+ *   rules:{walkStepsPerPoint:number, quizPerCorrect:number, quizDailyCap:number}}>}
  */
 function getSummary() {
   return requestService.request({ url: '/points' });

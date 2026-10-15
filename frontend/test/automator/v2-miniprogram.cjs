@@ -291,8 +291,8 @@ async function run() {
     const daily = (await api('/points/daily?page=1&page_size=20')).body;
     const ruleText = [];
     for (const el of await page.$$('.rule-line')) ruleText.push(await el.text());
-    const pass = d.summary.total === pts0.total && d.rules.walkStepCap === 20000 && d.rules.quizPerCorrect === 2
-      && d.items.length === daily.items.length && ruleText.length === 3 && ruleText[0].indexOf('20000') >= 0;
+    const pass = d.summary.total === pts0.total && d.rules.walkStepsPerPoint === 1000 && d.rules.quizPerCorrect === 2
+      && d.items.length === daily.items.length && ruleText.length === 4 && ruleText[0].indexOf('1000') >= 0;
     return { pass, detail: 'total=' + d.summary.total + ' items=' + d.items.length + '/' + daily.total + ' rule0=' + ruleText[0] };
   });
 

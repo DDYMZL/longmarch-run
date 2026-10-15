@@ -231,7 +231,7 @@ def points_cases(c, users):
         got = []
         boundaries = [
             (500, 0), (999, 0), (1000, 1), (1999, 1), (2000, 2),
-            (2611, 2), (3500, 3), (10000, 10), (20000, 20), (25000, 20),
+            (2611, 2), (3500, 3), (10000, 10), (20000, 20), (25000, 25),
         ]
         for steps, want in boundaries:
             db.query(PointsLog).filter(PointsLog.user_id == u1[0]).delete()

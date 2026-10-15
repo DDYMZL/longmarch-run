@@ -35,14 +35,14 @@
       <view class="card-title">今日进度</view>
       <view class="today-row">
         <text>今日步数 {{summary.todaySteps}} 步</text>
-        <text class="text-gold">步行 +{{summary.todayWalk}}/{{rules.walkDailyCap}}</text>
+        <text class="text-gold">步行 +{{summary.todayWalk}}</text>
       </view>
       <view class="today-row">
         <text>今日答对 {{summary.todayCorrect}} 题</text>
         <text class="text-gold">答题 +{{summary.todayQuiz}}/{{rules.quizDailyCap}}</text>
       </view>
       <view class="divider"></view>
-      <view class="rule-line">· 步行：每累计 {{rules.walkStepsPerPoint}} 步 1 分，单日步数按 {{rules.walkStepCap}} 步封顶，每日最多 {{rules.walkDailyCap}} 分</view>
+      <view class="rule-line">· 步行：每累计 {{rules.walkStepsPerPoint}} 步 1 分，不设单日上限，不足部分结余累计</view>
       <view class="rule-line">· 当前有 {{summary.walkCarry}} 步结余，将计入下一次积分换算</view>
       <view class="rule-line">· 答题：每答对 1 题 {{rules.quizPerCorrect}} 分，每日最多 {{rules.quizDailyCap}} 分；超时不计分</view>
       <view class="rule-line">· 总积分 = 步行积分 + 答题积分，由服务端统一计算</view>

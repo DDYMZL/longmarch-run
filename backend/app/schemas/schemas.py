@@ -535,8 +535,6 @@ class QuizAnswerRequest(BaseModel):
 # ---------------- 积分 ----------------
 class PointsRules(CamelModel):
     walk_steps_per_point: int
-    walk_step_cap: int
-    walk_daily_cap: int
     quiz_per_correct: int
     quiz_daily_cap: int
 
@@ -620,7 +618,6 @@ class ProfileNextNode(ProfileNodeRef):
 
 class ProfileStats(CamelModel):
     total_steps: int = 0
-    scored_total_steps: int = 0
     total_distance: float = 0
     sport_days: int = 0
     current_streak: int = 0
