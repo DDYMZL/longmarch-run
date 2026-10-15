@@ -14,7 +14,8 @@ S20 V2.0 活动窗口 / 积分台账 / 部门锁定 综合回归（TestClient + 
     A08 鉴权先于活动校验：无 Token 恒 401
     A09 保存/发布/撤回均写审计
   积分
-    P01 步行积分边界 999/1000/1999/20000/25000 步 -> 0/1/1/20/20
+    P01 步行积分边界 500/999/1000/1999/2000/2611/3500/10000/20000/25000
+    P01A 存量逐日取整台账启动回算为累计积分，且不改答题积分
     P02 多次补步累加只保留一行台账、按最终步数计分
     P03 重复同步近 7 日幂等，不重复计分
     P04 微信运动重复同步按最新最终值校正，往日补录联动结余积分
@@ -228,7 +229,11 @@ def points_cases(c, users):
     db = SessionLocal()
     try:
         got = []
-        for steps, want in [(999, 0), (1000, 1), (1999, 1), (20000, 20), (25000, 20)]:
+        boundaries = [
+            (500, 0), (999, 0), (1000, 1), (1999, 1), (2000, 2),
+            (2611, 2), (3500, 3), (10000, 10), (20000, 20), (25000, 20),
+        ]
+        for steps, want in boundaries:
             db.query(PointsLog).filter(PointsLog.user_id == u1[0]).delete()
             db.query(DailySport).filter(DailySport.user_id == u1[0]).delete()
             db.commit()
@@ -237,6 +242,30 @@ def points_cases(c, users):
             got.append((steps, p["walk"], p["todayWalk"], want))
         record("P01", "步行积分边界", all(w == want and t == want for _, w, t, want in got) and
                points_service.walk_points(-5) == 0, f"got={got}")
+
+        db.query(PointsLog).filter(PointsLog.user_id == u1[0]).delete()
+        db.query(DailySport).filter(DailySport.user_id == u1[0]).delete()
+        sports = [
+            DailySport(user_id=u1[0], date="2026-01-01", steps=500),
+            DailySport(user_id=u1[0], date="2026-01-02", steps=500),
+            DailySport(user_id=u1[0], date="2026-01-03", steps=1611),
+        ]
+        db.add_all(sports)
+        db.flush()
+        db.add_all([
+            PointsLog(user_id=u1[0], date="2026-01-03", reason="步行积分", delta=1,
+                      source_type="walk", ref_id=sports[-1].id, biz_key="walk:2026-01-03"),
+            PointsLog(user_id=u1[0], date="2026-01-03", reason="答题积分", delta=7,
+                      source_type="quiz", biz_key="quiz:2026-01-03"),
+        ])
+        db.commit()
+        repaired = points_service.recompute_walk_all(db, fix=True)
+        breakdown = points_service.get_breakdown(db, u1[0])
+        record("P01A", "存量逐日取整台账按累计步数回算且不改答题积分",
+               repaired["fixed"] == 1 and breakdown == {"total": 9, "walk": 2, "quiz": 7}
+               and sum(delta for _key, delta in walk_rows(u1[0])) == 2,
+               f"repair={repaired} points={breakdown} rows={walk_rows(u1[0])}")
+
         db.query(PointsLog).filter(PointsLog.user_id == u1[0]).delete()
         db.query(DailySport).filter(DailySport.user_id == u1[0]).delete()
         db.commit()

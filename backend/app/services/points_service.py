@@ -279,35 +279,41 @@ def get_daily_details(db: Session, user_id: int, page: int = 1, page_size: int =
 
 
 # ---------------- 校验 / 重算 ----------------
-def _expected_for(db: Session, user_ids: List[int]) -> Dict[Tuple[int, str], Tuple[int, Optional[int]]]:
+def _expected_for(
+    db: Session, user_ids: List[int], sources: Tuple[str, ...] = SOURCES
+) -> Dict[Tuple[int, str], Tuple[int, Optional[int]]]:
     """按源数据计算应得积分 {(user_id, biz_key): (delta, ref_id)}。"""
     expected: Dict[Tuple[int, str], Tuple[int, Optional[int]]] = {}
-    totals: Dict[int, int] = {}
-    for sid, uid, date, steps in db.query(
-        DailySport.id, DailySport.user_id, DailySport.date, DailySport.steps
-    ).filter(DailySport.user_id.in_(user_ids)).order_by(DailySport.user_id, DailySport.date):
-        prior = totals.get(uid, 0)
-        points, _carry = next(walk_chain(prior, (steps,)))
-        totals[uid] = prior + capped_steps(steps)
-        expected[(uid, biz_key(WALK, date))] = (points, sid)
-    sessions = dict(
-        ((uid, date), qid)
-        for qid, uid, date in db.query(
-            DailyQuestion.id, DailyQuestion.user_id, DailyQuestion.date
-        ).filter(DailyQuestion.user_id.in_(user_ids))
-    )
-    for (uid, date), correct in quiz_correct_counts(db, user_ids).items():
-        expected[(uid, biz_key(QUIZ, date))] = (quiz_points(correct), sessions.get((uid, date)))
+    if WALK in sources:
+        totals: Dict[int, int] = {}
+        for sid, uid, date, steps in db.query(
+            DailySport.id, DailySport.user_id, DailySport.date, DailySport.steps
+        ).filter(DailySport.user_id.in_(user_ids)).order_by(DailySport.user_id, DailySport.date):
+            prior = totals.get(uid, 0)
+            points, _carry = next(walk_chain(prior, (steps,)))
+            totals[uid] = prior + capped_steps(steps)
+            expected[(uid, biz_key(WALK, date))] = (points, sid)
+    if QUIZ in sources:
+        sessions = dict(
+            ((uid, date), qid)
+            for qid, uid, date in db.query(
+                DailyQuestion.id, DailyQuestion.user_id, DailyQuestion.date
+            ).filter(DailyQuestion.user_id.in_(user_ids))
+        )
+        for (uid, date), correct in quiz_correct_counts(db, user_ids).items():
+            expected[(uid, biz_key(QUIZ, date))] = (quiz_points(correct), sessions.get((uid, date)))
     return expected
 
 
-def _verify_batch(db: Session, user_ids: List[int], fix: bool) -> Tuple[int, List[Dict]]:
-    expected = _expected_for(db, user_ids)
+def _verify_batch(
+    db: Session, user_ids: List[int], fix: bool, sources: Tuple[str, ...] = SOURCES
+) -> Tuple[int, List[Dict]]:
+    expected = _expected_for(db, user_ids, sources)
     actual = {
         (uid, key): (int(delta or 0), ref_id)
         for uid, key, delta, ref_id in db.query(
             PointsLog.user_id, PointsLog.biz_key, PointsLog.delta, PointsLog.ref_id
-        ).filter(PointsLog.user_id.in_(user_ids), PointsLog.source_type.in_(SOURCES))
+        ).filter(PointsLog.user_id.in_(user_ids), PointsLog.source_type.in_(sources))
     }
     diffs: List[Dict] = []
     for key in expected.keys() | actual.keys():
@@ -323,16 +329,14 @@ def _verify_batch(db: Session, user_ids: List[int], fix: bool) -> Tuple[int, Lis
     return len(expected), diffs
 
 
-def recompute_all(db: Session, fix: bool = False, user_ids: Optional[Iterable[int]] = None) -> Dict:
-    """全量（或指定用户）按源数据核对积分台账；fix=True 时修复差异并提交。
-
-    分批处理用户，避免一次性加载全部台账；返回核对天数、差异数与前 50 条差异样例。
-    """
+def _recompute(
+    db: Session, fix: bool, user_ids: Optional[Iterable[int]], sources: Tuple[str, ...]
+) -> Dict:
     ids = sorted(set(user_ids)) if user_ids is not None else [uid for (uid,) in db.query(User.id).order_by(User.id)]
     checked, mismatches, samples = 0, 0, []
     for start in range(0, len(ids), RECOMPUTE_BATCH):
         batch = ids[start:start + RECOMPUTE_BATCH]
-        count, diffs = _verify_batch(db, batch, fix)
+        count, diffs = _verify_batch(db, batch, fix, sources)
         checked += count
         mismatches += len(diffs)
         samples.extend(diffs[: max(0, 50 - len(samples))])
@@ -345,3 +349,16 @@ def recompute_all(db: Session, fix: bool = False, user_ids: Optional[Iterable[in
         "fixed": mismatches if fix else 0,
         "samples": samples,
     }
+
+
+def recompute_walk_all(db: Session, fix: bool = False) -> Dict:
+    """按每日运动源数据核对全部用户的步行积分；fix=True 时幂等修复历史台账。"""
+    return _recompute(db, fix, None, (WALK,))
+
+
+def recompute_all(db: Session, fix: bool = False, user_ids: Optional[Iterable[int]] = None) -> Dict:
+    """全量（或指定用户）按源数据核对积分台账；fix=True 时修复差异并提交。
+
+    分批处理用户，避免一次性加载全部台账；返回核对天数、差异数与前 50 条差异样例。
+    """
+    return _recompute(db, fix, user_ids, SOURCES)
