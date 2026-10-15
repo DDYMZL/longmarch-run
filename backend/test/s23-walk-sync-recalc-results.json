@@ -1,0 +1,84 @@
+{
+  "total": 13,
+  "passed": 13,
+  "results": [
+    {
+      "id": "R01",
+      "name": "复现 bug：累计 2611 步但步行积分仅 1 分（旧逐日取整台账）",
+      "ok": true,
+      "detail": "points={'total': 8, 'walk': 1, 'quiz': 7, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 1, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'quizDailyCap': 10}} profile={'totalSteps': 2611, 'totalDistance': 1.71, 'sportDays': 3, 'currentStreak': 0, 'maxStreak': 0, 'maxDaySteps': 1611, 'avgDailySteps'"
+    },
+    {
+      "id": "R02",
+      "name": "同步后全量修复：2611 步步行积分 2 分，答题积分保留",
+      "ok": true,
+      "detail": "out={'date': '2026-10-15', 'steps': 0, 'totalSteps': 2611, 'synced': False, 'status': 'partial', 'processedDates': ['2026-10-09', '2026-10-10', '2026-10-11'], 'failedDates': [{'date': '2026-10-12', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-13', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-14', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-15', 'reason': '微信运动本次未返回该日数据，可稍后重试'"
+    },
+    {
+      "id": "R03",
+      "name": "多天不足 1000 步跨日累计：800+700+600+511 → 2 分（逐日 0/1/1/0）",
+      "ok": true,
+      "detail": "walk=2 carry=611 rows=[('walk:2026-10-10', 1), ('walk:2026-10-11', 1)]"
+    },
+    {
+      "id": "R04",
+      "name": "累计边界 999→0、1999→1、2000→2、3500→3，每次同步联动重算",
+      "ok": true,
+      "detail": "got=[(0, 0), (1, 1), (2, 1), (3, 1)]"
+    },
+    {
+      "id": "R05",
+      "name": "同数据重复同步幂等不重复加分",
+      "ok": true,
+      "detail": "out={'date': '2026-10-15', 'steps': 0, 'totalSteps': 3500, 'synced': False, 'status': 'partial', 'processedDates': ['2026-10-09', '2026-10-10', '2026-10-11'], 'failedDates': [{'date': '2026-10-12', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-13', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-14', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-15', 'reason': '微信运动本次未返回该日数据，可稍后重试'"
+    },
+    {
+      "id": "R06",
+      "name": "历史步数下调至 2999 步积分修正为 2 分（允许按实际数据下降）",
+      "ok": true,
+      "detail": "change=-1 walk=2"
+    },
+    {
+      "id": "R07",
+      "name": "步数回升至 3000 步积分恢复为 3 分",
+      "ok": true,
+      "detail": "change=1"
+    },
+    {
+      "id": "R08",
+      "name": "同步部分日期失败：缺失日保留原值不清零、其他日正常、积分按实际数据重算",
+      "ok": true,
+      "detail": "failed={'2026-10-10': '微信运动本次未返回该日数据，可稍后重试', '2026-10-13': '微信运动本次未返回该日数据，可稍后重试', '2026-10-14': '微信运动本次未返回该日数据，可稍后重试', '2026-10-15': '微信运动本次未返回该日数据，可稍后重试'} saved=700"
+    },
+    {
+      "id": "R09",
+      "name": "无运动记录的残留 walk 台账行被清零且不计入总分",
+      "ok": true,
+      "detail": "stale=0 rows=[('walk:2020-01-01', 0), ('walk:2026-10-10', 1), ('walk:2026-10-11', 1)]"
+    },
+    {
+      "id": "R10",
+      "name": "同步只修复本人台账，不影响其他用户",
+      "ok": true,
+      "detail": "u4 rows=[]"
+    },
+    {
+      "id": "R11",
+      "name": "答题/legacy 流水不受同步修复影响，total = walk + quiz",
+      "ok": true,
+      "detail": "pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 3, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'quizDailyCap': 10}} u1={'total': 9, 'walk': 2, 'quiz': 7, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 1, 'rules':"
+    },
+    {
+      "id": "R12",
+      "name": "个人中心/积分概览/积分明细/总积分榜四处步行积分一致",
+      "ok": true,
+      "detail": "prof={'total': 2, 'walk': 2, 'quiz': 0, 'rank': 3} pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 3, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'quizDailyCap': 10}} me={'rank': 3, 'userId': 2, 'nickname': 'S23r02', 'avatar': '', 'orgName': '', 'steps': 2611"
+    },
+    {
+      "id": "R13",
+      "name": "重新请求（模拟刷新/退出重进）积分仍为 2 分",
+      "ok": true,
+      "detail": "pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 611, 'rank': 3, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'quizDailyCap': 10}} prof={'total': 2, 'walk': 2, 'quiz': 0, 'rank': 3}"
+    }
+  ]
+}

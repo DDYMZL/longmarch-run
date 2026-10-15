@@ -1,7 +1,8 @@
 """运动数据服务（迁移自前端 services/sport.js）。
 
 规则：按 user+date 保存每日步数，微信最近 7 日数据逐日覆盖而非累加；
-每次写入在同一事务内从最早变更日起重算步行结余积分（见 points_service）。
+每次写入在同一事务内按运动源数据全量核对修复该用户步行台账（见 points_service.recompute_walk），
+保证累计步行积分 = 累计计分步数 // 1000，重复同步幂等。
 步数来源：前端 wx.getWeRunData 加密数据，后端 code2Session 换 session_key 解密 stepInfoList；
 仅 mock 登录用户（开发模式）或未配置微信凭证时回退 seeded_steps 模拟，真实用户绝不编造步数。
 
@@ -139,7 +140,7 @@ def sync_today(
     encrypted_data: Optional[str] = None,
     iv: Optional[str] = None,
 ) -> Dict:
-    """同步微信运动最近 7 个北京时间自然日，逐日覆盖并按结余口径幂等重算积分。
+    """同步微信运动最近 7 个北京时间自然日，逐日覆盖并按源数据全量修复步行台账（幂等）。
 
     微信数据缺失的日期不写 0、不覆盖已有记录，作为 failed_dates 返回并允许后续重试。
     """
@@ -176,7 +177,7 @@ def sync_today(
             written.append((day, record, previous, created))
 
     if processed:
-        points_service.sync_walk_from(db, user_id, min(processed))
+        points_service.recompute_walk(db, user_id)
     try:
         db.commit()
     except IntegrityError:
@@ -327,7 +328,7 @@ def get_recent(db: Session, user_id: int, n: int) -> List[Dict]:
 
 
 def add_steps(db: Session, user_id: int, delta: int) -> None:
-    """手动补充步数（演示用）：当天累加 delta，并从当天起按结余口径重算步行积分。"""
+    """手动补充步数（演示用）：当天累加 delta，并按运动源数据全量修复步行台账。"""
     date = today_str()
     prev_total = get_total_steps(db, user_id)
     is_first_record = db.query(DailySport.id).filter(DailySport.user_id == user_id).first() is None
@@ -335,7 +336,7 @@ def add_steps(db: Session, user_id: int, delta: int) -> None:
     existing = _lock_day(db, user_id, date)
     value = (existing.steps or 0) + delta if existing is not None else delta
     record, prev_steps, created, changed = _upsert_day(db, user_id, date, value, "manual")
-    points_service.sync_walk_from(db, user_id, date)
+    points_service.recompute_walk(db, user_id)
     db.commit()
     if changed:
         _after_written(db, user_id, date, record, created and is_first_record, prev_steps, prev_total)

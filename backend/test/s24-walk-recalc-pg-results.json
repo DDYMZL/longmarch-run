@@ -1,0 +1,42 @@
+{
+  "total": 6,
+  "passed": 6,
+  "results": [
+    {
+      "id": "P01",
+      "name": "复现：真实库旧口径台账 2611 步仅 1 分",
+      "ok": true,
+      "detail": "points=1 steps=2611"
+    },
+    {
+      "id": "P02",
+      "name": "同步后全量修复为 2 分，个人中心/积分/明细一致",
+      "ok": true,
+      "detail": "change=1 pts=2 prof=2"
+    },
+    {
+      "id": "P03",
+      "name": "同数据重复同步幂等不重复加分",
+      "ok": true,
+      "detail": "change=0"
+    },
+    {
+      "id": "P04",
+      "name": "历史步数 700→900 后累计 2811 仍为 2 分且已按源数据重算",
+      "ok": true,
+      "detail": "change=0"
+    },
+    {
+      "id": "P05",
+      "name": "部分日期缺失：保留原值、返回 failed_dates、积分按实际数据重算",
+      "ok": true,
+      "detail": "failed=[{'date': '2026-10-10', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-13', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-14', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-15', 'reason': '微信运动本次未返回该日数据，可稍后重试'}] saved=900"
+    },
+    {
+      "id": "P06",
+      "name": "总积分榜与积分概览同口径（walkPoints 一致）",
+      "ok": true,
+      "detail": "me={'rank': 83, 'userId': 531, 'nickname': 'S24PG临时验证', 'avatar': '', 'orgName': '', 'steps': 2811, 'points': 2, 'walkPoints': 2, 'quizPoints': 0, 'isMe': True} pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 811, 'rank': 83, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'q"
+    }
+  ]
+}

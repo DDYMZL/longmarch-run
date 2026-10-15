@@ -58,10 +58,10 @@
 | 后端 service | 前端 services/*.js | 核心职责 |
 | --- | --- | --- |
 | `auth_service` | `auth.js` | `wx_login`：code→微信 code2Session→openid→建/查用户→签发 JWT；凭证为空时 mock openid，已配置凭证时微信换取失败抛 `WxLoginError`（不回退 mock，`WX_LOGIN_ALLOW_MOCK` 仅本地测试例外）；并发首登撞 openid 唯一约束回滚复用；`update_nickname`：昵称仅可修改一次 |
-| `sport_service` | `sport.js` | 今日步数查询/同步（同日覆盖）、最近 n 天记录、手动补步、行军日历聚合（按月） |
+| `sport_service` | `sport.js` | 今日步数查询/同步（同日覆盖，同步后全量修复步行台账）、最近 n 天记录、手动补步、行军日历聚合（按月） |
 | `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段、经纬度 + persons 关联人物）、按累计步数点亮；`_route_state` 为节点状态/进度计算共用内核（个人路线与组织路线复用）；`get_global_goal` 全员共同长征目标（全员累计步数对 GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES 配置，里程碑实时计算）；`get_footprints` 我的长征足迹（lit_nodes 点亮日期/快照 + daily_sport 当日步数，无冗余存储）；`mark_ceremony_seen` 长征完成仪式标记（§20.4，幂等写入 users.route_ceremony_at） |
 | `quiz_service` | `quiz.js` | 按用户个人历史分层轮换抽题（同日固定于 `daily_questions`，最多 5 道）、逐题 90 秒服务器计时作答、记录/重置/知识画像 |
-| `points_service` | — | V2.0 积分台账：总积分 = 步行 + 答题；`set_daily` 按「用户 + biz_key（walk/quiz:日期）」行锁覆盖，业务事务内按源数据重算（幂等）；`get_summary` / `get_daily_details` 概览与按日明细；`points_subquery` 供排名复用；`recompute_walk_all` 在应用启动时按运动源数据分批修复历史步行台账，`recompute_all` 供管理端核对/修复全部积分来源 |
+| `points_service` | — | V2.0 积分台账：总积分 = 步行 + 答题；`set_daily` 按「用户 + biz_key（walk/quiz:日期）」行锁覆盖，业务事务内按源数据重算（幂等）；`get_summary` / `get_daily_details` 概览与按日明细；`points_subquery` 供排名复用；`recompute_walk` 在步数写入后按运动源数据全量修复单个用户步行台账，`recompute_walk_all` 在应用启动时全量修复，`recompute_all` 供管理端核对/修复全部积分来源 |
 | `activity_service` | — | 活动时间窗口：按服务器时间实时计算 unpublished/not_started/ongoing/ended，`check` 供 `require_activity_participation` / `require_activity_view` 守卫；管理端保存/发布/撤回写审计 |
 | `medal_service` | `medal.js` | 12 枚勋章的判定与发放（`check_and_grant` 返回新获列表），含连续行军/步数里程碑/隐藏勋章 |
 | `org_service` | `org.js` | 组织树逐级下钻、用户组织查询/选定（任意层级）；`get_companions` 同组织同行者（子树口径人数/今日总步数/同行者列表，隐私只下发昵称/头像/步数）；`get_org_march` 组织共同长征目标（子树成员累计步数映射组织路线，复用 `march_service._route_state` 现算无持久点亮） |
