@@ -218,11 +218,21 @@
 }
 
 /* 路线位置小地图 */
-.mini-map {
+.mini-map,
+.map-empty {
   width: 100%;
   height: 320rpx;
   border-radius: 16rpx;
   overflow: hidden;
+}
+
+.map-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8c7a67;
+  background: #f3ecdf;
+  font-size: 26rpx;
 }
 
 .detail-actions {

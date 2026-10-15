@@ -338,6 +338,8 @@ def get_node_detail(db: Session, user_id: int, node_id: int) -> Optional[Dict]:
         "status": state["status"] if state else "unlocked",
         "remain": state["remain"] if state else node_def.target_steps,
         "current_steps": route["current_steps"],
+        "latitude": node_def.latitude,
+        "longitude": node_def.longitude,
         "brief": node_def.brief or "",
         "significance": node_def.significance or "",
         "figures": node_def.figures or "",

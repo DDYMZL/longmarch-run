@@ -295,6 +295,8 @@ class NodeDetailOut(CamelModel):
     status: str
     remain: int
     current_steps: int
+    latitude: float
+    longitude: float
     brief: str = ""
     significance: str = ""
     figures: str = ""

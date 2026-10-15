@@ -18,6 +18,7 @@ Page({
     currentText: '',
     keywordList: [],
     markers: [],
+    hasMapPoint: false,
     // 区域氛围（§12）：主题标识 / 环境描述 / 头部渐变
     themeKey: '',
     themeEnv: '',
@@ -41,9 +42,18 @@ Page({
           unlocked: '○ 未解锁'
         };
         const theme = nodeThemes.getNodeTheme(node.id);
+        const latitude = Number(node.latitude);
+        const longitude = Number(node.longitude);
+        const hasMapPoint =
+          node.latitude !== null &&
+          node.latitude !== undefined &&
+          node.longitude !== null &&
+          node.longitude !== undefined &&
+          Number.isFinite(latitude) &&
+          Number.isFinite(longitude);
 
         this.setData({
-          node,
+          node: hasMapPoint ? Object.assign({}, node, { latitude, longitude }) : node,
           statusText: statusMap[node.status] || '未解锁',
           targetText: util.formatNumber(node.targetSteps),
           currentText: util.formatNumber(node.currentSteps),
@@ -51,24 +61,27 @@ Page({
           themeKey: theme.theme,
           themeEnv: theme.environment,
           themeBgStyle: nodeThemes.themeBgStyle(theme),
-          markers: [
-            {
-              id: node.id,
-              latitude: node.latitude,
-              longitude: node.longitude,
-              width: 24,
-              height: 24,
-              callout: {
-                content: node.name,
-                color: '#5A1A1A',
-                bgColor: '#FBF3DC',
-                fontSize: 12,
-                borderRadius: 8,
-                padding: 6,
-                display: 'ALWAYS'
-              }
-            }
-          ]
+          hasMapPoint,
+          markers: hasMapPoint
+            ? [
+                {
+                  id: node.id,
+                  latitude,
+                  longitude,
+                  width: 24,
+                  height: 24,
+                  callout: {
+                    content: node.name,
+                    color: '#5A1A1A',
+                    bgColor: '#FBF3DC',
+                    fontSize: 12,
+                    borderRadius: 8,
+                    padding: 6,
+                    display: 'ALWAYS'
+                  }
+                }
+              ]
+            : []
         });
         wx.setNavigationBarTitle({ title: node.name });
         this.startAtmosphere(theme);

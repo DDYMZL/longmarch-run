@@ -59,7 +59,7 @@
 | --- | --- | --- |
 | `auth_service` | `auth.js` | `wx_login`：code→微信 code2Session→openid→建/查用户→签发 JWT；凭证为空时 mock openid，已配置凭证时微信换取失败抛 `WxLoginError`（不回退 mock，`WX_LOGIN_ALLOW_MOCK` 仅本地测试例外）；并发首登撞 openid 唯一约束回滚复用；`update_nickname`：昵称仅可修改一次 |
 | `sport_service` | `sport.js` | 今日步数查询/同步（同日覆盖）、最近 n 天记录、手动补步、行军日历聚合（按月） |
-| `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段 + persons 关联人物）、按累计步数点亮；`_route_state` 为节点状态/进度计算共用内核（个人路线与组织路线复用）；`get_global_goal` 全员共同长征目标（全员累计步数对 GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES 配置，里程碑实时计算）；`get_footprints` 我的长征足迹（lit_nodes 点亮日期/快照 + daily_sport 当日步数，无冗余存储）；`mark_ceremony_seen` 长征完成仪式标记（§20.4，幂等写入 users.route_ceremony_at） |
+| `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段、经纬度 + persons 关联人物）、按累计步数点亮；`_route_state` 为节点状态/进度计算共用内核（个人路线与组织路线复用）；`get_global_goal` 全员共同长征目标（全员累计步数对 GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES 配置，里程碑实时计算）；`get_footprints` 我的长征足迹（lit_nodes 点亮日期/快照 + daily_sport 当日步数，无冗余存储）；`mark_ceremony_seen` 长征完成仪式标记（§20.4，幂等写入 users.route_ceremony_at） |
 | `quiz_service` | `quiz.js` | 按用户个人历史分层轮换抽题（同日固定于 `daily_questions`，最多 5 道）、逐题 90 秒服务器计时作答、记录/重置/知识画像 |
 | `points_service` | — | V2.0 积分台账：总积分 = 步行 + 答题；`set_daily` 按「用户 + biz_key（walk/quiz:日期）」行锁覆盖，业务事务内按源数据重算（幂等）；`get_summary` / `get_daily_details` 概览与按日明细；`points_subquery` 供排名复用；`recompute_all` 按源数据分批核对/修复 |
 | `activity_service` | — | 活动时间窗口：按服务器时间实时计算 unpublished/not_started/ongoing/ended，`check` 供 `require_activity_participation` / `require_activity_view` 守卫；管理端保存/发布/撤回写审计 |
@@ -156,7 +156,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET | `/api/march/global` | 是 | 全员共同长征目标（需求 §11）：`{totalSteps, targetSteps, progressPct, milestones[{name,steps,reached}], nextMilestone{name,steps,remain}|null}`；全员累计=全部用户 daily_sport 之和，目标/里程碑配置于 `march_service.GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES` |
 | GET | `/api/march/footprints` | 是 | 我的长征足迹（需求 §7）：`{nodes[{id,name,icon,litAt,litDate,daySteps,cumSteps}]}`，按路线顺序的已点亮节点；litDate 为本地日期（与 DailySport.date 同口径），cumSteps 为点亮时刻累计快照（历史回填为 0 前端判空） |
 | GET | `/api/march/route-nodes` | 是 | 启用节点配置列表（含经纬度） |
-| GET | `/api/march/node/{node_id}` | 是 | 节点详情（任意状态可看，含未解锁），不存在 404；含 `persons[{id,name}]` 关联人物（§14 节点 → 人物入口） |
+| GET | `/api/march/node/{node_id}` | 是 | 节点详情（任意状态可看，含未解锁），不存在 404；含 `latitude/longitude` 路线点位及 `persons[{id,name}]` 关联人物（§14 节点 → 人物入口） |
 | POST | `/api/march/light-up` | 是 | 点亮达标节点，返回 `{newlyLit: [...], newlyCompletedChapters: [...], newMedals: [...]}` 并刷新勋章（newMedals 为本次新获勋章 id；V2.0 起点亮不发放积分，gainedPoints 恒为 0） |
 | POST | `/api/march/ceremony` | 是 | 标记长征完成仪式已观看（§20.4）：幂等写入 users.route_ceremony_at；仅首次完成触发完整动画，之后仪式页为静态回顾 |
 | GET | `/api/quiz/daily` | 是 | 今日固定答题状态 `{date, issueNo, completed, totalCount, questionShortage, shortageMessage, ...}`：按本人历史使用次数分层随机轮换；不开题、不下发未开题目；题库不足 5 道时按实际数量返回明确状态 |

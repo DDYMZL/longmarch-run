@@ -17,13 +17,32 @@ function getRoute() {
   return requestService.request({ url: '/march/route' });
 }
 
+/** 判断节点是否包含可供地图渲染的经纬度。 */
+function hasCoordinates(node) {
+  if (!node || node.latitude === null || node.latitude === undefined) return false;
+  if (node.longitude === null || node.longitude === undefined) return false;
+  return Number.isFinite(Number(node.latitude)) && Number.isFinite(Number(node.longitude));
+}
+
 /**
- * 获取单个节点详情（含未解锁节点）。
+ * 获取单个节点详情（含未解锁节点）。旧版详情接口缺坐标时从路线接口补齐。
  * @param {number} nodeId
  * @returns {Promise<object>}
  */
 function getNodeDetail(nodeId) {
-  return requestService.request({ url: '/march/node/' + nodeId });
+  return requestService.request({ url: '/march/node/' + nodeId }).then((node) => {
+    if (hasCoordinates(node)) return node;
+    return getRoute()
+      .then((route) => {
+        const routeNode = (route.nodes || []).find((item) => item.id === nodeId);
+        if (!hasCoordinates(routeNode)) return node;
+        return Object.assign({}, node, {
+          latitude: routeNode.latitude,
+          longitude: routeNode.longitude
+        });
+      })
+      .catch(() => node);
+  });
 }
 
 /**

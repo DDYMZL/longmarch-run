@@ -95,6 +95,7 @@
   <view class="card anim-card" style="animation-delay: 380ms">
     <view class="card-title">路线位置</view>
     <map
+      wx:if="{{hasMapPoint}}"
       class="mini-map"
       latitude="{{node.latitude}}"
       longitude="{{node.longitude}}"
@@ -104,6 +105,7 @@
       enable-zoom="{{false}}"
       enable-rotate="{{false}}"
     ></map>
+    <view wx:else class="map-empty">暂无路线点位</view>
   </view>
 
   <view class="detail-actions">

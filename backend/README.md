@@ -119,7 +119,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/broadcast/today` | 今日长征播报（期号/全局汇总/今日长征彩蛋/个人状态） |
 | GET | `/api/march/route` | 长征路线进度（含各节点状态，仅统计启用节点） |
 | GET | `/api/march/route-nodes` | 启用节点配置列表（含经纬度） |
-| GET | `/api/march/node/{node_id}` | 节点详情（任意状态可查看） |
+| GET | `/api/march/node/{node_id}` | 节点详情（任意状态可查看，含路线经纬度） |
 | POST | `/api/march/light-up` | 点亮达标节点、发放积分并判定勋章（返回 newMedals） |
 | GET | `/api/quiz/daily` | 今日固定答题状态（按用户个人使用轮次随机抽题；逐题进度、当前题、题库不足状态；不开题） |
 | POST | `/api/quiz/start` | 开始/继续当前题（幂等，每题 90 秒服务器计时） |
