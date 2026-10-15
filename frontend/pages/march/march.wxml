@@ -123,9 +123,7 @@
       <view class="route-meta">
         <view class="route-name-row">
           <text class="route-name {{item.status}}">{{item.name}}</text>
-          <text class="route-badge {{item.status}}">
-            {{item.status === 'completed' ? '已点亮' : (item.status === 'current' ? '进行中' : '未解锁')}}
-          </text>
+          <text class="route-badge {{item.status}}">{{item.status === 'completed' ? '已点亮' : (item.status === 'current' ? '进行中' : '未解锁')}}</text>
         </view>
         <view class="route-target">目标 {{item.targetSteps}} 步</view>
         <view wx:if="{{item.status === 'current'}}" class="route-remain">
