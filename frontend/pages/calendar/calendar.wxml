@@ -87,9 +87,7 @@
         </view>
         <view class="detail-row">
           <text class="detail-label">点亮节点</text>
-          <text wx:if="{{selected.litNodes.length > 0}}" class="detail-value text-gold">
-            ⭐ {{selected.litNodesText}}
-          </text>
+          <text wx:if="{{selected.litNodes.length > 0}}" class="detail-value text-gold">⭐ {{selected.litNodesText}}</text>
           <text wx:else class="detail-value text-gray">无</text>
         </view>
         <button class="btn-ghost detail-close" bindtap="closeDetail">关闭</button>

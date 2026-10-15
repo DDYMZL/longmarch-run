@@ -239,13 +239,17 @@
 
 .detail-label {
   color: #666;
+  flex-shrink: 0;
 }
 
+/* text 组件需显式块级化，否则长内容时整个盒子会被挤到下一行 */
 .detail-value {
+  display: block;
   color: #333;
   font-weight: 500;
   max-width: 400rpx;
   text-align: right;
+  word-break: break-all;
 }
 
 .detail-close {
