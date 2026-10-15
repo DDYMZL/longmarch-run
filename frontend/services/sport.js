@@ -10,6 +10,8 @@
  */
 const requestService = require('./request');
 
+const DAILY_TARGET = 20000;
+
 /**
  * 发起微信运动授权
  * @returns {Promise<boolean>} 是否授权成功
@@ -106,7 +108,9 @@ function syncToday() {
  *   nextStreakMilestone:number|null, streakRemain:number}>}
  */
 function getToday() {
-  return requestService.request({ url: '/sport/today' });
+  return requestService
+    .request({ url: '/sport/today' })
+    .then((result) => Object.assign({}, result, { target: DAILY_TARGET }));
 }
 
 /**
