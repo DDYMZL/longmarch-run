@@ -64,19 +64,19 @@
       "id": "P02",
       "name": "多次补步只保留一行、按最终步数计分",
       "ok": true,
-      "detail": "walk=7 rows=[('walk:2026-10-13', 7)]"
+      "detail": "walk=7 rows=[('walk:2026-10-15', 7)]"
     },
     {
       "id": "P03",
-      "name": "重复同步幂等",
+      "name": "重复同步近 7 日幂等",
       "ok": true,
-      "detail": "steps=11084 rows=[('walk:2026-10-13', 11)]"
+      "detail": "steps=4006 rows=[('walk:2026-10-09', 5), ('walk:2026-10-10', 8), ('walk:2026-10-11', 9), ('walk:2026-10-12', 10), ('walk:2026-10-13', 11), ('walk:2026-10-14', 12), ('walk:2026-10-15', 4)]"
     },
     {
       "id": "P04",
-      "name": "重复同步取最大步数，往日按最终步数校正",
+      "name": "重复同步按最终值校正并联动结余积分",
       "ok": true,
-      "detail": "steps=[4200, 12345, 12345] walk=20/12"
+      "detail": "steps=[4200, 12345, 9000] walk=17/9"
     },
     {
       "id": "P05",
@@ -88,13 +88,13 @@
       "id": "P06",
       "name": "总积分 = 步行 + 答题（概览与明细一致）",
       "ok": true,
-      "detail": "summary=7=7+0 daily={'date': '2026-10-13', 'walk': 7, 'quiz': 0, 'total': 7, 'steps': 7500, 'correctCount': 0, 'updatedAt': '2026-10-13T04:06:20.029691'}"
+      "detail": "summary=7=7+0 daily={'date': '2026-10-15', 'walk': 7, 'quiz': 0, 'total': 7, 'steps': 7500, 'correctCount': 0, 'updatedAt': '2026-10-15T04:14:24.880238'}"
     },
     {
       "id": "P07",
       "name": "legacy 流水不计入",
       "ok": true,
-      "detail": "total=11"
+      "detail": "total=59"
     },
     {
       "id": "P08",
@@ -106,19 +106,19 @@
       "id": "C01",
       "name": "总积分榜降序，前 10 与管理端同序同分",
       "ok": true,
-      "detail": "mini=[(4, 20), (3, 11), (6, 10), (5, 8), (2, 7)] admin=[(4, 20), (3, 11), (6, 10), (5, 8), (2, 7)]"
+      "detail": "mini=[(3, 59), (4, 17), (6, 10), (5, 8), (2, 7)] admin=[(3, 59), (4, 17), (6, 10), (5, 8), (2, 7)]"
     },
     {
       "id": "C02",
       "name": "我的名次与积分三处一致",
       "ok": true,
-      "detail": "points=1/20 rank={'rank': 1, 'userId': 4, 'nickname': 'S20用户4', 'avatar': '', 'orgName': '', 'steps': 21145, 'points': 20, 'walkPoints': 20, 'quizPoints': 0, 'isMe': True} profile={'total': 20, 'walk': 20, 'quiz': 0, 'rank': 1}"
+      "detail": "points=2/17 rank={'rank': 2, 'userId': 4, 'nickname': 'S20用户4', 'avatar': '', 'orgName': '', 'steps': 17800, 'points': 17, 'walkPoints': 17, 'quizPoints': 0, 'isMe': True} profile={'total': 17, 'walk': 17, 'quiz': 0, 'rank': 2}"
     },
     {
       "id": "C03",
       "name": "管理端人员详情与导出同口径积分",
       "ok": true,
-      "detail": "overview={'total': 20, 'walk': 20, 'quiz': 0, 'rank': 1, 'logs': [{'date': '2026-10-13', 'reason': '步行积分', 'delta': 12, 'source_type': 'walk'}, {'date': '2026-10-12', 'reason': '步行积分', 'delta': 8, 'source_type': 'walk'}]} csv=﻿\"排名\",\"人员ID\",\"姓名\",\"曾用名\",\"改名时间\",\"所属组织\",\"总积分\",\"步行积分\",\"答题积分\",\"累计步数\",\"到达节点数\""
+      "detail": "overview={'total': 17, 'walk': 17, 'quiz': 0, 'rank': 2, 'logs': [{'date': '2026-10-15', 'reason': '步行积分', 'delta': 9, 'source_type': 'walk'}, {'date': '2026-10-14', 'reason': '步行积分', 'delta': 8, 'source_type': 'walk'}]} csv=﻿\"排名\",\"人员ID\",\"姓名\",\"曾用名\",\"改名时间\",\"所属组织\",\"总积分\",\"步行积分\",\"答题积分\",\"累计步数\",\"到达节点数\""
     },
     {
       "id": "D01",

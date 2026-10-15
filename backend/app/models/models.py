@@ -139,6 +139,7 @@ class Question(Base):
     analysis: Mapped[str] = mapped_column(Text, default="")
     score: Mapped[int] = mapped_column(Integer, default=20)
     category: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
+    active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
 
 
 class MedalDef(Base):
@@ -232,6 +233,7 @@ class DailySport(Base):
 
     distance 为估算距离（km）= steps × 步长；is_goal_completed 表示当日达到
     行军目标（连续行军判定依据）；is_makeup / makeup_at 为补签预留字段。
+    source 数据来源（werun / mock / manual），synced_at 最近一次写入时间（UTC，019）。
     """
 
     __tablename__ = "daily_sport"
@@ -245,6 +247,9 @@ class DailySport(Base):
     is_goal_completed: Mapped[bool] = mapped_column(Boolean, default=False)
     is_makeup: Mapped[bool] = mapped_column(Boolean, default=False)
     makeup_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    source: Mapped[str] = mapped_column(String(16), default="werun")
+    synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    sync_status: Mapped[str] = mapped_column(String(16), default="processed")
 
 
 class LitNode(Base):

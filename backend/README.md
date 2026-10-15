@@ -110,7 +110,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | PUT | `/api/auth/nickname` | 修改昵称（body: `nickname`），每人仅一次，已修改过返回 400 |
 | PUT | `/api/auth/nickname/initial` | 首次引导设置昵称（body: `nickname`），不消耗改名机会，已改过名返回 400 |
 | GET | `/api/sport/today` | 今日步数概况 |
-| POST | `/api/sport/sync` | 同步今日步数（同日覆盖，非累加；wx.getWeRunData 加密数据后端解密取真实步数，开发模式回退模拟） |
+| POST | `/api/sport/sync` | 解密并同步微信运动最近 7 个北京时间自然日；缺失日期不写 0 且可重试，返回今日步数、成功/失败日期、积分修正与步数结余 |
 | GET | `/api/sport/recent?n=7` | 最近 n 天运动记录 |
 | GET | `/api/sport/calendar?month=YYYY-MM` | 行军日历（当月每日步数/达标/答题/点亮 + 月统计） |
 | POST | `/api/sport/add` | 手动补充步数（演示用，body: `delta`） |
@@ -121,13 +121,13 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/march/route-nodes` | 启用节点配置列表（含经纬度） |
 | GET | `/api/march/node/{node_id}` | 节点详情（任意状态可查看） |
 | POST | `/api/march/light-up` | 点亮达标节点、发放积分并判定勋章（返回 newMedals） |
-| GET | `/api/quiz/daily` | 今日答题状态（逐题进度、当前题与服务器截止时间；不开题） |
+| GET | `/api/quiz/daily` | 今日固定答题状态（按用户个人使用轮次随机抽题；逐题进度、当前题、题库不足状态；不开题） |
 | POST | `/api/quiz/start` | 开始/继续当前题（幂等，每题 90 秒服务器计时） |
 | POST | `/api/quiz/answer` | 提交当前题（body: `questionId`、`answer`；每题一次，超时拒绝） |
 | GET | `/api/quiz/records` | 答题记录 |
 | GET | `/api/quiz/knowledge` | 知识画像（总正确率 + 分类正确率） |
 | POST | `/api/quiz/reset` | 重置今日答题（调试用） |
-| GET | `/api/points` | 积分概览：`total`（= walk + quiz）/ `walk` / `quiz` / 今日两项及计分依据 / `rank`（总积分榜名次）/ `rules` |
+| GET | `/api/points` | 积分概览：`total`（= walk + quiz）/ `walk` / `quiz` / 今日两项及计分依据 / `walkCarry` 当前步数结余 / `rank` / `rules` |
 | GET | `/api/points/daily?page=&page_size=` | 积分明细：按自然日倒序分页，每天步行/答题积分与当日步数、答对数 |
 | GET | `/api/medal/list` | 勋章列表（含未获得） |
 | POST | `/api/medal/check` | 检查并发放勋章 |
@@ -162,7 +162,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | POST | `/api/admin/route-nodes` | 新增路线节点（校验坐标/步数/排序/递增） |
 | PUT | `/api/admin/route-nodes/{id}` | 编辑路线节点（含历史事件卡内容字段） |
 | PATCH | `/api/admin/route-nodes/{id}/enabled` | 启用/停用路线节点 |
-| GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 题库 CRUD（含知识分类） |
+| GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 题库 CRUD（DELETE 为软停用，不影响当天已生成任务） |
 | GET | `/api/admin/questions/import-template` | 下载题库 Excel 导入模板（数据表 + 填写说明） |
 | POST | `/api/admin/questions/import-preview` / `import-confirm` | 题库批量导入：上传 .xlsx 逐行校验返回预览令牌与错误明细 → 凭令牌一次性整批写入 |
 | GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 每日寄语 CRUD（排序号/启用状态/出处/关联节点；按排序号升序分页，keyword 搜内容/出处） |
@@ -182,10 +182,10 @@ python run.py                 # 或 uvicorn app.main:app --reload
 
 ## 业务规则（与前端 Mock 完全一致）
 
-- **步数**：按 `用户 + 日期` 唯一，同日同步为覆盖而非累加；步数来源为 `wx.getWeRunData` 加密数据后端解密取当日真实步数，仅 mock 用户（开发模式）或未配置微信凭证时回退按「日期+用户」稳定模拟（4000~12999），真实用户缺数据/解密失败返回 400 不写库。
+- **步数**：按 `用户 + 日期` 唯一；`wx.getWeRunData` 的加密 `stepInfoList` 由后端校验解密，以北京时间筛选最近 7 个自然日并逐日覆盖。微信本次未返回的日期不写 0、不覆盖旧值，响应列入 `failedDates` 供重试；前端当前步数区只展示今天。仅 mock 用户/未配置微信凭证的开发环境按「日期+用户」稳定模拟最近 7 日，真实用户绝不造数。每日记录保存 `source / synced_at / sync_status`。
 - **路线**：累计步数达到节点 `targetSteps` 即点亮，**点亮后永久保留**；节点状态分 `completed / current / unlocked`。管理后台可启停节点，停用节点不在小程序可见路线中，不参与完成判定和排名，但已有点亮记录保留。
-- **答题**：每日随机 5 题、每题 20 分、满分 100；逐题开题，每题 90 秒（`QUIZ_QUESTION_SECONDS`，只认服务器时间，截止后 `QUIZ_ANSWER_GRACE_SECONDS` 宽限网络延迟），每题仅提交一次、即时判定，超时不得分且不可再提交；开题/截止/提交时间、作答与判定落库 `quiz_answers`；只下发当前题且**不返回答案**；全部结束生成当日记录（含正确率、超时数、逐题明细）。
-- **积分**（V2.0）：**总积分 = 步行积分 + 答题积分**，仅后端计算。步行：每自然日 `floor(min(步数, 20000) / 1000)`，单日最高 20；答题：每答对 1 题 +2、不扣分、单日最高 10。台账 `points_log` 每人每来源每日一行（`biz_key` = `walk:日期` / `quiz:日期` 唯一），在步数写入/答题提交的同一事务内按源数据重算覆盖，重复同步与重放请求不会重复计分；步数同步只增不减（取当日最终步数），已有记录的往日按微信最终步数校正。登录/达标/点亮/里程碑不再发放积分，旧流水标记 `legacy` 仅追溯不计入。`POST /api/admin/points/verify` 可全量核对与修复（参数见 `Settings.POINTS_*`）。
+- **答题**：每个用户独立按题目历史使用次数轮换，优先从本人未使用/当前轮使用次数最少的题中随机抽取；不足 5 题时逐层跨入下一轮补足，当天不重复，同日 `daily_questions` 固定不重抽。题库仅 1~4 道时按实际数量返回并给出 `questionShortage / shortageMessage`。题目停用不再进入新任务，但当天既有任务仍可完成。逐题开题与 90 秒服务器计时、单次提交和超时规则保持不变。
+- **积分**（V2.0）：**总积分 = 步行积分 + 答题积分**，仅后端计算。步行每日最多取 20000 步参与计分，按日期顺序累计后每满 1000 步得 1 分，不足 1000 的零头结余到下一条运动记录（单日最高仍为 20）；答题每答对 1 题 +2、单日最高 10。台账按 `用户 + 来源 + 日期` 唯一并覆盖重算；补录/修正往日步数会从该日起联动重算后续结余，重复同步与重放不重复计分。旧 `legacy` 流水仅追溯不计入。
 - **勋章**：12 枚分入门/路线/挑战/完成四类：`first-step`（首次运动）、`learner`（10 次答题）、`persistence`（连续行军 7 天）、`luding`/`snow`（点亮泸定桥/雪山）、`day-10k`（单日万步）、`steps-100k`/`steps-500k`（累计 10 万/50 万步）、`streak-30`（连续行军 30 天）、`master`（积分≥500）、`fearless`（连续 7 天日万步，隐藏）、`victory`（全部**启用**节点点亮）。
 - **连续行军**：当日步数 ≥ 5000（`STREAK_GOAL_STEPS` 可配）即完成当日行军；`daily_sport.is_goal_completed` 为判定依据，`users.continuous_days/max_continuous_days` 为冗余缓存。
 - **事件系统**：用户成就（首次运动/当日达标/连续里程碑/点亮/勋章/答题等）统一落 `user_event` 并生成中文文案，小程序足迹时间轴与管理端实时动态共用此数据源。
@@ -220,6 +220,6 @@ backend 所需的建库、建表、索引和结构变更统一维护在根目录
 ## 待完善（生产化 TODO）
 
 - **微信登录**：配置真实 `WX_APPID`/`WX_SECRET`，`code2Session` 走真实接口。
-- **微信运动步数**：前端 `wx.getWeRunData` 取加密数据连同 `wx.login` code 上送 `POST /api/sport/sync`，后端 code2Session 换 `session_key` 解密（AES-128-CBC + watermark.appid 校验，`app/core/wx.py`）取当日步数落库。
+- **微信运动真机验收**：前端 `wx.getWeRunData` 取加密数据连同 `wx.login` code 上送，后端已按 `stepInfoList` 实际返回范围处理最近 7 日；仍需在已开通微信运动的真机账号验证微信侧实际返回范围及跨午夜归日。
 - **头像存储**：`chooseAvatar` 得到的是小程序本地临时路径，对后端无意义；生产需前端上传头像文件到后端/对象存储，`avatar` 存可访问 URL。
 - **数据库迁移**：引入 Alembic 管理表结构变更。

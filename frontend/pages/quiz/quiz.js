@@ -18,6 +18,8 @@ Page({
     dots: [],
     issueNo: 1,
     timeLimit: 90,
+    dailyCount: 5,
+    shortageMessage: '',
     loading: true,
     errorMsg: '',
     knowledge: null
@@ -46,6 +48,8 @@ Page({
           dots: util.quizDots(daily.progress, this.data.mode !== 'review'),
           issueNo: daily.issueNo,
           timeLimit: daily.timeLimit,
+          dailyCount: daily.totalCount,
+          shortageMessage: daily.shortageMessage,
           knowledge: results[1],
           loading: false,
           errorMsg: !daily.completed && daily.totalCount === 0 ? '本期情报正在准备中，请稍后再来。' : ''

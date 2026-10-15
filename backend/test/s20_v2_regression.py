@@ -16,8 +16,8 @@ S20 V2.0 活动窗口 / 积分台账 / 部门锁定 综合回归（TestClient + 
   积分
     P01 步行积分边界 999/1000/1999/20000/25000 步 -> 0/1/1/20/20
     P02 多次补步累加只保留一行台账、按最终步数计分
-    P03 重复同步幂等，不重复计分
-    P04 微信运动重复同步取最大步数，往日按最终步数校正
+    P03 重复同步近 7 日幂等，不重复计分
+    P04 微信运动重复同步按最新最终值校正，往日补录联动结余积分
     P05 答题积分：答对 4 题 8 分、5 题封顶 10，答错不扣分
     P06 总积分 = 步行 + 答题（概览/明细一致）
     P07 旧规则流水（legacy）不计入总积分
@@ -252,8 +252,9 @@ def points_cases(c, users):
     outs = [c.post("/api/sport/sync", headers=H(u2), json={}).json() for _ in range(3)]
     rows = walk_rows(u2[0])
     steps = outs[-1]["steps"]
-    record("P03", "重复同步幂等",
-           len(rows) == 1 and rows[0][1] == min(steps, 20000) // 1000 and len({o["steps"] for o in outs}) == 1,
+    record("P03", "重复同步近 7 日幂等",
+           len(rows) == 7 and sum(delta for _key, delta in rows) == outs[-1]["totalSteps"] // 1000
+           and len({o["steps"] for o in outs}) == 1 and outs[-1]["pointsChange"] == 0,
            f"steps={steps} rows={rows}")
 
     # 微信运动真实链路：替换解密，模拟同日步数回落与往日校正
@@ -284,8 +285,8 @@ def points_cases(c, users):
     finally:
         settings.WX_APPID, settings.WX_SECRET, sport_service.code2session, sport_service.decrypt_werun = orig
     p = c.get("/api/points", headers=H(u3)).json()
-    record("P04", "重复同步取最大步数，往日按最终步数校正",
-           [o.get("steps") for o in outs] == [4200, 12345, 12345] and p["todayWalk"] == 12 and p["walk"] == 20,
+    record("P04", "重复同步按最终值校正并联动结余积分",
+           [o.get("steps") for o in outs] == [4200, 12345, 9000] and p["todayWalk"] == 9 and p["walk"] == 17,
            f"steps={[o.get('steps') for o in outs]} walk={p['walk']}/{p['todayWalk']}")
 
     r4 = play_quiz(c, u4, 4)
@@ -310,7 +311,7 @@ def points_cases(c, users):
     finally:
         db.close()
     p = c.get("/api/points", headers=H(u2)).json()
-    record("P07", "legacy 流水不计入", p["total"] == walk_rows(u2[0])[0][1], f"total={p['total']}")
+    record("P07", "legacy 流水不计入", p["total"] == sum(delta for _key, delta in walk_rows(u2[0])), f"total={p['total']}")
 
     db = SessionLocal()
     try:
@@ -326,7 +327,7 @@ def points_cases(c, users):
     v3 = c.post("/api/admin/points/verify", headers=ADMIN, json={}).json()
     p = c.get("/api/points", headers=H(u3)).json()
     record("P08", "核对检出 2 处差异，修复后无差异并写审计",
-           v1["mismatches"] == 2 and v2["fixed"] == 2 and v3["mismatches"] == 0 and p["todayWalk"] == 12
+           v1["mismatches"] == 2 and v2["fixed"] == 2 and v3["mismatches"] == 0 and p["todayWalk"] == 9
            and len(audits("points.recompute")) >= 1,
            f"verify={v1['mismatches']} fixed={v2['fixed']} after={v3['mismatches']}")
 

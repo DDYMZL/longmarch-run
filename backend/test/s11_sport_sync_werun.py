@@ -4,8 +4,8 @@ S11 步数同步真实数据链路 冒烟脚本（TestClient，不依赖 8010 �
 
 背景：此前 /sport/sync 前端不带数据、后端一律按「日期+用户」伪随机生成 4000~12999
 假步数，用户真实步数被覆盖为编造值。修复后：
-  - 前端 wx.getWeRunData 加密数据 + wx.login code 上送，后端解密取当日真实步数；
-  - 仅 mock 登录用户（开发模式）或未配置微信凭证时回退 seeded 模拟；
+  - 前端 wx.getWeRunData 加密数据 + wx.login code 上送，后端解密取最近 7 日真实步数；
+  - 仅 mock 登录用户（开发模式）或未配置微信凭证时回退最近 7 日 seeded 模拟；
   - 真实用户无数据/解密失败一律 400，绝不写入编造步数。
 
 覆盖：
@@ -15,7 +15,7 @@ S11 步数同步真实数据链路 冒烟脚本（TestClient，不依赖 8010 �
   W04 真实用户携带伪造加密数据 → 400 且 DB 无当日记录（绝不写假数据）
   W05 decrypt_werun 加解密往返一致（watermark.appid 匹配）
   W06 watermark.appid 不匹配 → ValueError
-  W07 解密数据中缺少当日步数 → ValueError（经 _resolve_steps 直接验证，不触网）
+  W07 解密数据缺少当日但含历史数据 → 返回历史数据，由同步服务报告部分成功
 
 用法：cd backend && python test/s11_sport_sync_werun.py
 """
@@ -139,7 +139,7 @@ def main():
                    f"status={r4.status_code} detail={r4.json().get('detail')} rows={rows4}")
         else:
             # 未配置凭证时按设计回退模拟（开发模式），但绝不因解密失败写编造值
-            record("W04", "未配置凭证：伪造 payload 回退开发模拟", r4.status_code == 200 and rows4 == 1,
+            record("W04", "未配置凭证：伪造 payload 回退开发模拟", r4.status_code == 200 and rows4 == 7,
                    f"status={r4.status_code} steps={r4.json().get('steps')}")
 
         # W05 decrypt_werun 加解密往返
@@ -181,11 +181,9 @@ def main():
             yesterday_only = {"stepInfoList": [{"timestamp": ts - 86400, "step": 111}],
                               "watermark": {"appid": settings.WX_APPID, "ts": ts}}
             enc_yesterday = encrypt_werun(session_key, iv, yesterday_only)
-            try:
-                sport_service._resolve_steps("real_x", "c", enc_yesterday, iv, today, 999999)
-                record("W07", "解密数据缺当日步数抛错", False, "未抛错")
-            except ValueError as e:
-                record("W07", "解密数据缺当日步数抛错", "缺少今日步数" in str(e), str(e))
+            yesterday_steps = sport_service._resolve_steps("real_x", "c", enc_yesterday, iv, today, 999999)
+            record("W07", "缺少当日但含历史数据时保留实际范围", today not in yesterday_steps and 111 in yesterday_steps.values(),
+                   f"steps={yesterday_steps}")
 
             got = sport_service._resolve_steps("real_x", "c", encrypted2, iv, today, 999999)
             record("W08", "_resolve_steps 按北京时间解析各日真实步数（含今日）",

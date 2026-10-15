@@ -56,6 +56,7 @@ Page({
             todayQuiz: s.todayQuiz,
             todaySteps: s.todaySteps,
             todayCorrect: s.todayCorrect,
+            walkCarry: s.walkCarry,
             rank: s.rank
           },
           rules: s.rules,

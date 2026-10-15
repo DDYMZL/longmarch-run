@@ -325,10 +325,16 @@ Page({
           arrivePopup.playArriveQueue(this, res.newlyLit, res.newlyCompletedChapters);
         } else if (res.newMedals.length > 0) {
           wx.showToast({ title: '获得新勋章！', icon: 'none' });
-        } else if (res.result.synced) {
-          wx.showToast({ title: '步数同步成功', icon: 'success' });
+        } else if (res.result.failedDates.length > 0) {
+          wx.showToast({
+            title: '已同步' + res.result.processedDates.length + '天，' + res.result.failedDates.length + '天待重试',
+            icon: 'none',
+            duration: 2500
+          });
+        } else if (res.result.synced || res.result.pointsChange !== 0) {
+          wx.showToast({ title: '近7天步数已同步', icon: 'success' });
         } else {
-          wx.showToast({ title: '今日已同步', icon: 'none' });
+          wx.showToast({ title: '近7天已是最新', icon: 'none' });
         }
         this.refreshAll();
       })

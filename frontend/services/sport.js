@@ -59,9 +59,11 @@ function getWeRunData() {
 }
 
 /**
- * 同步今日步数（后端解密微信运动数据落库并刷新勋章）。
+ * 同步微信运动最近 7 个自然日（后端解密、按北京时间归日、幂等补录并重算积分）。
+ * 页面只使用返回的 steps 展示今天；历史日期仅在后端处理。
  * 授权/登录/取数任一失败即抛错，不向服务端发请求，避免写入非真实步数。
- * @returns {Promise<{date:string, steps:number, totalSteps:number, synced:boolean}>}
+ * @returns {Promise<{date:string, steps:number, totalSteps:number, synced:boolean, status:string,
+ *   processedDates:string[], failedDates:Array, pointsChange:number, todayWalkPoints:number, walkCarry:number}>}
  */
 function syncToday() {
   return authorizeWeRun()

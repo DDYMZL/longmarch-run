@@ -17,10 +17,9 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.database import SessionLocal
-from app.core.helpers import to_local, today_str
+from app.core.helpers import to_local
 from app.data.seed import ORGANIZATIONS
 from app.models.models import (
-    DailyQuestion,
     DailySport,
     LitNode,
     MedalDef,
@@ -153,7 +152,7 @@ def list_questions(
     keyword 模糊匹配题干；qtype（single/judge）与 category（event/route/figure）
     精确过滤；按 id 升序。
     """
-    query = db.query(Question)
+    query = db.query(Question).filter(Question.active.is_(True))
     if keyword.strip():
         query = query.filter(Question.question.contains(keyword.strip(), autoescape=True))
     if qtype:
@@ -195,19 +194,14 @@ def update_question(db: Session, question_id: int, data: Dict) -> Optional[Quest
 
 
 def delete_question(db: Session, question_id: int) -> None:
-    """删除题目；若已被抽取进未过期的每日题目缓存，先一并清理避免脏引用。
+    """软停用题目；之后不再抽取，当天已生成的答题任务仍保留并可完成。
 
-    题目不存在时静默返回（幂等）。
+    题目不存在或已停用时静默返回（幂等）。
     """
     question = db.query(Question).filter(Question.id == question_id).first()
-    if question is None:
+    if question is None or not question.active:
         return
-    # 只有今天（含）之后的抽题缓存仍会被读取，历史缓存不必扫描
-    caches = db.query(DailyQuestion).filter(DailyQuestion.date >= today_str()).all()
-    for cache in caches:
-        if question_id in (cache.question_ids or []):
-            cache.question_ids = [q for q in cache.question_ids if q != question_id]
-    db.delete(question)
+    question.active = False
     db.commit()
 
 

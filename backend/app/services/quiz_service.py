@@ -1,7 +1,7 @@
 """每日答题服务（每题限时作答，V2.0 需求六）。
 
 规则：
-  每日随机 5 题；逐题开题，每题 settings.QUIZ_QUESTION_SECONDS（90）秒，计时只认服务器时间；
+  每用户按个人使用历史分轮随机，每日最多 5 题且同日固定；逐题开题，每题 settings.QUIZ_QUESTION_SECONDS（90）秒，计时只认服务器时间；
   每题仅可提交一次，提交即判定；超时不得分且之后不可再提交；全部题目结束后生成当日答题记录。
   答题积分 = 答对数 × 2（单日上限 10，不扣分），每次判定与积分台账同一事务写入（见 points_service）。
 安全：
@@ -15,11 +15,13 @@
   返回 issue_no（第 N 期，以 Settings.ACTIVITY_START_DATE 为第 1 期）；
   get_knowledge 按题目 category 聚合历史答题正确率（知识画像）。
 """
+import logging
 import random
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional, Tuple
 
+from sqlalchemy import and_, func
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -27,6 +29,8 @@ from app.core.config import settings
 from app.core.helpers import today_str
 from app.models.models import DailyQuestion, PointsLog, Question, QuizAnswer, QuizRecord
 from app.services import event_service, points_service
+
+logger = logging.getLogger(__name__)
 
 DAILY_COUNT = 5
 SCORE_PER_QUESTION = 20
@@ -95,17 +99,64 @@ def _get_record(db: Session, user_id: int, date: str) -> Optional[QuizRecord]:
     )
 
 
+def _question_usage(db: Session, user_id: int) -> Dict[int, int]:
+    """用户各题已使用次数：逐题记录为准，018 之前已完成场次回退 daily_questions。"""
+    usage = {
+        int(qid): int(count)
+        for qid, count in db.query(QuizAnswer.question_id, func.count(QuizAnswer.id))
+        .filter(QuizAnswer.user_id == user_id)
+        .group_by(QuizAnswer.question_id)
+    }
+    has_answer = db.query(QuizAnswer.id).filter(
+        QuizAnswer.session_id == DailyQuestion.id
+    ).exists()
+    legacy = (
+        db.query(DailyQuestion.question_ids)
+        .join(
+            QuizRecord,
+            and_(
+                QuizRecord.user_id == DailyQuestion.user_id,
+                QuizRecord.date == DailyQuestion.date,
+            ),
+        )
+        .filter(DailyQuestion.user_id == user_id, ~has_answer)
+        .yield_per(500)
+    )
+    for (question_ids,) in legacy:
+        for question_id in question_ids or []:
+            usage[question_id] = usage.get(question_id, 0) + 1
+    return usage
+
+
+def _pick_questions(db: Session, user_id: int) -> List[int]:
+    """按用户独立轮换随机抽题：先取使用次数最少的一层，不足时依次跨入下一轮补足。"""
+    all_ids = [qid for (qid,) in db.query(Question.id).filter(Question.active.is_(True)).all()]
+    if not all_ids:
+        return []
+    usage = _question_usage(db, user_id)
+    selected: List[int] = []
+    remaining = set(all_ids)
+    while remaining and len(selected) < DAILY_COUNT:
+        least = min(usage.get(qid, 0) for qid in remaining)
+        tier = [qid for qid in remaining if usage.get(qid, 0) == least]
+        take = min(DAILY_COUNT - len(selected), len(tier))
+        picked = random.sample(tier, take)
+        selected.extend(picked)
+        remaining.difference_update(picked)
+    return selected
+
+
 def _session(db: Session, user_id: int, date: str, create: bool) -> Optional[DailyQuestion]:
-    """当日答题会话（抽题缓存，保证同一天同一套题）；create=True 时不存在则抽题创建。"""
+    """当日答题会话（抽题缓存，保证同一天同一套题）；create=True 时不存在则按个人轮次抽题。"""
     query = db.query(DailyQuestion).filter(
         DailyQuestion.user_id == user_id, DailyQuestion.date == date
     )
     cache = query.first()
     if not create or (cache is not None and cache.question_ids):
         return cache
-    # 只取主键抽样，题库再大也不加载题干/选项
-    all_ids = [r[0] for r in db.query(Question.id).all()]
-    ids = random.sample(all_ids, min(DAILY_COUNT, len(all_ids)))
+    ids = _pick_questions(db, user_id)
+    if len(ids) < DAILY_COUNT:
+        logger.warning("quiz bank shortage: user_id=%s date=%s active_questions=%s", user_id, date, len(ids))
     if cache is None:
         db.add(DailyQuestion(user_id=user_id, date=date, question_ids=ids))
     else:
@@ -254,6 +305,10 @@ def _state(
         "issue_no": _issue_no(date),
         "completed": record is not None,
         "total_count": record.total_count if record else total,
+        "question_shortage": total < DAILY_COUNT,
+        "shortage_message": (
+            f"当前题库仅有 {total} 道可用题目，本期按实际题量作答" if total < DAILY_COUNT else ""
+        ),
         "time_limit": settings.QUIZ_QUESTION_SECONDS,
         "server_time": _ms(now),
         "progress": progress,

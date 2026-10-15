@@ -1,0 +1,82 @@
+{
+  "results": [
+    {
+      "id": "S01",
+      "name": "一次同步处理最近 7 个北京时间自然日",
+      "ok": true,
+      "detail": "processed=['2026-10-09', '2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15'] rows=7"
+    },
+    {
+      "id": "S02",
+      "name": "响应与前端当前区域只返回今天步数",
+      "ok": true,
+      "detail": "date=2026-10-15 steps=200"
+    },
+    {
+      "id": "S03",
+      "name": "5800 步余 800 结转，次日 200 步再得 1 分",
+      "ok": true,
+      "detail": "yesterday=5 today=1 carry=0"
+    },
+    {
+      "id": "S04",
+      "name": "重复同步幂等且不重复加分",
+      "ok": true,
+      "detail": "change=0 total=11"
+    },
+    {
+      "id": "S05",
+      "name": "历史步数变化会修正后续结余积分与连续行军缓存",
+      "ok": true,
+      "detail": "change=-1 points=4/1 streak=0"
+    },
+    {
+      "id": "S06",
+      "name": "缺失日期不写 0、不覆盖旧值并返回可重试状态",
+      "ok": true,
+      "detail": "failed=[{'date': '2026-10-13', 'reason': '微信运动本次未返回该日数据，可稍后重试'}] saved=1000"
+    },
+    {
+      "id": "S07",
+      "name": "每日记录保存来源、同步时间和处理状态",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "Q01",
+      "name": "同用户同日固定 5 道且不重复",
+      "ok": true,
+      "detail": "[4, 5, 8, 3, 2]"
+    },
+    {
+      "id": "Q02",
+      "name": "未答题不足 5 时先用完剩余 3 题再跨轮补 2 题",
+      "ok": true,
+      "detail": "day1=[4, 5, 8, 3, 2] day2=[7, 1, 6, 8, 5]"
+    },
+    {
+      "id": "Q03",
+      "name": "A 用户历史不影响 B 用户选题",
+      "ok": true,
+      "detail": "[3, 8, 1, 6, 7]"
+    },
+    {
+      "id": "Q04",
+      "name": "全部题目用过后自动进入下一轮且当天不重复",
+      "ok": true,
+      "detail": "[1, 6, 3, 4, 7]"
+    },
+    {
+      "id": "Q05",
+      "name": "停用题保留既有当天任务但不参与后续抽题",
+      "ok": true,
+      "detail": "retained=1 later=[7, 2, 6, 8, 5]"
+    },
+    {
+      "id": "Q06",
+      "name": "题库不足 5 道时不重复并返回明确状态",
+      "ok": true,
+      "detail": "{'date': '2026-10-15', 'issueNo': 45, 'completed': False, 'totalCount': 3, 'questionShortage': True, 'shortageMessage': '当前题库仅有 3 道可用题目，本期按实际题量作答', 'timeLimit': 90, 'serverTime': 1792037807670, 'progress': [{'seq': 1, 'status': 'pending', 'correct': False}, {'seq': 2, 'status': 'pending', 'correct': False}, {'seq': 3, 'status': 'pending', 'correct': False}], 'current': None, 'correctCount': 0, 'po"
+    }
+  ]
+}

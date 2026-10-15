@@ -26,7 +26,7 @@ def today(current: User = Depends(require_activity_view), db: Session = Depends(
     return sport_service.get_today(db, current.id)
 
 
-@router.post("/sync", response_model=SportSync, summary="同步今日步数")
+@router.post("/sync", response_model=SportSync, summary="同步微信运动近 7 日步数")
 def sync(
     payload: Optional[SportSyncRequest] = None,
     current: User = Depends(require_activity_participation),

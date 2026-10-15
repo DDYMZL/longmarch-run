@@ -1,7 +1,7 @@
 """连续行军服务。
 
 规则：当天步数 >= settings.STREAK_GOAL_STEPS（默认 5000）即完成当日行军。
-- 写入侧（on_sport_written）：当日记录首次达标时推进连续天数、达成里程碑时
+- 写入侧（on_sport_written）：达标状态变化时重算连续天数缓存；首次达标并跨越里程碑时
   写 STREAK_* 事件（一次性成就，以事件表去重；V2.0 起里程碑不再发放积分）；
 - 读取侧（compute_streaks）：以 daily_sport.is_goal_completed 为准重算，
   「当前连续」允许今天尚未达标（连续算到昨天），今天昨天都未达标则为 0；
@@ -79,16 +79,16 @@ def on_sport_written(db: Session, user_id: int, date: str) -> Optional[int]:
         return None  # 达标状态未变化，不产生新事件
     record.is_goal_completed = reached
     db.commit()
-    if not reached:
-        return None
 
     current, best = compute_streaks(db, user_id)
     user = db.query(User).filter(User.id == user_id).first()
     old_best = user.max_continuous_days if user else 0
     if user is not None:
         user.continuous_days = current
-        user.max_continuous_days = max(best, old_best)
+        user.max_continuous_days = best
         db.commit()
+    if not reached:
+        return None
 
     event_service.record(
         db, user_id, "DAILY_GOAL", {"date": date, "steps": record.steps, "streak": current}

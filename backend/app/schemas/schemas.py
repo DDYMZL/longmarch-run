@@ -143,11 +143,22 @@ class SportToday(CamelModel):
     streak_remain: int = 0
 
 
+class SportSyncFailure(CamelModel):
+    date: str
+    reason: str
+
+
 class SportSync(CamelModel):
     date: str
     steps: int
     total_steps: int
     synced: bool
+    status: str = "success"
+    processed_dates: List[str] = []
+    failed_dates: List[SportSyncFailure] = []
+    points_change: int = 0
+    today_walk_points: int = 0
+    walk_carry: int = 0
 
 
 class SportSyncRequest(CamelModel):
@@ -472,6 +483,8 @@ class QuizDailyOut(CamelModel):
     issue_no: int = 1
     completed: bool
     total_count: int = 0
+    question_shortage: bool = False
+    shortage_message: str = ""
     time_limit: int
     server_time: int
     progress: List[QuizProgressItem] = []
@@ -536,6 +549,7 @@ class PointsSummaryOut(CamelModel):
     today_quiz: int = 0
     today_steps: int = 0
     today_correct: int = 0
+    walk_carry: int = 0
     rank: Optional[int] = None
     rules: PointsRules
 

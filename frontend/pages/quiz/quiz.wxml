@@ -13,7 +13,7 @@
       <view class="quiz-hero-icon anim-float">📡</view>
       <view class="quiz-hero-title">今日长征情报</view>
       <view class="quiz-hero-issue">第 {{issueNo}} 期</view>
-      <view class="quiz-hero-sub">每期 5 题 · 每题限时 {{timeLimit}} 秒 · 答对 1 题 +2 积分</view>
+      <view class="quiz-hero-sub">本期 {{dailyCount}} 题 · 每题限时 {{timeLimit}} 秒 · 答对 1 题 +2 积分</view>
       <view wx:if="{{started}}" class="quiz-dots hero-dots">
         <view wx:for="{{dots}}" wx:key="seq" class="quiz-dot {{item.cls}}">{{item.seq}}</view>
       </view>
@@ -28,6 +28,8 @@
       <view class="rule-line">· 超时未提交视为未答对，不得分</view>
       <view class="rule-line">· 答对 1 题 +2 积分，单日答题积分上限 10 分</view>
     </view>
+
+    <view wx:if="{{shortageMessage}}" class="empty-tip">{{shortageMessage}}</view>
 
     <view wx:if="{{errorMsg}}" class="error-tip">
       <view>{{errorMsg}}</view>

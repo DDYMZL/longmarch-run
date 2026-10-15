@@ -60,7 +60,7 @@
 | `auth_service` | `auth.js` | `wx_login`：code→微信 code2Session→openid→建/查用户→签发 JWT；凭证为空时 mock openid，已配置凭证时微信换取失败抛 `WxLoginError`（不回退 mock，`WX_LOGIN_ALLOW_MOCK` 仅本地测试例外）；并发首登撞 openid 唯一约束回滚复用；`update_nickname`：昵称仅可修改一次 |
 | `sport_service` | `sport.js` | 今日步数查询/同步（同日覆盖）、最近 n 天记录、手动补步、行军日历聚合（按月） |
 | `march_service` | `march.js` | 路线进度（节点状态 completed/current/unlocked）、节点详情（含历史事件卡 7 字段 + persons 关联人物）、按累计步数点亮；`_route_state` 为节点状态/进度计算共用内核（个人路线与组织路线复用）；`get_global_goal` 全员共同长征目标（全员累计步数对 GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES 配置，里程碑实时计算）；`get_footprints` 我的长征足迹（lit_nodes 点亮日期/快照 + daily_sport 当日步数，无冗余存储）；`mark_ceremony_seen` 长征完成仪式标记（§20.4，幂等写入 users.route_ceremony_at） |
-| `quiz_service` | `quiz.js` | 每日抽 5 题（同用户同日同套，缓存于 `daily_questions`）、逐题限时作答（`start` 开题 / `answer` 提交，每题 90 秒服务器计时，`quiz_answers` 落库）、全部结束生成记录、重置、知识画像（按题目分类统计正确率） |
+| `quiz_service` | `quiz.js` | 按用户个人历史分层轮换抽题（同日固定于 `daily_questions`，最多 5 道）、逐题 90 秒服务器计时作答、记录/重置/知识画像 |
 | `points_service` | — | V2.0 积分台账：总积分 = 步行 + 答题；`set_daily` 按「用户 + biz_key（walk/quiz:日期）」行锁覆盖，业务事务内按源数据重算（幂等）；`get_summary` / `get_daily_details` 概览与按日明细；`points_subquery` 供排名复用；`recompute_all` 按源数据分批核对/修复 |
 | `activity_service` | — | 活动时间窗口：按服务器时间实时计算 unpublished/not_started/ongoing/ended，`check` 供 `require_activity_participation` / `require_activity_view` 守卫；管理端保存/发布/撤回写审计 |
 | `medal_service` | `medal.js` | 12 枚勋章的判定与发放（`check_and_grant` 返回新获列表），含连续行军/步数里程碑/隐藏勋章 |
@@ -88,7 +88,7 @@
 | 表 | 关键字段 | 约束/说明 |
 | --- | --- | --- |
 | `route_nodes` | id, name, target_steps(累计步数要求), historical_time, icon, description, latitude(9,6), longitude(10,6), sort_order, is_enabled(默认true), brief, significance, figures, location, images(JSON), audio, keywords | 10 行；id 从 1 起；启用节点按 `sort_order, id` 排序后 target_steps 严格递增；停用节点不影响小程序可见路线但 lit_nodes/勋章记录保留；brief/significance/figures/location/images/audio/keywords 为历史事件卡内容字段（005） |
-| `questions` | id, type(single/judge), question, options(JSON), answer(JSON), analysis, score(20), category(event/route/figure) | 15 行；`answer` 不通过任何接口下发；`category` 支撑知识画像（005） |
+| `questions` | id, type, question, options/answer(JSON), analysis, score, category, active | `active=false` 为软停用，不参与新抽题但保留既有任务引用；answer 不在作答接口预先下发 |
 | `medal_defs` | id(str 主键), name, icon, desc, category(starter/route/challenge/complete), hidden, sort_order | 12 行：first-step/learner/persistence/luding/snow/day-10k/steps-100k/steps-500k/streak-30/master/fearless(隐藏)/victory；hidden=True 未获得时不公开条件 |
 | `organizations` | id, name, parent_id(可空=顶级), level(≥1), sort_order | 多级树；用户可选定任意层级节点 |
 | `persons` | id, name, avatar(可空), brief(可空) | 长征人物志（006，需求 §14）：13 行真实历史人物；avatar 空时前端展示姓名首字占位（不伪造历史照片） |
@@ -144,7 +144,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | POST | `/api/auth/qr/info` | 是 | 查询扫码场景 `{scene}`：L{token} 返回 `{type:"login", status}`（pending→置 scanned）；B{token} 返回 `{type:"bind", status, target:{provider, appId, nickname?}}`；凭证不存在/过期 404/400 |
 | POST | `/api/auth/qr/confirm` | 是 | 确认/取消扫码 `{scene, action:confirm|cancel}`：L 确认校验 RBAC——无启用角色会话置 failed（403 带原因），有角色置 confirmed；B 确认事务内写 user_identities（unionid 冲突禁止自动合并，凭证单次有效） |
 | GET | `/api/sport/today` | 是 | 今日步数概况 `{date, steps, target, totalSteps}` |
-| POST | `/api/sport/sync` | 是 | 同步今日步数：请求体（可选）携带 `{code, encryptedData, iv}`（wx.getWeRunData 加密数据），后端 code2Session 换 session_key 解密取当日真实步数；仅 mock 用户或未配置微信凭证时回退模拟，真实用户缺数据/解密失败 400 不写库。返回 `{date, steps, totalSteps, synced}` 并刷新勋章 |
+| POST | `/api/sport/sync` | 是 | 解密 wx.getWeRunData 的 `stepInfoList`，按北京时间处理最近 7 个自然日并逐日覆盖；缺失日不写 0、可重试。返回 `{date, steps, totalSteps, synced, status, processedDates, failedDates, pointsChange, todayWalkPoints, walkCarry}`，其中 `steps` 仅为今天 |
 | GET | `/api/sport/recent?n=7` | 是 | 最近 n 天记录 `[{date, steps, text}]` |
 | GET | `/api/sport/calendar?month=YYYY-MM` | 是 | 行军日历：当月每日步数/达标/答题/点亮节点 + 月统计（总步数/运动天数/日均/最高/当前连续） |
 | POST | `/api/sport/add` | 是 | 手动补步（演示）：`{delta}` → 今日概况，刷新勋章 |
@@ -159,7 +159,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET | `/api/march/node/{node_id}` | 是 | 节点详情（任意状态可看，含未解锁），不存在 404；含 `persons[{id,name}]` 关联人物（§14 节点 → 人物入口） |
 | POST | `/api/march/light-up` | 是 | 点亮达标节点，返回 `{newlyLit: [...], newlyCompletedChapters: [...], newMedals: [...]}` 并刷新勋章（newMedals 为本次新获勋章 id；V2.0 起点亮不发放积分，gainedPoints 恒为 0） |
 | POST | `/api/march/ceremony` | 是 | 标记长征完成仪式已观看（§20.4）：幂等写入 users.route_ceremony_at；仅首次完成触发完整动画，之后仪式页为静态回顾 |
-| GET | `/api/quiz/daily` | 是 | 今日答题状态 `{date, issueNo, completed, totalCount, timeLimit, serverTime, progress[], current?, correctCount, points, record?}`：不开题、不下发未开题目；已过截止 + 宽限的题目判超时；已完成时 record 含 details 逐题结果 |
+| GET | `/api/quiz/daily` | 是 | 今日固定答题状态 `{date, issueNo, completed, totalCount, questionShortage, shortageMessage, ...}`：按本人历史使用次数分层随机轮换；不开题、不下发未开题目；题库不足 5 道时按实际数量返回明确状态 |
 | POST | `/api/quiz/start` | 是 | 开始/继续当前题（幂等）：作答中返回同一题与 `current{seq, question, startedAt, deadlineAt, remainingMs}`（题目不含答案与解析）；当前题已截止则判超时并开下一题；全部结束返回记录 |
 | POST | `/api/quiz/answer` | 是 | 提交当前题 `{questionId, answer: ["A"]}`（单选/判断恰好 1 个选项）→ `{seq, correct, correctAnswer, analysis, points, correctCount, todayPoints, finished, record?}`；未开题 / 已作答 / 超时 / 非法选项 400；同题并发只一次生效。V2.0 起移除整卷提交 `/api/quiz/submit`（V1.2 已移除 `/api/quiz/check`） |
 | GET | `/api/persons/{person_id}` | 是 | 长征人物志详情（需求 §14）：`{id, name, avatar, brief, nodes[{id,name,icon,historicalTime,brief}]}`（相关历史事件=关联节点，按路线顺序）；人物不存在 404 |
@@ -213,7 +213,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | POST | `/api/admin/route-nodes` | 管理员(route_nodes) | 新增路线节点 |
 | PUT | `/api/admin/route-nodes/{id}` | 管理员(route_nodes) | 编辑路线节点（含历史事件卡 7 字段） |
 | PATCH | `/api/admin/route-nodes/{id}/enabled` | 管理员(route_nodes) | 启用/停用节点 |
-| GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 管理员(questions) | 题库 CRUD（含 category 分类） |
+| GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 管理员(questions) | 题库 CRUD（含 category；DELETE 软停用，不破坏当天已生成任务） |
 | GET/POST | `/api/admin/questions/import-template` · `import-preview` · `import-confirm` | 管理员(questions) | 题库 Excel 导入：模板下载 → 上传校验（返回 `{preview_token, total, valid_count, invalid_count, errors[{row, field, reason}]}`）→ 凭令牌确认写入 `{imported}`（令牌 30 分钟有效、单次核销，重复确认 400） |
 | GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 管理员(quotes) | 每日寄语 CRUD（需求 §16）：字段 `{content, source, sort_order(0~999999), is_enabled, node_id}`；GET 分页 page/pageSize 按 (sort_order, id) 升序，可选 keyword 按内容/出处模糊搜索（LIKE 通配符转义）；内容/出处为空或超 200 字、排序号越界、坏节点 400，不存在 404 |
 | GET/PUT | `/api/admin/quotes/cycle` | 管理员(quotes) | 寄语循环信息 `{start_date, enabled_count, today_quote_id, today_position}`；PUT `{start_date}` 修改循环起始日期（格式非法 400） |
@@ -305,11 +305,11 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 
 | 域 | 规则 |
 | --- | --- |
-| 步数 | 按「用户+日期」唯一，同日同步**覆盖**；步数来源为 wx.getWeRunData 加密数据后端解密取当日真实步数，仅 mock 用户（开发模式）或未配置微信凭证时回退按「日期+用户」稳定模拟（4000~12999），真实用户绝不编造步数；`/sport/add` 演示补步 |
+| 步数 | 按「用户+日期」唯一；后端解密 wx.getWeRunData 后按北京时间筛选最近 7 日逐日覆盖，缺失日不写 0/不覆盖旧值并返回失败原因；前端仅展示今天。`daily_sport` 记录 source/synced_at/sync_status；仅开发环境模拟，真实用户绝不造数 |
 | 路线 | 累计步数 ≥ 节点 `targetSteps` 即点亮，点亮**永久保留**；节点状态 `completed`（已点亮）/ `current`（下一目标）/ `unlocked`（未解锁）；停用节点不在小程序可见路线中，不参与完成判定和排名，已有 lit_nodes 记录保留 |
 | 章节 | 5 章配置于 `march_service.CHAPTERS`（每章 2 个 route_nodes 主键，划分与介绍可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`（全部停用的章节不下发）；`light_up_nodes` 对比点亮前后完成集，新完成章写 `CHAPTER_COMPLETE` 事件并随响应返回（含 title/intro 供前端仪式展示），不改变节点点亮与积分规则 |
-| 答题 | 每日随机 5 题、每题 20 分、满分 100；逐题开题、每题 90 秒（服务器计时），每题仅可提交一次、提交即判定，超时不得分且不可再提交；全部题目结束生成当日记录（每日一次）；只下发当前题且**不含答案与解析**；`/quiz/reset` 仅供调试 |
-| 积分 | 总积分 = 步行积分 + 答题积分，只由后端计算：步行每日 `floor(min(当日步数, 20000) / 1000)`（单日最高 20）；答题每答对 1 题 +2、不扣分、单日最高 10。台账每人每来源每日一行（biz_key 唯一），在业务事务内按源数据覆盖重算，重复同步/重放/并发不重复计分，往日步数校正同步修正积分；登录、达标、点亮、完成路线等旧规则不再发放，旧流水（legacy）仅追溯不计入；`/api/admin/points/verify` 按源数据核对与修复（参数见 `Settings.POINTS_*`） |
+| 答题 | 每用户独立按题目历史使用次数分层轮换：先随机取本人未使用/当前最早轮次题，不足 5 时跨下一层补足；同日固定且不重复。题库 1~4 道按实际数量并返回不足状态；软停用题不进入新任务但不影响当天既有任务。逐题 90 秒、单次提交、服务端判定保持不变 |
+| 积分 | 总积分 = 步行积分 + 答题积分，只由后端计算：每日最多 20000 步参与计分，按日期累计每满 1000 步 1 分，零头结余到下一条记录，单日最高 20；答题每对 1 题 +2、每日最高 10。台账幂等覆盖；往日补录/修正从该日起联动重算后续结余；旧 legacy 流水不计入 |
 | 勋章 | 12 枚分四类：入门（first-step 首次运动 / learner 答题 10 次 / persistence 连续行军 7 天）、路线（luding 点亮泸定桥 / snow 点亮雪山）、挑战（day-10k 单日万步 / steps-100k / steps-500k / streak-30 连续 30 天 / master 积分≥500 / fearless 连续 7 天日万步，隐藏）、完成（victory 全部**启用**节点点亮）；隐藏勋章未获得时不公开条件 |
 | 连续行军 | 当日步数 ≥ `STREAK_GOAL_STEPS`（默认 5000）即完成当日行军；写入侧在 `is_goal_completed` 由 False 翻 True 时更新 `users.continuous_days/max_continuous_days` 并写 DAILY_GOAL/STREAK_* 事件（一次性成就按事件表去重）；读取侧以 `daily_sport.is_goal_completed` 重算为准 |
 | 事件 | 所有用户侧成就（首次运动/当日达标/连续里程碑/点亮节点/获得勋章/完成答题等）统一写 `user_event`，文案由 `event_service.build_text` 生成；写事件即向 WS 广播 `activity`，任何数据写入广播 `data_changed`；小程序公开动态流（`/api/broadcast/activities` + WS）只暴露昵称/文案/类型/时间，`ACTIVITY_MASK_NICKNAME` 可开启昵称脱敏 |

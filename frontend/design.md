@@ -74,10 +74,10 @@
 | 前端 service | 主要方法 | 对应后端接口 | 核心业务 |
 | --- | --- | --- | --- |
 | `auth.js` | `ensureLogin()` / `wxLogin(profile)` / `verifyInvite(code)` / `onboard({inviteCode,nickname,orgId,avatar})` / `updateNickname(name)` / `setInitialNickname(name)` / `updateLocalUser()` / `clearLocalUser()` / `persistAvatar()` / `savePendingInvite()` / `readPendingInvite()` / `clearPendingInvite()` | `POST /api/auth/login`、`POST /api/auth/invite/verify`、`POST /api/auth/onboard`、`PUT /api/auth/nickname`、`PUT /api/auth/nickname/initial` | 登录态管理；/auth/login 返回 `{status, token?, user?}` 分流：active 写登录态；disabled/unregistered 抛 `err.admission` 由启动页处理；邀请码扫码落地由 launch 保存 `lm_pending_invite`、入驻页读取并 `verifyInvite` + `onboard`（后端条件 UPDATE 原子核销）；`updateLocalUser(patch)` 同时写 `lm_login_user` 与 `app.globalData.user`（组织名称等仅前端缓存字段由此回显到「我的」页）；request.js 401 单飞重登，403 `X-Account-Status: disabled` 直接清态回启动页 |
-| `sport.js` | 今日步数 / `syncToday()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, calendar` | 步数按「用户+日期」覆盖；同步走 wx.getWeRunData 加密数据后端解密取真实步数；行军日历月聚合 |
+| `sport.js` | 今日步数 / `syncToday()` / 最近记录 / `getCalendar(month)` | `/api/sport/today, sync, recent, calendar` | wx.getWeRunData 加密数据由后端按北京时间补录最近 7 日；页面只展示今天，缺失日提示待重试 |
 | `march.js` | `getRoute()` / `getNodeDetail(id)` / `lightUpNodes()` / `getGlobalGoal()` / `getFootprints()` / `markCeremony()` / `hasPlayedIntro()` / `markIntroPlayed()` | `/api/march/route, node/{id}, light-up, global, footprints, ceremony` | 路线进度与节点配置由 `/march/route` 统一下发；步数达标由后端点亮、发放勋章并广播（light-up 返回 newlyLit / newlyCompletedChapters / newMedals）；全员共同长征目标（全员累计/总目标/里程碑）；`getFootprints()` 我的长征足迹；`markCeremony()` 标记完成仪式已观看（§20.4）；开场动画播放标记（Storage `lm_march_intro_played`，页面不直接读写 Storage） |
-| `quiz.js` | `getDaily()` / `start()` / `answer(questionId, label)` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, start, answer, records, reset, knowledge` | V2.0 逐题限时：每日抽 5 题（同日同套，题目不含答案与解析）；`start` 幂等开当前题并下发服务器剩余毫秒（当前题已截止由后端判超时并开下一题）；`answer` 每题仅一次、服务端判定是否超时与对错；每答对 1 题 2 积分、每日上限 10；知识画像分类正确率 |
-| `points.js` | `getSummary()` / `getDaily(page, pageSize)` | `/api/points, /api/points/daily` | V2.0 积分：总积分/步行/答题/今日/排名 + 规则参数 `rules`；每日明细分页（积分只由后端计算，前端仅展示） |
+| `quiz.js` | `getDaily()` / `start()` / `answer(questionId, label)` / 记录 / `resetToday()` / `getKnowledge()` | `/api/quiz/daily, start, answer, records, reset, knowledge` | 后端按当前用户个人历史分轮随机、同日固定且不重复；题库不足 5 道按实际题量提示。逐题 90 秒、单次提交、服务端判定与积分规则不变 |
+| `points.js` | `getSummary()` / `getDaily(page, pageSize)` | `/api/points, /api/points/daily` | 总/步行/答题/今日/排名 + `walkCarry` 步数结余 + 规则参数；积分只由后端计算 |
 | `activity.js` | `getStatus()` / `formatRange(status)` | `/api/activity/status`（公开） | 活动状态（未发布/未开始/进行中/已结束 + allowParticipate/allowView/结束标题与提示），写 `app.globalData.activity`；请求带 `skipActivityRedirect` 避免自身被守卫重定向 |
 | `medal.js` | `getMedalList()` | `/api/medal/list` | 勋章墙（分类/隐藏/排序由后端下发；判定发放由后端在同步/点亮/答题副链路完成） |
 | `profile.js` | `getSummary()` / `getTimeline(limit)` | `/api/profile/summary, timeline` | 我的长征档案聚合与足迹时间轴 |
@@ -242,11 +242,11 @@ PC 管理后台登录页生成小程序码（POST /api/admin/wechat/qr，mock �
 
 | 域 | 规则 |
 | --- | --- |
-| 步数 | 「用户+日期」唯一，同日同步**覆盖**；步数来源为 wx.getWeRunData 加密数据后端解密取当日真实步数，仅开发模式（mock 用户或未配置微信凭证）由后端按「日期+用户」稳定模拟（4000~12999） |
+| 步数 | 「用户+日期」唯一；一次同步由后端按北京时间处理微信实际返回的最近 7 日，缺失日不写 0 且可重试；首页只展示今天，历史日只影响后端记录/积分 |
 | 路线 | 累计步数 ≥ `targetSteps` 即点亮，**永久保留**；节点状态 `completed / current / unlocked`；后台可启停节点，停用节点不可见但已有 `LitNode` 记录保留 |
 | 章节 | 5 章配置于后端 `march_service.CHAPTERS`（每章 2 节点，划分可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`；完成写 `CHAPTER_COMPLETE` 事件并触发前端章节完成仪式，不改变既有节点点亮与积分规则 |
-| 答题 | V2.0 每日随机 5 题，逐题 90 秒限时（服务器计时），每题仅提交一次；超时记为超时不得分；题目按 event/route/figure 分类支撑知识画像 |
-| 积分 | V2.0 总积分 = 步行积分 + 答题积分（仅此两项，登录/点亮/完成路线不再计分）：步行每日 floor(min(步数, 20000) / 1000)，上限 20；答题每答对 1 题 2 分，每日上限 10；按「用户+日期」幂等台账，后端可重算校验；仅活动进行中计分 |
+| 答题 | 后端按用户个人历史分轮随机，未使用题优先，同日固定且不重复；不足 5 题按实际题量明确提示。逐题 90 秒服务器计时、每题单次提交规则不变 |
+| 积分 | 总积分 = 步行 + 答题：每日最多 20000 步参与计分，按日期累计每满 1000 步 1 分，零头结余到下一条记录（页面展示 walkCarry）；答题每对 1 题 2 分、每日上限 10；后端幂等重算 |
 | 组织 | 入驻/首次选定后锁定，用户端不可再改（403 `ORG_LOCKED`），仅管理员后台调整并留审计 |
 | 活动 | 后台配置活动时间窗口；未开始/已结束不允许参与（同步、答题、选组织 403）；结束后是否可查看由 `allow_view_after_end` 控制 |
 | 连续行军 | 当日步数 ≥ 5000 即完成当日行军；连续天数/最长连续由后端维护并下发 |

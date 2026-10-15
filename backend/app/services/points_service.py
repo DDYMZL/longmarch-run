@@ -1,16 +1,18 @@
 """积分台账服务（V2.0）：总积分 = 步行积分 + 答题积分，全部由后端按源数据计算。
 
 规则（参数见 Settings.POINTS_*）：
-  步行：每自然日 floor(min(当日步数, 20000) / 1000)，单日最高 20；
+  步行（019 结余口径）：每日计分步数 min(当日步数, 20000)，按日期顺序累计，
+    当日积分 = floor(累计 / 1000) - floor(前一日累计 / 1000)；不足 1000 步的零头结余到下一条记录，
+    单日最高仍为 20（计分步数封顶 20000 且结余 < 1000，故当日积分恒 ≤ 20）；
   答题：每答对 1 题 +2，不扣分，单日最高 10。
 台账：每人每来源每自然日一行（biz_key = walk:日期 / quiz:日期，唯一约束），
   业务写入时在同一事务内按源数据重算覆盖（set_daily 不提交，由调用方统一提交），
-  重复同步/重放请求/并发只会得到同一结果，不会重复计分。
+  重复同步/重放请求/并发只会得到同一结果，不会重复计分；补录往日步数时从该日起重算其后各日。
   V2.0 之前的旧规则流水（source_type=legacy）保留追溯，不计入总积分。
 校验：recompute_all 按源数据（daily_sport / quiz_answers，历史日回退 quiz_records）全量核对并可修复台账。
 """
 from datetime import datetime
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, Iterator, List, Optional, Tuple
 
 from sqlalchemy import case, func
 from sqlalchemy.orm import Session
@@ -26,9 +28,40 @@ REASONS = {WALK: "步行积分", QUIZ: "答题积分"}
 RECOMPUTE_BATCH = 500
 
 
+def capped_steps(steps: int) -> int:
+    """当日参与计分的步数（0 ~ POINTS_WALK_STEP_CAP）。"""
+    return min(max(int(steps or 0), 0), settings.POINTS_WALK_STEP_CAP)
+
+
+def walk_chain(prior_total: int, steps_in_order: Iterable[int]) -> Iterator[Tuple[int, int]]:
+    """按日期顺序逐日产出 (当日步行积分, 当日结束后的结余步数)；prior_total 为此前各日计分步数之和。"""
+    per = settings.POINTS_WALK_STEPS_PER_POINT
+    total = prior_total
+    for steps in steps_in_order:
+        before = total // per
+        total += capped_steps(steps)
+        yield total // per - before, total % per
+
+
+def _capped_sum(db: Session, user_id: int, before_date: Optional[str] = None) -> int:
+    """用户（早于 before_date 的）各日计分步数之和，库内聚合。"""
+    cap = settings.POINTS_WALK_STEP_CAP
+    query = db.query(
+        func.coalesce(func.sum(case((DailySport.steps > cap, cap), else_=DailySport.steps)), 0)
+    ).filter(DailySport.user_id == user_id)
+    if before_date is not None:
+        query = query.filter(DailySport.date < before_date)
+    return int(query.scalar() or 0)
+
+
+def walk_carry(db: Session, user_id: int) -> int:
+    """当前结余步数（尚未折算积分、计入下一条记录的零头）。"""
+    return _capped_sum(db, user_id) % settings.POINTS_WALK_STEPS_PER_POINT
+
+
 def walk_points(steps: int) -> int:
-    capped = min(max(int(steps or 0), 0), settings.POINTS_WALK_STEP_CAP)
-    return capped // settings.POINTS_WALK_STEPS_PER_POINT
+    """无历史结余时单日步行积分；链式入账应使用 sync_walk_from。"""
+    return capped_steps(steps) // settings.POINTS_WALK_STEPS_PER_POINT
 
 
 def quiz_points(correct_count: int) -> int:
@@ -72,9 +105,30 @@ def set_daily(
     return True
 
 
-def sync_walk_day(db: Session, record: DailySport) -> bool:
-    """按当日最终步数重算步行积分（调用方需已锁定 daily_sport 行并负责提交）。"""
-    return set_daily(db, record.user_id, WALK, record.date, walk_points(record.steps), record.id)
+def sync_walk_from(db: Session, user_id: int, start_date: str) -> None:
+    """从 start_date 起按结余口径重算该用户各日步行积分（调用方需已串行化该用户写入并负责提交）。
+
+    往日补录会改变其后各日的结余，故重算 start_date 及之后的全部记录；之前的记录不受影响。
+    """
+    rows = (
+        db.query(DailySport.id, DailySport.date, DailySport.steps)
+        .filter(DailySport.user_id == user_id, DailySport.date >= start_date)
+        .order_by(DailySport.date)
+        .all()
+    )
+    prior = _capped_sum(db, user_id, before_date=start_date)
+    for (sid, date, _steps), (points, _carry) in zip(rows, walk_chain(prior, (r.steps for r in rows))):
+        set_daily(db, user_id, WALK, date, points, sid)
+
+
+def walk_on(db: Session, user_id: int, date: str) -> int:
+    """某日已入账的步行积分。"""
+    value = (
+        db.query(PointsLog.delta)
+        .filter(PointsLog.user_id == user_id, PointsLog.biz_key == biz_key(WALK, date))
+        .scalar()
+    )
+    return int(value or 0)
 
 
 def sync_quiz_day(
@@ -143,7 +197,7 @@ def get_total(db: Session, user_id: int) -> int:
 
 
 def get_summary(db: Session, user_id: int) -> Dict:
-    """积分概览：累计三项 + 今日两项（含今日步数/答对数，供展示计分依据）。"""
+    """积分概览：累计三项 + 今日两项（含今日步数/答对数，供展示计分依据）+ 当前步数结余。"""
     date = today_str()
     today = _sum_by_source(db, user_id, date)
     sport = (
@@ -158,6 +212,7 @@ def get_summary(db: Session, user_id: int) -> Dict:
         "today_quiz": today[QUIZ],
         "today_steps": int(sport or 0),
         "today_correct": correct,
+        "walk_carry": walk_carry(db, user_id),
         "rules": rules(),
     }
 
@@ -227,10 +282,14 @@ def get_daily_details(db: Session, user_id: int, page: int = 1, page_size: int =
 def _expected_for(db: Session, user_ids: List[int]) -> Dict[Tuple[int, str], Tuple[int, Optional[int]]]:
     """按源数据计算应得积分 {(user_id, biz_key): (delta, ref_id)}。"""
     expected: Dict[Tuple[int, str], Tuple[int, Optional[int]]] = {}
+    totals: Dict[int, int] = {}
     for sid, uid, date, steps in db.query(
         DailySport.id, DailySport.user_id, DailySport.date, DailySport.steps
-    ).filter(DailySport.user_id.in_(user_ids)):
-        expected[(uid, biz_key(WALK, date))] = (walk_points(steps), sid)
+    ).filter(DailySport.user_id.in_(user_ids)).order_by(DailySport.user_id, DailySport.date):
+        prior = totals.get(uid, 0)
+        points, _carry = next(walk_chain(prior, (steps,)))
+        totals[uid] = prior + capped_steps(steps)
+        expected[(uid, biz_key(WALK, date))] = (points, sid)
     sessions = dict(
         ((uid, date), qid)
         for qid, uid, date in db.query(
