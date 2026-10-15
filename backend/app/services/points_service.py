@@ -47,8 +47,8 @@ def walk_chain(prior_total: int, steps_in_order: Iterable[int]) -> Iterator[Tupl
         yield total // per - before, total % per
 
 
-def _capped_sum(db: Session, user_id: int) -> int:
-    """用户各日计分步数之和，库内聚合。"""
+def scored_total_steps(db: Session, user_id: int) -> int:
+    """计分口径累计步数：各日 min(步数, 单日封顶) 之和，库内聚合（累计步行积分 = 该值 // 1000）。"""
     cap = settings.POINTS_WALK_STEP_CAP
     total = (
         db.query(
@@ -62,7 +62,7 @@ def _capped_sum(db: Session, user_id: int) -> int:
 
 def walk_carry(db: Session, user_id: int) -> int:
     """当前结余步数（尚未折算积分、计入下一条记录的零头）。"""
-    return _capped_sum(db, user_id) % settings.POINTS_WALK_STEPS_PER_POINT
+    return scored_total_steps(db, user_id) % settings.POINTS_WALK_STEPS_PER_POINT
 
 
 def walk_points(steps: int) -> int:

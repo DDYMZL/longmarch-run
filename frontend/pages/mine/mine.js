@@ -47,7 +47,8 @@ Page({
 
         this.setData({
           user,
-          totalSteps: summary.stats.totalSteps,
+          // 计分口径步数（各日封顶 20000 后求和）：与步行积分同口径，walk ≈ totalSteps / 1000
+          totalSteps: summary.stats.scoredTotalSteps,
           litCount: summary.stats.litCount,
           totalCount: summary.stats.totalCount,
           quizCount: summary.quiz.totalCount,

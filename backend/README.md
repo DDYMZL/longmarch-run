@@ -114,7 +114,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/sport/recent?n=7` | 最近 n 天运动记录 |
 | GET | `/api/sport/calendar?month=YYYY-MM` | 行军日历（当月每日步数/达标/答题/点亮 + 月统计） |
 | POST | `/api/sport/add` | 手动补充步数（演示用，body: `delta`） |
-| GET | `/api/profile/summary` | 个人档案聚合（加入天数/连续行军/各项统计/路线完成度） |
+| GET | `/api/profile/summary` | 个人档案聚合（加入天数/连续行军/各项统计/路线完成度）；stats 含 `totalSteps` 原始累计与 `scoredTotalSteps` 计分口径（各日封顶 20000 求和） |
 | GET | `/api/profile/timeline` | 我的长征足迹（user_event 时间轴） |
 | GET | `/api/broadcast/today` | 今日长征播报（期号/全局汇总/今日长征彩蛋/个人状态） |
 | GET | `/api/march/route` | 长征路线进度（含各节点状态，仅统计启用节点） |

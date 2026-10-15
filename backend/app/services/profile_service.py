@@ -89,6 +89,8 @@ def get_summary(db: Session, user: User) -> Dict:
     )
     sport_days, total_steps, max_day_steps = int(sport_days), int(total_steps), int(max_day_steps)
     total_distance = round(float(total_distance), 2)
+    # 计分口径步数（各日封顶 20000 后求和），供「我的」页累计运动(步)与步行积分对齐展示
+    scored_total_steps = points_service.scored_total_steps(db, user.id)
 
     current_streak, max_streak = streak_service.compute_streaks(db, user.id)
 
@@ -144,6 +146,7 @@ def get_summary(db: Session, user: User) -> Dict:
         },
         "stats": {
             "total_steps": total_steps,
+            "scored_total_steps": scored_total_steps,
             "total_distance": total_distance,
             "sport_days": sport_days,
             "current_streak": current_streak,

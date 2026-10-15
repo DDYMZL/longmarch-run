@@ -620,6 +620,7 @@ class ProfileNextNode(ProfileNodeRef):
 
 class ProfileStats(CamelModel):
     total_steps: int = 0
+    scored_total_steps: int = 0
     total_distance: float = 0
     sport_days: int = 0
     current_streak: int = 0
