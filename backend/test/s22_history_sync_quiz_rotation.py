@@ -96,6 +96,8 @@ def main():
                and partial["failed_dates"] == [{"date": days[-3], "reason": "微信运动本次未返回该日数据，可稍后重试"}]
                and saved == keep, f"failed={partial['failed_dates']} saved={saved}")
         record("S07", "每日记录保存来源、同步时间和处理状态", all(r.source == "mock" and r.synced_at and r.sync_status == "processed" for r in rows))
+        today = sport_service.get_today(db, user.id)
+        record("S08", "今日行军目标调整为 20000 步", today["target"] == 20000, today)
 
         for i in range(1, 9):
             db.add(Question(id=i, type="single", question=f"题目{i}", options=[{"label": "A", "text": "是"}], answer=["A"], active=True))

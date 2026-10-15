@@ -20,9 +20,9 @@ const arrivePopup = require('../../utils/arrivePopup');
 /**
  * 今日行军状态文案（需求 §6.3/6.4：按真实数据分档，不随机生成）
  *   0 步            -> 未开始
- *   (0, goal)       -> 运动中（goal=当日行军目标，后端下发 5000）
- *   [goal, target)  -> 今日行军目标已完成
- *   >= target       -> 今日完成一次长距离行军（target=10000）
+ *   (0, goal)       -> 运动中（goal=连续行军目标，后端下发 5000）
+ *   [goal, target)  -> 今日连续行军目标已完成
+ *   >= target       -> 今日行军目标已完成（target=20000）
  */
 /** 活动未进行中时的首页横幅（进行中或不限制时返回 null） */
 function activityBanner(s) {
@@ -34,8 +34,8 @@ function activityBanner(s) {
 
 function marchStatusText(steps, goal, target) {
   if (steps <= 0) return '今天还没有开始行军';
-  if (steps >= target) return '今日完成一次长距离行军';
-  if (steps >= goal) return '今日行军目标已完成';
+  if (steps >= target) return '今日行军目标已完成';
+  if (steps >= goal) return '今日连续行军目标已完成';
   return '正在向下一站前进';
 }
 
@@ -44,7 +44,7 @@ Page({
     user: null,
     // 今日行军
     todaySteps: 0,
-    dailyTarget: 10000,
+    dailyTarget: 20000,
     stepPercent: 0,
     marchStatus: '今天还没有开始行军',
     syncing: false,

@@ -3,7 +3,7 @@
 ## 变更
 
 - 首页同步结果区分：近 7 日成功、已是最新、部分日期待重试。
-- 当前步数区域仍只读取后端 `steps`（今天），不展示历史逐日步数。
+- 当前步数区域仍只读取后端 `steps`（今天），不展示历史逐日步数；今日行军主目标调整为 20000 步，5000 步门槛明确标注为连续行军目标。
 - 积分页展示 `walkCarry`，说明结余步数会计入下一次换算。
 - 答题页按后端 `totalCount` 展示实际题量；题库不足 5 道时展示 `shortageMessage`，不阻止现有题目作答。
 
@@ -11,7 +11,7 @@
 
 - `node --check services/sport.js pages/home/home.js pages/points/points.js pages/quiz/quiz.js`：通过。
 - 微信开发者工具 CLI `open --project D:/project/longmarch-run`：项目成功打开并触发编译，无 CLI 报错。
-- 后端接口/页面数据契约由 `backend/test/s22_history_sync_quiz_rotation.py` 覆盖，13/13 通过。
+- 后端接口/页面数据契约由 `backend/test/s22_history_sync_quiz_rotation.py` 覆盖，14/14 通过（含今日行军目标 20000 步）。
 - 2026-10-15 回归：模拟旧后端仅返回 `date/steps/totalSteps/synced`，service 会补齐近 7 日数组与积分字段，首页显示通用同步提示，不再因读取 `failedDates.length` 报错；模拟新版响应时保留原数组和近 7 日提示。
 
 ## 未完成的环境验收

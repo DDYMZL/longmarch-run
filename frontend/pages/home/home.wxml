@@ -138,7 +138,7 @@
       </view>
       <view class="streak-side">
         <view class="streak-goal {{todayGoalCompleted ? 'done' : ''}}">
-          {{todayGoalCompleted ? '今日目标已达成 ✓' : '今日目标 ' + streakGoal + ' 步'}}
+          {{todayGoalCompleted ? '今日连续行军已达成 ✓' : '连续行军目标 ' + streakGoal + ' 步'}}
         </view>
         <view class="streak-mile" wx:if="{{nextStreakMilestone}}">
           再坚持 {{streakRemain}} 天可达 {{nextStreakMilestone}} 天里程碑

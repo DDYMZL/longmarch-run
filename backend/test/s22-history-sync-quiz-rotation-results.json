@@ -43,40 +43,46 @@
       "detail": ""
     },
     {
+      "id": "S08",
+      "name": "今日行军目标调整为 20000 步",
+      "ok": true,
+      "detail": "{'date': '2026-10-15', 'steps': 200, 'target': 20000, 'total_steps': 10000, 'current_streak': 0, 'max_streak': 0, 'streak_goal': 5000, 'today_goal_completed': False, 'next_streak_milestone': 3, 'streak_remain': 3}"
+    },
+    {
       "id": "Q01",
       "name": "同用户同日固定 5 道且不重复",
       "ok": true,
-      "detail": "[4, 5, 8, 3, 2]"
+      "detail": "[6, 4, 8, 3, 5]"
     },
     {
       "id": "Q02",
       "name": "未答题不足 5 时先用完剩余 3 题再跨轮补 2 题",
       "ok": true,
-      "detail": "day1=[4, 5, 8, 3, 2] day2=[7, 1, 6, 8, 5]"
+      "detail": "day1=[6, 4, 8, 3, 5] day2=[1, 7, 2, 8, 3]"
     },
     {
       "id": "Q03",
       "name": "A 用户历史不影响 B 用户选题",
       "ok": true,
-      "detail": "[3, 8, 1, 6, 7]"
+      "detail": "[4, 3, 1, 8, 5]"
     },
     {
       "id": "Q04",
       "name": "全部题目用过后自动进入下一轮且当天不重复",
       "ok": true,
-      "detail": "[1, 6, 3, 4, 7]"
+      "detail": "[2, 7, 1, 6, 4]"
     },
     {
       "id": "Q05",
       "name": "停用题保留既有当天任务但不参与后续抽题",
       "ok": true,
-      "detail": "retained=1 later=[7, 2, 6, 8, 5]"
+      "detail": "retained=2 later=[6, 5, 4, 3, 7]"
     },
     {
       "id": "Q06",
       "name": "题库不足 5 道时不重复并返回明确状态",
       "ok": true,
-      "detail": "{'date': '2026-10-15', 'issueNo': 45, 'completed': False, 'totalCount': 3, 'questionShortage': True, 'shortageMessage': '当前题库仅有 3 道可用题目，本期按实际题量作答', 'timeLimit': 90, 'serverTime': 1792037807670, 'progress': [{'seq': 1, 'status': 'pending', 'correct': False}, {'seq': 2, 'status': 'pending', 'correct': False}, {'seq': 3, 'status': 'pending', 'correct': False}], 'current': None, 'correctCount': 0, 'po"
+      "detail": "{'date': '2026-10-15', 'issueNo': 45, 'completed': False, 'totalCount': 3, 'questionShortage': True, 'shortageMessage': '当前题库仅有 3 道可用题目，本期按实际题量作答', 'timeLimit': 90, 'serverTime': 1792039340067, 'progress': [{'seq': 1, 'status': 'pending', 'correct': False}, {'seq': 2, 'status': 'pending', 'correct': False}, {'seq': 3, 'status': 'pending', 'correct': False}], 'current': None, 'correctCount': 0, 'po"
     }
   ]
 }

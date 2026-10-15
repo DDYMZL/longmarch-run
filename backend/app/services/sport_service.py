@@ -23,7 +23,7 @@ from app.core.wx import code2session, decrypt_werun
 from app.models.models import DailySport, LitNode, QuizRecord, RouteNode, User
 from app.services import event_service, points_service, streak_service
 
-DAILY_TARGET = 10000  # 今日目标步数（展示用）
+DAILY_TARGET = 20000  # 今日目标步数（展示用）
 TOTAL_MILESTONES = [(100000, "TOTAL_STEPS_100000"), (500000, "TOTAL_STEPS_500000")]
 
 
