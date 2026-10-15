@@ -40,23 +40,33 @@
     "list": [
       {
         "pagePath": "pages/home/home",
-        "text": "首页"
+        "text": "首页",
+        "iconPath": "images/tabbar/home.png",
+        "selectedIconPath": "images/tabbar/home-active.png"
       },
       {
         "pagePath": "pages/march/march",
-        "text": "长征"
+        "text": "长征",
+        "iconPath": "images/tabbar/march.png",
+        "selectedIconPath": "images/tabbar/march-active.png"
       },
       {
         "pagePath": "pages/quiz/quiz",
-        "text": "情报"
+        "text": "情报",
+        "iconPath": "images/tabbar/quiz.png",
+        "selectedIconPath": "images/tabbar/quiz-active.png"
       },
       {
         "pagePath": "pages/rank/rank",
-        "text": "排行"
+        "text": "排行",
+        "iconPath": "images/tabbar/rank.png",
+        "selectedIconPath": "images/tabbar/rank-active.png"
       },
       {
         "pagePath": "pages/mine/mine",
-        "text": "我的"
+        "text": "我的",
+        "iconPath": "images/tabbar/mine.png",
+        "selectedIconPath": "images/tabbar/mine-active.png"
       }
     ]
   },

@@ -22,6 +22,9 @@ const CLOUDS = [
   { x: 0.88, y: 0.2, s: 0.85, v: 0.016 }
 ];
 
+// 星色（冷白为主，少量暖白/淡蓝增加层次）
+const STAR_TINTS = ['#EAF2FF', '#EAF2FF', '#EAF2FF', '#FFF1D6', '#CFE0FF'];
+
 /** 列表/信息卡视图节点：仅保留模板用到的字段，减小 setData 体积 */
 function toViewNode(node) {
   return {
@@ -598,19 +601,34 @@ Page({
       });
     }
 
-    // 星空（大小星混合，部分大星带十字光芒；闪烁相位/频率各异）
+    // 星空分远/中/近三层（构建期一次性分配，帧内零分配）：
+    // 远景微星静态烘焙进离屏层；中景小星错峰呼吸闪烁；近景亮星带十字光芒并轻微缩放
+    this.farStars = [];
+    for (let i = 0; i < 110; i++) {
+      const p = this.sampleSkyPoint(0.5);
+      this.farStars.push({ x: p.x, y: p.y, r: 0.35 + Math.random() * 0.45, bright: Math.random() < 0.4 });
+    }
     this.stars = [];
-    for (let i = 0; i < 82; i++) {
-      const big = Math.random() < 0.16;
+    for (let i = 0; i < 64; i++) {
+      const big = i < 9;
+      const p = this.sampleSkyPoint(0.35);
+      const lo = big ? 0.3 + Math.random() * 0.15 : 0.08 + Math.random() * 0.22;
       this.stars.push({
-        x: Math.random() * cw,
-        y: Math.random() * ch * 0.72,
-        r: big ? 1.5 + Math.random() * 1.1 : 0.5 + Math.random() * 0.9,
+        x: p.x,
+        y: p.y,
+        r: big ? 1.3 + Math.random() * 1.0 : 0.5 + Math.random() * 0.8,
+        lo,
+        span: (big ? 0.95 : 0.55 + Math.random() * 0.4) - lo,
+        // 周期约 4.5~18s；slow=true 长时间微暗、缓慢增亮再渐暗（呼吸式）
+        freq: 0.35 + Math.random() * 1.05,
         phase: Math.random() * Math.PI * 2,
-        freq: 0.5 + Math.random() * 1.6,
+        slow: Math.random() < 0.45,
+        color: STAR_TINTS[Math.floor(Math.random() * STAR_TINTS.length)],
         glint: big
       });
     }
+    // 按颜色排序：绘制时 fillStyle 只切换几次
+    this.stars.sort((a, b) => (a.color < b.color ? -1 : a.color > b.color ? 1 : 0));
 
     // 区域氛围（需求 §12）：每个节点按区域主题生成少量环境粒子
     // （每节点 3 颗、总量 30 封顶、构建期一次性分配，帧内零分配）
@@ -636,6 +654,33 @@ Page({
 
     // 节点名标签宽度缓存（避免每帧 measureText）
     this._labelW = {};
+  },
+
+  /**
+   * 星点采样：bandRatio 概率落在左上→右中的斜向银河带（近似高斯散布），其余均匀散布于天空区，
+   * 避免网格感；避让节点 16px 范围（最多重试 6 次），保证节点不被星点干扰。
+   * @param {number} bandRatio 落入银河带的概率
+   * @returns {{x:number, y:number}}
+   */
+  sampleSkyPoint(bandRatio) {
+    const { cw, ch } = this;
+    const skyH = ch * 0.72;
+    const pts = this.nodePts || [];
+    let x = 0;
+    let y = 0;
+    for (let k = 0; k < 6; k++) {
+      if (Math.random() < bandRatio) {
+        const u = Math.random();
+        const g = (Math.random() + Math.random() + Math.random() - 1.5) * 0.12 * ch;
+        x = Math.min(cw, Math.max(0, u * cw - g * 0.4));
+        y = Math.min(skyH, Math.max(0, (0.06 + 0.42 * u) * ch + g));
+      } else {
+        x = Math.random() * cw;
+        y = Math.random() * skyH;
+      }
+      if (!pts.some((p) => Math.abs(p.x - x) < 16 && Math.abs(p.y - y) < 16)) break;
+    }
+    return { x, y };
   },
 
   /* ---------------- 动画循环 ---------------- */
@@ -836,6 +881,19 @@ Page({
     }
     ctx.restore();
 
+    // 3.5 远景微星（静态，位于山峦之后；按两档亮度各合批一次 fill）
+    const far = this.farStars || [];
+    [[false, 'rgba(210,225,245,0.22)'], [true, 'rgba(230,238,252,0.5)']].forEach(([bright, color]) => {
+      ctx.beginPath();
+      far.forEach((s) => {
+        if (s.bright !== bright) return;
+        ctx.moveTo(s.x + s.r, s.y);
+        ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      });
+      ctx.fillStyle = color;
+      ctx.fill();
+    });
+
     // 4. 层叠山峦（程序化，带渐变与山脊高光）
     this.drawRidges(ctx);
 
@@ -972,27 +1030,36 @@ Page({
     });
   },
 
-  /** 闪烁星空：大小星混合，大星带十字光芒 */
+  /**
+   * 闪烁星空（中/近景）：每颗星独立周期/相位/亮度区间错峰闪烁，slow 星用三次方曲线
+   * 实现「长时间微暗 → 缓慢增亮 → 渐暗」的呼吸感；近景亮星随亮度轻微缩放并带十字光芒。
+   */
   drawStars(t) {
     const ctx = this.ctx;
-    this.stars.forEach((s) => {
-      const tw = 0.3 + 0.7 * (0.5 + 0.5 * Math.sin(t * s.freq + s.phase));
+    let color = '';
+    for (const s of this.stars) {
+      const w = 0.5 + 0.5 * Math.sin(t * s.freq + s.phase);
+      const k = s.slow ? w * w * w : w;
+      const tw = s.lo + s.span * k;
+      if (s.color !== color) {
+        color = s.color;
+        ctx.fillStyle = color;
+      }
       ctx.globalAlpha = tw;
-      ctx.fillStyle = '#EAF2FF';
       ctx.beginPath();
-      ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+      ctx.arc(s.x, s.y, s.glint ? s.r * (0.9 + 0.2 * k) : s.r, 0, Math.PI * 2);
       ctx.fill();
       if (s.glint) {
         ctx.globalAlpha = tw * 0.45;
         ctx.strokeStyle = '#CFE4FF';
         ctx.lineWidth = 0.8;
-        const g = s.r * 3.4;
+        const g = s.r * (2.4 + 1.6 * k);
         ctx.beginPath();
         ctx.moveTo(s.x - g, s.y); ctx.lineTo(s.x + g, s.y);
         ctx.moveTo(s.x, s.y - g); ctx.lineTo(s.x, s.y + g);
         ctx.stroke();
       }
-    });
+    }
     ctx.globalAlpha = 1;
   },
 
@@ -1148,7 +1215,13 @@ Page({
         ctx.fillStyle = '#FFF7DC';
         ctx.fill();
       } else if (node.status === 'current') {
-        // 呼吸星星（§13.2 当前=呼吸动画）：扩散脉冲环 + 红色星形呼吸缩放
+        // 呼吸星星（§13.2 当前=呼吸动画）：柔和外发光 + 扩散脉冲环 + 红色星形呼吸缩放
+        if (this.glowRed) {
+          const soft = 0.5 + 0.5 * Math.sin(t * 1.3);
+          const s = 64 + soft * 18;
+          ctx.globalAlpha = 0.28 + soft * 0.17;
+          ctx.drawImage(this.glowRed, p.x - s / 2, p.y - s / 2, s, s);
+        }
         const cyc = (t % 1.6) / 1.6;
         for (let k = 0; k < 2; k++) {
           const pr = (cyc + k * 0.5) % 1;
