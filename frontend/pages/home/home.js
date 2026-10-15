@@ -332,9 +332,15 @@ Page({
             duration: 2500
           });
         } else if (res.result.synced || res.result.pointsChange !== 0) {
-          wx.showToast({ title: '近7天步数已同步', icon: 'success' });
+          wx.showToast({
+            title: res.result.historyDetailsAvailable ? '近7天步数已同步' : '步数已同步',
+            icon: 'success'
+          });
         } else {
-          wx.showToast({ title: '近7天已是最新', icon: 'none' });
+          wx.showToast({
+            title: res.result.historyDetailsAvailable ? '近7天已是最新' : '步数已是最新',
+            icon: 'none'
+          });
         }
         this.refreshAll();
       })

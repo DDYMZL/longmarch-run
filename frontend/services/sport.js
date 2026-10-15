@@ -58,12 +58,28 @@ function getWeRunData() {
   });
 }
 
+/** 补齐同步响应，兼容后端滚动发布期间尚未提供近 7 日明细的旧结构。 */
+function normalizeSyncResult(result) {
+  const data = result || {};
+  const historyDetailsAvailable = Array.isArray(data.processedDates) && Array.isArray(data.failedDates);
+  return Object.assign({}, data, {
+    status: data.status || 'success',
+    processedDates: Array.isArray(data.processedDates) ? data.processedDates : [],
+    failedDates: Array.isArray(data.failedDates) ? data.failedDates : [],
+    pointsChange: typeof data.pointsChange === 'number' ? data.pointsChange : 0,
+    todayWalkPoints: typeof data.todayWalkPoints === 'number' ? data.todayWalkPoints : 0,
+    walkCarry: typeof data.walkCarry === 'number' ? data.walkCarry : 0,
+    historyDetailsAvailable: historyDetailsAvailable
+  });
+}
+
 /**
  * 同步微信运动最近 7 个自然日（后端解密、按北京时间归日、幂等补录并重算积分）。
  * 页面只使用返回的 steps 展示今天；历史日期仅在后端处理。
  * 授权/登录/取数任一失败即抛错，不向服务端发请求，避免写入非真实步数。
  * @returns {Promise<{date:string, steps:number, totalSteps:number, synced:boolean, status:string,
- *   processedDates:string[], failedDates:Array, pointsChange:number, todayWalkPoints:number, walkCarry:number}>}
+ *   processedDates:string[], failedDates:Array, pointsChange:number, todayWalkPoints:number,
+ *   walkCarry:number, historyDetailsAvailable:boolean}>}
  */
 function syncToday() {
   return authorizeWeRun()
@@ -79,7 +95,8 @@ function syncToday() {
     })
     .then((payload) =>
       requestService.request({ url: '/sport/sync', method: 'POST', data: payload })
-    );
+    )
+    .then(normalizeSyncResult);
 }
 
 /**
