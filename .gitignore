@@ -22,6 +22,7 @@ admin/dist.zip
 
 # 发布打包产物
 backend-update.tar.gz
+sql.tar.gz
 frontend/dist.zip
 
 # 支付宝开发者工具（误用生成的配置）
