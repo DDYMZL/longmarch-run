@@ -6,7 +6,6 @@ init_seed 幂等：
 - 表非空时仅「补空值/补新勋章 id」——节点历史内容、题目分类只填空字段，
   尊重管理端已做的编辑与删除（不复活被删节点/题目）。
 """
-from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.models import DailyQuote, MedalDef, Organization, Person, PersonNode, Question, RouteNode
@@ -358,9 +357,7 @@ def _seed_route_nodes(db: Session) -> None:
 
 def _seed_questions(db: Session) -> None:
     """题库：空表全量写入；非空表只为既有题目补空分类（不复活被删题目）。"""
-    # 直接 count 而非 Question.count()：后者会包成 SELECT count(*) FROM (...questions_active...) 子查询，
-    # openGauss 解析该派生表别名时报 UndefinedTable，本地 SQLite 不复现。
-    if db.query(func.count()).select_from(Question).scalar() == 0:
+    if db.query(Question).count() == 0:
         db.add_all([Question(**q) for q in QUESTION_BANK])
         return
     seed_by_id = {q["id"]: q for q in QUESTION_BANK}
