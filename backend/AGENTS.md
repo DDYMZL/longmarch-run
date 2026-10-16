@@ -18,7 +18,7 @@
 | 数据校验 | Pydantic v2 | 响应模型统一继承 `CamelModel` |
 | 鉴权 | PyJWT（HS256） | Bearer Token，由 `app.core.security` 签发/校验 |
 | 微信对接 | httpx（`code2Session`） | `WX_APPID`/`WX_SECRET` 为空时降级 mock openid；已配置时换取失败 502（`WX_LOGIN_ALLOW_MOCK` 仅本地测试） |
-| 配置 | pydantic-settings | 从环境变量 / `.env` 读取，`.env` 不入库 |
+| 配置 | pydantic-settings | 按系统环境变量 `APP_ENV` 选择 env 文件：`prod` 加载 `.env.prod`（生产），否则加载 `.env`（本地开发）；两份文件均已入库（用户决定），生产占位值部署前须替换 |
 
 ## 3. 目录结构与分层约定
 
@@ -90,7 +90,7 @@ schemas 被 routes/services 引用；core 不 import 业务模块
    - 禁止给响应加 snake_case 字段（破坏前端契约）；
    - 禁止破坏种子幂等性；
    - 禁止在后端启动流程中调用 `Base.metadata.create_all`；
-   - 禁止把 `_smoke_test.db`、`.env`、`__pycache__` 视为源码修改目标。
+   - 禁止把 `_smoke_test.db`、`__pycache__` 视为源码修改目标；`.env` 与 `.env.prod` 均已入库，修改前先确认不影响本机/生产环境加载（生产占位值须保持为占位，不得填入真实生产密钥）。
 5. **验证**：运行 `docker compose -f docker/compose.yml up -d` 并确认 `database-init` 成功后，再运行 `python run.py`；用 TestClient 冒烟关键接口；接口文档以 `/docs`（Swagger）核对响应字段。
 6. **同步文档**：接口、业务规则变更时，同步更新本目录 `design.md` 与 `README.md` 的「API 一览」「业务规则」章节。
 7. **测试约定**：功能开发或缺陷修复完成后必须测试：测试报告（Markdown）放 `backend/test/docs/`，截图等视觉证据放 `backend/test/images/`；接口冒烟使用 TestClient（`backend/test/` 现有脚本），WebSocket 与聚合接口的验证记录同样入 docs。

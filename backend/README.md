@@ -28,6 +28,7 @@ docker/
 backend/
 ├── requirements.txt          # 依赖
 ├── .env.example              # 环境变量样例（复制为 .env）
+├── .env / .env.prod          # 本地开发配置 / 生产配置（均入库；.env.prod 由 APP_ENV=prod 启用）
 ├── run.py                    # 开发启动入口
 └── app/
     ├── main.py               # 应用入口：种子数据 + 注册路由
@@ -72,11 +73,13 @@ python run.py                 # 或 uvicorn app.main:app --reload
 - 后端启动时幂等写入业务种子数据，并按 `daily_sport` 分批核对修复步行积分台账；不负责建库建表。
 - 密码中的 `@` 在 `DATABASE_URL` 中写为 `%40`。
 
-## 配置项（.env）
+## 配置项（.env / .env.prod）
+
+后端按系统环境变量 `APP_ENV` 选择加载的 env 文件：`APP_ENV=prod` 时加载 **`.env.prod`**（生产配置，服务器须在 systemd unit 等环境注入该变量），其余情况加载 **`.env`**（本地开发配置）。两份文件均已入库：`.env` 为本地开发值，`.env.prod` 为生产口径（`DEBUG=false`、小程序码 `release`、mock 登录关闭），其中生产库连接串、`JWT_SECRET`、`ADMIN_PASSWORD` 为占位符，**部署前必须替换为服务器真实值**。`APP_ENV` 不能写进 .env 文件本身（env 文件选择发生在解析之前）。
 
 | 变量 | 默认值 | 说明 |
 | --- | --- | --- |
-| `DATABASE_URL` | `postgresql+psycopg2://gaussdb:LongMarch%40123@127.0.0.1:5118/longmarch` | 本地 Docker openGauss 连接串 |
+| `DATABASE_URL` | `postgresql+psycopg2://gaussdb:LongMarch%40123@127.0.0.1:5118/longmarch` | 本地 Docker openGauss 连接串；生产为服务器 openGauss 6.0.1（端口 5432） |
 | `JWT_SECRET` | 开发默认值 | **生产务必修改** |
 | `JWT_EXPIRE_MINUTES` | `10080`（7天） | 小程序令牌有效期 |
 | `JWT_ADMIN_EXPIRE_MINUTES` | `720`（12小时） | 管理员令牌有效期（RBAC 每请求查库，长时效兜底） |
@@ -84,7 +87,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | `WX_APPID` / `WX_SECRET` | 空 | 留空时登录使用 mock openid，便于本地调试；已配置时微信换取失败返回 502 |
 | `WX_LOGIN_ALLOW_MOCK` | `false` | 仅本地 automator 测试：已配置凭证时换取失败仍回退 mock openid；**生产必须为 false** |
 | `WX_WEB_APPID` / `WX_WEB_SECRET` | 空 | 微信网页授权渠道凭证（阶段2 门控，未配置不开放） |
-| `WXACODE_ENV_VERSION` | `trial` | 小程序码环境版本：开发期 `trial`（体验版码，扫码者须为体验成员）；生产发布后改 `release` |
+| `WXACODE_ENV_VERSION` | `trial` | 小程序码环境版本：开发期 `trial`（体验版码，扫码者须为体验成员）；生产 `release` |
 | `QR_LOGIN_TTL_SECONDS` | `300` | PC 扫码登录会话有效期 |
 | `BIND_REQUEST_TTL_SECONDS` | `600` | 身份绑定请求有效期 |
 | `CORS_ORIGINS` | `["*"]` | 跨域来源（JSON 数组） |

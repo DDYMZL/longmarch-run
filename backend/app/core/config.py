@@ -1,13 +1,18 @@
-"""应用配置：基于 pydantic-settings，从环境变量 / .env 读取。"""
+"""应用配置：基于 pydantic-settings，从环境变量 / .env（或 .env.prod）读取。"""
+import os
 from functools import lru_cache
 from pathlib import Path
 from typing import List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# .env 锚定到 backend 根目录，不依赖启动时的工作目录（本地 run.py 与服务器
+# env 文件锚定到 backend 根目录，不依赖启动时的工作目录（本地 run.py 与服务器
 # uvicorn/systemd 从不同 cwd 启动都能读到同一份配置）。
-_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+_ENV_DIR = Path(__file__).resolve().parents[2]
+# APP_ENV 只从系统环境变量读取（env 文件选择发生在解析 .env 之前，写进 .env 不生效）：
+# prod 时加载生产配置 .env.prod，其余情况加载本地开发配置 .env。两份文件均已入库。
+_APP_ENV = os.getenv("APP_ENV", "").strip().lower()
+_ENV_FILE = _ENV_DIR / (".env.prod" if _APP_ENV == "prod" else ".env")
 
 
 class Settings(BaseSettings):
@@ -19,10 +24,13 @@ class Settings(BaseSettings):
     APP_NAME: str = "长征运动挑战 API"
     API_PREFIX: str = "/api"
     DEBUG: bool = True
+    # 运行环境标识：prod 生产（加载 .env.prod），其余为本地开发（加载 .env）
+    APP_ENV: str = "dev"
 
     # 数据库（openGauss 兼容 PostgreSQL 协议，使用 psycopg2 驱动）
     # 必填：不提供任何默认连接串，缺失时启动即报错，避免回退到错误/过期的库或泄露内置凭证。
-    # 本地开发模板见 backend/.env.example；生产由部署环境注入（systemd EnvironmentFile / 环境变量）。
+    # 本地开发配置在 backend/.env（模板 backend/.env.example）；生产配置在 backend/.env.prod
+    # （APP_ENV=prod 时加载，生产库地址与强密码部署前须替换为服务器真实值）。
     DATABASE_URL: str
 
     # JWT

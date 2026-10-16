@@ -5,6 +5,9 @@ __pycache__/
 venv/
 *.db
 .env
+# 经用户决定：backend/.env（本地开发配置）与 backend/.env.prod（生产配置）入库；
+# .env.prod 不匹配上方 .env 模式，此处仅需放行 backend/.env
+!backend/.env
 # 本机覆盖的环境变量（如 admin/.env.development.local 指向本机后端）
 .env*.local
 .pytest_cache/
