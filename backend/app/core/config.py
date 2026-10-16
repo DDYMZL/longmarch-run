@@ -63,6 +63,20 @@ class Settings(BaseSettings):
     # 组织架构外部同步接口地址（留空时同步使用内置种子数据，便于开发调试）
     ORG_SYNC_API_URL: str = ""
 
+    # 腾讯云 CloudBase Agent（管理后台 AI 出题）
+    # API Key 仅供后端调用，禁止写入前端代码、接口响应或日志。
+    CLOUDBASE_ENV_ID: str = ""
+    CLOUDBASE_AGENT_ID: str = ""
+    CLOUDBASE_API_KEY: str = ""
+    # ACP 调用地址；留空时按「https://{ENV_ID}.api.tcloudbasegateway.com/v1/aibot/bots/{AGENT_ID}/acp」拼接
+    CLOUDBASE_AGENT_URL: str = ""
+    CLOUDBASE_TIMEOUT_SECONDS: int = 180  # 单批调用超时（秒）
+
+    # AI 出题生成策略：总量拆成多批并发调用，规避单次长回复被截断
+    AI_QUESTION_BATCH_SIZE: int = 10  # 每批请求 Agent 生成的题数
+    AI_QUESTION_MAX_CONCURRENCY: int = 3  # 批间并发上限
+    AI_QUESTION_MAX_COUNT: int = 100  # 单次生成 / 单次保存的题数上限
+
     # 长征活动规则
     STRIDE_M: float = 0.7  # 平均步长（米），估算距离(km) = 步数 × 步长 / 1000
     STREAK_GOAL_STEPS: int = 5000  # 连续行军每日达标步数（当天达到即计入连续行军）

@@ -1138,6 +1138,63 @@ class AdminImportConfirmOut(BaseModel):
     imported: int
 
 
+# ---------------- 管理端 AI 智能出题 ----------------
+class AdminAiGenerateRequest(BaseModel):
+    """AI 出题请求。
+
+    question_type 目前仅支持 single（小程序答题逻辑限定单答案）；
+    difficulty 只作为生成提示词参数，不入库（questions 表无难度列）；category 可空。
+    """
+
+    topic: str
+    count: int = Field(10, ge=1, le=100)
+    question_type: str = "single"
+    difficulty: str = "medium"
+    category: str = ""
+    extra_requirements: str = ""
+
+
+class AdminAiQuestionDraft(BaseModel):
+    """AI 生成的题目草稿：data 为题目内容，errors 为待修正问题（重复/答案缺失/选项不完整等）。
+
+    errors 非空的草稿不允许直接保存，须由管理员在预览列表中修正或剔除。
+    """
+
+    index: int
+    data: AdminQuestionUpsert
+    errors: List[str] = []
+
+
+class AdminAiGenerateOut(BaseModel):
+    """生成结果统计与草稿列表。batch_errors 为整批失败的批次说明（部分失败时非空）。"""
+
+    requested: int
+    generated: int
+    valid_count: int
+    invalid_count: int
+    items: List[AdminAiQuestionDraft] = []
+    batch_errors: List[str] = []
+
+
+class AdminAiBatchSaveRequest(BaseModel):
+    """批量保存审核通过的题目；字段沿用 AdminQuestionUpsert，后端保存时重新校验。"""
+
+    questions: List[AdminQuestionUpsert]
+
+
+class AdminAiSaveFailure(BaseModel):
+    """单条保存失败：index 为提交列表中的序号（从 1 起）。"""
+
+    index: int
+    reason: str
+
+
+class AdminAiBatchSaveOut(BaseModel):
+    saved: int
+    failed: int
+    failures: List[AdminAiSaveFailure] = []
+
+
 # ---------------- 管理端驾驶舱 / 数据大屏 ----------------
 class AdminDashboardMetrics(BaseModel):
     """驾驶舱核心指标（组织维度已按需求取消，不含 org 统计）。"""

@@ -6,6 +6,7 @@ import type { FormInstance, FormRules } from 'element-plus'
 import { createQuestion, deleteQuestion, fetchQuestions, questionImportApi, updateQuestion } from '../api/admin'
 import type { Question, QuestionOption } from '../api/admin'
 import ExcelImportDialog from '../components/ExcelImportDialog.vue'
+import AiGenerateDialog from '../components/AiGenerateDialog.vue'
 
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F']
 const CATEGORIES = [
@@ -213,6 +214,17 @@ function handleImported() {
   if (page.value === 1) loadQuestions()
   else page.value = 1
 }
+
+// ---------------- AI 智能出题 ----------------
+const aiVisible = ref(false)
+// 新题在列表末尾，回到第一页并清除筛选才能看到刚保存的题目
+function handleAiSaved() {
+  filterType.value = ''
+  filterCategory.value = ''
+  appliedKeyword.value = ''
+  keyword.value = ''
+  handleImported()
+}
 </script>
 
 <template>
@@ -236,6 +248,7 @@ function handleImported() {
       <span class="total">共 {{ total }} 题</span>
       <el-button :icon="'Download'" @click="importDialog?.downloadTemplate()">下载导入模板</el-button>
       <el-button :icon="'Upload'" @click="importVisible = true">批量导入</el-button>
+      <el-button :icon="'MagicStick'" @click="aiVisible = true">AI 智能出题</el-button>
       <el-button type="primary" :icon="'Plus'" @click="openCreate">新增题目</el-button>
       <el-button :icon="'Refresh'" @click="loadQuestions">刷新</el-button>
     </div>
@@ -295,6 +308,8 @@ function handleImported() {
       :api="questionImportApi"
       @imported="handleImported"
     />
+
+    <AiGenerateDialog v-model="aiVisible" @saved="handleAiSaved" />
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="640px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">

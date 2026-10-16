@@ -656,6 +656,60 @@ export const questionImportApi = {
   confirm: (token: string) => confirmImport('/admin/questions/import-confirm', token)
 }
 
+// ---------------- AI 智能出题 ----------------
+export interface AiGeneratePayload {
+  topic: string
+  count: number
+  question_type: string
+  difficulty: string
+  category?: string
+  extra_requirements?: string
+}
+
+export interface AiQuestionDraft {
+  index: number
+  data: QuestionUpsert
+  errors: string[]
+}
+
+export interface AiGenerateResult {
+  requested: number
+  generated: number
+  valid_count: number
+  invalid_count: number
+  items: AiQuestionDraft[]
+  batch_errors: string[]
+}
+
+export interface AiSaveFailure {
+  index: number
+  reason: string
+}
+
+export interface AiBatchSaveResult {
+  saved: number
+  failed: number
+  failures: AiSaveFailure[]
+}
+
+// 生成需等待后端分批调用 Agent，耗时可达分钟级：不设前端超时（timeout: 0），
+// 由用户通过 signal 主动取消；silent 让错误在弹窗内联展示而非全局 toast。
+export function generateAiQuestions(data: AiGeneratePayload, signal?: AbortSignal) {
+  return request.post<AiGenerateResult>('/admin/ai/generate-questions', data, {
+    timeout: 0,
+    signal,
+    silent: true
+  })
+}
+
+export function batchSaveAiQuestions(questions: QuestionUpsert[]) {
+  return request.post<AiBatchSaveResult>(
+    '/admin/ai/questions/batch-save',
+    { questions },
+    { silent: true }
+  )
+}
+
 // ---------------- 每日寄语 ----------------
 export function fetchQuotes(page: number, pageSize: number, keyword = '') {
   return request.get<QuoteListResult>('/admin/quotes', {

@@ -1,0 +1,104 @@
+{
+  "suite": "s25_ai_question_generate",
+  "total": 16,
+  "passed": 16,
+  "failed": 0,
+  "results": [
+    {
+      "id": "A01",
+      "name": "Excel 模板下载未受影响（内容类型/双工作表/表头）",
+      "ok": true,
+      "detail": "status=200 ctype=application/vnd.openxmlformats-officedoc sheets=2"
+    },
+    {
+      "id": "A02",
+      "name": "Excel 预览 + 确认导入未受影响",
+      "ok": true,
+      "detail": "preview=3/0 confirm={'imported': 3} ids=[1, 2, 3]"
+    },
+    {
+      "id": "A03",
+      "name": "生成接口参数校验（空主题/题型/难度/分类/数量）",
+      "ok": true,
+      "detail": "空主题=400 题型非单选=400 难度非法=400 分类非法=400 数量为 0=422 数量超上限=422"
+    },
+    {
+      "id": "A04",
+      "name": "未登录 401、无 questions 菜单的管理员 403（生成与保存）",
+      "ok": true,
+      "detail": "anon=401/401 restricted=403/403"
+    },
+    {
+      "id": "A05",
+      "name": "Agent 故障映射为明确中文提示（超时/鉴权/服务异常/截断/无效 JSON）",
+      "ok": true,
+      "detail": "超时=502 鉴权失败=502 服务不可用=502 回复截断=502 无效输出=400"
+    },
+    {
+      "id": "A06",
+      "name": "Markdown 代码围栏与前后多余文本仍能解析出题",
+      "ok": true,
+      "detail": "status=200 generated=2 valid=2"
+    },
+    {
+      "id": "A07",
+      "name": "逐题识别答案缺失/选项不完整/题干为空/库内重复/批内重复/结构非法",
+      "ok": true,
+      "detail": "all pass valid=1 invalid=6"
+    },
+    {
+      "id": "A08",
+      "name": "生成结果只是草稿，未写入正式题库",
+      "ok": true,
+      "detail": "before=[1, 2, 3] after=[1, 2, 3]"
+    },
+    {
+      "id": "A09",
+      "name": "批量保存重新校验：合法项入库且 id 自 max+1 连续、非法项计入 failures",
+      "ok": true,
+      "detail": "saved=4 failed=3 new_ids=[4, 5, 6, 7] expect=[4, 5, 6, 7] ai_ids=[4, 5, 7] reasons={2: \"正确答案 ['Q'] 不在选项标签中\", 4: '与题库中已有题目重复', 6: '与本次生成的其他题目重复'}"
+    },
+    {
+      "id": "A10",
+      "name": "批量保存拦截库内重复与批内重复",
+      "ok": true,
+      "detail": "idx4=与题库中已有题目重复 idx5=None idx6=与本次生成的其他题目重复"
+    },
+    {
+      "id": "A11",
+      "name": "批量保存空列表返回 400",
+      "ok": true,
+      "detail": "status=400 detail=没有需要保存的题目"
+    },
+    {
+      "id": "A12",
+      "name": "保存后题库列表可查到，且与 Excel 导入题目字段同构",
+      "ok": true,
+      "detail": "total=3 same_shape=True"
+    },
+    {
+      "id": "A13",
+      "name": "生成/保存/列表响应均不泄露 CLOUDBASE_API_KEY",
+      "ok": true,
+      "detail": "key_configured=True checked=5 responses"
+    },
+    {
+      "id": "A16",
+      "name": "小程序下发契约不变：camelCase 且不含 answer/analysis",
+      "ok": true,
+      "detail": "keys=['id', 'options', 'question', 'score', 'type']"
+    },
+    {
+      "id": "A14",
+      "name": "真实调用 Agent 生成 10 道单选题：结构合规、答案唯一且在选项中、不入库",
+      "ok": true,
+      "detail": "status=200 generated=10 valid=10 invalid=0 batch_errors=[] count_after=8"
+    },
+    {
+      "id": "A15",
+      "name": "真实调用 Agent 生成 50 道题：分批处理长响应、结构与去重达标",
+      "ok": true,
+      "detail": "status=200 generated=50 valid=50 invalid=0 unique_questions=50 batch_errors=[]"
+    }
+  ]
+}

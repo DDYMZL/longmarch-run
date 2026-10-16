@@ -25,6 +25,10 @@ from app.schemas.schemas import (
     AdminActivityPublishRequest,
     AdminActivitySettingOut,
     AdminActivitySettingUpdate,
+    AdminAiBatchSaveOut,
+    AdminAiBatchSaveRequest,
+    AdminAiGenerateOut,
+    AdminAiGenerateRequest,
     AdminAuditLogListOut,
     AdminDashboardOut,
     AdminLoginOut,
@@ -78,7 +82,9 @@ from app.services import (
     access_service,
     activity_service,
     admin_service,
+    ai_question_service,
     audit_service,
+    cloudbase_service,
     dashboard_service,
     identity_service,
     import_service,
@@ -487,6 +493,49 @@ def update_question(
 def delete_question(question_id: int, db: Session = Depends(get_db)):
     admin_service.delete_question(db, question_id)
     return {"message": "已删除"}
+
+
+# ---------------- AI 智能出题 ----------------
+# 生成结果一律作为草稿返回，必须由管理员在预览列表确认后调 batch-save 才入库。
+@router.post(
+    "/ai/generate-questions",
+    response_model=AdminAiGenerateOut,
+    summary="AI 生成题目草稿（不入库）",
+    dependencies=[Depends(require_menu("questions"))],
+)
+def ai_generate_questions(payload: AdminAiGenerateRequest, db: Session = Depends(get_db)):
+    try:
+        return ai_question_service.generate_questions(
+            db,
+            payload.topic,
+            payload.count,
+            payload.question_type,
+            payload.difficulty,
+            payload.category,
+            payload.extra_requirements,
+        )
+    except cloudbase_service.CloudBaseError as exc:
+        # 先于 ValueError 捕获：CloudBaseError 继承 ValueError，但属上游故障应返回 502
+        raise HTTPException(status_code=502, detail=str(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/ai/questions/batch-save",
+    response_model=AdminAiBatchSaveOut,
+    summary="批量保存审核通过的 AI 题目",
+    dependencies=[Depends(require_menu("questions"))],
+)
+def ai_batch_save_questions(
+    payload: AdminAiBatchSaveRequest, db: Session = Depends(get_db)
+):
+    try:
+        return ai_question_service.batch_save_questions(
+            db, [item.model_dump() for item in payload.questions]
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 # ---------------- 每日寄语维护（需求 §16、V1.1 功能二）----------------
