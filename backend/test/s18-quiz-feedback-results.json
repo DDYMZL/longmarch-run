@@ -4,13 +4,13 @@
       "id": "T01",
       "name": "未开题不下发题目，5 题 pending，限时 90 秒",
       "ok": true,
-      "detail": "status=200 body={\"date\": \"2026-10-15\", \"issueNo\": 45, \"completed\": false, \"totalCount\": 5, \"questionShortage\": false, \"shortageMessage\": \"\", \"timeLimit\": 90, \"serverTime\": 1792"
+      "detail": "status=200 body={\"date\": \"2026-10-16\", \"issueNo\": 46, \"completed\": false, \"totalCount\": 5, \"questionShortage\": false, \"shortageMessage\": \"\", \"timeLimit\": 90, \"serverTime\": 1792"
     },
     {
       "id": "T02",
       "name": "开题仅下发当前题、不含答案，截止 = 开题 + 90 秒",
       "ok": true,
-      "detail": "status=200 cur={\"seq\": 1, \"question\": {\"id\": 8, \"type\": \"judge\", \"question\": \"S18 题目 8\", \"options\": [{\"label\": \"A\", \"text\": \"正确\"}, {\"label\": \"B\", \"text\": \"错误\"}], \"score\": 20}, leaked=[]"
+      "detail": "status=200 cur={\"seq\": 1, \"question\": {\"id\": 7, \"type\": \"single\", \"question\": \"S18 题目 7\", \"options\": [{\"label\": \"A\", \"text\": \"选项A7\"}, {\"label\": \"B\", \"text\": \"选项B7\"}, {\"label\": leaked=[]"
     },
     {
       "id": "T03",
@@ -34,7 +34,7 @@
       "id": "T06",
       "name": "答对即时判定，积分 +2 写入台账",
       "ok": true,
-      "detail": "status=200 body={\"seq\": 1, \"questionId\": 8, \"status\": \"answered\", \"correct\": true, \"userAnswer\": [\"B\"], \"correctAnswer\": [\"B\"], \"analysis\": \"解析 8\", \"points\": 2, \"correctCount\": pts=(2, 1)"
+      "detail": "status=200 body={\"seq\": 1, \"questionId\": 7, \"status\": \"answered\", \"correct\": true, \"userAnswer\": [\"D\"], \"correctAnswer\": [\"D\"], \"analysis\": \"解析 7\", \"points\": 2, \"correctCount\": pts=(2, 1)"
     },
     {
       "id": "T07",
@@ -70,19 +70,19 @@
       "id": "T12",
       "name": "最后一题后生成记录（2 对 1 错 2 超时，积分 4，正确率 40%）",
       "ok": true,
-      "detail": "status=200 rec={\"date\": \"2026-10-15\", \"totalCount\": 5, \"correctCount\": 2, \"score\": 40, \"points\": 4, \"accuracy\": 40, \"timeoutCount\": 2, \"wrongList\": [{\"index\": 2, \"questionId\": 7, \"category\": \"event\", \"question\": \"S1"
+      "detail": "status=200 rec={\"date\": \"2026-10-16\", \"totalCount\": 5, \"correctCount\": 2, \"score\": 40, \"points\": 4, \"accuracy\": 40, \"timeoutCount\": 2, \"wrongList\": [{\"index\": 2, \"questionId\": 5, \"category\": \"event\", \"question\": \"S1"
     },
     {
       "id": "T13",
       "name": "完成后 start 返回记录、再提交 400；records 无明细",
       "ok": true,
-      "detail": "completed=True answer=400 recs=[{'date': '2026-10-15', 'totalCount': 5, 'correctCount': 2, 'score': 40, 'points': 4, 'accuracy': 40, 'timeoutCount': 2, 'wrongList': [{'index': 2, 'questionId': 7, 'category': 'event', 'question': 'S18 题目 7', 'correctAnswer': 'D', 'analysis': '解析 7'}, {'index': 4, 'qu"
+      "detail": "completed=True answer=400 recs=[{'date': '2026-10-16', 'totalCount': 5, 'correctCount': 2, 'score': 40, 'points': 4, 'accuracy': 40, 'timeoutCount': 2, 'wrongList': [{'index': 2, 'questionId': 5, 'category': 'event', 'question': 'S18 题目 5', 'correctAnswer': 'B', 'analysis': '解析 5'}, {'index': 4, 'qu"
     },
     {
       "id": "T14",
       "name": "全对积分 10、正确率 100",
       "ok": true,
-      "detail": "rec={\"date\": \"2026-10-15\", \"totalCount\": 5, \"correctCount\": 5, \"score\": 100, \"points\": 10, \"accuracy\": 100, \"timeoutCount\": 0, \"wrongList\": [], \"details\": [{\"index\" pts=(10, 1)"
+      "detail": "rec={\"date\": \"2026-10-16\", \"totalCount\": 5, \"correctCount\": 5, \"score\": 100, \"points\": 10, \"accuracy\": 100, \"timeoutCount\": 0, \"wrongList\": [], \"details\": [{\"index\" pts=(10, 1)"
     },
     {
       "id": "T15",
@@ -112,7 +112,7 @@
       "id": "T19",
       "name": "历史无明细记录原样返回",
       "ok": true,
-      "detail": "record={\"date\": \"2026-10-15\", \"totalCount\": 5, \"correctCount\": 2, \"score\": 40, \"points\": 4, \"accuracy\": 40, \"timeoutCount\": 0, \"wrongList\": [{\"index\": 1, \"questionId\":"
+      "detail": "record={\"date\": \"2026-10-16\", \"totalCount\": 5, \"correctCount\": 2, \"score\": 40, \"points\": 4, \"accuracy\": 40, \"timeoutCount\": 0, \"wrongList\": [{\"index\": 1, \"questionId\":"
     },
     {
       "id": "T20",

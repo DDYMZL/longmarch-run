@@ -40,19 +40,19 @@
       "id": "C07",
       "name": "按天循环：第1/2/3条、末条后回到第1条、起始日在未来兜底第1条",
       "ok": true,
-      "detail": "got={'d0': 1, 'd1': 2, 'd2': 4, 'wrap': 1, 'future': 1} expected=[1, 2, 4] cycle={'start_date': '2026-10-16', 'enabled_count': 3, 'today_quote_id': 1, 'today_position': 1}"
+      "detail": "got={'d0': 1, 'd1': 2, 'd2': 4, 'wrap': 1, 'future': 1} expected=[1, 2, 4] cycle={'start_date': '2026-10-21', 'enabled_count': 3, 'today_quote_id': 1, 'today_position': 1}"
     },
     {
       "id": "C08",
       "name": "同一天不同用户/重复请求得到同一条，date 为当天，含出处与节点",
       "ok": true,
-      "detail": "a1={'id': 2, 'date': '2026-10-11', 'content': 'S17寄语二', 'source': '出处二', 'node': {'id': 3, 'name': '四渡赤水'}} b1=2"
+      "detail": "a1={'id': 2, 'date': '2026-10-16', 'content': 'S17寄语二', 'source': '出处二', 'node': {'id': 3, 'name': '四渡赤水'}} b1=2"
     },
     {
       "id": "C09",
       "name": "停用寄语不参与循环，按最新启用列表重算",
       "ok": true,
-      "detail": "today=4 expected=4 cycle={'start_date': '2026-10-10', 'enabled_count': 2, 'today_quote_id': 4, 'today_position': 2}"
+      "detail": "today=4 expected=4 cycle={'start_date': '2026-10-15', 'enabled_count': 2, 'today_quote_id': 4, 'today_position': 2}"
     },
     {
       "id": "C10",

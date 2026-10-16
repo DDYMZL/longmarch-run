@@ -70,13 +70,13 @@
       "id": "P02",
       "name": "多次补步只保留一行、按最终步数计分",
       "ok": true,
-      "detail": "walk=7 rows=[('walk:2026-10-15', 7)]"
+      "detail": "walk=7 rows=[('walk:2026-10-16', 7)]"
     },
     {
       "id": "P03",
       "name": "重复同步近 7 日幂等",
       "ok": true,
-      "detail": "steps=4006 rows=[('walk:2026-10-09', 5), ('walk:2026-10-10', 8), ('walk:2026-10-11', 9), ('walk:2026-10-12', 10), ('walk:2026-10-13', 11), ('walk:2026-10-14', 12), ('walk:2026-10-15', 4)]"
+      "detail": "steps=4967 rows=[('walk:2026-10-10', 8), ('walk:2026-10-11', 9), ('walk:2026-10-12', 10), ('walk:2026-10-13', 11), ('walk:2026-10-14', 12), ('walk:2026-10-15', 4), ('walk:2026-10-16', 5)]"
     },
     {
       "id": "P04",
@@ -94,7 +94,7 @@
       "id": "P06",
       "name": "总积分 = 步行 + 答题（概览与明细一致）",
       "ok": true,
-      "detail": "summary=7=7+0 daily={'date': '2026-10-15', 'walk': 7, 'quiz': 0, 'total': 7, 'steps': 7500, 'correctCount': 0, 'updatedAt': '2026-10-15T10:01:44.466001'}"
+      "detail": "summary=7=7+0 daily={'date': '2026-10-16', 'walk': 7, 'quiz': 0, 'total': 7, 'steps': 7500, 'correctCount': 0, 'updatedAt': '2026-10-16T07:19:22.740266'}"
     },
     {
       "id": "P07",
@@ -124,7 +124,7 @@
       "id": "C03",
       "name": "管理端人员详情与导出同口径积分",
       "ok": true,
-      "detail": "overview={'total': 17, 'walk': 17, 'quiz': 0, 'rank': 2, 'logs': [{'date': '2026-10-15', 'reason': '步行积分', 'delta': 9, 'source_type': 'walk'}, {'date': '2026-10-14', 'reason': '步行积分', 'delta': 8, 'source_type': 'walk'}]} csv=﻿\"排名\",\"人员ID\",\"姓名\",\"曾用名\",\"改名时间\",\"所属组织\",\"总积分\",\"步行积分\",\"答题积分\",\"累计步数\",\"到达节点数\""
+      "detail": "overview={'total': 17, 'walk': 17, 'quiz': 0, 'rank': 2, 'logs': [{'date': '2026-10-16', 'reason': '步行积分', 'delta': 9, 'source_type': 'walk'}, {'date': '2026-10-15', 'reason': '步行积分', 'delta': 8, 'source_type': 'walk'}]} csv=﻿\"排名\",\"人员ID\",\"姓名\",\"曾用名\",\"改名时间\",\"所属组织\",\"总积分\",\"步行积分\",\"答题积分\",\"累计步数\",\"到达节点数\""
     },
     {
       "id": "D01",

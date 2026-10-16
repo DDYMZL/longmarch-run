@@ -4,13 +4,13 @@
       "id": "W01",
       "name": "mock 用户无 payload 同步走开发模拟",
       "ok": true,
-      "detail": "status=200 steps=9854"
+      "detail": "status=200 steps=7840"
     },
     {
       "id": "W02",
       "name": "同日重复同步 synced=False 且步数不变",
       "ok": true,
-      "detail": "steps=9854 synced=False"
+      "detail": "steps=7840 synced=False"
     },
     {
       "id": "W03",
@@ -38,15 +38,15 @@
     },
     {
       "id": "W07",
-      "name": "解密数据缺当日步数抛错",
+      "name": "缺少当日但含历史数据时保留实际范围",
       "ok": true,
-      "detail": "微信运动数据中缺少今日步数，请稍后重试"
+      "detail": "steps={'2026-10-15': 111}"
     },
     {
       "id": "W08",
-      "name": "_resolve_steps 取当日真实步数",
+      "name": "_resolve_steps 按北京时间解析各日真实步数（含今日）",
       "ok": true,
-      "detail": "steps=6543"
+      "detail": "steps={'2026-10-15': 111, '2026-10-16': 6543}"
     }
   ],
   "hasCreds": true

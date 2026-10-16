@@ -30,13 +30,13 @@
       "id": "P05",
       "name": "部分日期缺失：保留原值、返回 failed_dates、积分按实际数据重算",
       "ok": true,
-      "detail": "failed=[{'date': '2026-10-10', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-13', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-14', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-15', 'reason': '微信运动本次未返回该日数据，可稍后重试'}] saved=900"
+      "detail": "failed=[{'date': '2026-10-11', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-14', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-15', 'reason': '微信运动本次未返回该日数据，可稍后重试'}, {'date': '2026-10-16', 'reason': '微信运动本次未返回该日数据，可稍后重试'}] saved=900"
     },
     {
       "id": "P06",
       "name": "总积分榜与积分概览同口径（walkPoints 一致）",
       "ok": true,
-      "detail": "me={'rank': 83, 'userId': 531, 'nickname': 'S24PG临时验证', 'avatar': '', 'orgName': '', 'steps': 2811, 'points': 2, 'walkPoints': 2, 'quizPoints': 0, 'isMe': True} pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 811, 'rank': 83, 'rules': {'walkStepsPerPoint': 1000, 'walkStepCap': 20000, 'walkDailyCap': 20, 'quizPerCorrect': 2, 'q"
+      "detail": "me={'rank': 83, 'userId': 534, 'nickname': 'S24PG临时验证', 'avatar': '', 'orgName': '', 'steps': 2811, 'points': 2, 'walkPoints': 2, 'quizPoints': 0, 'isMe': True} pts={'total': 2, 'walk': 2, 'quiz': 0, 'todayWalk': 0, 'todayQuiz': 0, 'todaySteps': 0, 'todayCorrect': 0, 'walkCarry': 811, 'rank': 83, 'rules': {'walkStepsPerPoint': 1000, 'quizPerCorrect': 2, 'quizDailyCap': 10}}"
     }
   ]
 }
