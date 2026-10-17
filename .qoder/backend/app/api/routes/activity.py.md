@@ -10,7 +10,7 @@
 
 ## 3. 业务需求
 
-V2.0 需求一「活动时间控制」（`ce14a95`，2026-10-13，`docs/迭代记录.md:401`）。公开的动机写在路由 docstring（`:14-15`）：小程序启动页在**登录前**即需判定活动状态以决定是否进入，故不能挂 `get_current_user`；仅返回活动名称、起止时间、状态与提示文案，不含任何用户数据。
+V2.0 需求一「活动时间控制」（`ce14a95`，2026-10-13）。公开的动机写在路由 docstring（`:14-15`）：小程序启动页在**登录前**即需判定活动状态以决定是否进入，故不能挂 `get_current_user`；仅返回活动名称、起止时间、状态与提示文案，不含任何用户数据。
 
 ## 4. 核心功能
 
@@ -56,8 +56,8 @@ router 前缀 `/activity`（`:9`），`backend/app/main.py:70` 以 `/api` 挂载
 
 数据来源：`git log --follow --oneline -- backend/app/api/routes/activity.py`，仅 **1 个提交**。
 
-### 2026-10-13（`ce14a95`，10:55，`docs/迭代记录.md:401`）
+### 2026-10-13（`ce14a95`，10:55）
 - 需求：V2.0 活动时间控制。
 - 修改内容：创建本文件（公开状态端点）；同批交付 `activity_settings` 迁移、`activity_service`、管理端设置/发布与审计、写接口按活动状态 403 拦截、读接口按结束后可查看配置放行、业务日期统一北京时间（提交信息）。
 - 关联文件：`backend/app/services/activity_service.py`、`backend/app/api/deps.py`（`_activity_guard`）、`backend/app/api/routes/admin.py`、`docker/init/`、`frontend/services/activity.js`。
-- 测试结果：见 `docs/迭代记录.md:401` 条目。
+- 测试结果：见 `docs/迭代记录.md` 的 `ce14a95` 条目。

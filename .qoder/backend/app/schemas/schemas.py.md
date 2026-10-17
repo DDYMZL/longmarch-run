@@ -306,9 +306,8 @@ Schema 不直接引用表，但字段形状与 `models/models.py` 的 ORM 一一
 
 **待确认**：
 
-- `.qoder/PROJECT.md:267` 把「勋章 6」的滞后表述同时归给 `backend/app/models/models.py:5` 与 `backend/AGENTS.md`。实测 `models.py` 全文**不含**「勋章 6」（`grep -n 勋章 backend/app/models/models.py` 仅命中 `:146`、`:149`、`:354`、`:371`），滞后的只有 `backend/AGENTS.md:39`。该条 PROJECT.md 记录是否需更正，**待确认**（本次任务不允许修改其他文件）。
-- 生产环境 Python / pydantic 版本是否与开发机一致（开发实测 pydantic 2.13.4、fastapi 0.141.1）；`requirements.txt` 的固定策略见 `.qoder/backend/requirements.txt.md`。若生产为更低 pydantic 2.x，`Field(min_length=...)` 作用于 `List`（`:1846`）等写法的行为需回归验证，**待确认**。
-- `RankListOut`（`:829`，对应 `GET /api/rank/steps`）被路由 summary 标注为「旧版契约」。小程序 `services/rank.js` 当前是否仍在调用该端点、能否下线，**待确认**（需核对小程序文档批次）。
+- 生产环境 Python / pydantic 版本是否与开发机一致（开发实测 pydantic 2.13.4、fastapi 0.141.1）；`requirements.txt` 的固定策略见 `.qoder/backend/requirements.txt.md`。若生产为更低 pydantic 2.x，`Field(min_length=...)` 作用于 `List`（`:1846` `AdminAiImportRequest.draft_ids`）等写法的行为需回归验证，**待确认**。
+- `RankListOut`（`:829`，对应 `GET /api/rank/steps`）能否下线：已查实**小程序端不再调用**——`frontend/services/rank.js` 只有 `/rank/points`（`:16`）一处请求，全 `frontend/` 与 `admin/src/` 对 `rank/steps` **0 命中**；现存调用方只有后端测试脚本（`backend/test/e2e_datasync.py:120`、`e2e_full_flow.py:340`/`:575`、`s7_perf_refactor.py:137`），且 `rank_service.py:16` 注释已标注「旧版 /rank/steps 榜单条数」。是否正式下线属产品决策，**待确认**。
 
 **待开发**：无。管理端 5 个 AI 子页面「待开发」（`ARCHITECTURE.md` §11.3）指的是 `admin/src/` 前端页面，其所需的 `:1706-1858` 全部契约**已就绪**。
 

@@ -2,6 +2,9 @@
 
 ## 1. 文件路径
 `backend/app/services/import_service.py`（410 行）
+> **引用约定**：本文中所有**代码**引用一律为「仓库根相对路径 + 行号」；本文件自身的行号简写为 `:NN`。
+> 对 `.qoder/PROJECT.md`、`.qoder/ARCHITECTURE.md`、`.qoder/REQUIREMENTS.md`、`.qoder/decisions/README.md`、`.qoder/backend/test/README.md`、`docs/迭代记录.md` 这几份**总览/台账类文档**，本文只给「路径 + 章节号/条目号/条目标题」而**不给行号**——编写期间实测这些文件正被并发修订、行号反复位移（例：`.qoder/ARCHITECTURE.md` 的架构不变量 13 在数十分钟内从 `:707` 移到 `:712`，`docs/迭代记录.md` 同一提交条目位移 6 行），写死行号会立刻失效并误导读者。对**不变动的历史归档件**（`backend/test/docs/*.md` 等测试报告）仍保留行号。
+
 
 ## 2. 文件职责
 管理后台 Excel 批量导入的**通用框架 + 两类业务实现**：提供 .xlsx 模板生成、上传解析、公式注入拦截、整批校验、预览暂存（`import_previews`）与凭一次性令牌的事务化确认写入；在其上注册「题库」与「每日寄语」两套表头/说明/行解析/批量写入逻辑（模块 docstring `backend/app/services/import_service.py:1-11`）。
@@ -12,7 +15,7 @@
 - **V1.1 功能一：题库 Excel 模板下载与批量导入**。提交 `54ea125`（2026-10-10）创建本文件（297 行），同期新增迁移 `docker/init/011_import_previews.sql`、`backend/test/s12_question_import.py` 与 `backend/requirements.txt` 的 `openpyxl`/`python-multipart` 两行依赖。
 - **V1.1 功能二 / 需求 §16：每日寄语按天循环 + Excel 导入**。提交 `d6acf7e`（2026-10-11）在本文件追加寄语导入（+114 行），复用题库导入框架。
 - 上层规则汇总见 `.qoder/ARCHITECTURE.md` §8「文件上传与 Excel 导入导出」与 `.qoder/REQUIREMENTS.md` §11.6「Excel 导入导出规则」；本文档只补文件级细节，不复制其正文。
-- 关键设计取舍（两阶段预览、条件 UPDATE 消费令牌、整批阻断、不引入 pandas）已登记在 `.qoder/decisions/README.md:77-82`。
+- 关键设计取舍（两阶段预览、条件 UPDATE 消费令牌、整批阻断、不引入 pandas）已登记在 `.qoder/decisions/README.md`「导入导出」相关的 7 行决策中。
 
 ## 4. 核心功能
 
@@ -88,7 +91,7 @@
 **依赖（import）**
 - 标准库：`io`、`uuid`、`datetime`/`timedelta`、`typing`（`:12-15`）。
 - 第三方：`openpyxl.Workbook` / `load_workbook`（`:17`，声明于 `backend/requirements.txt:12`）、`sqlalchemy.func`（`:18`）、`sqlalchemy.orm.Session`（`:19`）。
-- ORM：`DailyQuote`、`ImportPreview`、`Question`、`RouteNode`（`:21`；定义于 `backend/app/models/models.py:81`、`:519`、`:126`、`:32`）。
+- ORM：`DailyQuote`、`ImportPreview`、`Question`、`RouteNode`（本文件 `:21`；定义于 `backend/app/models/models.py:81`、`backend/app/models/models.py:519`、`backend/app/models/models.py:126`、`backend/app/models/models.py:32`）。
 - 服务层：`quote_service`（`:22`，取 3 个长度/排序常量与 `check_fields`）；`admin_service._validate_question`（`:23`）——**跨模块导入另一服务的私有（下划线）函数**，其定义在 `backend/app/services/admin_service.py:208-233`。
 - 间接依赖：`python-multipart`（`backend/requirements.txt:13`）是 FastAPI 解析 `UploadFile = File(...)` 表单的底层包，**backend 代码中没有任何直接 `import multipart`**（全仓 grep 无命中）；两个上传端点在 `backend/app/api/routes/admin.py:444`、`:597`。
 
@@ -104,7 +107,7 @@
 `backend/app/api/routes/admin.py`：import 于 `:90`；调用点 `:423-424`（两个常量）、`:435`（题库模板）、`:450-451`（题库预览 + `ImportError`）、`:463`（题库确认）、`:588`（寄语模板）、`:603-604`（寄语预览 + `ImportError`）、`:616`（寄语确认）。**无其它模块 import 本文件。**
 
 **测试与前端**
-- 冒烟脚本：`backend/test/s12_question_import.py`（题库导入，SQLite 临时库）、`backend/test/s17_quote_cycle_import.py`（寄语循环 + 导入）；结果产物 `backend/test/s12-question-import-results.json`、`backend/test/s17-quote-cycle-results.json`。索引见 `.qoder/backend/test/README.md:72-73`。
+- 冒烟脚本：`backend/test/s12_question_import.py`（题库导入，SQLite 临时库）、`backend/test/s17_quote_cycle_import.py`（寄语循环 + 导入）；结果产物 `backend/test/s12-question-import-results.json`、`backend/test/s17-quote-cycle-results.json`。索引见 `.qoder/backend/test/README.md` §3.1「场景套件（S 系列）」表中 `backend/test/s12_question_import.py` 与 `backend/test/s17_quote_cycle_import.py` 两行。
 - 管理后台消费方：`admin/src/components/ExcelImportDialog.vue`（通过 `api: ExcelImportApi` prop 注入模板/预览/确认函数，同一组件复用于两类导入，见 `.qoder/ARCHITECTURE.md` §8.2）。
 
 ## 7. 业务规则
@@ -142,12 +145,12 @@
 
 ## 8. 修改约束
 - **表头顺序即契约**：`_read_sheet:76` 按位置比对表头，改列名/列序必须同时改 `QUESTION_HEADERS`/`QUOTE_HEADERS` 与说明文案，并意识到**已下载到管理员本地的旧模板会立即失效**（报「表头与模板不一致」）。
-- **不得改为部分成功导入**：这是 `.qoder/ARCHITECTURE.md` 不变量 13（`:693`）与 `.qoder/decisions/README.md:79` 登记的设计决定，`_confirm:156-158` 是唯一强制点，不要绕过。
+- **不得改为部分成功导入**：这是 `.qoder/ARCHITECTURE.md` §14「架构不变量清单」第 13 条与 `.qoder/decisions/README.md`「任一行出错则整批阻断」行登记的设计决定，`_confirm:156-158` 是唯一强制点，不要绕过。
 - **令牌核销与业务写入必须保持在同一事务**（`:162-171`）：拆开会导致「令牌已核销但数据未写入」或「重复导入」。
 - **寄语的 `ValueError` 必须两参**：`_parse_quote_row` 抛 `ValueError(字段, 原因)`，调用点 `:373` 用 `*exc.args` 解包成 `_fail(row, field, reason)`。若新增单参 `raise ValueError("...")`，会因缺位置参数在预览阶段抛 `TypeError`（500）。题库侧 `_parse_question_row` 相反，是单参 + `:267` 固定填空串 field——两侧不可混用。
 - **id / sort_order 分配口径必须与既有新增接口一致**：题库 `max(id)+1`（`:293`）与 `backend/app/services/admin_service.py:175-176` 同源；`questions.id` 库内为 `INTEGER PRIMARY KEY` **无序列**（`docker/init/001_schema.sql:17`），ORM 也未声明 `autoincrement`（`backend/app/models/models.py:134`），因此不能简单删掉显式 id。
 - **`_validate_question` 是跨模块私有函数**（`backend/app/services/admin_service.py:208`）：改其签名或校验口径会同时影响 `create_question`/`update_question`、AI 批量保存与本模块导入，须一并回归。
-- 新增业务导入类型需同步：`biz_type` 取值、新的 `*_HEADERS`/`*_INSTRUCTIONS`/`_parse_*_row`/`preview_*`/`confirm_*` 五件套、`backend/app/schemas/schemas.py` 契约、`backend/app/api/routes/admin.py` 三个端点与菜单权限码、admin 侧 `ExcelImportDialog.vue` 的 api 注入。
+- 新增业务导入类型需同步：`biz_type` 取值、新的 `*_HEADERS`/`*_INSTRUCTIONS`/`_parse_*_row`/`preview_*`/`confirm_*` 五件套、`backend/app/schemas/schemas.py` 契约、`backend/app/api/routes/admin.py` 三个端点与菜单权限码、admin 侧 `admin/src/components/ExcelImportDialog.vue` 的 api 注入。
 - 上传大小/行数上限改动要同步路由层（`backend/app/api/routes/admin.py:423-425` 直接读本模块常量）与模板说明文案中的「单次最多 500 行」（`:186`、`:306`）。
 - **不得把导入文件内容、管理员账号名等写入日志**：`payload` 里是整批业务数据（题干、寄语文本），`.qoder/README.md` §3.14 的敏感信息约束同样适用。
 
@@ -159,8 +162,8 @@
 - 公式注入拦截、2MB/500 行上限、30 分钟一次性令牌、条件 UPDATE 防重复确认、整批事务与回滚，全部有代码落点（见 §4、§7）。
 
 **已知问题（事实陈述，均已登记且用户决定只记录不修改）**
-1. **`confirm_question_import` 用 `max(id)+1` 分配主键且无并发保护**（`:293`）。并发导入、或导入与 `admin_service.create_question`/AI 批量保存同时进行，可分配到相同 id 触发主键冲突；此时 `_confirm` 回滚（`:172-174`）、令牌恢复 pending，整批失败但不产生脏数据。已登记为 `.qoder/PROJECT.md:254` 第 27 项、`.qoder/ARCHITECTURE.md:745`。
-2. **`confirm_quote_import` 用 `max(sort_order)+1` 取排序号且无并发保护**（`:399-401`）。`daily_quotes.sort_order` **无唯一约束**（`docker/init/013_daily_quote_cycle.sql:8` 加列，`:37` 建的是非唯一索引 `ix_daily_quotes_cycle`），因此并发确认两批未填排序号的寄语**不会报错，只会静默产生重复排序号**；展示侧按 `(sort_order, id)` 升序兜底（模板说明第 4 条 `:309-310`、迁移注释 `docker/init/013_daily_quote_cycle.sql:4`）。
+1. **`confirm_question_import` 用 `max(id)+1` 分配主键且无并发保护**（`:293`）。并发导入、或导入与 `admin_service.create_question`/AI 批量保存同时进行，可分配到相同 id 触发主键冲突；此时 `_confirm` 回滚（`:172-174`）、令牌恢复 pending，整批失败但不产生脏数据。已登记为 `.qoder/PROJECT.md` §8「代码级技术债」第 27 项、`.qoder/ARCHITECTURE.md` §16.1「已查证 / 已决策」表的「非自增主键的 id 分配」行。
+2. **`confirm_quote_import` 用 `max(sort_order)+1` 取排序号且无并发保护**（`:399-401`）。`daily_quotes.sort_order` **无唯一约束**（`docker/init/013_daily_quote_cycle.sql:8` 加列，`docker/init/013_daily_quote_cycle.sql:37` 建的是非唯一索引 `ix_daily_quotes_cycle`），因此并发确认两批未填排序号的寄语**不会报错，只会静默产生重复排序号**；展示侧按 `(sort_order, id)` 升序兜底（模板说明第 4 条 `:309-310`、迁移注释 `docker/init/013_daily_quote_cycle.sql:4`）。
 3. **排序号触顶静默截断**：`min(next_order, SORT_ORDER_MAX)`（`:405`）。当库内已存在 `sort_order = 999999` 时，后续所有未填排序号的行都会落 999999，既不报错也不提示。
 4. **预览阶段全表加载**：`:261` 全表读 `questions.question`、`:364` 全表读 `daily_quotes.content`、`:361` 全表读 `route_nodes`。当前量级（种子 15 题、10 节点）无影响；数据量增长后是内存与查询开销点，且与 `MAX_ROWS=500` 的单批上限无关（重复检测必须比对全库）。
 5. **表头单元格自身的公式注入未被 `ImportError` 覆盖**：`:74` 对表头行调用 `_cell_text`，若表头单元格以 `=`/`+`/`@` 开头会抛 `ValueError`，而两个预览端点只捕获 `import_service.ImportError`（`backend/app/api/routes/admin.py:451`、`:604`），结果是 500 而非 400。触发前提是人为篡改模板表头。
@@ -168,11 +171,11 @@
 7. `class ImportError`（`:30`）在模块作用域遮蔽同名内置异常（现状记录，当前无实际影响）。
 
 **未实现 / 文档滞后**
-- **`biz_type = "staff"`（人员导入）不存在**：本文件只注册了 `question` 与 `quote` 两类。但 `backend/app/models/models.py:520`、`:524` 的 `ImportPreview` docstring 与 `docker/init/011_import_previews.sql:3` 注释都写了「题库/寄语/**人员**」，`.qoder/PROJECT.md:268` 已登记该 docstring 滞后。另需注意 **`.qoder/REQUIREMENTS.md:562`「Excel 批量导入人员｜已实现，两阶段（预览 → 确认）｜`services/import_service.py`」与代码不符**——`backend/app` 内无人员导入代码路径（grep `staff`/`人员导入`/`名册` 仅命中 `models.py:520`、`:524`），`persons` 表本身也没有创建路径（`.qoder/PROJECT.md:347`）。该需求是「计划后取消」还是「待开发」——**待确认**。
+- **`biz_type = "staff"`（人员导入）不存在**：本文件只注册了 `question` 与 `quote` 两类。但 `backend/app/models/models.py:520`、`:524` 的 `ImportPreview` docstring 与 `docker/init/011_import_previews.sql:3` 注释都写了「题库/寄语/**人员**」，`.qoder/PROJECT.md` §8「文档滞后项」的 `backend/app/models/models.py:524` 行已登记该 docstring 滞后。另需注意 **`.qoder/REQUIREMENTS.md` §11.2「人员管理」表的「Excel 批量导入人员」行写作「已实现，两阶段（预览 → 确认）」，与代码不符**——`backend/app` 内无人员导入代码路径（grep `staff`/`人员导入`/`名册` 仅命中 `backend/app/models/models.py:520`、`backend/app/models/models.py:524`），`persons` 表本身也没有创建路径（`.qoder/PROJECT.md` §10「待确认问题清单（汇总）」→「已查证解决」表第 7 项）。该需求是「计划后取消」还是「待开发」——**待确认**。
 - 覆盖导入模式（与库内重复时更新而非判错）未实现，docstring `:8` 的「默认新增导入模式」暗示曾有此设想——**待确认**（无对应需求文档或提交记录）。
 
 **行号引用偏差（供交叉核对）**
-- `.qoder/decisions/README.md:79` 与 `.qoder/REQUIREMENTS.md:614` 把「任一行出错则整批阻断」的依据标为 `import_service.py:280-286`；该区间是 `preview_question_import` 的返回统计段（错误**回传**格式），实际**阻断强制点**在 `_confirm:156-158`。`.qoder/ARCHITECTURE.md:431` 用 `:280-286` 指「错误回传格式」是准确的。
+- `.qoder/decisions/README.md`「任一行出错则整批阻断」行与 `.qoder/REQUIREMENTS.md` §11.6「Excel 导入导出规则（管理端通用）」表的「错误策略」行，都把该规则的依据标为「`import_service.py:280-286`」（裸文件名，照录以便定位）；该区间是 `preview_question_import` 的返回统计段（错误**回传**格式），实际**阻断强制点**在 `_confirm:156-158`。`.qoder/ARCHITECTURE.md` §8.2「两阶段导入（预览 → 确认）」第 3 条用 `:280-286` 指「错误回传格式」，这一处是准确的。
 
 ## 10. 迭代记录
 数据来源：`git log --follow --oneline -- backend/app/services/import_service.py`（**2 个提交**）与 `docs/迭代记录.md` 对应条目，按时间倒序。

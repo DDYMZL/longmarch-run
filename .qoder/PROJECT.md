@@ -213,6 +213,8 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 
 ## 8. 当前已知问题与遗留
 
+> **编号说明**：本章序号在三个子表间**连续递增**（阻塞级 1–3 → 架构级限制 4–10 → 代码级技术债 11–32），是 §8 全局索引而非各表独立编号。新增条目一律取当前最大号 +1 并放进语义最贴切的子表，**不得重排既有编号**——`.qoder/` 各文件级文档与 `ARCHITECTURE.md` 都以「§8 第 N 项」的形式交叉引用这些条目，重排会使其全部失效。故后加入「架构级限制」的第 33 项排在该表末尾属正常现象。
+
 ### 阻塞级 / 功能不可用
 
 | # | 问题 | 影响 | 依据 |
@@ -232,6 +234,7 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | 8 | **调试端点暴露在生产 API 面** | `POST /api/quiz/reset`（重置当日答题）与 `POST /api/sport/add`（手动补步）仅挂活动参与守卫，任何登录用户可调用 |
 | 9 | **AI 知识检索是关键词匹配**，未接入向量语义检索 | `ai_knowledge_service.py` docstring 明示为 V1.0 已知取舍 |
 | 10 | **`wx_web`（开放平台网站应用）渠道半成品** | 配置项、表结构、确认流程已就绪，但**全代码库无任何创建 `BindRequest` 行的入口**，绑定只有确认/取消半程 |
+| 33 | **`GET /api/org/children` 无需鉴权即可浏览整棵组织树**：唯一的依赖注入是 `get_db`，没有 `get_current_user` / `require_activity_view`。**属有意设计**——`:28` docstring 明写「不鉴权也可浏览组织树」（入驻前需先选组织）；代价是组织架构与各级名称对未登录者完全可见 | `backend/app/api/routes/org.py:23-29` |
 
 ### 代码级技术债
 
@@ -256,6 +259,9 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | 27 | **非自增主键靠 `max(id)+1` 分配且无并发保护**：并发新增题目/路线点位可撞主键；AI 批量生成与 Excel 导入也走同一套 `max+1`。`persons` 更是只有 seed、无新增代码路径 | `admin_service.py:46-47`/`:175-176`、`ai_question_service.py:378`/`:674`、`import_service.py:293` |
 | 28 | **ORM 类型注解与运行时不符**：`Numeric` 列注解为 `Mapped[float]`，但 psycopg2 实际返回 `decimal.Decimal`（`Mapped[...]` 只是 typing 元数据，不做强转）；出口靠 Pydantic 转 float。直接对这些字段做算术或比较时需注意 Decimal/float 混用 | `models.py:55-56`（`route_nodes.latitude`/`longitude`）、`:246`（`daily_sport.distance`） |
 | 29 | **补签字段为死字段**：`daily_sport.is_makeup` / `makeup_at` 已由 `005_upgrade.sql:31-36` 建列且 NOT NULL DEFAULT FALSE，但全仓无任何业务写入点，库中 0 行为 true | `models.py:235` docstring、`:248-249` |
+| 30 | **服务层越过 `points_service` 直删它管的表**：`reset_today` 自己 `db.query(PointsLog).filter(biz_key == points_service.biz_key(QUIZ, date)).delete()`，积分口径知识（`biz_key` 构造）被复制到了调用方。`points_service` 的任何 `biz_key` 规则变更都不会自动传导到这里。该函数仅供调试端点 `POST /api/quiz/reset` 使用（见「架构级限制」第 8 项） | `backend/app/services/quiz_service.py:536-539`（`:540` 服务层自提交） |
+| 31 | **`POST /api/march/ceremony` 是 `march.py` 7 个端点中唯一没有 `response_model` 的**，直接返回裸 `{"ok": True}`，无 Schema 约束、不出现在 OpenAPI 响应模型里。与 `backend/AGENTS.md` §3.1「路由必须声明 `response_model`」不符（同文件其余 6 个端点均已声明） | `backend/app/api/routes/march.py:76-81` |
+| 32 | **勋章发放的 WebSocket 广播不对称**：`GET /api/medal/list` 在活动开放时也会调 `check_and_grant` 实际发放勋章，但**不广播**；`POST /api/medal/check` 发放后广播 `medal.check`。因此经 `/list` 触发的发放不会推到管理端人员档案，管理端看到的勋章可能滞后于库中真实状态，直到下一次 `/check` 或手动刷新 | `backend/app/api/routes/medal.py:18-19`（无广播）vs `:29-31`（有广播） |
 
 ### 文档滞后项（代码正确，文档过时）
 
@@ -303,7 +309,7 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 
 ## 10. 文档覆盖率
 
-### 本批已交付（总览层）
+### 总览层（已交付）
 
 | 文档 | 状态 |
 | --- | --- |
@@ -318,16 +324,18 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | `.qoder/tasks/README.md` | ✅ 任务记录约定 + `docs/` 中 9 份真实记录索引（**本批未新建任务记录**） |
 | `.qoder/decisions/README.md` | ✅ 架构决策**索引**（指向代码注释等既有权威出处，**本批未新建 ADR 文件**） |
 
-### 待补齐（文件级文档，按批次）
+### 文件级文档（按批次）
 
-| 批次 | 范围 | 预计文档数 |
-| --- | --- | --- |
-| 一 | `backend/app/**`（api 21 + core 8 + data 2 + models 2 + schemas 2 + services 31）+ `backend/run.py` + 后端工程配置 | ~68 |
-| 二 | `frontend/`：25 个页面（页面级合一）+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` | ~52 |
-| 三 | `admin/src/**` 28 + 工程配置与脚本 ~9 | ~37 |
-| 四 | `docker/init/` 22 个 SQL + `init-db.sh` + `compose.yml` | ~24 |
+| 批次 | 范围 | 文档数 | 状态 |
+| --- | --- | --- | --- |
+| 一 | 后端：`app/services` 30、`app/api/routes` 18、`app/core` 7、`app/api/deps.py`、`app/main.py`、`app/data/seed.py`、`app/models/models.py`、`app/schemas/schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt` | **64** | ✅ **已交付 64/64**（2026-10-17） |
+| 二 | 小程序：25 个页面（页面级合一）+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` + 根 `project.config.json` | **52** | 待补齐 |
+| 三 | 管理后台：`admin/src/**` 28（实测无纯 re-export 桶文件）+ `scripts/zip-dist.mjs` + `package.json` + `vite.config.ts` + `tsconfig.json`/`tsconfig.app.json`/`tsconfig.node.json` + `index.html` + `.env.development`/`.env.prod` | **35** | 待补齐 |
+| 四 | 数据库与脚本：`docker/init/*.sql` 22（其中 `021`、`022` **尚未入库**）+ `init-db.sh` + `compose.yml` + 根 `*.bat` 4 个（`start`/`build-backend`/`build-prod`/`build-sql`） | **28** | 待补齐 |
 
-**建档分母说明**：git 跟踪文件共 676 个（不含尚未入库的 `.qoder/` 与 `docker/init/021`、`022`），其中约 400 个属第 4 节排除规则覆盖的测试脚本、测试报告、截图、构建产物与依赖，不建档。需建档的业务源文件约 **181 个**。
+**建档分母说明**：git 跟踪文件共 676 个（不含尚未入库的 `.qoder/` 与 `docker/init/021`、`022`），其中约 400 个属第 4 节排除规则覆盖的测试脚本、测试报告、截图、构建产物与依赖，不建档。四批合计需建档 **179 个**（64 + 52 + 35 + 28），已完成 64 个，总进度 **35.8%**。
+
+> 第一批的实际分母比原估的 ~68 少 4：原估把 `backend/app/**` 下 8 个 `__init__.py` 计入了各子目录（api 21 / core 8 / data 2 / models 2 / schemas 2 / services 31），而这些按第 4 节排除规则不建档。72 个候选路径 − 8 个 `__init__.py` = **64**，已用 `find` 实测核对。
 
 ### 待确认问题清单（汇总）
 

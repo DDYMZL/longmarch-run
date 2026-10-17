@@ -11,7 +11,7 @@ AI 调用计数与限额服务：按**北京时间当日**统计 `ai_usage_logs`
 ## 3. 业务需求
 
 - 需求来源：《长征步迹 AI 智能中心开发需求 V1.0》Phase A——普通用户每天模型调用次数上限（防滥用）与全站每天调用上限（**防成本失控**），见 `backend/app/core/config.py:84-85` 注释、`.qoder/REQUIREMENTS.md` §10.2。后端提交 `1600074`（2026-10-17）。
-- 用量/成本统计页属**待开发**（`.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md` §10.6：「usage / cost 统计页 待开发（`ai_usage_logs` 表已建）」）。本文件当前只承担**计数与写入**，不承担任何对外查询接口。
+- 用量/成本统计页属**待开发**（`.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md` §10.6「usage / cost 统计页」行原文：「usage / cost 统计页 ｜ **待开发**（ai_usage_logs 表已建、写入侧 ai_usage_service.py 已实现；**读取侧接口未实现**，见本表「运行概览 / 调用记录」行）」；引文中的 ai_usage_service.py 即本文件 `backend/app/services/ai_usage_service.py`，原文写的是裸文件名，此处按 `.qoder/README.md` §3 引用规范展开）。本文件当前只承担**计数与写入**，不承担任何对外查询接口。
 - 自然日口径与全项目一致：每日步数、答题、积分、限额统一按北京时间当日（`backend/app/core/helpers.py:1-5` 模块 docstring、`:22-24`）。
 
 ## 4. 核心功能
@@ -56,14 +56,14 @@ WHERE day_key = <北京时间当日 YYYY-MM-DD> AND status = 'success' [AND user
 
 ### 4.5 调用点与事务边界（谁 commit）
 
-本模块**只写不提交**，提交全部发生在 `backend/app/services/ai_chat_service.py`：
+本模块**只写不提交**，提交全部发生在 `backend/app/services/ai_chat_service.py`（下表「`check_limits`」「`record`」「commit 位置」三列的行号均属该文件）：
 
 | 场景 | `check_limits` | `record` | commit 位置 | 说明 |
 |---|---|---|---|---|
 | 历史助手对话成功 | `backend/app/services/ai_chat_service.py:198` | `:258-262`（`status="success"`、带 `conversation_id`、`used_tokens`、`elapsed_ms`） | `:263` | 与 assistant 消息、`conv.updated_at` 同事务 |
-| 历史助手对话上游故障 | 同上 | `:241-244`（`status="error"`、`error_code="cloudbase"`、`elapsed_ms=None`、无 `conversation_id`） | `:245` | 先 `db.rollback()`（`:240`）丢弃本次用户消息与新建会话，再单独记 error 日志并提交；随后抛出 → 路由映射 502 |
+| 历史助手对话上游故障 | `backend/app/services/ai_chat_service.py:198`（同上） | `:241-244`（`status="error"`、`error_code="cloudbase"`、`elapsed_ms=None`、无 `conversation_id`） | `:245` | 先 `db.rollback()`（`:240`）丢弃本次用户消息与新建会话，再单独记 error 日志并提交；随后抛出 → 路由映射 502 |
 | 答题解析（题库无解析，调模型）成功 | `backend/app/services/ai_chat_service.py:374` | `:400-403`（`feature=quiz_explanation`、无 `conversation_id`） | `:404` | 题库已有解析时在 `:370-371` 提前 return，**不校验限额、不写日志** |
-| 答题解析上游故障 | 同上 | `:392-395`（`status="error"`、`error_code="cloudbase"`，`elapsed_ms` 用默认 `None`） | `:396` | 同样先 `db.rollback()`（`:391`） |
+| 答题解析上游故障 | `backend/app/services/ai_chat_service.py:374`（同上） | `:392-395`（`status="error"`、`error_code="cloudbase"`，`elapsed_ms` 用默认 `None`） | `:396` | 同样先 `db.rollback()`（`:391`） |
 
 `model` 字段四处均传 `settings.CLOUDBASE_AGENT_ID`（`backend/app/services/ai_chat_service.py:242`、`:260`、`:393`、`:401`），即**暂存 Agent ID 而非底层模型名**（`backend/app/models/models.py:665` 注明「底层模型名需控制台确认」）。
 
@@ -83,10 +83,12 @@ WHERE day_key = <北京时间当日 YYYY-MM-DD> AND status = 'success' [AND user
 - 标准库：`logging`（`:7`）、`typing.Optional`（`:8`）。
 - 第三方：`sqlalchemy.func`（`:10`）、`sqlalchemy.orm.Session`（`:11`）。
 - 项目内：`app.core.helpers.today_str`（`:13`）、`app.models.models.AiUsageLog`（`:14`）、`app.services.ai_config_service.AiConfig`（`:15`，**仅类型导入**，不调用其任何函数）。
-- 数据库表：`ai_usage_logs`（模型 `backend/app/models/models.py:660-684`；DDL `docker/init/021_ai_center.sql:78-90`；索引 `:116-121`）。列为 `id`(SERIAL PK)、`user_id`、`conversation_id`、`feature VARCHAR(30) NOT NULL`、`model VARCHAR(64)`、`used_tokens`、`elapsed_ms`、`status VARCHAR(16) NOT NULL DEFAULT 'success'`、`error_code VARCHAR(50)`、`day_key VARCHAR(10) NOT NULL`、`created_at`。`user_id`/`conversation_id` 为**逻辑外键**（DDL 无 FOREIGN KEY 约束，见 `.qoder/backend/app/models/models.py.md` §外键）。
+- 数据库表：`ai_usage_logs`（模型 `backend/app/models/models.py:660-684`；DDL `docker/init/021_ai_center.sql:78-90`；索引 `:116-121`）。列为 `id`(SERIAL PK)、`user_id`、`conversation_id`、`feature VARCHAR(30) NOT NULL`、`model VARCHAR(64)`、`used_tokens`、`elapsed_ms`、`status VARCHAR(16) NOT NULL DEFAULT 'success'`、`error_code VARCHAR(50)`、`day_key VARCHAR(10) NOT NULL`、`created_at`。`user_id`/`conversation_id` 为**逻辑外键**（DDL 无 FOREIGN KEY 约束，见 `.qoder/backend/app/models/models.py.md` §4.7）。
 - 无第三方 HTTP 依赖（不调 CloudBase）。
 
 ### 6.2 被谁依赖
+
+（下表「位置」列的行号均属同行「依赖方」列的文件。）
 
 | 依赖方 | 位置 | 用到的符号 |
 |---|---|---|
@@ -127,7 +129,7 @@ WHERE day_key = <北京时间当日 YYYY-MM-DD> AND status = 'success' [AND user
 
 ### 存在问题 / 限制
 
-1. **限额校验无并发保护（事实陈述）**：`check_limits` 只做「先读计数、后调模型、成功后再写日志」，中间无预扣记录、无行锁、无唯一约束。同一用户（或全站）并发请求可同时通过校验，实际成功次数会超出 `chat_daily_limit`/`global_daily_limit`。当前小程序为单用户手动提问、并发面窄，未暴露；与 `.qoder/ARCHITECTURE.md` §15 第 1 条「限流计数为进程内内存态、无法水平扩容」属同类限制。是否需要收紧（如先写 pending 记录再更新状态）——**待确认**。
+1. **限额校验无并发保护（事实陈述）**：`check_limits` 只做「先读计数、后调模型、成功后再写日志」，中间无预扣记录、无行锁、无唯一约束。同一用户（或全站）并发请求可同时通过校验，实际成功次数会超出 `chat_daily_limit`/`global_daily_limit`。当前小程序为单用户手动提问、并发面窄，未暴露。注意计数**落库**（`ai_usage_logs`），因此不属 `.qoder/ARCHITECTURE.md` §15 第 1 条「WS 连接表、限流计数、access_token 缓存均为进程内内存态」所指的那类限流——本模块的计数重启不丢、多进程可见；但「先读后写、无锁」的竞态在多进程部署下同样存在。是否需要收紧（如先写 pending 记录再更新状态）——**待确认**。
 2. **全站日限额分支无冒烟覆盖**：`backend/test/s26_ai_center.py` 全文没有触发 `global_daily_limit` 的用例（该键名只出现在 C01 的配置视图响应断言里，`backend/test/s26-ai-center-results.json` C01 detail），`:40-42` 的 429 路径仅由代码审阅确认，未实测。
 3. **`ai_usage_logs` 无任何读取接口**：表已建、日志在写，但用量/成本统计页与查询端点均属待开发（`.qoder/ARCHITECTURE.md` §11.3）。当前该表数据只能直接查库查看。
 4. `FEATURE_ROUTE`（`backend/app/services/ai_chat_service.py:40`）与 `backend/app/models/models.py:663` 注释中的 `question_gen` 均为**无写入点的取值**（§7 第 7 条）：前者是死常量，后者是注释与实现分叉。是否保留待后续阶段决定——**待确认**。

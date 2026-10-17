@@ -14,11 +14,11 @@
 
 ## 3. 业务需求
 
-- **`ea58b6c`（2026-10-16 23:19）创建本文件**：题库接入 CloudBase Agent AI 出题，「`services/cloudbase_service.py` 封装腾讯云 CloudBase Agent 的 ACP 协议调用（JSON-RPC `session/prompt` + SSE，累积 `agent_message_chunk` 文本、`stopReason` 终止）」（`docs/迭代记录.md:53` 条目原文）。
+- **`ea58b6c`（2026-10-16 23:19）创建本文件**：题库接入 CloudBase Agent AI 出题，「`services/cloudbase_service.py` 封装腾讯云 CloudBase Agent 的 ACP 协议调用（JSON-RPC `session/prompt` + SSE，累积 `agent_message_chunk` 文本、`stopReason` 终止）」（`docs/迭代记录.md` 的 `ea58b6c` 条目原文）。
 - **`1600074`（2026-10-17 11:06）重构为可复用调用层**：AI 智能中心 Phase A 需要把用量与耗时带回给上层落库，故拆出 `_request_once` + `prompt_meta`，新增 `CallResult`/`_StreamState`/`retryable` 与重试退避（据 `git show 1600074 -- backend/app/services/cloudbase_service.py`，132 增 47 删）。
 - 导航层出处（本文档只回指、不复制正文）：`.qoder/ARCHITECTURE.md` §11.1「外部集成」、`.qoder/REQUIREMENTS.md` §10.4「多轮对话实现方式」、配置项清单见 `.qoder/backend/app/core/config.py.md` §5「腾讯云 CloudBase Agent」。
 - **安全需求**（`backend/app/services/cloudbase_service.py:10`）：API Key 仅在本模块内组装到请求头，不写日志、不进异常消息、不下发前端；`backend/app/core/config.py:67` 有同义约束注释。
-- 上游需求书为《长征步迹 AI 智能中心开发需求 V1.0》（按 §13 分阶段，Phase A = 后端全做 + 小程序聊天页）。**该需求文档本身未入库**（`docs/` 下无此文件，实测 `ls docs/` 仅 8 份文档），条目内容以 `docs/迭代记录.md:31`、`backend/test/docs/s26-ai-center-report.md:4` 的转述为准，原始需求文本措辞**待确认**。本文件属传输层，需求书未对其单独提出条目。
+- 上游需求书为《长征步迹 AI 智能中心开发需求 V1.0》（按 §13 分阶段，Phase A = 后端全做 + 小程序聊天页）。**该需求文档本身未入库**（`docs/` 下无此文件，实测 `ls docs/` 仅 8 份文档），条目内容以 `docs/迭代记录.md` 的 `1600074` 条目、`backend/test/docs/s26-ai-center-report.md:4` 的转述为准，原始需求文本措辞**待确认**。本文件属传输层，需求书未对其单独提出条目。
 
 ## 4. 核心功能
 
@@ -186,11 +186,30 @@ detail 文案**原样透传到小程序与管理后台**，因此所有 detail �
 调用链（route → service → 本模块 → 外部）：
 
 ```text
-POST /api/ai/chat              → routes/ai.py:53-65      → ai_chat_service.send_message:233      → prompt_meta → CloudBase Agent
-GET  /api/ai/quiz-explanation/* → routes/ai.py:126-141    → ai_chat_service.quiz_explanation:384  → prompt_meta → CloudBase Agent
-POST /api/admin/ai/generate-questions → routes/admin.py:505-521 → ai_question_service._generate_batch:204 → prompt → CloudBase Agent
-POST /api/admin/ai/jobs         → routes/ai_admin.py:200-225 → ai_question_service（同上一链路）
-GET  /api/ai/route-guide/*      → routes/ai.py:113-123    → ai_chat_service.route_guide          → **不调用本模块**
+POST /api/ai/chat
+  → backend/app/api/routes/ai.py:53-65
+  → backend/app/services/ai_chat_service.py:233（send_message）
+  → prompt_meta → CloudBase Agent
+
+GET /api/ai/quiz-explanation/{question_id}
+  → backend/app/api/routes/ai.py:126-141
+  → backend/app/services/ai_chat_service.py:383-389（quiz_explanation）
+  → prompt_meta → CloudBase Agent
+
+POST /api/admin/ai/generate-questions
+  → backend/app/api/routes/admin.py:500-521
+  → backend/app/services/ai_question_service.py:204（_generate_batch）
+  → prompt → CloudBase Agent
+
+POST /api/admin/ai/jobs
+  → backend/app/api/routes/ai_admin.py:200-225
+  → backend/app/services/ai_question_service.py:204（同上一链路）
+  → prompt → CloudBase Agent
+
+GET /api/ai/route-guide/{node_id}
+  → backend/app/api/routes/ai.py:113-123
+  → backend/app/services/ai_chat_service.py:274-310（route_guide）
+  → **不调用本模块**
 ```
 
 ### 6.3 测试覆盖
@@ -234,7 +253,7 @@ GET  /api/ai/route-guide/*      → routes/ai.py:113-123    → ai_chat_service.
 - 截断拒绝（`:177-180`）、空回复拒绝（`:181-183`）。
 - 密钥不外泄的三处防线（`:83`、`:174`、`:217`）。
 - 向后兼容入口 `prompt`（`:223-228`）。
-- **真实链路已验证**（非推断）：`docs/迭代记录.md:31`（`1600074`）记 s26 冒烟 47/47，「含真实 Agent 调用 L01：reply 143 字、usedTokens=19715」；`docs/迭代记录.md:21`（`1fbacac`）记 VPN 关闭后重跑 s26 全量 47/47，「L01 真实 Agent 原生网络直达（reply 163 字、usedTokens=19989）」。这两条同时证明 `agent_message_chunk` 与 `usage_update.used` 的事件形态（`:98-104`）确为实测。
+- **真实链路已验证**（非推断）：`docs/迭代记录.md` 的 `1600074` 条目记 s26 冒烟 47/47，「含真实 Agent 调用 L01：reply 143 字、usedTokens=19715」；`docs/迭代记录.md` 的 `1fbacac` 条目记 VPN 关闭后重跑 s26 全量 47/47，「L01 真实 Agent 原生网络直达（reply 163 字、usedTokens=19989）」。这两条同时证明 `agent_message_chunk` 与 `usage_update.used` 的事件形态（`:98-104`）确为实测。
 
 ### 9.2 存在问题 / 已知限制
 
@@ -251,13 +270,13 @@ GET  /api/ai/route-guide/*      → routes/ai.py:113-123    → ai_chat_service.
 
 - 本模块无待开发项：Phase A 已交付（`.qoder/ARCHITECTURE.md` §11.2）。
 - `.qoder/ARCHITECTURE.md` §11.3 所列的「管理后台 5 个 AI 子页面、node-detail 讲解面板、答题页 AI 讲解按钮、usage/cost 统计页」均为**待开发**，但它们不影响本文件——本文件只是被调用的传输层。
-- **真机（非模拟器）真实 Agent 链路待验证**（`docs/迭代记录.md:21` 的「待验证」字段原文）。
+- **真机（非模拟器）真实 Agent 链路待验证**（`docs/迭代记录.md` 的 `1fbacac` 条目的「待验证」字段原文）。
 
 ## 10. 迭代记录
 
 数据来源：`git log --follow --oneline -- backend/app/services/cloudbase_service.py`（**2 个提交**）与 `docs/迭代记录.md` 对应条目，按时间倒序。工作区当前无本文件的未提交改动（`git status --short backend/app/services/` 为空）。
 
-### 2026-10-17（`1600074`，`docs/迭代记录.md:31`）
+### 2026-10-17（`1600074`，见 `docs/迭代记录.md` 该提交条目）
 
 - 需求：AI 智能中心 Phase A（§3.1 历史助手 / §3.2 路线节点讲解 / §3.3 答题解析 / §3.4 管理端接口）需要把模型用量与耗时带回上层落 `ai_usage_logs`，并对上游瞬时故障做可控重试。
 - 修改内容（涉本文件，据 `git show 1600074 -- backend/app/services/cloudbase_service.py` 核实，132 增 47 删）：
@@ -270,16 +289,16 @@ GET  /api/ai/route-guide/*      → routes/ai.py:113-123    → ai_chat_service.
   - 新增 `time.monotonic()` 耗时测量（`:157`、`:176`）、重试循环与 `0.5s×次数` 线性退避（`:210-218`）；
   - 超时文案由「AI 生成超时，请减少数量或稍后重试」改为「AI 生成超时，请稍后重试」并标记可重试（`:171`）。
 - 关联文件：`backend/app/services/ai_chat_service.py`（新建）、`ai_knowledge_service.py`（新建）、`ai_config_service.py`、`ai_usage_service.py`、`backend/app/api/routes/ai.py`、`ai_admin.py`、`backend/app/models/models.py`、`docker/init/021_ai_center.sql`、`022_ai_admin_menus.sql`（`docker/` 按仓库规则不随提交）。
-- 测试结果（`docs/迭代记录.md:31` 验证字段原文）：冒烟 `test/s26_ai_center.py` **47/47**（含真实 Agent 调用 L01：reply 143 字、usedTokens=19715；空来源场景模型拒答不编造）；真库校验——迁移应用/表索引菜单齐备/ORM 与真库列 ALL_MATCH/JSON round-trip 后回滚、真库真实 Agent 对话一次（reply 194 字、usedTokens=431）；报告 `backend/test/docs/s26-ai-center-report.md`。管理后台 Vue 子页面、usage/cost 页、node-detail 讲解面板、答题页 AI 讲解按钮按需求 §13 留后续阶段。
+- 测试结果（`docs/迭代记录.md` 的 `1600074` 条目验证字段原文）：冒烟 `test/s26_ai_center.py` **47/47**（含真实 Agent 调用 L01：reply 143 字、usedTokens=19715；空来源场景模型拒答不编造）；真库校验——迁移应用/表索引菜单齐备/ORM 与真库列 ALL_MATCH/JSON round-trip 后回滚、真库真实 Agent 对话一次（reply 194 字、usedTokens=431）；报告 `backend/test/docs/s26-ai-center-report.md`。管理后台 Vue 子页面、usage/cost 页、node-detail 讲解面板、答题页 AI 讲解按钮按需求 §13 留后续阶段。
 
-### 2026-10-16（`ea58b6c`，`docs/迭代记录.md:53`）
+### 2026-10-16（`ea58b6c`，见 `docs/迭代记录.md` 该提交条目）
 
 - 需求：题库接入 CloudBase Agent AI 出题（草稿审核后入库），Excel 导入完整保留。
 - 修改内容（涉本文件）：**创建本文件**，封装腾讯云 CloudBase Agent 的 ACP 协议调用——JSON-RPC `session/prompt` + SSE，累积 `agent_message_chunk` 文本、按 `stopReason` 终止；当时对外只有 `prompt(text, timeout) -> str` 一个入口，`_http_error` 返回字符串，`_consume_line` 返回布尔，无 `retryable`、无重试、无用量捕获、无耗时测量（据 `git show 1600074` 的删除行反推）。
 - 关联文件：`backend/app/services/ai_question_service.py`、`backend/app/api/routes/admin.py`、`backend/app/core/config.py`（`CLOUDBASE_*` 5 项与 `AI_QUESTION_*` 3 项）、`admin/src/components/AiGenerateDialog.vue`、`backend/test/s25_ai_question_generate.py`。
-- 测试结果（`docs/迭代记录.md:53` 验证字段原文）：后端冒烟 `test/s25_ai_question_generate.py` **16/16** 通过（含真实 Agent 生成 10 题与 50 题、401/403 越权、响应体不含密钥、小程序答题接口契约未变）；admin `npm run build` 通过；浏览器真机验收 10 项全通过（截图 `admin/test/images/s26-01~09`，报告 `admin/test/docs/s26-ai-question-admin-report.md`、`backend/test/docs/s26-ai-question-backend-report.md`）；**无任何数据库结构或数据变更**。
+- 测试结果（`docs/迭代记录.md` 的 `ea58b6c` 条目验证字段原文）：后端冒烟 `test/s25_ai_question_generate.py` **16/16** 通过（含真实 Agent 生成 10 题与 50 题、401/403 越权、响应体不含密钥、小程序答题接口契约未变）；admin `npm run build` 通过；浏览器真机验收 10 项全通过（截图 `admin/test/images/s26-01~09`，报告 `admin/test/docs/s26-ai-question-admin-report.md`、`backend/test/docs/s26-ai-question-backend-report.md`）；**无任何数据库结构或数据变更**。
 
 ### 相关但不改本文件的提交（供追溯）
 
-- `37f3e40`（2026-10-17 00:22，`docs/迭代记录.md:36`）：`backend/.env` / `.env.prod` 新增 `CLOUDBASE_ENV_ID/AGENT_ID/API_KEY/AGENT_URL` 及 AI 运行参数配置项，供本模块读取；验证字段记「配置项由 `app/core/config.py` Settings 读取并在 s26 冒烟 C 组覆盖（key 已配置且响应不泄露）」。
-- `1fbacac`（2026-10-17 11:26，`docs/迭代记录.md:21`）：VPN 关闭后重跑 s26 全量 **47/47**，L01 真实 Agent 原生网络直达（reply 163 字、usedTokens=19989）；新增 `frontend/test/automator/ai-chat-live.cjs` 全真链路 4/4。范围仅测试与报告，未改本文件。
+- `37f3e40`（2026-10-17 00:22，`docs/迭代记录.md` 的 `37f3e40` 条目）：`backend/.env` / `.env.prod` 新增 `CLOUDBASE_ENV_ID/AGENT_ID/API_KEY/AGENT_URL` 及 AI 运行参数配置项，供本模块读取；验证字段记「配置项由 `app/core/config.py` Settings 读取并在 s26 冒烟 C 组覆盖（key 已配置且响应不泄露）」。
+- `1fbacac`（2026-10-17 11:26，`docs/迭代记录.md` 的 `1fbacac` 条目）：VPN 关闭后重跑 s26 全量 **47/47**，L01 真实 Agent 原生网络直达（reply 163 字、usedTokens=19989）；新增 `frontend/test/automator/ai-chat-live.cjs` 全真链路 4/4。范围仅测试与报告，未改本文件。

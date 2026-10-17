@@ -74,6 +74,13 @@
 12. **未经明确要求，不要为了生成文档而修改业务代码、数据库数据或生产环境配置。**
 13. **排除规则**见第 4 节。
 14. **敏感信息**：对 `.env` 等文件只记录**配置项名称与用途**，绝不复制实际值；文档中不得出现密码、Token、AppSecret、JWT 密钥、数据库连接串、邀请码、真实 openid/unionid。
+15. **引用 `docs/迭代记录.md` 只用提交号，禁止用行号**。该文件按根 `agents.md` §1.8 在**顶部**追加条目，任何一次提交都会使其后所有行号整体下移——写作当时正确的行号，下一次提交即失效（本仓库已出现过 116 处失效引用）。统一写法：`` `docs/迭代记录.md` 的 `<7 位提交号>` 条目 ``；提交号取该条目 `- 提交：`<hash>`` 一行。
+16. **引用 `.qoder/` 四份总览文档（`PROJECT.md` / `ARCHITECTURE.md` / `REQUIREMENTS.md` / `CHANGELOG.md`）用「章节号 + 行标签」，不用行号**——这四份文档会被并行任务持续编辑，行号不稳定（本仓库已查出 8 处因此指到了错误的表格行）。写法：
+    - 指向表格某一行：`` `.qoder/REQUIREMENTS.md` §10.1「后台 AI 接口」行 ``（引号内抄该行首列原文，行标签不会像行号那样漂移）；
+    - 指向编号列表某一项：`` `.qoder/PROJECT.md` §8「代码级技术债」第 22 项 ``；
+    - 指向整节/整段：`` `.qoder/ARCHITECTURE.md` §9.4 ``、`` `.qoder/ARCHITECTURE.md` §7「wx_web 半成品」段 ``。
+    - **禁止**用 `DOC.md:482`/`:527` 这类省略写法并列引用多行——展开后第二个行号会失去归属。
+17. **引用源码文件才写 `路径:行号`**（如 `backend/app/services/sport_service.py:126`），且必须实际读过该行、确认内容确为所述；行号范围不得超出文件实际行数。`.qoder/` **文件级**文档之间互引可保留行号（每份文档与一个源文件一一对应、几乎不会被并行任务改动），但同样须实读确认，且这些文档自身增删行后必须回来更正引用方。
 
 ---
 
@@ -176,7 +183,7 @@
 
 | 文档 | 内容 |
 | --- | --- |
-| `README.md` | 本文件：目录结构、与其他文档的分工、14 条自动维护规则、建档排除规则、文件级模板 |
+| `README.md` | 本文件：目录结构、与其他文档的分工、17 条自动维护规则、建档排除规则、文件级模板 |
 | `PROJECT.md` | 项目定位、四端组成与真实目录、开发/运行/部署、核心业务规则、已知问题、文档覆盖率统计 |
 | `ARCHITECTURE.md` | 四端调用关系、分层与请求链路、API 约定、鉴权与 RBAC、WebSocket、微信对接、导入导出、状态与一致性、部署与迁移、数据库结构、16 条架构不变量、架构级限制、待确认清单 |
 | `REQUIREMENTS.md` | 现行有效业务需求逐条实现状态（已实现/部分实现/待开发/已废弃/待确认），含已废弃规则清单与文档滞后项 |
@@ -187,4 +194,13 @@
 | `tasks/README.md` | 任务记录约定与 9 项模板；`docs/` 中已存在的 9 份真实任务/分析记录索引 |
 | `decisions/README.md` | 架构与技术决策**索引**（不新建 ADR 文件，指向代码注释与模块 docstring 等权威出处） |
 
-**尚未建档**：文件级文档（`backend/app/**`、`frontend/**`、`admin/src/**`、`docker/init/*.sql`）。`.qoder/backend/`、`.qoder/frontend/`、`.qoder/admin/` 目前只有 `test/README.md`，`.qoder/docker/init/` 为空目录骨架。按 backend → frontend → admin → docker/init 分四批补齐，每批完成后提交推送。
+**文件级文档进度**：按 backend → frontend → admin → docker/init 分四批补齐，每批完成后提交推送。
+
+| 批次 | 范围 | 状态 |
+| --- | --- | --- |
+| 一 | `.qoder/backend/**`（`app/services` 30、`app/api/routes` 18、`app/core` 7、`deps.py`、`main.py`、`seed.py`、`models.py`、`schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt`） | ✅ **64/64 已交付**（2026-10-17） |
+| 二 | `.qoder/frontend/**`（25 页面 + 19 service + 3 util + 1 data + `app.*` + `sitemap.json` + 根 `project.config.json`） | 待补齐（52） |
+| 三 | `.qoder/admin/**`（`src/**` 28 + 脚本与工程配置 7） | 待补齐（35） |
+| 四 | `.qoder/docker/**`（22 SQL + `init-db.sh` + `compose.yml`）+ 根 `*.bat` 4 个 | 待补齐（28） |
+
+`.qoder/frontend/`、`.qoder/admin/` 目前只有 `test/README.md`，`.qoder/docker/init/` 为空目录骨架。分母口径与实测依据见 `.qoder/PROJECT.md` §10。

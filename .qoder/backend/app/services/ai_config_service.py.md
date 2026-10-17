@@ -56,9 +56,9 @@ AI 智能中心的**运行时配置服务**：把 `system_settings` 表中管理
 
 ### 4.4 9 项配置映射与消费点
 
-| setting_key | `AiConfig` 字段 | 范围（`:46-54`） | env 默认项 | 运行时消费点 |
+| setting_key | `AiConfig` 字段 | 范围（本文件 `:46-54`） | env 默认项（`backend/app/core/config.py`） | 运行时消费点 |
 |---|---|---|---|---|
-| `ai_enabled` | `enabled` | bool | `AI_ENABLED`（`backend/app/core/config.py:83`） | `ensure_enabled`（`:129`）→ `backend/app/services/ai_chat_service.py:192`、`:373` |
+| `ai_enabled` | `enabled` | bool | `AI_ENABLED`（`backend/app/core/config.py:83`） | `ensure_enabled`（本文件 `:129`）→ `backend/app/services/ai_chat_service.py:192`、`:373` |
 | `ai_chat_daily_limit` | `chat_daily_limit` | 0~100000 | `AI_CHAT_DAILY_LIMIT`（`:84`） | `backend/app/services/ai_usage_service.py:37-39` |
 | `ai_global_daily_limit` | `global_daily_limit` | 0~1000000 | `AI_GLOBAL_DAILY_LIMIT`（`:85`） | `backend/app/services/ai_usage_service.py:40-42` |
 | `ai_max_input_chars` | `max_input_chars` | 1~2000 | `AI_MAX_INPUT_CHARS`（`:86`） | `backend/app/services/ai_chat_service.py:196-197` |
@@ -132,6 +132,8 @@ DB 覆盖值非空即**整串替换**内置默认（`:141-143`），不做长度
 
 ### 6.2 被谁依赖
 
+（下表「位置」列的行号均属同行「依赖方」列的文件。）
+
 | 依赖方 | 位置 | 用到的符号 |
 |---|---|---|
 | `backend/app/api/routes/ai_admin.py` | `:37`（import）、`:349`、`:375` | `get_config_view`、`patch_config` |
@@ -154,12 +156,12 @@ DB 覆盖值非空即**整串替换**内置默认（`:141-143`），不做长度
 
 ## 8. 修改约束
 
-- **新增可编辑项须同步改 5 处**，缺一即断链：① `Settings` 字段（`backend/app/core/config.py:80-91`）② `_SPEC`（`:45-55`）③ `AiConfig` 字段（`:32-40`）④ `get_config_view` 的 `values` 字典（`:157-167`）⑤ schema `AdminAiConfigValues`（`backend/app/schemas/schemas.py:1744-1755`）。漏 ④ 会出现「能写不能读回」。
+- **新增可编辑项须同步改 5 处**，缺一即断链：① `Settings` 字段（`backend/app/core/config.py:80-91`）② `_SPEC`（`backend/app/services/ai_config_service.py:45-55`）③ `AiConfig` 字段（`:32-40`）④ `get_config_view` 的 `values` 字典（`:157-167`）⑤ schema `AdminAiConfigValues`（`backend/app/schemas/schemas.py:1744-1755`）。漏 ④ 会出现「能写不能读回」。
 - **setting_key 命名固定 `ai_*` 小写下划线**：路由靠 `f"ai_{key}"` 拼前缀（`backend/app/api/routes/ai_admin.py:366`），改名即破坏管理端契约。
 - `_SPEC` 的 env 默认**必须保持 lambda 延迟求值**（`:44` 注释）；改成直接取值会让「测试中改写 `settings` 单例」失效。
 - `patch_config` **不得自行 commit**（`:187`）：事务边界在路由，需与审计写入同事务（`backend/app/api/routes/ai_admin.py:375-377`）。
 - 不得在本模块返回值、异常消息或日志中出现任何密钥（`:5-6`；`.qoder/README.md` §3.14）。
-- 提示词长度上限与 `system_settings.setting_value` 列宽冲突（§9 第 1 条）：若要支持长提示词，须**新增编号迁移**扩列宽并遵守 `docker/init/SQL_CONSTRAINTS.md`，**禁止修改已在生产执行过的 `013_daily_quote_cycle.sql`**（`.qoder/README.md` §3.7）。
+- 提示词长度上限与 `system_settings.setting_value` 列宽冲突（§9 第 1 条）：若要支持长提示词，须**新增编号迁移**扩列宽并遵守 `docker/init/SQL_CONSTRAINTS.md`，**禁止修改已在生产执行过的 `docker/init/013_daily_quote_cycle.sql`**（`.qoder/README.md` §3.7）。
 - `setting_service.set_value` 的 `updated_at` 用 `datetime.utcnow()`（`backend/app/services/setting_service.py:19`、`:22`），而 AI 各表用 `helpers.now_utc()`（如 `backend/app/services/ai_question_service.py:497`）；二者同为 UTC naive、行为等价，改动时不要混入本地时区。
 
 ## 9. 当前实现状态

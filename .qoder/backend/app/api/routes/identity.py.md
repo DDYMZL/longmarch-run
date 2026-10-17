@@ -12,7 +12,7 @@
 
 ## 3. 业务需求
 
-- 需求来源：`b431e4d`（2026-10-09）「微信扫码登录与身份关联（批次2）」（`docs/迭代记录.md:658`）；设计文档 `docs/identity-binding-design.md`（identity_service docstring `:1` 直接引用）。
+- 需求来源：`b431e4d`（2026-10-09）「微信扫码登录与身份关联（批次2）」（`docs/迭代记录.md` 的 `b431e4d` 条目）；设计文档 `docs/identity-binding-design.md`（identity_service docstring `:1` 直接引用）。
 - 业务场景：管理员在 PC 管理后台登录页展示小程序码，用手机微信扫码 → 小程序确认页确认 → PC 端签发管理员令牌，替代账号密码登录；以及为阶段 2 的 `wx_web` 渠道身份绑定预留确认流程。
 
 ## 4. 核心功能
@@ -68,7 +68,7 @@
 2. **归属校验（能否解绑他人身份）——确切结论：不能**。`identity_service.unbind:252-254`：`identity is None or identity.user_id != user.id` 一律抛 ValueError「身份不存在」→ 路由转 **400**（`:113-114`）。非本人身份与不存在身份返回同一文案，不泄露资源存在性；解绑他人身份在任何路径下都不可达（端点先过 `get_current_user`，再按 `current` 校验归属）。已由冒烟测试覆盖：`backend/test/s8_identity_admin.py` A12「非本人身份 400」（报告 `backend/test/docs/s8-identity-admin.md:22`）。
 3. **`wx_mini` 为登录凭证不可解绑**：`identity_service.py:255-256`，400「微信登录凭证不可解绑」（解绑即失去登录方式）。
 4. **provider 支持取值**：`wx_mini` 与 `wx_web`（`backend/app/models/models.py:386` 模型 docstring；`docs/identity-binding-design.md:47` 表设计一致）。`wx_mini` 由登录/入驻自动采集（`identity_service.ensure_wx_mini_identity:264-314`，仅真实微信响应时调用）；`wx_web` 只能经 B 场景 `confirm_bind` 写入。
-5. **`wx_web` 预留能力结论（复核后仍成立）**：全仓 grep `wx_web` 核实——数据库与模型注释支持该值（`models.py:386`）；小程序 `frontend/pages/account/account.js:9-12` `PROVIDER_NAMES` 备好「微信网页授权」文案并能渲染/解绑该来源；但 **backend/app 内无任何创建 `BindRequest` 行的接口**（唯一写入路径 `confirm_bind` 的前置凭证无生产入口，仅测试 fixture 经 ORM 落库），`WX_WEB_APPID`/`WX_WEB_SECRET` 配置（`config.py:48-50`）在 backend/app 代码中无引用；管理后台无身份来源展示页（grep `identities` 在 `admin/src/` 无命中）。与 `.qoder/ARCHITECTURE.md:406`、`.qoder/REQUIREMENTS.md:115`、`.qoder/PROJECT.md:232` 的「半成品/部分实现」结论一致：**确认/取消/列表/解绑半程已实现，凭证创建半程缺失**。
+5. **`wx_web` 预留能力结论（复核后仍成立）**：全仓 grep `wx_web` 核实——数据库与模型注释支持该值（`models.py:386`）；小程序 `frontend/pages/account/account.js:9-12` `PROVIDER_NAMES` 备好「微信网页授权」文案并能渲染/解绑该来源；但 **backend/app 内无任何创建 `BindRequest` 行的接口**（唯一写入路径 `confirm_bind` 的前置凭证无生产入口，仅测试 fixture 经 ORM 落库），`WX_WEB_APPID`/`WX_WEB_SECRET` 配置（`config.py:48-50`）在 backend/app 代码中无引用；管理后台无身份来源展示页（grep `identities` 在 `admin/src/` 无命中）。与 `.qoder/ARCHITECTURE.md` §7「wx_web 半成品」段、`.qoder/REQUIREMENTS.md` §2.4「wx_web 网页授权渠道」行、`.qoder/PROJECT.md` §8「架构级限制」第 10 项的「半成品/部分实现」结论一致：**确认/取消/列表/解绑半程已实现，凭证创建半程缺失**。
 6. **凭证安全**：scene/qr 明文不落库，只存 SHA-256 摘要（`identity_service.py:5-6`、`:34-35`）；L/B 凭证仅后端可生成（本文件 docstring `:4`）；qrId 与 scene 分离互不可推导。
 7. **一人一 unionid**：unionid 冲突禁止自动合并（`identity_service.py:203-211`、`:279-299`）。
 
@@ -83,7 +83,7 @@
 
 ## 9. 当前实现状态
 
-- **已实现**：4 个端点全部可用；PC 扫码登录全链路（创建/轮询/确认/取消/单次签发）经 S8 集成测试 23/23 验证（`b431e4d` 提交信息，`docs/迭代记录.md:658`；报告 `backend/test/docs/s8-identity-admin.md`）；小程序确认页与账号页经 automator 验证（`frontend/test/docs/identity-bind-account-report.md`）。
+- **已实现**：4 个端点全部可用；PC 扫码登录全链路（创建/轮询/确认/取消/单次签发）经 S8 集成测试 23/23 验证（`b431e4d` 提交信息，`docs/迭代记录.md` 的 `b431e4d` 条目；报告 `backend/test/docs/s8-identity-admin.md`）；小程序确认页与账号页经 automator 验证（`frontend/test/docs/identity-bind-account-report.md`）。
 - **部分实现（预留）**：`wx_web` 绑定渠道——确认流程就绪但无凭证创建入口（§7 第 5 条）。
 - **存在问题 / 已知事项**：
   1. `BIND_REQUEST_TTL_SECONDS` 定义未接线（§7 第 1 条，待确认是否遗漏）。
@@ -94,7 +94,7 @@
 
 数据来源：`git log --follow --oneline -- backend/app/api/routes/identity.py`，仅 **1 个提交**。
 
-### 2026-10-09（`b431e4d`，10:27，`docs/迭代记录.md:658`）
+### 2026-10-09（`b431e4d`，10:27）
 - 需求：微信扫码登录与身份关联（批次 2）。
 - 修改内容：创建本文件（4 端点）；同批交付 `identity_service`（扫码会话创建/轮询/确认/取消/单次签发、绑定确认事务、身份列表与解绑、登录采集 unionid）、`qr_login_sessions`/`bind_requests`/`user_identities` 相关迁移、管理员令牌 typ 区分与每请求查库校验、接口限流。
 - 关联文件：`backend/app/services/identity_service.py`、`backend/app/api/routes/admin.py`、`backend/app/api/routes/auth.py`（登录采集 unionid）、`frontend/pages/bind/`、`frontend/pages/account/`、`frontend/services/identity.js`。

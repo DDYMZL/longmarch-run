@@ -278,8 +278,8 @@ ORM 映射见 `backend/app/models/models.py:540-684`（`AiKnowledge` `:540`、`A
 
 ### 待开发（Phase A 的既定边界，**非缺陷**）
 
-1. **`GET /api/ai/route-guide/{node_id}` 的小程序入口未接**：`node-detail` 页 AI 讲解面板待开发（`.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md:377`）。后端已就绪，前端 grep 零调用（§6.2）。
-2. **`GET /api/ai/quiz-explanation/{question_id}` 的小程序入口未接**：答题页「AI 讲解」按钮待开发（`.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md:285`）。后端已就绪，前端 grep 零调用。
+1. **`GET /api/ai/route-guide/{node_id}` 的小程序入口未接**：`node-detail` 页 AI 讲解面板待开发（`.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md` §6.7「node-detail AI 讲解面板」行）。后端已就绪，前端 grep 零调用（§6.2）。
+2. **`GET /api/ai/quiz-explanation/{question_id}` 的小程序入口未接**：答题页「AI 讲解」按钮待开发（`.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md` §5.5「答题页 AI 讲解按钮」行）。后端已就绪，前端 grep 零调用。
 3. **`nodeId` 节点上下文追问通道未接**：后端链路完整（§7.6），小程序侧注释明确「Phase A 先不接入，保留参数通道」（`frontend/pages/ai-chat/ai-chat.js:40`），且因 `ai-chat` 是 tabBar 页而当前不可达。
 4. **小程序真机（非模拟器）真实 Agent 全链路待验证**（`backend/test/docs/s26-ai-center-report.md` §4、`.qoder/ARCHITECTURE.md` §11.3）：模拟器链路已 4/4 通过（`frontend/test/automator/ai-chat-live.cjs`，提交 `1fbacac`）。
 

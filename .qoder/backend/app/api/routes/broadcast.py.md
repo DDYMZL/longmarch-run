@@ -8,12 +8,12 @@
 
 「今日播报」聚合与「实时行军动态」两个只读端点的路由层，各一行核心逻辑，业务全在 `backend/app/services/broadcast_service.py` 与 `backend/app/services/event_service.py`。
 
-**面向对象（从代码与调用方核实）**：**小程序**，不是管理后台。依据：① 两个端点都挂小程序用户鉴权 `Depends(get_current_user)`（`:15`、`:22`），管理端令牌走的是 `get_current_admin` 体系；② 唯一调用方是 `frontend/services/broadcast.js:27`、`:36`（首页 `frontend/pages/home/home.js:159`、`:161` 消费）；③ `admin/src/` 全目录 grep `broadcast` 无任何 API 调用命中；④ 端点 2 的 summary 自标「实时行军动态（小程序）」（`:19`）。注意 `.qoder/ARCHITECTURE.md:112` 的路由清单把本模块标为「管理后台」，**与上述代码事实不符**（管理端的实时动态走 WebSocket `activity` 消息而非本 REST 接口，见 §7），该总览表条目应更正。
+**面向对象（从代码与调用方核实）**：**小程序**，不是管理后台。依据：① 两个端点都挂小程序用户鉴权 `Depends(get_current_user)`（`:15`、`:22`），管理端令牌走的是 `get_current_admin` 体系；② 唯一调用方是 `frontend/services/broadcast.js:27`、`:36`（首页 `frontend/pages/home/home.js:159`、`:161` 消费）；③ `admin/src/` 全目录 grep `broadcast` 无任何 API 调用命中；④ 端点 2 的 summary 自标「实时行军动态（小程序）」（`:19`）。注意 `.qoder/ARCHITECTURE.md` §2.2「routes/broadcast.py」行的路由清单把本模块标为「管理后台」，**与上述代码事实不符**（管理端的实时动态走 WebSocket `activity` 消息而非本 REST 接口，见 §7），该总览表条目应更正。
 
 ## 3. 业务需求
 
-- 端点 1：需求「功能 6 全局播报 + 功能 7 长征记忆彩蛋」（`broadcast_service.py:1` docstring），`18c2121`（2026-10-02）「新增小程序聚合接口（档案/足迹/日历/播报/知识画像）」交付（`docs/迭代记录.md:808`）。
-- 端点 2：需求 §8.3/8.5「实时行军动态」（路由 docstring `:25`），P1-1 批次 `17a4d98`（2026-10-03）交付（`docs/迭代记录.md:728`）。
+- 端点 1：需求「功能 6 全局播报 + 功能 7 长征记忆彩蛋」（`broadcast_service.py:1` docstring），`18c2121`（2026-10-02）「新增小程序聚合接口（档案/足迹/日历/播报/知识画像）」交付（`docs/迭代记录.md` 的 `18c2121` 条目）。
+- 端点 2：需求 §8.3/8.5「实时行军动态」（路由 docstring `:25`），P1-1 批次 `17a4d98`（2026-10-03）交付（`docs/迭代记录.md` 的 `17a4d98` 条目）。
 
 ## 4. 核心功能
 
@@ -71,7 +71,7 @@
 
 - **已实现**：2 个端点均可用；随 `18c2121`、`17a4d98` 交付（验证记录见 §10 与 `docs/迭代记录.md` 对应条目）。
 - **存在问题 / 已知事项**：
-  1. `.qoder/ARCHITECTURE.md:112` 将本模块面向对象误标为「管理后台」（§2 给出代码证据），待总览文档更正。
+  1. `.qoder/ARCHITECTURE.md` §2.2「routes/broadcast.py」行将本模块面向对象误标为「管理后台」（§2 给出代码证据），待总览文档更正。
   2. 两端点未挂 `require_activity_view` 活动闸门（§6，是否有意待确认）。
 - **待开发**：无。
 
@@ -79,14 +79,14 @@
 
 数据来源：`git log --follow --oneline -- backend/app/api/routes/broadcast.py`，共 **2 个提交**。按时间倒序。
 
-### 2026-10-03（`17a4d98`，00:45，`docs/迭代记录.md:728`）
+### 2026-10-03（`17a4d98`，00:45）
 - 需求：实时行军动态（P1-1）。
 - 修改内容（涉本文件）：新增 `GET /broadcast/activities` 公开动态流接口（limit 钳制 1..50）；同批交付 WS 客户端（`frontend/services/ws.js`）与首页实时行军卡（提交信息）。
 - 关联文件：`backend/app/services/event_service.py`、`frontend/services/broadcast.js`、`frontend/pages/home/home.js`。
-- 测试结果：见 `docs/迭代记录.md:728` 条目。
+- 测试结果：见 `docs/迭代记录.md` 的 `17a4d98` 条目。
 
-### 2026-10-02（`18c2121`，00:12，`docs/迭代记录.md:808`）
+### 2026-10-02（`18c2121`，00:12）
 - 需求：小程序聚合接口批次（档案/足迹/日历/播报/知识画像）。
 - 修改内容（涉本文件）：创建本文件，新增 `GET /broadcast/today` 今日播报聚合。
 - 关联文件：`backend/app/services/broadcast_service.py`、`backend/app/api/routes/profile.py` 等同批路由。
-- 测试结果：见 `docs/迭代记录.md:808` 条目。
+- 测试结果：见 `docs/迭代记录.md` 的 `18c2121` 条目。

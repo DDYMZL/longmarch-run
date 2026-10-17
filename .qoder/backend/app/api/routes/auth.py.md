@@ -10,7 +10,7 @@
 
 ## 3. 业务需求
 
-- 需求来源：`afbcba9`（2026-10-12）「邀请码准入全链路」——`/api/auth/login` 改为状态式返回 active/unregistered/disabled 且未入驻不建号，新增 `/api/auth/invite/verify` 与 `/api/auth/onboard`（提交信息原文，见 `docs/迭代记录.md:420`）。
+- 需求来源：`afbcba9`（2026-10-12）「邀请码准入全链路」——`/api/auth/login` 改为状态式返回 active/unregistered/disabled 且未入驻不建号，新增 `/api/auth/invite/verify` 与 `/api/auth/onboard`（提交信息原文，见 `docs/迭代记录.md` 的 `afbcba9` 条目）。
 - 昵称规则：`f820e0e`（2026-10-01）「微信名称直登与昵称仅可修改一次」；`43877dc`（2026-10-01）新增首次引导设置昵称接口（不消耗改名机会）。
 - 设计文档：`docs/identity-binding-design.md`（身份采集部分）、`frontend/design.md:135`（入驻链路）。
 
@@ -83,7 +83,7 @@
 2. **一人一号**：openid 唯一约束 + 并发冲突回滚复用（`auth_service.py:98-99`、`:144-149`）。
 3. **已入驻用户登录不校验原邀请码**（过期/停用/用满不影响，`auth_service.py:74`）。
 4. **昵称仅可修改一次**（`nickname_changed_at` 为判据），首次引导设置不消耗该机会（§4.3）。
-5. **副作用链（`backend/AGENTS.md` 不变量 5）**：不变量条文列举了 login，但**当前代码中 login/onboard 不调用 `medal_service.check_and_grant`，也不产生积分**（grep `check_and_grant` 全 backend/app 仅命中 `routes/medal.py:19`/`:29`、`routes/march.py:71`、`routes/quiz.py:35`/`:51`、`routes/sport.py:48`/`:80` 及 event/medal service 注释）。事实依据：`2f3f333`（2026-10-13）积分台账重构移除了 `_after_sign_in` 中的 `grant_daily_login`（提交信息「移除登录/达标/点亮/里程碑积分」，`docs/迭代记录.md:387`）；本文件保留的登录副作用只有 WS `data_changed` 广播。不变量条文与代码的这一出入属文档滞后，记录在此、不改代码。
+5. **副作用链（`backend/AGENTS.md` 不变量 5）**：不变量条文列举了 login，但**当前代码中 login/onboard 不调用 `medal_service.check_and_grant`，也不产生积分**（grep `check_and_grant` 全 backend/app 仅命中 `routes/medal.py:19`/`:29`、`routes/march.py:71`、`routes/quiz.py:35`/`:51`、`routes/sport.py:48`/`:80` 及 event/medal service 注释）。事实依据：`2f3f333`（2026-10-13）积分台账重构移除了 `_after_sign_in` 中的 `grant_daily_login`（提交信息「移除登录/达标/点亮/里程碑积分」）；本文件保留的登录副作用只有 WS `data_changed` 广播。不变量条文与代码的这一出入属文档滞后，记录在此、不改代码。
 6. **脱敏**：verify 不返回邀请码原文与使用次数（`:49`）；`afbcba9` 提交信息载明「日志/响应脱敏（不含 openid/session_key/wx code/原码）」。
 
 ## 8. 修改约束
@@ -97,7 +97,7 @@
 
 ## 9. 当前实现状态
 
-- **已实现**：6 个端点全部可用；准入模型（verify→onboard→login 三态）经 `afbcba9` 的 s19 冒烟 25/25 + 真实 openGauss 并发 3/3 验证（提交信息，`docs/迭代记录.md:420`）。
+- **已实现**：6 个端点全部可用；准入模型（verify→onboard→login 三态）经 `afbcba9` 的 s19 冒烟 25/25 + 真实 openGauss 并发 3/3 验证（提交信息）。
 - **存在问题 / 已知事项**：
   1. `LoginRequest.nickname` 字段声明但路由未使用（§4.1），属遗留冗余，删除需同步核对小程序请求体（`frontend/services/auth.js:96` 当前未发送该字段）。
   2. `/auth/login` 无限流（§4.1 第 6 点），防爆破完全依赖微信 code 一次性语义；mock 模式下（本地）无此保障。
@@ -108,34 +108,34 @@
 
 数据来源：`git log --follow --oneline -- backend/app/api/routes/auth.py`（6 个提交），与 `docs/迭代记录.md` 交叉核对。按时间倒序。
 
-### 2026-10-13（`2f3f333`，11:25，`docs/迭代记录.md:387`）
+### 2026-10-13（`2f3f333`，11:25）
 - 需求：积分台账重构（总积分=步行+答题，biz_key 每日幂等）。
 - 修改内容（涉本文件，据 diff 核实）：`_after_sign_in` 移除 `points_service.grant_daily_login` 调用并去掉 db 参数（登录不再产生积分），login docstring 同步删除「发放每日登录积分」表述；本文件自此不再 import `points_service`。
 - 关联文件：`backend/app/services/points_service.py`、`docker/init/017_*.sql` 等（详见迭代记录条目）。
-- 测试结果：见 `docs/迭代记录.md:387` 条目。
+- 测试结果：见 `docs/迭代记录.md` 的 `2f3f333` 条目。
 
-### 2026-10-12（`afbcba9`，`docs/迭代记录.md:420`）
+### 2026-10-12（`afbcba9`）
 - 需求：邀请码准入全链路。
 - 修改内容（涉本文件）：login 改状态式三态返回、不自动建号；新增 `POST /auth/invite/verify` 与 `POST /auth/onboard`（原子核销+建号+审计+幂等复用）；停用账号 403+`X-Account-Status` 头；邀请码限流 60 次/分/IP。
 - 关联文件：`backend/app/services/auth_service.py`、`invite_service.py`、`docker/init/015_*.sql`、admin、frontend。
 - 测试结果：s19 功能/权限/脱敏 25/25 + 真实 openGauss 并发 3/3（提交信息）。
 
-### 2026-10-11（`67c96b1`，`docs/迭代记录.md:568`）
+### 2026-10-11（`67c96b1`）
 - 需求：V1.0 扫码入驻登录健壮性。
 - 修改内容（涉本文件，据 diff 核实）：login 增加 `try/except auth_service.WxLoginError` → 502（此前微信换取失败无捕获）；已配置微信凭证时不回退 mock openid（该逻辑在 `auth_service._resolve_openid`）；并发首登唯一约束复用在 service 层。当时 login 仍为自动建号模型，三态返回由次日 `afbcba9` 引入。
-- 测试结果：见 `docs/迭代记录.md:568` 条目。
+- 测试结果：见 `docs/迭代记录.md` 的 `67c96b1` 条目。
 
-### 2026-10-01（`43877dc`，16:51，`docs/迭代记录.md:868`）
+### 2026-10-01（`43877dc`，16:51）
 - 需求：首次引导设置昵称。
 - 修改内容（涉本文件）：新增 `PUT /auth/nickname/initial`（`:107-123`），不消耗「每人仅一次」改名机会。
-- 测试结果：见 `docs/迭代记录.md:868` 条目。
+- 测试结果：见 `docs/迭代记录.md` 的 `43877dc` 条目。
 
-### 2026-10-01（`f820e0e`，15:54，`docs/迭代记录.md:884`）
+### 2026-10-01（`f820e0e`，15:54）
 - 需求：微信名称直登与昵称仅可修改一次（三端）。
 - 修改内容（涉本文件）：新增 `PUT /auth/nickname`；`UserOut` 增加 `nicknameChangedAt`。
-- 测试结果：见 `docs/迭代记录.md:884` 条目。
+- 测试结果：见 `docs/迭代记录.md` 的 `f820e0e` 条目。
 
-### 2026-09-30（`a94e685`，18:05，`docs/迭代记录.md:927`）
+### 2026-09-30（`a94e685`，18:05）
 - 需求：项目初始化。
 - 修改内容（涉本文件）：创建，含 login/me 等初始端点。
 - 测试结果：早期简略条目，未记载验证结果（待确认）。

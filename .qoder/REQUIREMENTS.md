@@ -450,7 +450,7 @@
 |---|---|---|
 | 聚合接口 | `GET /api/profile/*`（`routes/profile.py`，前缀 `/profile`） | `main.py:81` |
 | 积分概览 | `points_service.get_summary`：累计三项 + 今日两项（含今日步数/答对数，**供展示计分依据**）+ 当前步数结余 | `points_service.py:186-187` |
-| 「我的」页字段 | 累计运动(步) 展示**原始 `totalSteps`**（`scoredTotalSteps` 已随封顶移除而删除） | `9cb65b8`；`docs/迭代记录.md:86` |
+| 「我的」页字段 | 累计运动(步) 展示**原始 `totalSteps`**（`scoredTotalSteps` 已随封顶移除而删除） | `9cb65b8` |
 | 组织名自愈 | 每次 refresh 用后端 `orgFullName` 反向校准本地并 `auth.updateLocalUser({orgFullName})`，修复「重登或管理端调整后本地组织名过期/缺失」 | `frontend/pages/mine/mine.js:41-46` |
 | 阶段称号 | `profile.js` 按阈值计算 `stageTitle` | `frontend/pages/profile/profile.js` |
 | 日历热力 | `pages/calendar/calendar`，**4 个热力等级由后端提供**；快速切月用 `_requestId`（`:44-72`）防竞态 | 同上 |

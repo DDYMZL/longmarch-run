@@ -103,25 +103,25 @@
 - 需求：题库支持 Excel 模板下载与批量导入（预览校验 + 事务写入 + 防重复提交），题库列表改服务端分页。
 - 修改内容：新增 `openpyxl>=3.1.0` 与 `python-multipart>=0.0.9` 两行（diff 位于原第 9 行 `pydantic-settings` 之后）。前者用于 `backend/app/services/import_service.py` 的模板生成与解析，后者是 FastAPI 接收 `UploadFile` 的必需底层依赖。
 - 关联文件：`backend/app/services/import_service.py`、`backend/app/api/routes/admin.py`、`docker/init/011_import_previews.sql`、`admin/`。
-- 测试结果：据 `docs/迭代记录.md:590` 条目 —— S12 后端冒烟 **11/11**（`test/s12_question_import.py`，SQLite 临时库）；admin `npm run build` 通过。**Docker/openGauss 未启动，迁移 011 落库与浏览器验收当时标记为待验证**；批量导入的正式使用按用户要求待准入机制完成后开放。
+- 测试结果：据 `docs/迭代记录.md` 的 `54ea125` 条目 —— S12 后端冒烟 **11/11**（`test/s12_question_import.py`，SQLite 临时库）；admin `npm run build` 通过。**Docker/openGauss 未启动，迁移 011 落库与浏览器验收当时标记为待验证**；批量导入的正式使用按用户要求待准入机制完成后开放。
 
 ### 2026-10-10（`3df3fd0`，12:05）
 
 - 需求：步数同步接入微信运动真实数据，杜绝模拟步数写库。
 - 修改内容：新增 `pycryptodome>=3.20.0`（diff 位于原第 8 行 `pydantic` 之后），用于 `backend/app/core/wx.py:11` 的 `from Crypto.Cipher import AES` 解密微信运动加密数据。
 - 关联文件：`backend/app/core/wx.py`、`backend/app/services/sport_service.py`、`frontend/`。
-- 测试结果：据 `docs/迭代记录.md:595` 条目 —— S11 后端冒烟 **8/8**（`test/s11_sport_sync_werun.py`，含加解密往返 / watermark 校验 / 缺当日步数 / 伪造数据 400 零写入），e2e 全链路 **178/178** 回归；小程序 automator 验收 **4/4**（演示按钮已移除、devtools 取数失败友好报错且零写入，截图 `s11-01`）。真机部分在该条目中被截断，**完整结论待确认**。
+- 测试结果：据 `docs/迭代记录.md` 的 `3df3fd0` 条目 —— S11 后端冒烟 **8/8**（`test/s11_sport_sync_werun.py`，含加解密往返 / watermark 校验 / 缺当日步数 / 伪造数据 400 零写入），e2e 全链路 **178/178** 回归；小程序 automator 验收 **4/4**（演示按钮已移除、devtools 取数失败友好报错且零写入，截图 `s11-01`）。真机部分在该条目中被截断，**完整结论待确认**。
 
 ### 2026-10-01（`bceeb26`，10:26）
 
 - 需求：数据库由 SQLite 切换为 Docker 承载的 openGauss。
 - 修改内容：新增 `psycopg2-binary>=2.9.9`（diff 位于原第 3 行之后），作为 openGauss 的 PostgreSQL 协议 DBAPI 驱动。
 - 关联文件：`backend/app/core/database.py`、`backend/app/core/config.py`、`docker/compose.yml`、`docker/init/`。
-- 测试结果：`docs/迭代记录.md:910-912` 该条目**只有「内容：切换为 Docker 承载的 openGauss」一句，未记载验证结果** —— 属早期简略条目，测试情况**待确认**。
+- 测试结果：`docs/迭代记录.md` 的 `bceeb26` 条目**只有「内容：切换为 Docker 承载的 openGauss」一句，未记载验证结果** —— 属早期简略条目，测试情况**待确认**。
 
 ### 2026-09-30（`a94e685`，18:05）
 
 - 需求：项目初始化。
 - 修改内容：创建本文件，含 2 行中文注释与 **7 项依赖**：`fastapi>=0.110.0`、`uvicorn[standard]>=0.29.0`、`sqlalchemy>=2.0.25`、`pydantic>=2.6.0`、`pydantic-settings>=2.2.0`、`pyjwt>=2.8.0`、`httpx>=0.27.0`。此后 3 个提交各按需追加，共增至 11 项。
 - 关联文件：`backend/`、`frontend/`（仓库初始代码）。
-- 测试结果：`docs/迭代记录.md:926-928` 该条目**只有「内容：仓库初始代码」一句，未记载验证结果**，测试情况**待确认**。
+- 测试结果：`docs/迭代记录.md` 的 `a94e685` 条目**只有「内容：仓库初始代码」一句，未记载验证结果**，测试情况**待确认**。

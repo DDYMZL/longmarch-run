@@ -12,8 +12,8 @@
 
 ## 3. 业务需求
 
-- `82af32c`（2026-10-01）「新增 WebSocket 数据变更广播，步数/点亮/答题/勋章/组织操作实时推送管理端」（`docs/迭代记录.md:849`）；对应需求 §8.4（`frontend/services/ws.js:2` 注释）。
-- `4bf9acd`（2026-10-09）RBAC 批次追加「WS 管理员分支建连查库校验（撤销/禁用即时断权）」；`afbcba9`（2026-10-12）准入批次追加「禁用用户 … WS 4403」（提交信息，`docs/迭代记录.md:653`、`:420`）。
+- `82af32c`（2026-10-01）「新增 WebSocket 数据变更广播，步数/点亮/答题/勋章/组织操作实时推送管理端」（`docs/迭代记录.md` 的 `82af32c` 条目）；对应需求 §8.4（`frontend/services/ws.js:2` 注释）。
+- `4bf9acd`（2026-10-09）RBAC 批次追加「WS 管理员分支建连查库校验（撤销/禁用即时断权）」；`afbcba9`（2026-10-12）准入批次追加「禁用用户 … WS 4403」（提交信息，见 `docs/迭代记录.md` 的 `4bf9acd`、`afbcba9` 条目）。
 
 ## 4. 核心功能
 
@@ -99,20 +99,20 @@
 
 数据来源：`git log --follow --oneline -- backend/app/api/routes/ws.py`，共 **3 个提交**。按时间倒序。
 
-### 2026-10-12（`afbcba9`，`docs/迭代记录.md:420`）
+### 2026-10-12（`afbcba9`）
 - 需求：邀请码准入全链路。
 - 修改内容（据 diff 核实）：4403 分支从「仅管理员授权撤销」扩展为「`user.status != active` **或** 管理员授权撤销」——停用账号的 WS 连接在建连时即拒绝；新增 import `invite_service`。
 - 关联文件：`backend/app/api/routes/auth.py`、`backend/app/api/deps.py`、`docker/init/015_*.sql`、frontend/admin。
 - 测试结果：s19 冒烟 25/25 + 真实 openGauss 并发 3/3（提交信息）。
 
-### 2026-10-09（`4bf9acd`，10:43，`docs/迭代记录.md:653`）
+### 2026-10-09（`4bf9acd`，10:43）
 - 需求：管理后台 RBAC 与审计接口。
 - 修改内容（涉本文件）：WS 管理员分支建连查库校验（`role=admin` 且 `build_principal` 为 None → 4403），授权撤销/禁用即时断权（提交信息）。
 - 关联文件：`backend/app/api/routes/admin.py`、`backend/app/services/access_service.py`、`backend/app/api/deps.py`。
 - 测试结果：S9 30/30、S8 复测 23/23（提交信息）。
 
-### 2026-10-01（`82af32c`，17:52，`docs/迭代记录.md:849`）
+### 2026-10-01（`82af32c`，17:52）
 - 需求：管理端实时刷新。
 - 修改内容：创建本文件——`WS /api/ws/updates` 端点与握手鉴权；同批在步数/点亮/答题/勋章/组织操作后接入 `core/ws.py` 广播（提交信息）。
 - 关联文件：`backend/app/core/ws.py`、`admin/src/utils/liveUpdates.ts`。
-- 测试结果：见 `docs/迭代记录.md:849` 条目。
+- 测试结果：见 `docs/迭代记录.md` 的 `82af32c` 条目。

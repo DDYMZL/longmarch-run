@@ -40,7 +40,7 @@
 | `sync` / `add_steps` | `medal_service.check_and_grant` | `sport.py:48`、`:80`；实现 `backend/app/services/medal_service.py:33-113` |
 | `recent` | `sport_service.get_recent` | `sport_service.py:318-327` |
 | `calendar` | `sport_service.get_calendar` | `sport_service.py:245-315` |
-| `add_steps` | `sport_service.add_steps` + `get_today` | `sport_service.py:330-343`；`sport.py:79`、`:82` |
+| `add_steps` | `sport_service.add_steps` + `get_today` | `backend/app/services/sport_service.py:330-342`；`sport.py:79`、`:82` |
 
 WebSocket 广播：`sync` 成功后广播 `sport.sync`（`sport.py:49`），`add_steps` 广播 `sport.add`（`:81`），均走 `backend/app/core/ws.py:23`（`build_event`）与 `:62`（`broadcast`）。
 
@@ -49,7 +49,7 @@ WebSocket 广播：`sync` 成功后广播 `sport.sync`（`sport.py:49`），`add
 1. **请求体可选**：`payload: Optional[SportSyncRequest] = None`，缺省时 `body = payload or SportSyncRequest()`（`sport.py:31`、`:36`）。`SportSyncRequest`（`schemas.py:164-169`）三个可选字段 `code` / `encryptedData` / `iv`（camelCase 入参）。
 2. **步数解析** `sport_service._resolve_steps`（`sport_service.py:71-102`）：
    - 已配置 `WX_APPID`/`WX_SECRET` 且三字段齐全：`code2session(code)` 换 `session_key`（`backend/app/core/wx.py:18-42`），失败抛 `ValueError("微信会话换取失败，请重新同步")`；随后 `decrypt_werun` 做 AES-128-CBC 解密并**校验 `watermark.appid` 与配置一致**（`wx.py:45-61`），解密或校验失败抛 `ValueError("微信运动数据解密失败/校验失败，请重新同步")`；解析 `stepInfoList` 按北京时间自然日建 `{日期: 步数}` 映射（`sport_service.py:91-96`），空结果抛 `ValueError`（`:97-98`）。
-   - 仅 mock 登录用户（openid 以 `mock_` 开头）或未配置微信凭证时，回退 `seeded_steps` 稳定伪随机模拟（`sport_service.py:100-101`；`backend/app/core/helpers.py:47-60`，4000~12999）。
+   - 仅 mock 登录用户（openid 以 `mock_` 开头）或未配置微信凭证时，回退 `seeded_steps` 稳定伪随机模拟（`sport_service.py:100-101`；`backend/app/core/helpers.py:47-58`，4000~12999）。
    - **真实用户未携带加密数据：抛 `ValueError("未获取到微信运动数据…")`，绝不写编造步数**（`sport_service.py:102`）。
 3. **伪造数据 400 且零写入**：上述所有 `ValueError` 都在路由层被转成 400（`sport.py:46-47`）；`_resolve_steps` 在 `sync_today` 内位于任何数据库写入之前（`sport_service.py:149`，用户行锁 `:151`、逐日 upsert `:174` 均在其后），因此校验失败时**没有任何落库**。冒烟 `backend/test/s11_sport_sync_werun.py` 覆盖「加解密往返 / watermark 校验 / 伪造数据 400 零写入」场景（见 `.qoder/backend/requirements.txt.md` §10 的 2026-10-10 条目引文与 `backend/test/docs/`）。
 4. **步数覆盖规则（同日重复同步）**：同步范围为最近 7 个北京时间自然日（`recent_dates(7)`，`sport_service.py:148`）；每日以**微信最终值覆盖而非累加**（`_upsert_day`，`sport_service.py:114-132`，模块 docstring `:3-5`）；同日重复同步幂等——逐日行锁 `with_for_update()`（`_lock_day`，`:105-111`）+ 用户行锁串行化（`:151`），值未变化则不产生副作用（`:132` 的 `changed` 判定）。微信本次未返回的日期**不写 0、不覆盖已有记录**，进 `failed_dates` 允许后续重试（`:145`、`:157-165`）；负数/非法格式跳过并入 `failed_dates`（`:166-173`）。
@@ -66,7 +66,7 @@ WebSocket 广播：`sync` 成功后广播 `sport.sync`（`sport.py:49`），`add
 ### 4.5 `POST /api/sport/add`（调试端点，生产暴露）
 
 - summary 即「手动补充步数（演示用）」（`sport.py:73`）。请求体 `AddStepsRequest.delta`，`Field(0, ge=0)`（`schemas.py:202-205`）——**负数会被 Pydantic 拦为 422，但正数无上限**。
-- service 行为：当天已有步数上累加 `delta`，`source="manual"`，随后同样 `recompute_walk` + commit + 副作用链（`sport_service.py:330-343`）。
+- service 行为：当天已有步数上累加 `delta`，`source="manual"`，随后同样 `recompute_walk` + commit + 副作用链（`backend/app/services/sport_service.py:330-342`）。
 - **无任何环境开关**：`grep settings.DEBUG / APP_ENV` 在 `backend/app/api/routes/` 与 `sport_service.py` 中零命中（2026-10-17 实测）；`Settings` 虽有 `DEBUG`（`backend/app/core/config.py:26`）与 `APP_ENV`（`:28`）字段，但本端点未使用。生产环境暴露、可被用于刷步数/刷积分，已列为已知风险（`.qoder/ARCHITECTURE.md` §15 第 5 项、§16 第 11 项）。
 - 小程序端**不调用**本端点（`frontend/services/sport.js` 只调 sync/today/calendar/recent，`:99/:112/:122/:131`）；调用方仅测试脚本（如 `backend/test/e2e_datasync.py:137`、`backend/test/e2e_full_flow.py:173`）。
 
@@ -98,7 +98,7 @@ WebSocket 广播：`sync` 成功后广播 `sport.sync`（`sport.py:49`），`add
 3. **连续行军**：每日达标线 5000 步（`config.py:95`），达标翻转与里程碑事件由 `streak_service.on_sport_written` 维护（`streak_service.py:62-104`）。
 4. **勋章副作用链**：sync / add 之后必须 `check_and_grant`（`backend/AGENTS.md` 不变量 5；本文件 `:48`、`:80` 已满足）。
 5. **幂等与并发**：逐日 `with_for_update()` 行锁 + 用户行锁 + 覆盖式重算，重复同步结果一致（`sport_service.py:105-111`、`:151`；`.qoder/ARCHITECTURE.md` §9.1）。
-6. **模拟步数边界**：仅 mock openid 或未配置微信凭证才允许 `seeded_steps` 回退（`sport_service.py:100-102`、`helpers.py:47-52` 注释）。
+6. **模拟步数边界**：仅 mock openid 或未配置微信凭证才允许 `seeded_steps` 回退（`sport_service.py:100-102`、`backend/app/core/helpers.py:48-53` docstring）。
 
 ## 8. 修改约束
 

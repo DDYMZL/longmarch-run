@@ -18,7 +18,7 @@
 
 > **需求文档本身未入库**（`docs/` 下无该文件），条目内容以 `docs/迭代记录.md` 的 `1600074` 条目与 `backend/test/docs/s26-ai-center-report.md` 转述为准，**原始需求文本待确认**。
 
-**当前状态是「后端就绪、管理端无入口」的预期待开发状态，不是缺陷**：`.qoder/PROJECT.md` §7「管理后台（11 菜单）」、`.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md:482`/`:527` 一致记载 —— `docker/init/022_ai_admin_menus.sql` 已向 `admin_menus` 注入 5 个 `ai_*` 菜单码，但 `admin/src/router/menus.ts`（实测全文 15 行、11 项菜单）**一个 `ai_*` 都没有**，故管理后台侧边栏无 AI 智能中心入口、`admin/src/api/admin.ts` 也无本文件 15 个端点的任何调用方（grep 核实见 §6.2）。
+**当前状态是「后端就绪、管理端无入口」的预期待开发状态，不是缺陷**：`.qoder/PROJECT.md` §7「管理后台（11 菜单）」、`.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md` §10.1「菜单码」行与 §10.6「知识库 / 配置 / 题目工坊」行一致记载 —— `docker/init/022_ai_admin_menus.sql` 已向 `admin_menus` 注入 5 个 `ai_*` 菜单码，但 `admin/src/router/menus.ts`（实测全文 15 行、11 项菜单）**一个 `ai_*` 都没有**，故管理后台侧边栏无 AI 智能中心入口、`admin/src/api/admin.ts` 也无本文件 15 个端点的任何调用方（grep 核实见 §6.2）。
 
 ## 4. 核心功能
 
@@ -54,7 +54,7 @@
 | `ai_logs` | `:23-25` | AI调用记录 | 13 | **未使用**（无任何路由） |
 | `ai_config` | `:26-28` | AI配置中心 | 14 | ✅ 2 个端点 |
 
-> `ai_logs` 不只是「本文件未用」：**全后端没有任何读取 `ai_usage_logs` 的端点**（`grep -rn "AiUsageLog\|ai_usage_logs" backend/app --include=*.py` 只命中 `backend/app/models/models.py:660`/`:668` 与 `backend/app/services/ai_usage_service.py:3`/`:14`/`:27`/`:28`/`:31`/`:56`/`:58`，均为写入与限额计数）。`ai_overview` 同样无任何后端支撑。因此 `.qoder/REQUIREMENTS.md:479` 与 `.qoder/ARCHITECTURE.md` §11.2 把「调用记录」列入 `/api/admin/ai/*` 已交付范围，与代码不符（见 §9「文档与代码不一致」）。
+> `ai_logs` 不只是「本文件未用」：**全后端没有任何读取 `ai_usage_logs` 的端点**（`grep -rn "AiUsageLog\|ai_usage_logs" backend/app --include=*.py` 只命中 `backend/app/models/models.py:660`/`:668` 与 `backend/app/services/ai_usage_service.py:3`/`:14`/`:27`/`:28`/`:31`/`:56`/`:58`，均为写入与限额计数）。`ai_overview` 同样无任何后端支撑。因此 `.qoder/REQUIREMENTS.md` §10.1「后台 AI 接口」行与 `.qoder/ARCHITECTURE.md` §11.2 把「调用记录」列入 `/api/admin/ai/*` 已交付范围，与代码不符（见 §9「文档与代码不一致」）。
 >
 > `sort_order` 重号问题（`ai_overview`=10 与 `invites`=10、`ai_knowledge`=11 与 `activity`=11）已由 `.qoder/PROJECT.md` §8 第 26 条记录，2026-10-17 经用户决定**只记录不修改**。
 
@@ -63,7 +63,7 @@
 ### 4.2 模块级辅助
 
 - **`_PROMPT_KEYS`（`:45`）**：`{"chat": "ai_prompt_chat", "route": "ai_prompt_route", "quiz": "ai_prompt_quiz"}`，供 `patch_config` 做提示词类型白名单与键名映射（`:369-371`）。**与 `backend/app/services/ai_config_service.py:92-96` 的同名常量内容完全相同**，属跨模块重复定义（§9「存在问题」第 4 条）。
-- **`_audit(db, admin, action, detail)`（`:48-53`）**：写审计**但不提交**（`:49` docstring）。操作人映射：超管 → `("super", None)`，微信关联管理员 → `("user", admin.user_id)`（`:50`）；`target_user_id` 恒传 `None`（`:52` 第 4 个位置参数）；`detail` 恒注入 `{"operator": admin.username, **detail}`（`:52`）。底层 `audit_service.record`（`backend/app/services/audit_service.py:14-38`）只 `db.add`，docstring `:2-5` 明确「调用方在同一事务内完成业务变更与审计写入后统一 commit」。
+- **`_audit(db, admin, action, detail)`（`:48-53`）**：写审计**但不提交**（`:49` docstring）。操作人映射：超管 → `("super", None)`，微信关联管理员 → `("user", admin.user_id)`（`:50`）；`target_user_id` 恒传 `None`（`:52` 第 4 个位置参数）；`detail` 恒注入 `{"operator": admin.username, **detail}`（`:52`）。底层 `audit_service.record`（`backend/app/services/audit_service.py:14-36`）只 `db.add`，docstring `:3-4` 明确「调用方在同一事务内完成业务变更与审计写入后统一 commit」。
 - **`_knowledge_out(r: AiKnowledge)`（`:56-72`）**：ORM → 契约 dict，键为 snake_case，与 `AdminAiKnowledgeOut`（`schemas.py:1719-1732`）字段一一对应。可空文本列统一回退空值（`source or ""` `:63`、`category or ""` `:65`、`created_by or ""` `:67`、`reviewed_by or ""` `:68`、`related or []` `:64`），`:57` docstring 说明理由「本库空串按 NULL 存储」（openGauss Oracle 兼容模式，另见 `backend/app/models/models.py:546`）。
 
 ### 4.3 知识库维护（6 个端点 → `ai_knowledge_service` → 表 `ai_knowledge`）
@@ -309,7 +309,7 @@
 2. **`response_model` 必须用 `Admin*`（普通 `BaseModel`，snake_case）**，不得换成 `CamelModel`。`.qoder/ARCHITECTURE.md` §4.2：同一份业务数据面向两端时用两个不同 Schema，**不是**靠全局配置切换；改基类会让 admin 前端字段整体错位。`DELETE /knowledge/{kid}` 复用 `MessageOut`（`CamelModel`）之所以安全，仅因 `message` 是单词字段、camelCase 与 snake_case 同形 —— **不要照此给多词字段的端点复用 `CamelModel`**。
 3. **菜单码字符串必须与 `docker/init/022_ai_admin_menus.sql` 逐字一致**，且必须存在于 `admin_menus` 表；写错不会报错，只会让所有非超管恒定 403。新增 AI 端点须先在 022 之后**新增编号迁移**补菜单码（`docker/init/SQL_CONSTRAINTS.md`：禁止修改已在生产执行过的编号脚本），并同步 `admin/src/router/menus.ts`。
 4. **每个端点都必须挂 `require_menu`**（模块 docstring `:4`「不依赖前端隐藏按钮」）。管理后台**无按钮级权限**（`.qoder/PROJECT.md` §8 第 20 条），后端校验是唯一防线，漏挂即等于对全体管理员开放。
-5. **`POST /drafts/import` 的「题目入库 + 审计」必须保持同事务**：`ai_question_service.import_drafts` 刻意只 `flush`（`:683` 注释），由路由在 `_audit` 之后 `commit`（`:334`）。若把 commit 移进 service，审计会与业务分离，违背 `backend/app/services/audit_service.py:2-5` 的约定与本文件 `:6` 的声明。
+5. **`POST /drafts/import` 的「题目入库 + 审计」必须保持同事务**：`ai_question_service.import_drafts` 刻意只 `flush`（`:683` 注释），由路由在 `_audit` 之后 `commit`（`:334`）。若把 commit 移进 service，审计会与业务分离，违背 `backend/app/services/audit_service.py:3-4` 的约定与本文件 `:6` 的声明。
 6. **`dependencies=[Depends(require_menu(...))]` 与 `admin: AdminPrincipal = Depends(require_menu(...))` 的双重声明可简化**（§4.1 末）：只保留 `admin` 参数形式即可同时完成鉴权与取主体，功能等价且少一次闭包调用。修改时须保留鉴权语义不变。
 7. **`_knowledge_out`（`:56-72`）与 `AdminAiKnowledgeOut`（`schemas.py:1719-1732`）必须字段同步**：前者是手写 dict，新增列时两处都要改，否则新字段会被 `response_model` 静默丢弃（FastAPI 按模型裁剪输出）。同理适用于 `ai_question_service.job_view`（`:418-435`）/`draft_view`（`:438-449`）与 `AdminAiJobOut`/`AdminAiDraftOut`。
 8. **不要在路由层新增业务规则**（`backend/AGENTS.md` §3.1、§6.4）。目前唯一的边界情况是 `patch_config` 在路由内做键名映射（`ai_{key}`，`:366`）与提示词类型白名单校验（`:369-371`），而这份白名单在 `backend/app/services/ai_config_service.py:92-96` **已有一份完全相同的 `_PROMPT_KEYS`**；新增提示词类型时必须**同时**改两处，否则一边 400 一边静默丢弃。更稳妥的做法是把映射与校验整体下沉到 `ai_config_service`。
@@ -340,7 +340,7 @@
    - 推断后果：在 openGauss 上 `PATCH /config` 写入 chat/quiz 提示词正文很可能触发「value too long for type character varying(200)」；该异常是 psycopg2 `DataError`，**不是 `ValueError`**，路由 `:378` 的 `except ValueError` 捕获不到 → **500 未处理**（后端无全局异常处理器，`.qoder/ARCHITECTURE.md` §10.3）。
    - **测试未覆盖**：`backend/test/s26_ai_center.py:258-261` 的 PATCH 只写 `values` 与 `prompt_version="v2-test"`（8 字），`:274` 只测未知 kind，**从未写入过提示词正文**；且 s26 用 SQLite 临时库（报告「脚本」段），SQLite 不强制 VARCHAR 长度，即便写了也不会报错。
    - **openGauss 上的运行时确切表现待确认**（本任务禁止改库，未实测）。修复方向二选一：把 `PROMPT_MAX_LEN` 收敛到列宽内，或新增迁移加宽 `setting_value`（后者须遵守 `docker/init/SQL_CONSTRAINTS.md`）。
-3. **`ai_overview` 与 `ai_logs` 两个菜单码是空壳。** 022 已 seed（`docker/init/022_ai_admin_menus.sql:14-16`、`:23-25`），但**后端无对应端点**：`ai_usage_logs` 全项目只有写入与限额计数、**无任何读取端点**（§4.1 注、§6.3）。这与 `.qoder/REQUIREMENTS.md:479`、`.qoder/ARCHITECTURE.md` §11.2 把「调用记录」列入 `/api/admin/ai/*` 已交付范围的表述不符 —— **属文档滞后，非本文件缺陷**；`.qoder/ARCHITECTURE.md` §11.3 与 `.qoder/REQUIREMENTS.md:530` 另处已正确记为「usage / cost 统计页 待开发」。
+3. **`ai_overview` 与 `ai_logs` 两个菜单码是空壳。** 022 已 seed（`docker/init/022_ai_admin_menus.sql:14-16`、`:23-25`），但**后端无对应端点**：`ai_usage_logs` 全项目只有写入与限额计数、**无任何读取端点**（§4.1 注、§6.3）。这与 `.qoder/REQUIREMENTS.md` §10.1「后台 AI 接口」行、`.qoder/ARCHITECTURE.md` §11.2 把「调用记录」列入 `/api/admin/ai/*` 已交付范围的表述不符 —— **属文档滞后，非本文件缺陷**；`.qoder/ARCHITECTURE.md` §11.3 与 `.qoder/REQUIREMENTS.md` §10.6「运行概览 / 调用记录」行另处已正确记为「usage / cost 统计页 待开发」。
 4. **`_PROMPT_KEYS` 跨模块重复定义。** `ai_admin.py:45` 与 `backend/app/services/ai_config_service.py:92-96` 内容完全一致（同 3 项映射），违反根 `agents.md` §2.2「拒绝冗余代码」。新增提示词类型须同改两处（§8.8）。
 5. **`AI_ERRORS` 的 403/429 分支在本文件不可达。** `:224` 唯一使用点是 `POST /jobs`，而该链路不会抛 `AiDisabledError` / `AiLimitError`（§7.8）。模块 docstring `:7` 声明的四路映射对本文件而言只有 502/400 两路生效。保留 `AI_ERRORS` 本身无害（未来接入开关/限额时即生效），但 docstring 措辞与现状有偏差。
 6. **`POST /jobs` 是长事务 + 同步阻塞请求。** 生成期间持有同一 DB 会话（`:487` flush 后到 `:531` commit 之间要跑完全部批次的 CloudBase 调用），单批超时 `CLOUDBASE_TIMEOUT_SECONDS=180` 秒（`backend/app/core/config.py:73`），`count=100` 时拆 10 批、并发 3 → 最坏约 4 轮 × 180 秒。**无异步任务队列、无进度查询、无取消机制**；`admin/src/components/AiGenerateDialog.vue` 用 `AbortController` 做前端中断（`.qoder/ARCHITECTURE.md` §11.3），但**后端不会因客户端断开而停止生成**，任务仍会落库。是否可接受**待确认**（当前无管理端工坊页调用该端点，实际未暴露）。
@@ -349,7 +349,7 @@
 
 ### 待开发（Phase A 的既定边界，**非缺陷**）
 
-1. **管理后台 5 个 AI 子页面全部待开发**：知识库、题目工坊、配置中心、运行概览、调用记录。`admin/src/router/menus.ts`（11 项，无 `ai_*`）、`admin/src/api/admin.ts`（无本文件任何端点的封装）、`admin/src/views/`（无 AI 视图）三处一致（§3、§6.2）。**后端 15 个端点已就绪，DB 已有 5 个菜单码，管理端无入口** —— 这是 `.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md:527`、`.qoder/PROJECT.md` §7 记载的预期状态。
+1. **管理后台 5 个 AI 子页面全部待开发**：知识库、题目工坊、配置中心、运行概览、调用记录。`admin/src/router/menus.ts`（11 项，无 `ai_*`）、`admin/src/api/admin.ts`（无本文件任何端点的封装）、`admin/src/views/`（无 AI 视图）三处一致（§3、§6.2）。**后端 15 个端点已就绪，DB 已有 5 个菜单码，管理端无入口** —— 这是 `.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md` §10.6「知识库 / 配置 / 题目工坊」行、`.qoder/PROJECT.md` §7 记载的预期状态。
    > 已落地的 `admin/src/components/AiGenerateDialog.vue` 是嵌在**题库维护页**的生成对话框，走 `backend/app/api/routes/admin.py:500`/`:524` 的旧链路（`questions` 菜单），**与本文件无关**，不构成「题目工坊子页面已实现」（`.qoder/ARCHITECTURE.md` §11.3 已专门澄清此点）。
 2. **`ai_overview`（运行概览）与 `ai_logs`（调用记录）连后端也待开发**（§9「存在问题」第 3 条）：`ai_usage_logs` 表已建（`docker/init/021_ai_center.sql:78-90`）并已在写入，但无任何读取端点。
 3. **`admin/src/views/AuditView.vue` 的 `ACTION_TEXT` 待补 6 个 `ai.*` 映射**（§7.6 注）。

@@ -12,7 +12,7 @@
 
 ## 3. 业务需求
 
-- V2.0 需求一「活动时间控制」，由 `ce14a95`（2026-10-13 10:55）一次性交付（`docs/迭代记录.md:401`）。
+- V2.0 需求一「活动时间控制」，由 `ce14a95`（2026-10-13 10:55）一次性交付（`docs/迭代记录.md` 的 `ce14a95` 条目）。
 - 现行需求口径与规则表见 `.qoder/REQUIREMENTS.md` §1「活动时间控制与准入」（含 §1.2 前端行为、§1.3 待确认）；架构侧的准入闸门说明见 `.qoder/ARCHITECTURE.md` §5.4「活动准入闸门」。本文档不复制其正文。
 - 管理端页面口径见 `.qoder/REQUIREMENTS.md` §11.4「活动配置」。
 - 表结构来源：`docker/init/016_activity_settings.sql`（建表 + 单行默认配置 + `activity` 菜单，默认仅超管可见）；ORM 同步于 `backend/app/models/models.py:108-123`。
@@ -83,7 +83,7 @@
 - `_ensure_setting(db)`（`:131-140`）：配置行缺失时创建 `id=1`、`name=DEFAULT_NAME`、`start_at=end_at=now`、`is_published=False` 的行，只 `db.flush()`（`:139`）**不提交**，交由调用方 `update` 统一 commit。
 - `_snapshot(s)`（`:143-153`）：把 8 个字段序列化为审计用字典，时间格式化为北京时间 `YYYY-MM-DD HH:MM`（`:146-147`）。
 - `update(db, data, operator, actor_type, actor_id)`（`:156-187`）：
-  1. 入参时间按**北京时间**解释并截断到分钟（`:164-165`，`local_to_utc` + `replace(second=0, microsecond=0)`；`backend/app/schemas/schemas.py:1602-1613` `AdminActivitySettingUpdate` 文档串同口径）；
+  1. 入参时间按**北京时间**解释并截断到分钟（`:164-165`，`local_to_utc` + `replace(second=0, microsecond=0)`；`backend/app/schemas/schemas.py:1603-1612` `AdminActivitySettingUpdate` 文档串同口径）；
   2. 校验 `start >= end` → `ValueError("开始时间必须早于结束时间")`（`:166-167`）；名称去空后为空 → `ValueError("活动名称不能为空")`（`:168-170`）；
   3. 写 8 个字段 + `updated_at=now_utc()` + `updated_by=operator`（`:171-181`）；`end_title` / `end_message` 去空后为空则存 `None`（`:178-179`）；
   4. `audit_service.record(db, actor_type, actor_id, "activity.update", None, {operator, before, after})`（`:182-185`）；
@@ -100,8 +100,8 @@
 |---|---|---|---|
 | `GET /api/activity/status` | **公开**（登录前需判定） | `backend/app/api/routes/activity.py:12-16` | `ActivityStatusOut`（camelCase） |
 | `GET /api/admin/activity` | `require_menu("activity")` | `backend/app/api/routes/admin.py:1041-1050` | `AdminActivitySettingOut`（snake_case） |
-| `PUT /api/admin/activity` | `require_menu("activity")` | `backend/app/api/routes/admin.py:1053-1070` | 同上 |
-| `POST /api/admin/activity/publish` | `require_menu("activity")` | `backend/app/api/routes/admin.py:1072-1090` | 同上 |
+| `PUT /api/admin/activity` | `require_menu("activity")` | `backend/app/api/routes/admin.py:1053-1069` | 同上 |
+| `POST /api/admin/activity/publish` | `require_menu("activity")` | `backend/app/api/routes/admin.py:1072-1088` | 同上 |
 
 `activity` 菜单码由 `docker/init/016_activity_settings.sql` 写入 `admin_menus`，**默认只有超管可用**（超管在 `backend/app/api/deps.py:105-106` `has_menu` 中恒放行）。
 
@@ -138,7 +138,7 @@
 4. **配置缺失即「不限制」**：`setting is None` 时状态视为 `ongoing` 且准入全放行（`:50-51`、`:63`），保证未跑 016 迁移的测试库行为不变。
 5. **时间口径**：库内 `start_at`/`end_at`/`updated_at` 为 **UTC naive**（`backend/app/models/models.py:109`）；管理端入参与对外出参一律**北京时间**（入参 `:164-165` 转 UTC，出参 `:71-73` 转 +08:00）；精确到分钟（秒/微秒被截断）。
 6. **发布与保存解耦**：`update` 不动 `is_published`；未保存过配置就不能发布（`:194-195`）。
-7. **审计与变更同事务**：`audit_service.record` 只 `db.add` 不提交（`backend/app/services/audit_service.py:2-4`），由本服务在 `:186` / `:203` 统一 commit，保证「变更 + 审计」原子落库。审计 `detail` 携带 `before` / `after` 全量快照（`:184`）。
+7. **审计与变更同事务**：`audit_service.record` 只 `db.add` 不提交（`backend/app/services/audit_service.py:3-4`），由本服务在 `:186` / `:203` 统一 commit，保证「变更 + 审计」原子落库。审计 `detail` 携带 `before` / `after` 全量快照（`:184`）。
 8. **`updated_by` 存的是管理员用户名字符串**（`backend/app/api/routes/admin.py:1066`、`:1085` 传 `admin.username`），不是 user_id；`actor_type`/`actor_id` 另由 `_actor` 给出（`backend/app/api/routes/admin.py:752-754`：超管 `("super", None)`，微信关联管理员 `("user", user_id)`）。
 9. **与积分/勋章无耦合**：本服务不发放任何积分，只做时间闸门。
 
@@ -168,10 +168,10 @@
 
 ## 10. 迭代记录
 
-数据来源：`git log --follow --oneline -- backend/app/services/activity_service.py`（**仅 1 个提交**）与 `docs/迭代记录.md:401`。
+数据来源：`git log --follow --oneline -- backend/app/services/activity_service.py`（**仅 1 个提交**）与 `docs/迭代记录.md` 的 `ce14a95` 条目（2026-10-13「V2.0 需求一：活动时间控制（后端）」）。`docs/迭代记录.md` 按倒序在文件头追加新条目、行号会整体漂移，故本章统一按**提交哈希 + 日期标题**定位，不写行号。
 
 ### 2026-10-13（`ce14a95`，10:55，范围 backend、docker）
 - 需求：V2.0 需求一「活动时间控制」。
-- 修改内容：新建本文件——按服务器时间实时算出四态与「可参与 / 可查看」两种准入；配套交付 `docker/init/016_activity_settings.sql`（单行表 + 默认进行中配置 + `activity` 菜单默认仅超管）、公开接口 `GET /api/activity/status`、管理端 `GET/PUT /api/admin/activity` 与 `POST /api/admin/activity/publish`（变更与审计同一事务）、依赖 `require_activity_participation` / `require_activity_view`（写接口未进行时 403 + `X-Activity-Status`，读接口结束后按配置放行，`/medal/list` 不可参与时只读不发放）；同批把 `helpers` 业务日期改为固定 UTC+8（`docs/迭代记录.md:401-414`）。
+- 修改内容：新建本文件——按服务器时间实时算出四态与「可参与 / 可查看」两种准入；配套交付 `docker/init/016_activity_settings.sql`（单行表 + 默认进行中配置 + `activity` 菜单默认仅超管）、公开接口 `GET /api/activity/status`、管理端 `GET/PUT /api/admin/activity` 与 `POST /api/admin/activity/publish`（变更与审计同一事务）、依赖 `require_activity_participation` / `require_activity_view`（写接口未进行时 403 + `X-Activity-Status`，读接口结束后按配置放行，`/medal/list` 不可参与时只读不发放）；同批把 `helpers` 业务日期改为固定 UTC+8（同上条目「内容」）。
 - 关联文件：`backend/app/api/deps.py`、`backend/app/api/routes/activity.py`、`backend/app/api/routes/admin.py`、`backend/app/api/routes/medal.py`、`backend/app/models/models.py:108-123`、`backend/app/schemas/schemas.py:1567-1616`、`backend/app/core/helpers.py`、`docker/init/016_activity_settings.sql`、`frontend/services/activity.js`。
-- 测试结果：`docs/迭代记录.md:411-413` 原文——「TestClient 冒烟通过：默认状态、时间格式错误 422、开始晚于结束 400、未发布与已结束时写接口 403、结束后可查看与不可查看两种配置、无 Token 仍返回 401」；「`s19_invite_admission.py` 回归 25/25 通过」。
+- 测试结果：`docs/迭代记录.md` 的 `ce14a95` 条目「验证」原文——「TestClient 冒烟通过：默认状态、时间格式错误 422、开始晚于结束 400、未发布与已结束时写接口 403、结束后可查看与不可查看两种配置、无 Token 仍返回 401」；「`s19_invite_admission.py` 回归 25/25 通过」。
