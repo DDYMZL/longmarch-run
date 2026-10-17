@@ -61,10 +61,10 @@
 | mock 回退条件 | 仅当**未配置微信凭证**，或配置了凭证且 `WX_LOGIN_ALLOW_MOCK = true`（注释明确「仅限本地自动化测试，生产必须为 false」） | `core/config.py:42-46`；`auth_service.py:35-38` |
 | 返回状态 | `active`（签发令牌）/ `disabled` / `unregistered`（后两者 reject 携带 `err.admission`） | `auth_service.py:68-83` |
 | 令牌 | HS256 JWT，`sub` = 用户主键，**有效期 7 天**（`JWT_EXPIRE_MINUTES = 10080`） | `core/security.py:10-19`；`core/config.py:39` |
-| 默认昵称 | 「长征小战士」（登录时前端**不传 nickname**，只传 avatar） | `frontend/pages/login/login.js:1-6` 注释；**默认值由后端赋予，具体位置待确认** |
+| 默认昵称 | 「长征小战士」（登录时前端**不传 nickname**，只传 avatar）；默认值是 **ORM 列默认值**，不由接口代码显式赋值 | `frontend/pages/login/login.js:1-6` 注释；**`backend/app/models/models.py:192`**（`nickname: Mapped[str] = mapped_column(String(64), default="长征小战士")`） |
 | 头像 | 前端 `persistAvatar` 保存到 `wx.env.USER_DATA_PATH`，**不上传服务端**；已是用户目录路径或 `https://` 开头则原样返回；失败降级返回原路径 | `frontend/services/auth.js:18-34`（**未导出**） |
 | 登录页形态 | 登录按钮本身就是 `<button open-type="chooseAvatar">`，**页面没有昵称输入框** | `frontend/pages/login/login.js:1-6` |
-| 改名次数 | **每人仅一次**，走 `PUT /api/auth/nickname` | `frontend/services/auth.js:223-227`；`backend/routes/auth.py:92` summary |
+| 改名次数 | **每人仅一次**，走 `PUT /api/auth/nickname` | `frontend/services/auth.js:223-227`；`backend/app/api/routes/auth.py:92` summary「修改昵称（每人仅一次）」 |
 | 初始昵称 | 另有 `PUT /api/auth/nickname/initial`，**不消耗改名次数** | `frontend/services/auth.js:230-234` |
 | 本地缓存不代表已登录 | `globalData.loggedIn` 只有在后端 token 校验通过或登录成功后才为 true | `frontend/app.js:6` 注释；`frontend/design.md:103` |
 
@@ -169,7 +169,7 @@
 
 ### 3.3 已知遗留
 
-**补签**：`daily_sport` 是否存在 `is_makeup` / `makeup_at` 字段及补签业务规则 —— **待确认**（本次核对未在 `sport_service.py` 与 `streak_service.py` 的文档串中发现补签逻辑）。
+**补签（待开发）**：`daily_sport` 确有 `is_makeup`（`Boolean`，NOT NULL DEFAULT FALSE）与 `makeup_at`（`DateTime`，可空）两列，由 `docker/init/005_upgrade.sql:31-36` 建立，`backend/app/models/models.py:248-249` 映射，`:235` docstring 自述「为补签预留字段」。**但全仓无任何业务写入点**（`sport_service.py`、`streak_service.py` 均不读写），开发库实测 **0 行** `is_makeup=true` 或 `makeup_at` 非空。结论：**字段已建、业务未实现**，属预留死字段（另见 `PROJECT.md` §8 技术债 29）。补签的产品规则（可补几天、是否消耗积分、是否影响连续行军判定）**无任何需求依据，待产品确认**。
 
 ---
 
@@ -218,7 +218,7 @@
 | 零值处理 | 无既存行且 `delta <= 0` 时**不建行**，返回 False | `points_service.py:79-81` |
 | 全量校验 | `recompute_walk_all` / `recompute_all` 按源数据（`daily_sport` / `quiz_answers`，**历史日回退 `quiz_records`**）全量核对并可修复 | `points_service.py:14-16` |
 | 旧流水 | V2.0 之前的旧规则流水 `source_type = legacy`，**保留追溯但不计入总积分** | `points_service.py:13` |
-| `ref_id` | 关联源记录 id，与 `delta` 一起判断是否发生变化 | `points_service.py:94-96` |
+| `ref_id` | 关联源记录 id，与 `delta` 一起判断是否发生变化。**答题积分的 `ref_id` 指向 `daily_questions.id`（当日答题会话），不是 `quiz_records.id`**；步行积分的 `ref_id` 指向 `daily_sport.id`。无 DB 级外键，开发库实测 0 孤儿 | `points_service.py:94-96`；答题侧传参见 `quiz_service.py:260`、`:452`（均传 `session.id`，`_session` 返回 `DailyQuestion`，见 `:149`） |
 
 ### 4.5 展示
 
@@ -364,7 +364,7 @@
 
 | 规则 | 值 | 依据 |
 |---|---|---|
-| 双模式 | 实景地图 / 路线示意 | `frontend/pages/march/march.js` |
+| 双模式 | `real`（实景地图，原生 `<map>`）/ `canvas`（星空长征，Canvas 2D）。**由用户手动切换，不是自动降级**：WXML 顶部常驻两个按钮，初值 `real`；切到 `canvas` 时 `initCanvas()`，切回 `real` 时 `<canvas>` 已被 `wx:else` 移除，故显式置空 `ctx`/`canvas`/`staticLayer`/`glowGold`/`glowRed`/`arriveFx` 释放画布与离屏缓存，再用最新路线重建 markers 并重播视角动画 | 按钮：`frontend/pages/march/march.wxml:52-64`（两个 `bindtap="switchMode"` + `data-mode`）；初值：`march.js:49`；处理函数：`march.js:361-380` |
 | 定位标记 | `buildMapData` 中 marker `id = 999`，标题「🚩 我在这里」 | 同上 |
 | 手势命中半径 | `radius = 22 / v.scale`（**除以缩放比**，保持屏幕命中半径恒定） | `frontend/pages/march/march.js:1453-1467` `hitNode`（`radius` 在 `:1458`） |
 | 路线绘制 | `utils/routeCanvas.js`：`sampleRoutePath`（`:62-101`）、`distToIndex`（`:104-113`）、`createGlowSprite`（`:120-133`） | — |
@@ -660,16 +660,30 @@
 
 ## 14. 待确认清单（业务规则相关）
 
-1. **补签**：`daily_sport` 是否有 `is_makeup` / `makeup_at` 字段与补签业务规则 —— 本次核对未在 `sport_service.py` / `streak_service.py` 文档串中发现补签逻辑。
-2. **默认昵称「长征小战士」的赋值位置**：前端 `doLogin` 只传 `{avatar}` 不传 nickname，推测由后端赋默认值，**具体代码位置未定位**。
-3. **`master` 勋章口径**：实现按总积分 ≥ 500 判定，展示文案写「累计答题积分达到 500」，**修正方向待定**（见 §8.3）。
-4. **生产活动配置的起止时间与发布状态**（运行时数据，不在仓库）。
-5. **`WXACODE_ENV_VERSION` 生产是否已改为 `release`**（代码默认 `trial`）。
-6. **`ACTIVITY_MASK_NICKNAME`**（实时行动态昵称脱敏，需求 §8.5，开启后展示如「王*明」）代码默认 `false`（`core/config.py:99`），**生产是否开启待确认**。
-7. **`ORG_SYNC_API_URL` 外部组织同步接口**是否已实际对接（代码默认空 → 用内置种子）。
-8. **`lm_data_{userId}` 遗留 Storage 键**是否有清理计划（`frontend/design.md:104` 只说「迁移保留旧 key」）。
-9. **`frontend/AGENTS.md` §5 的 `NODE_COORDS` 前端硬编码坐标表在代码中不存在**（坐标全部来自 `GET /api/march/route`）—— 该文档条目应视为失效，是否修订待确认。
-10. **`images/tabbar/quiz.png` / `quiz-active.png`** 未被 `app.json` 引用，推测为「情报」曾作为 tab 的遗留，用途待确认。
+**仍需确认**
+
+1. **`master` 勋章口径**：实现按总积分 ≥ 500 判定，展示文案写「累计答题积分达到 500」，**修正方向待定**（见 §8.3）。
+2. **生产活动配置的起止时间与发布状态**（运行时数据，不在仓库）。开发库实测：1 行、`start=2026-08-31 16:00`、`end=2026-12-31 15:59`、`published=true`，**不代表生产**。
+3. **`WXACODE_ENV_VERSION` 生产是否已改为 `release`**（代码默认 `trial`）。
+4. **`ACTIVITY_MASK_NICKNAME`**（实时行动态昵称脱敏，需求 §8.5，开启后展示如「王*明」）代码默认 `false`（`core/config.py:99`），**生产是否开启待确认**。
+5. **`ORG_SYNC_API_URL` 外部组织同步接口**是否在生产实际对接（代码默认空 → 用内置种子）。
+6. **`lm_data_{userId}` 遗留 Storage 键**是否有清理计划（`frontend/design.md:104` 只说「迁移保留旧 key」）。
+7. **`frontend/AGENTS.md` §5 的 `NODE_COORDS` 前端硬编码坐标表在代码中不存在**（坐标全部来自 `GET /api/march/route`）—— 该文档条目应视为失效，是否修订待确认。
+8. **`images/tabbar/quiz.png` / `quiz-active.png`** 未被 `app.json` 引用，推测为「情报」曾作为 tab 的遗留，用途待确认。
+9. **补签的产品规则**：字段已建但业务未实现（见 §3.3），可补几天 / 是否消耗积分 / 是否影响连续行军判定，**无需求依据**。
+
+**待开发（无明确排期，2026-10-17 经用户确认按此标注）**
+
+| 项 | 当前状态 | 依据 |
+|---|---|---|
+| `ai-chat` 的 `nodeId` 参数通道 | **待开发（Phase B）**。代码注释写「Phase A 先不接入」，仓库中无 Phase B 计划文档 | `frontend/pages/ai-chat/`；`.qoder/PROJECT.md` §7 |
+| `pages/account` 入口恢复 | **已隐藏，恢复条件待产品确认**。页面已注册但无任何跳转入口，其 `handleUnbind` 对应按钮在 WXML 中未渲染（死代码路径） | `frontend/app.json:23`、`frontend/pages/account/account.js:52-78`、`frontend/design.md:48` |
+| 管理后台 5 个 `ai_*` 菜单对应页面 | **待开发**。`022_ai_admin_menus.sql` 已把 `ai_overview`/`ai_knowledge`/`ai_workshop`/`ai_logs`/`ai_config` 写入 `admin_menus`，但 `admin/src/router/menus.ts` 只有 11 项、**不含任何一个 `ai_*`**，即 DB 有菜单码而前端无入口 | `docker/init/022_ai_admin_menus.sql:15-27` vs `admin/src/router/menus.ts:3-15` |
+
+**已查证解决（原第 1、2 项，2026-10-17）**
+
+- **补签字段是否存在** → 存在但为死字段，详见 §3.3。
+- **默认昵称「长征小战士」的赋值位置** → `backend/app/models/models.py:192` 的 ORM 列默认值，详见 §2 登录表。
 
 ---
 

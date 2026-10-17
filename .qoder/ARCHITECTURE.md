@@ -646,7 +646,7 @@ proxy_set_header Connection "upgrade";
 - 唯一约束承载幂等语义，最典型的是 `points_log (user_id, biz_key)`。
 - 时间戳存在**两套默认值写法**（`default=datetime.utcnow` 与 SQL 侧 `DEFAULT`），ORM 与 DDL 需分别核对。
 - 毫秒时间戳用 `BigInteger`（`quiz_records.answer_at`，`models.py:287`）。
-- `Numeric` 列映射为 `Mapped[float]`，存在潜在 Decimal 精度问题（**待确认**是否有实际影响）。
+- `Numeric` 列（`route_nodes.latitude`/`longitude`、`daily_sport.distance`）在 ORM 侧注解为 `Mapped[float]`（`models.py:55-56`、`:246`），但 **psycopg2 运行时实际返回 `decimal.Decimal`**（开发库实测 `Decimal('25.885000')`、`Decimal('4.27')`）。`Mapped[...]` 只是 typing 元数据、**不做类型强转**，故注解与运行时类型不符；对外由 Pydantic 序列化为 float。在 service 层直接对这些字段做算术或比较时需注意 Decimal/float 混用。
 
 ### 13.3 种子数据：两条互补链，互不重叠
 
@@ -710,14 +710,28 @@ proxy_set_header Connection "upgrade";
 ## 16. 待确认清单（架构相关）
 
 1. 生产 nginx 配置文件的实际位置与完整内容（不在本仓库）。
-2. 生产 openGauss 的版本号与端口。
+2. 生产 openGauss 的版本号与端口。**开发环境已实测**：容器 `longmarch-opengauss`、宿主端口 5118、`version()` = `openGauss 7.0.0-RC3 build 01b7e318`（compiled 2026-03-25）、`datcompatibility='A'` / `sql_compatibility='A'`、库编码 `UTF8` / collate `en_US.utf8`；`compose.yml` 与 `init-db.sh` **均未显式指定编码与兼容模式**，A 模式来自镜像默认值，换镜像版本可能改变该默认值。
 3. 生产后端进程管理方式（systemd / nohup / supervisor / docker）。
 4. 后端是否配置了访问日志落盘与轮转。
 5. 小程序 `app.js` 无全局错误钩子是否为有意取舍。
 6. `libVersion` 以入库的 3.0.0 还是本地的 3.17.3 为准；真机最低基础库版本要求（`app.json` 中无声明，微信也不支持在该处声明）。
 7. `frontend/images/tabbar/` 下存在 `quiz.png` / `quiz-active.png` 但 `app.json` 未引用，推测是「情报」曾作为 tab 的遗留，用途待确认。
 8. `admin/src/pages/` 与 `admin/src/views/` 并存的原因与是否统一。
-9. `Numeric` → `Mapped[float]` 的 Decimal 精度问题是否有实际业务影响。
+9. ~~`Numeric` → `Mapped[float]` 的 Decimal 精度问题是否有实际业务影响。~~ **已查证，见下节。**
 10. `lm_data_{userId}` 遗留 Storage 键（永不删除）是否有清理计划。
 11. 调试端点 `/api/quiz/reset`、`/api/sport/add` 是否有生产环境关闭计划。
 12. `frontend/AGENTS.md` §5 提到的 `NODE_COORDS` 前端硬编码坐标表**代码中不存在**（节点经纬度全部来自 `GET /api/march/route`，`services/march.js:32-46` 缺坐标时回退重拉 route 补齐）—— 该文档条目应视为已失效，是否修订待确认。
+
+### 16.1 已查证 / 已决策（2026-10-17，不再是待确认项）
+
+| 项 | 结论 | 依据 |
+|---|---|---|
+| `Numeric` → `Mapped[float]` | 运行时实际返回 `decimal.Decimal`（实测 `Decimal('25.885000')`、`Decimal('4.27')`），注解不准确；当前无业务影响，出口经 Pydantic 转 float。记为技术债 | `PROJECT.md` §8 第 28 项 |
+| `admin_menus.sort_order` **真实重号** | `invites`=10 与 `ai_overview`=10、`activity`=11 与 `ai_knowledge`=11。侧边栏顺序由 `admin/src/router/menus.ts` 静态数组决定故**不受影响**；受影响的是 `access_service.py:63`/`:80`/`:201` 三处 `order_by(AdminMenu.sort_order)` 在同分时返回顺序不稳定。**用户决定：只记录为已知问题，不改业务代码** | `015:31-33`、`016:36-38`、`022:15`/`:18`；`PROJECT.md` §8 第 26 项 |
+| 5 个 `ai_*` 菜单码在 admin 前端缺失 | `022_ai_admin_menus.sql` 写入 `ai_overview`/`ai_knowledge`/`ai_workshop`/`ai_logs`/`ai_config`，但 `menus.ts` 只有 11 项、**不含任何一个**。属「Phase A 后端就绪、admin 页面待开发」的预期状态，**非缺陷** | `docker/init/022_ai_admin_menus.sql:15-27` vs `admin/src/router/menus.ts:3-15` |
+| 非自增主键的 id 分配 | 一律 `max(id)+1`，**无并发保护**（并发新增可撞主键）；`persons` 只有 seed、无新增代码路径 | `admin_service.py:46-47`/`:175-176`、`ai_question_service.py:378`/`:674`、`import_service.py:293`；`PROJECT.md` §8 第 27 项 |
+| 逻辑外键孤儿数据 | 开发库实测 `users.org_id`、`lit_nodes.node_id`、`user_medals.medal_id`、`quiz_records.user_id`、`daily_sport.user_id`、`organizations.parent_id`、`points_log.ref_id`→`daily_questions` **全部 0 孤儿**。注意答题积分的 `ref_id` 指向 `daily_questions.id`（会话），**不是** `quiz_records.id` | `points_log.source_type` 分布实测 legacy 435 / walk 92 / quiz 13；`quiz_service.py:260`/`:452` |
+| `daily_sport.is_makeup` / `makeup_at` | **纯预留死字段**：005 建列且 NOT NULL DEFAULT FALSE，但全仓无写入点，库中 0 行有值 | `models.py:235`/`:248-249`、`005_upgrade.sql:31-36`；`PROJECT.md` §8 第 29 项 |
+| 开发库兼容模式与版本 | `datcompatibility='A'`、`sql_compatibility='A'`、`UTF8`/`en_US.utf8`、openGauss **7.0.0-RC3 build 01b7e318**；`schema_migrations` 已登记 001→022 全部 22 项。**A 模式来自镜像默认值**，compose 与 init-db.sh 均未显式指定 | 见上表第 2 项 |
+| `march` 页双模式切换 | **有明确 UI 开关，非自动降级**：WXML 常驻两个 `bindtap="switchMode"` 按钮，初值 `real` | `march.wxml:52-64`、`march.js:49`/`:361-380` |
+| 默认昵称「长征小战士」 | **ORM 列默认值**，不由接口代码显式赋值 | `backend/app/models/models.py:192` |

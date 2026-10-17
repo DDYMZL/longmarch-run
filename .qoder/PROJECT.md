@@ -73,6 +73,8 @@ Vue 3.5 `<script setup>` + vue-router 4（History 模式）+ Element Plus 2.9（
 
 openGauss，Docker 镜像 `opengauss/opengauss-server:latest`（**未固定版本号**）。库运行在 **Oracle 兼容模式（A 模式）**，空字符串 `''` 按 `NULL` 存储，因此所有字符串内容列一律设计为可空。libpq 兼容层把 `server_version_num` 报告为 `90204`（等价 PostgreSQL 9.2.4）。
 
+**开发库实测（2026-10-17，容器 `longmarch-opengauss`，宿主端口 5118）**：`version()` 返回 `openGauss 7.0.0-RC3 build 01b7e318`（compiled 2026-03-25）；`datcompatibility='A'`、`sql_compatibility='A'`；库编码 `UTF8`、collate `en_US.utf8`；`schema_migrations` 已登记 001→022 全部 22 个迁移。**注意 `compose.yml` 与 `init-db.sh` 均未显式指定编码与兼容模式，A 模式来自镜像默认值**——换镜像版本可能改变该默认值。生产库的版本、端口与兼容模式**未核实**（见 §10 待确认 2）。
+
 ---
 
 ## 4. 开发环境与运行方式
@@ -248,6 +250,10 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | 23 | 章节（CHAPTERS）配置**硬编码**在 `backend/app/services/march_service.py:47`，管理端无可视化编辑 | 文档注明「后续增强」 |
 | 24 | 旧 e2e 测试脚本（`e2e_full_flow`、`e2e_datasync`、`s3_aggregates`）仍按 V1 口径（整卷提交、点亮发积分），登录链路 502，**未随 V2.0 改写** | `docs/迭代记录.md` `19b0d73` / `2f3f333` 遗留 |
 | 25 | `frontend/test/automator/ui-test.cjs` phase1 T02 断言已过期；automator 22/23 中 T16a 为环境性失败 | `docs/测试报告.md`、`a60b94b` 遗留 |
+| 26 | **`admin_menus.sort_order` 重号**：`invites`=10 与 `ai_overview`=10、`activity`=11 与 `ai_knowledge`=11。侧边栏顺序由 `menus.ts` 静态数组决定故不受影响，但三处 `order_by(AdminMenu.sort_order)` 在同分时**返回顺序不稳定**（角色菜单勾选列表、菜单全量列表、用户菜单码列表）。2026-10-17 经用户决定**只记录不修改** | `docker/init/015_invite_admission.sql:31-33`、`016_activity_settings.sql:36-38`、`022_ai_admin_menus.sql:15`/`:18`；`backend/app/services/access_service.py:63`/`:80`/`:201` |
+| 27 | **非自增主键靠 `max(id)+1` 分配且无并发保护**：并发新增题目/路线点位可撞主键；AI 批量生成与 Excel 导入也走同一套 `max+1`。`persons` 更是只有 seed、无新增代码路径 | `admin_service.py:46-47`/`:175-176`、`ai_question_service.py:378`/`:674`、`import_service.py:293` |
+| 28 | **ORM 类型注解与运行时不符**：`Numeric` 列注解为 `Mapped[float]`，但 psycopg2 实际返回 `decimal.Decimal`（`Mapped[...]` 只是 typing 元数据，不做强转）；出口靠 Pydantic 转 float。直接对这些字段做算术或比较时需注意 Decimal/float 混用 | `models.py:55-56`（`route_nodes.latitude`/`longitude`）、`:246`（`daily_sport.distance`） |
+| 29 | **补签字段为死字段**：`daily_sport.is_makeup` / `makeup_at` 已由 `005_upgrade.sql:31-36` 建列且 NOT NULL DEFAULT FALSE，但全仓无任何业务写入点，库中 0 行为 true | `models.py:235` docstring、`:248-249` |
 
 ### 文档滞后项（代码正确，文档过时）
 
@@ -322,19 +328,30 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 
 ### 待确认问题清单（汇总）
 
-1. 生产环境实际活动窗口（`activity_settings` 生产库值）。
-2. 生产 openGauss 的版本号与端口；后端进程管理方式（systemd/nohup/supervisor）；nginx 配置文件位置。
-3. 数据库默认字符集与 `dbcompatibility` 模式（`compose.yml` 与 `init-db.sh` 均未显式指定；`005_upgrade.sql` 注释称 Oracle/A 模式）。
-4. 勋章数量口径：代码 12 枚，多处文档写 6 枚——哪个是产品预期。
-5. `admin_menus.sort_order` 重号（`invites`=10 与 `ai_overview`=10、`activity`=11 与 `ai_knowledge`=11）是否有意。
-6. `daily_sport.is_makeup` / `makeup_at`（补签）是纯预留死字段，还是已有业务写入。
-7. `questions.id` / `route_nodes.id` / `persons.id` 为**非自增**主键且 seed 写死 1-15 / 1-10 / 1-13，管理端新增与 AI 导入时如何分配不冲突的 id。
-8. `organizations` 外部同步 `ORG_SYNC_API_URL` 是否在生产启用。
-9. `Numeric` 列（distance/lat/long）ORM 侧注解为 `Mapped[float]`，运行时是否发生 Decimal→float 精度处理。
-10. 早期迁移（002/005/013/015/017/019/020）含 `SQL_CONSTRAINTS.md` 后来禁用的 `ADD/DROP COLUMN IF NOT EXISTS`、`CREATE INDEX IF NOT EXISTS`；在**全新老版本生产库首次全量执行**是否可行，需 dry-run 验证。
-11. 无 DB 级外键的逻辑引用（`users.org_id`、`lit_nodes.node_id`、`user_medals.medal_id`、`points_log.ref_id` 等 11 处）是否存在孤儿数据。
-12. `march` 页 `real` / `canvas` 双模式的**切换触发条件**（`switchMode` 已实现资源释放，但未定位到明确的 UI 开关或自动降级判据）。
-13. 登录默认昵称「长征小战士」的定义位置（前端只传 `{avatar}`，推测在后端，**待确认**）。
-14. `ai-chat` 的 `nodeId` 参数通道何时接入（代码注释写「Phase A 先不接入」，未见 Phase B 计划文档）。
-15. `pages/account` 入口恢复的时间与条件（`frontend/design.md:48` 只说「暂时隐藏」）。
-16. `frontend/test/docs/` 32 份报告、`backend/test/docs/` 33 份与 `admin/test/docs/` 16 份（合计 81 份）与当前代码的对应关系——未逐份核对。
+2026-10-17 复核后，原 16 项中 **9 项已由代码与开发库实测查证解决**（见下表），**2 项经用户决定转为需求状态记录**（原 14、15），剩余 **5 项**（原 1、2、8、10、16）合并为下面 **4 条**仍需生产环境或后续工作才能确认的条目（原 2 与 8 同属生产部署事实，合并为第 2 条）。
+
+**仍需确认（4 项）**
+
+1. **生产环境实际活动窗口**：`activity_settings` 生产库值未知。开发库实测为 1 行、`start=2026-08-31 16:00`、`end=2026-12-31 15:59`、`published=true`，**不代表生产**。
+2. **生产部署事实**：生产 openGauss 版本与端口、后端进程管理方式（systemd / nohup / supervisor）、nginx 配置文件位置、`ORG_SYNC_API_URL` 是否在生产启用。开发环境已实测（openGauss 7.0.0-RC3、5118、`datcompatibility='A'`），生产未核实。**用户决定：标注为待确认，不阻塞建档。**
+3. **早期迁移语法兼容性**：002/005/013/015/017/019/020 含 `SQL_CONSTRAINTS.md` 后来禁用的 `ADD/DROP COLUMN IF NOT EXISTS`、`CREATE INDEX IF NOT EXISTS`；在**全新空库首次全量执行 001→022** 是否可行只有推理、无实测。**用户决定：暂不做 dry-run，仅标注风险。**
+4. **81 份测试报告与当前代码的对应关系**：`frontend/test/docs/` 32 份、`backend/test/docs/` 33 份、`admin/test/docs/` 16 份，未逐份核对。
+
+**已查证解决（9 项，2026-10-17）**
+
+| 原编号 | 问题 | 查证结果与依据 |
+| --- | --- | --- |
+| 3 | 字符集与 `dbcompatibility` 模式 | 开发库实测：`UTF8` / `en_US.utf8`、`datcompatibility='A'`、`sql_compatibility='A'`、**openGauss 7.0.0-RC3 build 01b7e318**。`compose.yml` 与 `init-db.sh` 均未显式指定，A 模式是**镜像默认值** |
+| 4 | 勋章数量口径 12 vs 6 | **12 枚为真**：`seed.py:282-313` MEDALS 12 项，库中 `medal_defs` 12 行。写「6 枚」的 `models.py:5` 与 `backend/AGENTS.md` 属文档滞后（见 §8） |
+| 6 | `is_makeup` / `makeup_at` 是否有写入 | **纯预留死字段**：库中 0 行有值；全仓除 `models.py:248-249` 定义与 `005_upgrade.sql:31-36` 建列外无任何写入点，`models.py:235` docstring 自述「为补签预留字段」 |
+| 7 | 非自增主键如何分配 id | 一律 **`max(id)+1`**：`admin_service.py:46-47`（route_nodes）、`:175-176`（questions）、`ai_question_service.py:378`/`:674`、`import_service.py:293`。**无并发保护**，并发新增可撞主键。`persons` 仅 seed（13 行，id 1-13），**无新增代码路径** |
+| 9 | `Numeric` 列的 Decimal→float 处理 | 库实际返回 `Decimal`（`daily_sport.distance` → `Decimal('4.27')`、`route_nodes.latitude` → `Decimal('25.885000')`），而 ORM 注解为 `Mapped[float]`（`models.py:55-56`、`:246`）——**注解只是 typing 元数据，不做类型强转，注解与运行时类型不符**；出口由 Pydantic 转 float |
+| 11 | 逻辑外键孤儿数据 | **全部 0 孤儿**：`users.org_id`、`lit_nodes.node_id`、`user_medals.medal_id`、`quiz_records.user_id`、`daily_sport.user_id`、`organizations.parent_id`、`points_log.ref_id`→`daily_questions`。（注意 `ref_id` 指向 **`daily_questions.id`** 而非 `quiz_records.id`，见 `quiz_service.py:260`/`:452` 传入 `session.id`） |
+| 12 | `march` 双模式切换触发条件 | **有明确 UI 开关，非自动降级**：`frontend/pages/march/march.wxml:52-64` 两个 `bindtap="switchMode"` 按钮（`data-mode="real"` 实景地图 / `data-mode="canvas"` 星空长征），初值 `mode:'real'`（`march.js:49`），处理函数 `march.js:361-380` |
+| 13 | 默认昵称「长征小战士」定义位置 | **`backend/app/models/models.py:192`**：`nickname: Mapped[str] = mapped_column(String(64), default="长征小战士")`，ORM 列默认值 |
+| 5 | `admin_menus.sort_order` 重号 | **确认为真重号**：`invites`=10 与 `ai_overview`=10、`activity`=11 与 `ai_knowledge`=11（`015:31-33`、`016:36-38`、`022:15`/`:18`）。侧边栏顺序由 `admin/src/router/menus.ts` 静态数组决定**不受影响**；受影响的是 `access_service.py:63`/`:80`/`:201` 三处 `order_by(AdminMenu.sort_order)` 的返回顺序在同分时不稳定。**用户决定：只记录为已知问题，不改业务代码**（见 §8 代码级技术债） |
+
+**转为需求状态记录（2 项）**
+
+- `ai-chat` 的 `nodeId` 参数通道 → REQUIREMENTS.md 标为**待开发（Phase B，无明确排期）**。
+- `pages/account` 入口恢复 → REQUIREMENTS.md 标为**已隐藏，恢复条件待产品确认**。
