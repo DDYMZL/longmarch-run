@@ -35,6 +35,8 @@
 
 **页面级合一例外**：小程序每个页面的 `.js/.wxml/.wxss/.json` 四件套合并为一份文档，命名取 `<页面名>.js.md`（如 `.qoder/frontend/pages/home/home.js.md`），文档内设 WXML / WXSS / JSON 专章并标注对应文件。理由：小程序页面是「四文件一体」的不可分割单元，拆成四份会造成大量重复且 wxml/wxss 单独成文信息量过低。
 
+**专章编号不得占用第 5–10 章**：WXML / WXSS / JSON 三个专章一律编为 `## 4-1.` / `## 4-2.` / `## 4-3.`，插在第 4 章「核心功能」之后、第 5 章「输入与输出」之前。第 5 节模板的 **10 个章节编号与标题是固定的**（1 文件路径 / 2 文件职责 / 3 业务需求 / 4 核心功能 / 5 输入与输出 / 6 依赖关系 / 7 业务规则 / 8 修改约束 / 9 当前实现状态 / 10 迭代记录），任何文档都不得重排、合并（如把「业务规则与修改约束」并成一章）或增删这 10 章——校验脚本按「编号 + 标题」双重匹配，编号对了标题不对同样判为不合格。
+
 ---
 
 ## 2. 与其他文档的关系（避免多头真相）
@@ -199,8 +201,8 @@
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
 | 一 | `.qoder/backend/**`（`app/services` 30、`app/api/routes` 18、`app/core` 7、`deps.py`、`main.py`、`seed.py`、`models.py`、`schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt`） | ✅ **64/64 已交付**（2026-10-17） |
-| 二 | `.qoder/frontend/**`（25 页面〔页面级合一〕+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 仓库根 `project.config.json` 1） | 待补齐（53） |
+| 二 | `.qoder/frontend/**`（25 页面〔页面级合一〕+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 仓库根 `project.config.json` 1） | ✅ **53/53 已交付**（2026-10-17） |
 | 三 | `.qoder/admin/**`（`src/**` 28 + `scripts/zip-dist.mjs` 1 + `package.json`/`vite.config.ts`/3 份 `tsconfig*.json`/`index.html` 6 + `.env.development`/`.env.prod` 2） | 待补齐（37） |
 | 四 | `.qoder/docker/**`（22 SQL + `init-db.sh` + `compose.yml`）+ 根 `*.bat` 4 个 | 待补齐（28） |
 
-四批合计需建档 **182 个**（64 + 53 + 37 + 28）。`.qoder/frontend/`、`.qoder/admin/` 目前只有 `test/README.md`，`.qoder/docker/init/` 为空目录骨架。分母口径与实测依据见 `.qoder/PROJECT.md` §10。
+四批合计需建档 **182 个**（64 + 53 + 37 + 28），已交付 **117 个**（第一、二批），总进度 **64.3%**。`.qoder/admin/` 目前只有 `test/README.md`，`.qoder/docker/init/` 为空目录骨架。各批分母均经 `find`/`ls` 实测复核（第三批 28+1+6+2、第四批 22+2+4，其中 SQL 22 份含尚未入库的 `021`、`022`）；第二批交付后已做源文件↔文档 **1:1 双向核对**，无遗漏无多余。分母口径与实测依据见 `.qoder/PROJECT.md` §10。

@@ -262,6 +262,9 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | 30 | **服务层越过 `points_service` 直删它管的表**：`reset_today` 自己 `db.query(PointsLog).filter(biz_key == points_service.biz_key(QUIZ, date)).delete()`，积分口径知识（`biz_key` 构造）被复制到了调用方。`points_service` 的任何 `biz_key` 规则变更都不会自动传导到这里。该函数仅供调试端点 `POST /api/quiz/reset` 使用（见「架构级限制」第 8 项） | `backend/app/services/quiz_service.py:536-539`（`:540` 服务层自提交） |
 | 31 | **`POST /api/march/ceremony` 是 `march.py` 7 个端点中唯一没有 `response_model` 的**，直接返回裸 `{"ok": True}`，无 Schema 约束、不出现在 OpenAPI 响应模型里。与 `backend/AGENTS.md` §3.1「路由必须声明 `response_model`」不符（同文件其余 6 个端点均已声明） | `backend/app/api/routes/march.py:76-81` |
 | 32 | **勋章发放的 WebSocket 广播不对称**：`GET /api/medal/list` 在活动开放时也会调 `check_and_grant` 实际发放勋章，但**不广播**；`POST /api/medal/check` 发放后广播 `medal.check`。因此经 `/list` 触发的发放不会推到管理端人员档案，管理端看到的勋章可能滞后于库中真实状态，直到下一次 `/check` 或手动刷新 | `backend/app/api/routes/medal.py:18-19`（无广播）vs `:29-31`（有广播） |
+| 34 | **导航类 `setTimeout` 未纳入页面清理表，跨 3 页复现 5 处**：这些 800ms 延时 `wx.navigateBack()` 都是裸调用，句柄未存进页面的定时器数组，`onUnload` 无法清除；用户在 800ms 内主动离开页面后定时器仍会触发一次返回。三页各自的清理机制本身是健全的（`quiz-result` 有 `_timers` 数组并在 `onUnload` 统一 `clearTimeout`），漏的只是这几处导航调用——属同一抄写模式的重复疏漏，非设计取舍 | `frontend/pages/quiz-result/quiz-result.js:64`、`:105`（`_timers` 初始化 `:56`、唯一 push 点 `:82`、清理 `:127`）；`frontend/pages/node-detail/node-detail.js:91`；`frontend/pages/ceremony/ceremony.js:49`、`:63` |
+| 35 | **`globalData.loggedIn` 被绕过访问器直写 2 处**：`app.js` 提供了 `setLoginUser`（`:15` 置真）与 `logout`（`:24` 置假）作为唯一写入口，但 `services/auth.js:70` 与 `services/request.js:39` 直接赋值 `app.globalData.loggedIn`。登录态是全站页面 `onShow` 守卫的判据，写入口分散后无法在一处加校验或日志 | `frontend/app.js:15`/`:24`（访问器）vs `frontend/services/auth.js:70`、`frontend/services/request.js:39`（直写） |
+| 36 | **源文件 docstring 与代码不符 2 处**（第二批建档 grep 实测）：① `profile.js:6` 写「入口：行军日历」，但全仓 `navigateTo('/pages/profile/profile')` 仅 `mine.js:83` 一处，calendar 页无任何跳转本页的代码；② `ai-chat.js:7` 写「非 tab 页，onShow 自行校验 loggedIn」，但 `app.json:54-59` 中 `pages/ai-chat/ai-chat` **是** tabBar 第 4 项。两处均为结构演进后注释未同步，与「文档滞后项」同类但发生在代码注释里，故单列 | `frontend/pages/profile/profile.js:6`；`frontend/pages/ai-chat/ai-chat.js:7` vs `frontend/app.json:54-59` |
 
 ### 文档滞后项（代码正确，文档过时）
 
@@ -329,11 +332,13 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | 批次 | 范围 | 文档数 | 状态 |
 | --- | --- | --- | --- |
 | 一 | 后端：`app/services` 30、`app/api/routes` 18、`app/core` 7、`app/api/deps.py`、`app/main.py`、`app/data/seed.py`、`app/models/models.py`、`app/schemas/schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt` | **64** | ✅ **已交付 64/64**（2026-10-17） |
-| 二 | 小程序：25 个页面（页面级合一）+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 根 `project.config.json` 1 | **53** | 待补齐 |
+| 二 | 小程序：25 个页面（页面级合一）+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 根 `project.config.json` 1 | **53** | ✅ **已交付 53/53**（2026-10-17） |
 | 三 | 管理后台：`admin/src/**` 28（实测无纯 re-export 桶文件）+ `scripts/zip-dist.mjs` 1 + `package.json`/`vite.config.ts`/`tsconfig.json`/`tsconfig.app.json`/`tsconfig.node.json`/`index.html` 6 + `.env.development`/`.env.prod` 2 | **37** | 待补齐 |
 | 四 | 数据库与脚本：`docker/init/*.sql` 22（其中 `021`、`022` **尚未入库**）+ `init-db.sh` + `compose.yml` 2 + 根 `*.bat` 4 个（`start`/`build-backend`/`build-prod`/`build-sql`） | **28** | 待补齐 |
 
-**建档分母说明**：git 跟踪文件共 676 个（不含尚未入库的 `.qoder/` 与 `docker/init/021`、`022`），其中约 400 个属第 4 节排除规则覆盖的测试脚本、测试报告、截图、构建产物与依赖，不建档。四批合计需建档 **182 个**（64 + 53 + 37 + 28，各批数字均由 `find`/`ls` 实测得出、非估算），已完成 64 个，总进度 **35.2%**。
+**建档分母说明**：git 跟踪文件共 676 个（不含尚未入库的 `.qoder/` 与 `docker/init/021`、`022`），其中约 400 个属第 4 节排除规则覆盖的测试脚本、测试报告、截图、构建产物与依赖，不建档。四批合计需建档 **182 个**（64 + 53 + 37 + 28，各批数字均由 `find`/`ls` 实测得出、非估算），已完成 **117 个**（第一批 64 + 第二批 53），总进度 **64.3%**。
+
+> 第二批交付后已做 **1:1 双向核对**：`frontend/` 侧实测 25 页面目录 / 19 `services/*.js` / 3 `utils/*.js` / 1 `data/*.js`，`.qoder/frontend/` 侧对应 25 / 19 / 3 / 1 份文档，加 4 份工程级（`app.js`/`app.json`/`app.wxss`/`sitemap.json`）与 1 份仓库根 `project.config.json`，合计 53——**无遗漏、无多余**（每个源文件恰有一份文档，每份文档恰对应一个真实存在的源文件或四件套）。25 份页面文档均按 `.qoder/README.md` §1 的「页面级合一」规则设 `## 4-1`/`## 4-2`/`## 4-3` 三个专章，10 个规范章节的编号与标题经脚本逐份校验通过。
 
 > 第一批的实际分母比原估的 ~68 少 4：原估把 `backend/app/**` 下 8 个 `__init__.py` 计入了各子目录（api 21 / core 8 / data 2 / models 2 / schemas 2 / services 31），而这些按第 4 节排除规则不建档。72 个候选路径 − 8 个 `__init__.py` = **64**，已用 `find` 实测核对。
 

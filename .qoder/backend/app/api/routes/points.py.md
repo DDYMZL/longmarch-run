@@ -38,7 +38,7 @@
 
 ### 4.3 两个端点的口径区别（任务重点）
 
-- **`GET /api/points`（概览，汇总值）**：`get_summary`（`points_service.py:186-204`）返回 `total`/`walk`/`quiz` + 今日两项（`todayWalkPoints`/`todayQuizPoints`）+ `todaySteps`/`todayCorrect` + `walkCarry`（零头结转步数）+ `rules`（规则文案，`:207-212`）；路由再并入 `rank`（与排行榜同一名次函数）。
+- **`GET /api/points`（概览，汇总值）**：`get_summary`（`points_service.py:186-204`）返回 `total`/`walk`/`quiz` + 今日两项（`todayWalk`/`todayQuiz`，service 侧键名 `today_walk`/`today_quiz`，`points_service.py:198-199`）+ `todaySteps`/`todayCorrect` + `walkCarry`（零头结转步数）+ `rules`（规则文案，`:207-212`）；路由再并入 `rank`（与排行榜同一名次函数）。
 - **`GET /api/points/daily`（明细，按自然日一行）**：`get_daily_details`（`points_service.py:215-262`）每天一行 `walk`/`quiz`/`total`/`steps`/`correctCount`/`updatedAt`；**响应中的 `total` 是「有台账的天数」而非积分和**（`:220`、`:230`，分页 total 语义）；`source_type in (walk, quiz)` 过滤 legacy 行（`:217-218`），legacy 台账不计入。
 - **三处同源**：`/api/points`、`/api/rank/points`、`/api/profile/summary` 的积分/名次全部读同一 `points_log` 台账（`points_subquery` `backend/app/services/points_service.py:149-163`、`get_breakdown` `backend/app/services/points_service.py:176-179`、`get_user_rank` `backend/app/services/rank_service.py:85`），改口径三处同时生效。
 
@@ -51,7 +51,7 @@
 
 - 输入：身份取自 JWT；`/daily` 另收 `page`、`page_size`。
 - 输出（camelCase，`CamelModel`，`schemas.py:17-22`）：
-  - `PointsSummaryOut`：`total`/`walk`/`quiz`/`todayWalkPoints`/`todayQuizPoints`/`todaySteps`/`todayCorrect`/`walkCarry`/`rules`/`rank`（`schemas.py:542-554`）。
+  - `PointsSummaryOut`：`total`/`walk`/`quiz`/`todayWalk`/`todayQuiz`/`todaySteps`/`todayCorrect`/`walkCarry`/`rules`/`rank`（`schemas.py:542-554`；模型字段为 `today_walk`/`today_quiz`，**不是** `today_walk_points`——后者属 `SportSync`，`schemas.py:160`，勿混用）。
   - `PointsDailyOut`：`list[]`（按日条目）+ `page`/`pageSize`/`total`（天数）（`schemas.py:567-569`）。
 - 错误码：401（令牌无效）；403（账号停用 `X-Account-Status`；活动不可见 `X-Activity-Status`，`backend/app/api/deps.py:46-81`）；422（分页越界）。无 400/404 路径。
 
