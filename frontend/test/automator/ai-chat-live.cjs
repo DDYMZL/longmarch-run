@@ -1,6 +1,6 @@
 /**
  * AI 历史助手真实链路验收（模拟器 → 本机后端 → CloudBase Agent，全真调用不 stub）
- * 前置：config.js ENV='local'、本机 8010 后端已起、外网可达（VPN 关闭态）；
+ * 前置：config.js DEV_TARGET='local'（仅开发版生效）、本机 8010 后端已起、外网可达（VPN 关闭态）；
  *       登录态用服务端签发的真实 JWT 注入 Storage（用户为本地开发库既有账号）。
  * 用法（cwd 必须是本目录，每次运行前需 cli auto 武装）：
  *   AI_LIVE_TOKEN=<服务端签发的JWT> node ai-chat-live.cjs assert   发送真实提问并断言回答/来源/提示条
