@@ -602,7 +602,7 @@
 | `RouteNodesView` | 路线节点管理：**前端做筛选，未做服务端分页**（数据量小） | — |
 | `AuditView` | 审计日志 | — |
 | `AccessView` | RBAC 双 tab | — |
-| `ExcelImportDialog.vue` | 通用导入对话框：通过 `api: ExcelImportApi` prop（`:10-14`）注入四个接口函数，**同一组件复用于所有导入场景**；`defineExpose({downloadTemplate})`（`:101`） | — |
+| `ExcelImportDialog.vue` | 通用导入对话框：通过 `api: ExcelImportApi` prop（`:10-14`）注入**三个**接口函数（`downloadTemplate`/`preview`/`confirm`），**同一组件复用于所有导入场景**；`defineExpose({downloadTemplate})`（`:101`）。〔2026-10-17 更正：原写「四个」，接口声明实为 3 个成员，与 `.qoder/ARCHITECTURE.md` §8.2 同源笔误，两处已一并更正〕 | — |
 
 ### 11.6 Excel 导入导出规则（管理端通用）
 

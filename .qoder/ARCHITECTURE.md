@@ -16,7 +16,7 @@
 | 后端 API 服务 | `backend/` | FastAPI + SQLAlchemy 2.0 同步 ORM | `:8010`（生产经 nginx 反代到 443） |
 | 管理后台 | `admin/` | Vue 3.5 + Element Plus 2.9 + Vite 6，构建为静态资源 | 生产为静态站点，走同一域名的 `/api` |
 | 数据库 | `docker/` | openGauss 容器（`opengauss/opengauss-server:latest`） | 本机 `:5118`（实测 7.0.0-RC3）；生产 `127.0.0.1:5432`、**openGauss 6.0.1**（据 `backend/.env.prod:7` 注释与 `:9` 连接串，非直连实测） |
-| 数据库迁移脚本 | `docker/init/` | 001–022 编号 SQL，容器初始化时按字典序执行 | — |
+| 数据库迁移脚本 | `docker/init/` | 001–022 编号 SQL，由 `database-init` 一次性服务按字典序执行（详见 §12.4） | — |
 
 ### 1.2 调用关系图
 
@@ -54,7 +54,7 @@
    ┌───────────────────────────────────────────────────────────┐
    │   openGauss（Oracle 兼容模式 A：'' 落库为 NULL）              │
    │   34 张业务表 + schema_migrations                            │
-   │   初始化：docker/init/001..022（字典序，ON_ERROR_STOP=1）      │
+   │   初始化：database-init 跑 docker/init/001..022（字典序）      │
    └───────────────────────────────────────────────────────────┘
 
    外部依赖：
@@ -624,23 +624,47 @@ proxy_set_header Connection "upgrade";
 | 环节 | 机制 |
 |---|---|
 | 脚本位置 | `docker/init/001_*.sql` … `022_*.sql` |
-| 执行时机 | 容器**首次初始化**时，openGauss 官方入口按**字典序**执行 `/docker/init` 下脚本（`docker/compose.yml` 挂载 `./init:/docker/init:ro`） |
-| 补跑机制 | `docker/compose.yml` 定义第二个一次性服务 `database-init`（`restart: "no"`、`depends_on: service_healthy`），用于对已存在的库补跑迁移 |
-| 已执行登记 | `schema_migrations` 表；`ON_ERROR_STOP=1` |
+| 执行者 | `docker/compose.yml:30-44` 的一次性服务 `database-init`（`restart: "no"`、`depends_on: opengauss: service_healthy`），经显式 `entrypoint: ["/bin/bash", "/docker/init/init-db.sh"]`（`:42`）运行 |
+| 执行时机 | **首次初始化与后续补跑走同一条路径**，均由 `database-init` 执行；`opengauss` 主服务只挂数据卷 `opengauss-data:/var/lib/opengauss`（`:16-17`），**不挂 `./init`、从不执行迁移脚本** |
+| 脚本来源 | 仅 `database-init` 挂载 `./init:/docker/init:ro`（`:44`） |
+| 执行顺序 | `init-db.sh:30` 的 `for sql_file in /docker/init/*.sql` 按 shell 通配的**字典序**逐个处理 |
+| 已执行登记 | `schema_migrations` 表；`init-db.sh:17` 传 `-v ON_ERROR_STOP=1` |
 | 编写约束 | **`docker/init/SQL_CONSTRAINTS.md` 为权威，写迁移前必读** |
 
-**关键约束（摘自 `SQL_CONSTRAINTS.md`）**：
+> **更正（2026-10-17）**：上表原「执行时机」行称首次初始化由 **openGauss 官方入口**执行 `/docker/init` 下脚本，并原「补跑机制」行把 `database-init` 描述为仅用于**已存在的库补跑**。二者均错。依据：`docker/compose.yml` 全文实读——`opengauss` 服务（`:4-28`）的 `volumes` 只有数据卷一项（`:16-17`），**没有** `./init` 挂载，故其官方入口看不到任何迁移脚本；唯一挂载 `./init:/docker/init:ro` 的是 `database-init`（`:44`），且它用 `entrypoint`（`:42`）**覆盖**了镜像默认入口。因此不存在「官方入口跑首次初始化 + `database-init` 补跑」两套机制，只有 `database-init` 一套，首次建库亦由它执行。该错误由第四批部署脚本建档发现（详见 `.qoder/docker/init/init-db.sh.md`、`.qoder/docker/compose.yml.md`）。
 
-- openGauss **禁止** `ADD/DROP COLUMN IF NOT EXISTS`，加列必须用 `DO $$ … EXCEPTION WHEN undefined_column/duplicate_column … $$` 块
-- `CREATE INDEX IF NOT EXISTS` 需谨慎
-- **派生表必须有别名**（历史事故 `f413ac6`）
-- **不支持 `ON CONFLICT`**
-- Oracle 兼容模式 A 下 **`''` 落库为 NULL**
-- 迁移必须幂等、必须在事务中、**不得删除数据**
-- 已发布脚本**不得修改**，只能新增编号
-- 每个脚本必须有三段式头注释：变更目的 / 影响面 / 回滚
+**`init-db.sh` 的执行与登记不原子**：`:34` 执行 `-f "${sql_file}"`、`:35` 才单独 `INSERT INTO schema_migrations`，是**两次独立的 gsql 调用**。脚本执行成功但登记失败（进程被杀、连接中断）时，下次启动会**重复执行**该脚本；反之若脚本中途失败，`ON_ERROR_STOP=1` 使其整体回滚、登记也不会写入，重跑安全。因此下段「重复执行会破坏数据或中止的脚本」的风险窗口不止于人为重跑。
 
-**历史包袱**：`005`、`013`、`015`、`017`、`019`、`020` 使用了如今被禁止的语法（它们早于约束文档），其中 `017`、`019` 含重算类 UPDATE，**不可重复执行**。
+**关键约束（摘自 `SQL_CONSTRAINTS.md`，151 行 / §1–§7）**：
+
+- **§1.1 禁用** `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`。替代写法两种：**方式 A（推荐、幂等）= DO 匿名块 + `information_schema.columns` 判定**（`:24-36`）；**方式 B = 直接 `ADD COLUMN` 不加 `IF NOT EXISTS`**（`:37`，仅当迁移编号唯一且确认从未跑过时可用，本身不幂等）
+- **§1.2 `CREATE INDEX IF NOT EXISTS` 需谨慎使用**（`:43`）
+- **§1.4 派生表（子查询）必须显式起别名**（历史事故 `f413ac6`）
+- **§1.5 其它已知不支持/易踩的语法**表格另含两条：`ALTER TABLE ... DROP COLUMN IF EXISTS` → 同样改用 DO 块 + `information_schema` 判定（`:85`）；`INSERT ... ON CONFLICT DO UPDATE` → **生产版本可能不支持**，改用 `WHERE NOT EXISTS` 或先 UPDATE 再 INSERT（`:87`，措辞是「可能」而非绝对不支持）
+- **§2.1 必须包事务**（首尾 `START TRANSACTION; ... COMMIT;`）；**§2.2 必须幂等**；**§2.3 不得删除数据**（禁 `DROP TABLE`/`TRUNCATE`/无 WHERE 的 `DELETE FROM`）；**§2.4 重算类 UPDATE 必须收敛**——WHERE 须限定 `biz_key`、`delta <> new_delta` 等条件，避免全表覆写
+- **§3.1 已发布（已在生产执行过）的编号脚本不得修改**，需要变更就新增编号；**§3.2 编号必须严格递增**，禁止 `010a_xxx.sql` 之类插入编号
+- **§4 每份 SQL 顶部必须有三段中文注释**：变更目的 / 影响面 / 回滚
+
+> **更正（2026-10-17）**：上列原为 8 条无出处列表，其中两条与权威文档不符，现已逐条标注 `SQL_CONSTRAINTS.md` 章节号。① 原写「加列必须用 `DO $$ … EXCEPTION WHEN undefined_column/duplicate_column … $$` 块」——该文档 §1.1 方式 A 实为 **DO 匿名块 + `information_schema` 判定**（`:24-36`），全文**没有** `EXCEPTION WHEN` 写法，原表述系凭空构造。② 原把「Oracle 兼容模式 A 下 `''` 落库为 NULL」列为「摘自 `SQL_CONSTRAINTS.md`」——对该文件全文检索无此内容，其真实出处是 ORM 侧的 docstring `backend/app/models/models.py:546`（「本库空字符串按 NULL 存储（Oracle 兼容模式），可空文本列读取时 None 即空值」），已从本列表移出，另见 §13.2。③ 原列表漏了 §1.5 的 `DROP COLUMN IF EXISTS` 与 §2.4「重算类 UPDATE 必须收敛」，后者正是 `017_points_ledger.sql:43` 无 WHERE 全表 UPDATE 所违反的条款。两处不符由第四批 SQL 建档发现。
+>
+> 补充事实（非摘自约束文档，系实读 `docker/compose.yml` 所得）：`SQL_CONSTRAINTS.md` §3.2 称「`init-db.sh` 按文件名字典序执行」，与上文 §12.4 表格更正后的结论一致——执行者是 `database-init` 服务而非 openGauss 官方入口。
+
+**历史包袱**：`002`、`005`、`013`、`014`、`015`、`017`、`019`、`020` 使用了 §1.1 明令禁用的 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`（依次 4 / 18 / 2 / 1 / 3 / 5 / 3 / 1 处，均早于约束文档）；另 `004`（`:5-6`）与 `008`（`:9`）用的是不加 `IF NOT EXISTS` 的裸 `ADD COLUMN`（§1.1「方式 B」），重复执行即报列已存在。其中 `013` **重跑必中止**（首跑 `:35` DROP 掉 `daily_quotes.date` 后，重跑时 `:14`/`:31` 仍引用该列 → `UndefinedColumn` 整体回滚，且原日期值无备份不可恢复）；`019` **重跑会静默回退数据**（详见下段第 4 项）。
+
+> **更正（2026-10-17）**：上段原列 `005`、`013`、`015`、`017`、`019`、`020` 六个脚本，**漏了 `002` 与 `014`**，且未区分「用了禁用语法」与「用了非幂等的裸 ADD COLUMN」两类。依据：对 `docker/init/*.sql` 全量 `grep -c "ADD COLUMN IF NOT EXISTS"` 实测命中 8 个文件（002=4、005=18、013=2、014=1、015=3、017=5、019=3、020=1）；`grep -n "ADD COLUMN"` 排除 `IF NOT EXISTS` 后只剩 004:5、004:6、008:9 三处。`002` 的漏列由第四批 SQL 建档发现（详见 `.qoder/docker/init/002_route_node_config.sql.md` §9）。
+
+**重复执行会破坏数据或中止的脚本**（第四批 SQL 建档对 `001`–`022` 逐个静态审读，未连库实测）：共六类——
+
+1. **`002_route_node_config.sql:8-36` 的 UPDATE 无 WHERE 子句**：`id` 1–10 的 `latitude`/`longitude` 被硬编码坐标**无条件覆盖**（`:10-19`、`:23-32`），管理端在「路线点位」页改过的坐标一经重跑即丢失。同一条 UPDATE 里的另两列**是**幂等的——`sort_order`（`:35`）用 `COALESCE(NULLIF(sort_order, 0), id)`、`is_enabled`（`:36`）用 `COALESCE(is_enabled, TRUE)` 且 `:41` 已置 NOT NULL 故重跑时恒非空——**只有经纬度不是**。
+2. **`010_admin_identity.sql:106-123` 的菜单与角色种子是裸 INSERT**（全文件 `ON CONFLICT` 命中 0 次），重跑撞 `uq_admin_menus_code` 唯一约束并整批中止。
+3. **`004`（`:5-6`）、`008`（`:9`）的裸 `ADD COLUMN`** 重跑报「列已存在」。
+4. **`013_daily_quote_cycle.sql` 重跑必中止且不可恢复**：首跑 `:35` 已 `DROP COLUMN daily_quotes.date`，重跑时 `:14`/`:31` 仍引用该列 → `UndefinedColumn` 整批回滚；且该 DROP 属实质删数据（与 `SQL_CONSTRAINTS.md` §2.3 精神相悖），原日期值**无备份**，仅能从 `sort_order` 顺序与 `MIN(date)` 间接推断。
+5. **`019_sport_backfill_carry.sql:15-28` 重跑会静默回退已算对的数据**：其重算 UPDATE 带 `p.delta <> c.delta` 收敛条件（符合 §2.4），但计算口径是**封顶 20000 步**，而运行期 `points_service.walk_chain` **不封顶**——故任何在 019 之后同步过运动数据的用户，其 `walk:` 行一经重跑即被回退成封顶值，日步数 >20000 者总分被压低。口径分歧本身已登记为 `.qoder/PROJECT.md` §8「代码级技术债」第 38 项。
+6. **`017_points_ledger.sql:43` 是无 WHERE 的全表 UPDATE**：`UPDATE quiz_records SET points = LEAST(correct_count * 2, 10)`。与第 1、5 项不同，它是 `correct_count` 的**纯函数**，重跑结果收敛（不会「跑两次不一样」），真实风险是**无条件覆写会抹掉任何人工调整过的 `points`**，且违反 §2.4「WHERE 必须限定收敛条件」。
+
+> **更正（2026-10-17）**：本列表原为 3 项，且上文「历史包袱」段原称「`017`、`019` 含重算类 UPDATE，**不可重复执行**」——该表述把两者混为一谈且不准确。实读源码后：`019` 确属**重跑回退数据**（现第 5 项），`017` 的重算 UPDATE 数学上**收敛**、问题是全表覆写（现第 6 项），而真正**重跑必中止**的是原先未列入的 `013`（现第 4 项）。`011`、`012`、`014`、`015`、`016`、`018`、`020`、`021`、`022` 经审读为语义幂等、可安全重跑。三处发现均由第四批 SQL 建档（`011`–`016`、`017`–`022` 两组）提出并经复核。
+
+**`009` 在空库上可能直接失败（待确认）**：`009_org_serial.sql:12` 是 `SELECT setval('organizations_id_seq', COALESCE((SELECT MAX(id) FROM organizations), 0))`，`:11` 注释自称「空表时为 1」；但按 PostgreSQL 语义 `setval(seq, 0)` 低于默认 `minvalue=1` 会**报错**而非返回 1。而 `organizations` 表在 `docker/init/*.sql` 中**没有任何 INSERT**（全量 grep 0 命中），组织树是后端 `backend/app/data/seed.py:423` 才写入的——因此**由 `init-db.sh` 从零初始化的库在执行到 009 时该表必为空**。openGauss 的实际行为未经实测（本次建档禁止连库），故记为待确认；核实方式见 `.qoder/docker/init/009_org_serial.sql.md` §9。
 
 **生产迁移缺口（已发生两次）**：`docker/init/021_ai_center.sql`、`022_ai_admin_menus.sql` 已在本地 openGauss 应用并登记 `schema_migrations`，但按仓库根 `agents.md` §1.3「`docker/` 不自动提交」规则**未入库**，因此生产库缺失这两张迁移。部署新后端前**必须**比对 `schema_migrations` 与 `docker/init`，按 [[opengauss-migration-gap]] 流程补跑，否则启动即报 `UndefinedTable`/`UndefinedColumn`。
 
@@ -672,7 +696,7 @@ proxy_set_header Connection "upgrade";
 | AI 智能中心 | `ai_knowledge`、`ai_conversations`、`ai_messages`、`ai_generation_jobs`、`ai_generated_questions`、`ai_usage_logs` |
 | 迁移基础设施 | `schema_migrations`（无 ORM 模型） |
 
-字段级说明（含类型、可空性、默认值、业务含义、索引、数据来源与更新规则）见 `.qoder/backend/app/models/models.py.md`；DDL 侧见 `.qoder/docker/init/*.sql.md`（**待生成**）。
+字段级说明（含类型、可空性、默认值、业务含义、索引、数据来源与更新规则）见 `.qoder/backend/app/models/models.py.md`；DDL 侧见 `.qoder/docker/init/*.sql.md`（逐脚本 10 章建档，含 ORM 与 DDL 分歧、幂等性与 `SQL_CONSTRAINTS.md` 违规清单）。
 
 ### 13.2 全库共性事实
 
@@ -745,9 +769,9 @@ proxy_set_header Connection "upgrade";
 
 ## 16. 待确认清单（架构相关）
 
-1. 生产 nginx 配置文件的实际位置与完整内容（不在本仓库）。
-2. 生产 openGauss 的版本号与端口。**开发环境已实测**：容器 `longmarch-opengauss`、宿主端口 5118、`version()` = `openGauss 7.0.0-RC3 build 01b7e318`（compiled 2026-03-25）、`datcompatibility='A'` / `sql_compatibility='A'`、库编码 `UTF8` / collate `en_US.utf8`；`compose.yml` 与 `init-db.sh` **均未显式指定编码与兼容模式**，A 模式来自镜像默认值，换镜像版本可能改变该默认值。
-3. 生产后端进程管理方式（systemd / nohup / supervisor / docker）。
+1. 生产 nginx 配置文件的实际位置与完整内容（不在本仓库）。**其中一点已可预判为必须核实**：管理后台路由用 HTML5 history 模式（`createWebHistory()`，`admin/src/router/index.ts:98`），若 nginx 的静态站点 `location` 未配 `try_files $uri $uri/ /index.html;` 一类的 SPA 回退，则**在 `/rankings` 等深层路由上直接刷新或粘贴链接会 404**——首页 `/` 与站内点击跳转都正常，故日常验收发现不了，只有刷新才暴露。**前端侧已核实无额外约束**：`admin/vite.config.ts`（全文仅 20 行）**未设 `base`**，即默认 `/`，与 `createWebHistory()` 的根路径假设一致；因此回退规则只需处理 SPA 一项，无需兼顾子路径部署。
+2. 生产 openGauss 的**兼容模式**（`datcompatibility` / `sql_compatibility`）。版本号与端口**已查证、不再是待确认项，见下节**（6.0.1 / 5432，依据配置文件而非直连实测）。
+3. ~~生产后端进程管理方式（systemd / nohup / supervisor / docker）。~~ **已查证，见下节**（systemd 服务 `longmarch-backend`）。
 4. 后端是否配置了访问日志落盘与轮转。
 5. 小程序 `app.js` 无全局错误钩子是否为有意取舍。
 6. `libVersion` 以入库的 3.0.0 还是本地的 3.17.3 为准；真机最低基础库版本要求（`app.json` 中无声明，微信也不支持在该处声明）。
@@ -771,3 +795,5 @@ proxy_set_header Connection "upgrade";
 | 开发库兼容模式与版本 | `datcompatibility='A'`、`sql_compatibility='A'`、`UTF8`/`en_US.utf8`、openGauss **7.0.0-RC3 build 01b7e318**；`schema_migrations` 已登记 001→022 全部 22 项。**A 模式来自镜像默认值**，compose 与 init-db.sh 均未显式指定 | 见上表第 2 项 |
 | `march` 页双模式切换 | **有明确 UI 开关，非自动降级**：WXML 常驻两个 `bindtap="switchMode"` 按钮，初值 `real` | `march.wxml:52-64`、`march.js:49`/`:361-380` |
 | 默认昵称「长征小战士」 | **ORM 列默认值**，不由接口代码显式赋值 | `backend/app/models/models.py:192` |
+| 生产后端**进程管理方式** | **systemd 服务 `longmarch-backend`**，`APP_ENV=prod`，代码目录 `/mnt/data/longmarch-run`，日志走 journald。原 §16 第 3 项的四个候选（systemd / nohup / supervisor / docker）中 systemd 为正解 | `backend/test/docs/s26-ai-question-backend-report.md:94-96`（转记于 `.qoder/PROJECT.md` §5「生产拓扑」） |
+| 生产 openGauss **版本与端口** | **6.0.1**（Ubuntu）、库 `longmarch`、端口 **5432**。与开发容器（`latest` 镜像、实测 7.0.0-RC3、宿主 5118）**存在版本偏斜**，涉及 DDL 与方言的改动不能只靠开发库验证。**注意依据强度**：来自配置文件而非直连实测，故其**兼容模式仍列 §16 第 2 项待确认** | `backend/.env.prod:7` 注释与 `:9` 连接串（转记于 `.qoder/PROJECT.md` §5） |

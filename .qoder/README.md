@@ -93,7 +93,7 @@
 | 类别 | 具体范围 | 处理方式 |
 | --- | --- | --- |
 | 第三方依赖 | `admin/node_modules/`、`frontend/test/automator/node_modules/`、Python 包 | 不建档；依赖清单见 `PROJECT.md` |
-| 构建产物 | `admin/dist/`、`admin/dist.zip`、`backend-update.tar.gz`、`sql.tar.gz`、`*.tsbuildinfo` | 不建档；打包方式见 `ARCHITECTURE.md` 部署章节 |
+| 构建产物 | `admin/dist/`、`admin/dist.zip`、`backend-update.tar.gz`、`sql.tar.gz`、`*.tsbuildinfo` | 不建档；打包方式见 `ARCHITECTURE.md` 部署章节。**例外**：`admin/tsconfig.app.tsbuildinfo` 与 `admin/tsconfig.node.tsbuildinfo` 虽属本类，却**已被 git 跟踪**且根 `.gitignore` 未忽略（`git ls-files admin/` 实测），现状登记于 `.qoder/PROJECT.md` §9「已被 git 跟踪（入库）」表；二者仍**不建档** |
 | 缓存与虚拟环境 | `__pycache__/`、`.venv/`、`.pytest_cache/` | 不建档 |
 | 本地数据库文件 | `backend/longmarch.db`、`backend/_smoke_*.db`、`backend/test/_smoke_*.db` | 不建档；属冒烟测试临时产物，**禁止视为源码修改目标** |
 | 日志与临时文件 | `*.log`、`frontend/test/automator/probe-*.tmp.cjs` | 不建档 |
@@ -202,7 +202,7 @@
 | --- | --- | --- |
 | 一 | `.qoder/backend/**`（`app/services` 30、`app/api/routes` 18、`app/core` 7、`deps.py`、`main.py`、`seed.py`、`models.py`、`schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt`） | ✅ **64/64 已交付**（2026-10-17） |
 | 二 | `.qoder/frontend/**`（25 页面〔页面级合一〕+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 仓库根 `project.config.json` 1） | ✅ **53/53 已交付**（2026-10-17） |
-| 三 | `.qoder/admin/**`（`src/**` 28 + `scripts/zip-dist.mjs` 1 + `package.json`/`vite.config.ts`/3 份 `tsconfig*.json`/`index.html` 6 + `.env.development`/`.env.prod` 2） | 待补齐（37） |
-| 四 | `.qoder/docker/**`（22 SQL + `init-db.sh` + `compose.yml`）+ 根 `*.bat` 4 个 | 待补齐（28） |
+| 三 | `.qoder/admin/**`（`src/**` 28 + `scripts/zip-dist.mjs` 1 + `package.json`/`vite.config.ts`/3 份 `tsconfig*.json`/`index.html` 6 + `.env.development`/`.env.prod` 2） | ✅ **37/37 已交付**（2026-10-17） |
+| 四 | `.qoder/docker/**`（22 SQL + `init-db.sh` + `compose.yml`）+ 根 `*.bat` 4 个 | ✅ **28/28 已交付**（2026-10-17） |
 
-四批合计需建档 **182 个**（64 + 53 + 37 + 28），已交付 **117 个**（第一、二批），总进度 **64.3%**。`.qoder/admin/` 目前只有 `test/README.md`，`.qoder/docker/init/` 为空目录骨架。各批分母均经 `find`/`ls` 实测复核（第三批 28+1+6+2、第四批 22+2+4，其中 SQL 22 份含尚未入库的 `021`、`022`）；第二批交付后已做源文件↔文档 **1:1 双向核对**，无遗漏无多余。分母口径与实测依据见 `.qoder/PROJECT.md` §10。
+四批合计需建档 **182 个**（64 + 53 + 37 + 28），已交付 **182 个**，总进度 **100%**。各批分母均经 `find`/`ls` 实测复核（第三批 28+1+6+2、第四批 22+2+4，其中 SQL 22 份含尚未入库的 `021`、`022`）；第二、三、四批交付后均做源文件↔文档 **1:1 双向核对**，无遗漏无多余。`.qoder` 下 `.md` 实测 **192 个** = 文件级 182 + 总览层 10（本批次的 5 份总览 + 3 份 `test/README.md` + `tasks/README.md` + `decisions/README.md`）。分母口径与实测依据见 `.qoder/PROJECT.md` §10。
