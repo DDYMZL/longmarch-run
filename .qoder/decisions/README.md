@@ -23,7 +23,7 @@
 | **已发布迁移脚本不得修改，只能新增编号** | 生产库已执行的脚本无法追溯重写 | `docker/init/SQL_CONSTRAINTS.md` §3 |
 | 迁移必须幂等、必须在事务中、**不得删除数据** | 补跑安全性 | `docker/init/SQL_CONSTRAINTS.md` §2 |
 | **全库无 CHECK 约束，所有「枚举」用 VARCHAR + 应用层常量** | openGauss 兼容性与迁移灵活性 | `.qoder/ARCHITECTURE.md` §13.2 |
-| **11 处逻辑外键不建数据库级 FK** | 便于迁移与数据修复 | 同上 |
+| **13 处逻辑外键不建数据库级 FK**（原记「11 处」，2026-10-17 核实为 13，差额来自迁移 015 新增的 2 列） | 便于迁移与数据修复 | 同上；逐列清单见 `.qoder/backend/app/models/models.py.md` §4.7 |
 | JSON 列用 `JSON` 而非 `JSONB` | 补丁伪造的 9.2 版本关闭了 JSONB 方言适配 | `backend/app/core/database.py:24-26` |
 | `''` 在 openGauss（Oracle 兼容模式 A）落库为 **NULL** | 数据库行为，非本项目选择，但**所有代码必须按此假设编写** | `docker/init/SQL_CONSTRAINTS.md` §1 |
 

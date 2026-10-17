@@ -109,11 +109,28 @@
 | `routes/profile.py` | `/profile` | 小程序 | 个人中心聚合 |
 | `routes/persons.py` | `/persons` | 小程序 | 长征人物 |
 | `routes/quotes.py` | `/quotes` | 小程序 | 每日金句 |
-| `routes/broadcast.py` | `/broadcast` | 管理后台 | 实时动态流（REST 拉取） |
+| `routes/broadcast.py` | `/broadcast` | 小程序 | 今日播报聚合与实时行军动态（REST 拉取） |
 | `routes/ws.py` | `/ws` | 双端 | WebSocket 长连接 |
 | `routes/ai.py` | `/ai` | 小程序 | AI 问答、路线讲解、答题讲解 |
 | `routes/admin.py` | `/admin` | 管理后台 | 后台全部业务接口（含 Excel 导入导出、审计、RBAC） |
 | `routes/ai_admin.py` | `/admin/ai` | 管理后台 | AI 智能中心后台接口（Phase A 已就绪，管理端页面**待开发**） |
+
+> **更正（2026-10-17）**：`routes/broadcast.py` 的「面向对象」原标为**管理后台**，实为**小程序**。依据：该模块两个端点均挂 `Depends(get_current_user)`（`backend/app/api/routes/broadcast.py:15`、`:22`，是小程序用户鉴权依赖而非 `get_current_admin`），`:19` 的 summary 自述「实时行军动态（小程序）」；唯一调用方是 `frontend/services/broadcast.js:27`、`:36`（由 `frontend/pages/home/home.js:159`、`:161` 消费），`admin/src/` 全目录对 `broadcast` **零命中**。管理端的实时刷新走 WebSocket（`routes/ws.py`），不经此模块。详见 `.qoder/backend/app/api/routes/broadcast.py.md` §2。
+>
+> 同行核实：`routes/ws.py` 标注「双端」**正确**——小程序 `frontend/services/ws.js:35-36`（`wx.connectSocket`）与管理端 `admin/src/utils/liveUpdates.ts:62`（`new WebSocket`）都连接同一个 `/api/ws/updates`，该端点同时接受小程序用户令牌与管理端令牌（`backend/app/api/routes/ws.py:27-28`）。
+
+**端点总数口径（2026-10-17 实测，易混淆，务必区分）**
+
+| 口径 | 数量 | 说明 |
+|---|---|---|
+| 唯一路径字符串 | **107** | `app.openapi()` 的 `paths` 键数。同一路径挂多个方法（如 `/api/admin/route-nodes` 的 GET 与 POST）只算一次 |
+| HTTP 方法级操作 | **125** | 18 个路由模块共 124 个装饰器（HTTP 123 + WebSocket 1），再加 `main.py:91` 直接注册在 app 上的 `GET /` 健康检查（不经任何 router） |
+| WebSocket | **1** | `/api/ws/updates`，不出现在 OpenAPI 中 |
+| **端点总计** | **126** | 125 HTTP + 1 WebSocket |
+
+各模块 HTTP 端点数：`admin.py` **57**、`ai_admin.py` **15**、`march.py` **7**、`auth.py` **6**、`quiz.py` **6**、`ai.py` **6**、`sport.py` **5**、`org.py` **5**、`identity.py` **4**、`medal.py` **2**、`rank.py` **2**、`profile.py` **2**、`broadcast.py` **2**、`activity.py` **1**、`points.py` **1**、`persons.py` **1**、`quotes.py` **1**、`ws.py` **1**（WebSocket），合计 124。
+
+> **统计陷阱**：该 FastAPI 版本的 `include_router` 是**惰性挂载**，`app.routes` 里 18 个路由模块表现为 `_IncludedRouter` 对象而**不会展开成 `APIRoute`**。直接遍历 `app.routes` 只能数到 1 个 `APIRoute`（健康检查），必须走 `app.openapi()` 或 `_IncludedRouter.original_router.routes` 才能拿到真实端点。
 
 ---
 
@@ -199,8 +216,8 @@ core/*              基础设施：config database security wx ws rate_limit
 
 | 层 | 约定 | 依据 |
 |---|---|---|
-| 数据库存储 | **UTC naive**（不带时区信息的 `datetime`） | `services/helpers.py:12-14` |
-| 业务日切分 | **北京时间 UTC+8** 的自然日 | `services/helpers.py:9`、`:22-24` |
+| 数据库存储 | **UTC naive**（不带时区信息的 `datetime`） | `core/helpers.py:12-14` |
+| 业务日切分 | **北京时间 UTC+8** 的自然日 | `core/helpers.py:9`、`:22-24` |
 | REST 输出 | ISO 字符串（UTC naive 直接 `isoformat()`） | `core/ws.py:18-20` 明确注释「与 REST 接口 event_time 格式一致」 |
 | **例外** | `quiz_records.answer_at` 存**毫秒级 BigInteger**，不是 datetime | `models/models.py:287` |
 | 前端解析 | 小程序 `utils/util.js:46-49` `parseUtc`；管理后台 `utils/format.ts:29-31` `parseUtc`，两端各自实现 | — |
@@ -475,7 +492,11 @@ core/*              基础设施：config database security wx ws rate_limit
 
 ### 10.1 限流
 
-`backend/app/core/rate_limit.py`：自实现 `SlidingWindowLimiter`（`:11-27`），**仅按 IP 维度**（`:38-39`），进程内内存计数。`:30-35` 定义 4 个实例，分别用于登录、邀请码校验、AI 问答等敏感入口。触发返回 429。
+`backend/app/core/rate_limit.py`：自实现 `SlidingWindowLimiter`（`:11-27`），**仅按 IP 维度**（`:38-39`），进程内内存计数。`:30-35` 定义 4 个实例：`login_limiter`（账号登录 10 次/分）、`qr_create_limiter`（扫码会话创建 10 次/分）、`qr_poll_limiter`（扫码轮询 60 次/分）、`invite_limiter`（邀请码校验/入驻 60 次/分）。触发返回 429。
+
+全部 5 个调用点：`backend/app/api/routes/admin.py:107`（login）、`:129`（qr_create）、`:149`（qr_poll），`backend/app/api/routes/auth.py:50`、`:69`（invite）。
+
+> **更正（2026-10-17）**：本节原写 4 个限流器「分别用于登录、邀请码校验、**AI 问答**等敏感入口」。经 grep 全量 `require_rate` 调用点核实，**`backend/app/api/routes/ai.py` 没有任何限流调用**——AI 问答的成本控制走的是另一套机制：按用户日额度（`AI_CHAT_DAILY_LIMIT`）与全站日额度（`AI_GLOBAL_DAILY_LIMIT`），由 `backend/app/services/ai_usage_service.py` 计数，生效值经 `ai_config_service.get_effective(db)` 合并。原第 4 个限流器实为扫码会话创建/轮询两项。详见 `.qoder/backend/app/core/rate_limit.py.md`。
 
 **局限**：进程内计数 → 多进程/多实例部署下阈值会被放大 N 倍；重启即清零。当前单进程部署下可用。
 
@@ -637,12 +658,13 @@ proxy_set_header Connection "upgrade";
 | AI 智能中心 | `ai_knowledge`、`ai_conversations`、`ai_messages`、`ai_generation_jobs`、`ai_generated_questions`、`ai_usage_logs` |
 | 迁移基础设施 | `schema_migrations`（无 ORM 模型） |
 
-字段级说明（含类型、可空性、默认值、业务含义、索引、数据来源与更新规则）见 `.qoder/backend/app/models/models.py.md`（**待生成**）与 `.qoder/docker/init/*.sql.md`（**待生成**）。
+字段级说明（含类型、可空性、默认值、业务含义、索引、数据来源与更新规则）见 `.qoder/backend/app/models/models.py.md`；DDL 侧见 `.qoder/docker/init/*.sql.md`（**待生成**）。
 
 ### 13.2 全库共性事实
 
 - **无任何 CHECK 约束**；所有「枚举」都是 `VARCHAR` + 应用层常量校验。
-- **11 处逻辑外键没有数据库级 FK 约束**（有意为之，便于迁移与数据修复）。
+- **13 处逻辑外键没有数据库级 FK 约束**（有意为之，便于迁移与数据修复）。逐列清单与 DDL 依据见 `.qoder/backend/app/models/models.py.md` §4.7。
+  > **更正（2026-10-17）**：本条原写「11 处」。经对 `backend/app/models/models.py` 全文做多行感知的声明解析核实：`ForeignKey(...)` 声明共 **23 处**，与 `docker/init` 中 23 处 `REFERENCES` 一一对应；其余承载引用 id 但无 FK 声明的列共 **13 个**。差额 2 列来自迁移 `015_invite_admission.sql`（`:12` 新增 `invite_codes.org_id`、`:26` 新增 `users.invite_code_id`），即「11」是 015 之前的旧口径。另核实 `user_identities` 与 `bind_requests` 的 `app_id`/`openid`/`unionid`（`models.py:401-403`、`:424-426`）是微信侧自然键而非指向本库表的引用 id，**不计入**逻辑外键。
 - 唯一约束承载幂等语义，最典型的是 `points_log (user_id, biz_key)`。
 - 时间戳存在**两套默认值写法**（`default=datetime.utcnow` 与 SQL 侧 `DEFAULT`），ORM 与 DDL 需分别核对。
 - 毫秒时间戳用 `BigInteger`（`quiz_records.answer_at`，`models.py:287`）。

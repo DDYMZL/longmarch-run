@@ -264,7 +264,7 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | `frontend/design.md:261` | 称跨端一致性靠「管理端 WebSocket 广播」——小程序端**只消费 `type === 'activity'`**，不处理任何数据变更事件 |
 | `admin/design.md` §3 | 页面清单只列到 `/orgs`，**缺 `/access`、`/invites`、`/audit`、`/activity` 四个已实现路由** |
 | `backend/design.md` §2.2 | 称 `seed.py` 写入「后台菜单 9 项与内置角色」——实际菜单与角色由 `docker/init/010_admin_identity.sql` 种入，`seed.py` 不含任何菜单/角色；且菜单现为 **16 个** |
-| `backend/app/models/models.py:5`、`backend/AGENTS.md` | 写「勋章 6」——`seed.py` 实际 **12 枚** |
+| `backend/AGENTS.md:39` | 写「种子数据：路线 10 / 题库 15 / **勋章 6** / 组织树」——`backend/app/data/seed.py:282-311` 的 `MEDALS` 实际 **12 枚**（2026-10-17 更正：本行原并列引用 `backend/app/models/models.py:5`，经逐行核对该文件 docstring（`:1-9`）只列出 `MedalDef`/`UserMedal` 类名、**不含任何勋章数量**，故删除该错误引用） |
 | `backend/app/models/models.py:524` | `ImportPreview` docstring 写 `biz_type: question / quote / staff`——`import_service` **只实现了 question 与 quote**，无 staff（人员）导入 |
 | `project.config.json:57` vs `project.private.config.json` | `libVersion` 入库值 `3.0.0` 与本机私有值 `3.17.3` 不一致 |
 

@@ -93,6 +93,9 @@
 | 敏感配置 | `backend/.env`、`backend/.env.prod`、`project.config.json`、`admin/.env.*` | 建档但**只列配置项名称与用途**，不写值 |
 | 本机私有配置 | `project.private.config.json`、`mini.project.json`（支付宝工具残留）、`.env*.local` | 不建档（已 gitignore）；在 `PROJECT.md` 说明其存在与风险 |
 | 纯静态资源 | `frontend/images/tabbar/*.png` | 不建档；生成方式见 `.qoder/frontend/test/README.md` |
+| 空/单行包标识文件 | `backend/app/**/__init__.py`（8 个，均为 1 行）、`admin/src/**` 中的纯 re-export 桶文件 | 不建档；其存在意义只是 Python 包标识，无业务含义。所在包的职责写进该包内实际业务文件的文档 |
+| 既有说明文档 | `backend/AGENTS.md`、`backend/README.md`、`backend/design.md`、`frontend/AGENTS.md`、`frontend/design.md`、`admin/agents.md`、`admin/design.md`、`docker/init/SQL_CONSTRAINTS.md`、`docs/**` | **不建档也不复制内容**；它们是各自范围的权威出处，`.qoder/` 只做索引与交叉引用（分工见 §2），避免多头真相 |
+| 测试结果产物 | `backend/e2e-full-results.json` 等仓库内散落的 `*-results.json` | 不建档；属测试产物，归档规则见 `.qoder/backend/test/README.md` |
 
 **必须建档**的范围：`backend/app/**`、`backend/run.py`、`frontend/app.*`、`frontend/pages/**`（页面级）、`frontend/services/**`、`frontend/utils/**`、`frontend/data/**`、`admin/src/**`、`admin/scripts/**`、`docker/init/*.sql`、`docker/init/init-db.sh`、`docker/compose.yml`，以及各端工程配置文件（`package.json`、`vite.config.ts`、`tsconfig*.json`、`requirements.txt`、`.env*`、`project.config.json`、`sitemap.json`、根 `*.bat`）。
 
