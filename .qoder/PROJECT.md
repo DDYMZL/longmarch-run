@@ -329,11 +329,11 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | 批次 | 范围 | 文档数 | 状态 |
 | --- | --- | --- | --- |
 | 一 | 后端：`app/services` 30、`app/api/routes` 18、`app/core` 7、`app/api/deps.py`、`app/main.py`、`app/data/seed.py`、`app/models/models.py`、`app/schemas/schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt` | **64** | ✅ **已交付 64/64**（2026-10-17） |
-| 二 | 小程序：25 个页面（页面级合一）+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` + 根 `project.config.json` | **52** | 待补齐 |
-| 三 | 管理后台：`admin/src/**` 28（实测无纯 re-export 桶文件）+ `scripts/zip-dist.mjs` + `package.json` + `vite.config.ts` + `tsconfig.json`/`tsconfig.app.json`/`tsconfig.node.json` + `index.html` + `.env.development`/`.env.prod` | **35** | 待补齐 |
-| 四 | 数据库与脚本：`docker/init/*.sql` 22（其中 `021`、`022` **尚未入库**）+ `init-db.sh` + `compose.yml` + 根 `*.bat` 4 个（`start`/`build-backend`/`build-prod`/`build-sql`） | **28** | 待补齐 |
+| 二 | 小程序：25 个页面（页面级合一）+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 根 `project.config.json` 1 | **53** | 待补齐 |
+| 三 | 管理后台：`admin/src/**` 28（实测无纯 re-export 桶文件）+ `scripts/zip-dist.mjs` 1 + `package.json`/`vite.config.ts`/`tsconfig.json`/`tsconfig.app.json`/`tsconfig.node.json`/`index.html` 6 + `.env.development`/`.env.prod` 2 | **37** | 待补齐 |
+| 四 | 数据库与脚本：`docker/init/*.sql` 22（其中 `021`、`022` **尚未入库**）+ `init-db.sh` + `compose.yml` 2 + 根 `*.bat` 4 个（`start`/`build-backend`/`build-prod`/`build-sql`） | **28** | 待补齐 |
 
-**建档分母说明**：git 跟踪文件共 676 个（不含尚未入库的 `.qoder/` 与 `docker/init/021`、`022`），其中约 400 个属第 4 节排除规则覆盖的测试脚本、测试报告、截图、构建产物与依赖，不建档。四批合计需建档 **179 个**（64 + 52 + 35 + 28），已完成 64 个，总进度 **35.8%**。
+**建档分母说明**：git 跟踪文件共 676 个（不含尚未入库的 `.qoder/` 与 `docker/init/021`、`022`），其中约 400 个属第 4 节排除规则覆盖的测试脚本、测试报告、截图、构建产物与依赖，不建档。四批合计需建档 **182 个**（64 + 53 + 37 + 28，各批数字均由 `find`/`ls` 实测得出、非估算），已完成 64 个，总进度 **35.2%**。
 
 > 第一批的实际分母比原估的 ~68 少 4：原估把 `backend/app/**` 下 8 个 `__init__.py` 计入了各子目录（api 21 / core 8 / data 2 / models 2 / schemas 2 / services 31），而这些按第 4 节排除规则不建档。72 个候选路径 − 8 个 `__init__.py` = **64**，已用 `find` 实测核对。
 

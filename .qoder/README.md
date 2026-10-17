@@ -199,8 +199,8 @@
 | 批次 | 范围 | 状态 |
 | --- | --- | --- |
 | 一 | `.qoder/backend/**`（`app/services` 30、`app/api/routes` 18、`app/core` 7、`deps.py`、`main.py`、`seed.py`、`models.py`、`schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt`） | ✅ **64/64 已交付**（2026-10-17） |
-| 二 | `.qoder/frontend/**`（25 页面 + 19 service + 3 util + 1 data + `app.*` + `sitemap.json` + 根 `project.config.json`） | 待补齐（52） |
-| 三 | `.qoder/admin/**`（`src/**` 28 + 脚本与工程配置 7） | 待补齐（35） |
+| 二 | `.qoder/frontend/**`（25 页面〔页面级合一〕+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 仓库根 `project.config.json` 1） | 待补齐（53） |
+| 三 | `.qoder/admin/**`（`src/**` 28 + `scripts/zip-dist.mjs` 1 + `package.json`/`vite.config.ts`/3 份 `tsconfig*.json`/`index.html` 6 + `.env.development`/`.env.prod` 2） | 待补齐（37） |
 | 四 | `.qoder/docker/**`（22 SQL + `init-db.sh` + `compose.yml`）+ 根 `*.bat` 4 个 | 待补齐（28） |
 
-`.qoder/frontend/`、`.qoder/admin/` 目前只有 `test/README.md`，`.qoder/docker/init/` 为空目录骨架。分母口径与实测依据见 `.qoder/PROJECT.md` §10。
+四批合计需建档 **182 个**（64 + 53 + 37 + 28）。`.qoder/frontend/`、`.qoder/admin/` 目前只有 `test/README.md`，`.qoder/docker/init/` 为空目录骨架。分母口径与实测依据见 `.qoder/PROJECT.md` §10。
