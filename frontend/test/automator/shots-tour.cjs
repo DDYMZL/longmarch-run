@@ -228,7 +228,7 @@ const STATES = [
     await sleep(2200);
   }],
   ['07-quiz-answer', async (mini) => {
-    await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz', 2);
+    await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz', 2);
     const quiz = await waitPath(mini, 'pages/quiz/quiz');
     await ensureQuizFresh(mini, quiz);
     await cmd(() => quiz.callMethod('handleStart'), 'handleStart', 2);
@@ -236,7 +236,7 @@ const STATES = [
     await sleep(2000);
   }],
   ['08-quiz-result-100', async (mini) => {
-    await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz 08', 2);
+    await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz 08', 2);
     const quiz = await waitPath(mini, 'pages/quiz/quiz');
     console.log('08: on quiz page');
     await ensureQuizFresh(mini, quiz);
@@ -245,7 +245,7 @@ const STATES = [
     await answerAll(mini, false);
   }],
   ['09-quiz-result-0', async (mini) => {
-    await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz back', 2);
+    await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz back', 2);
     const quiz = await waitPath(mini, 'pages/quiz/quiz');
     await ensureQuizFresh(mini, quiz);
     await cmd(() => quiz.callMethod('handleStart'), 'handleStart 2nd', 2);

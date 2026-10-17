@@ -33,7 +33,7 @@ frontend/
 │   ├── sport.js / march.js / quiz.js / medal.js / org.js / rank.js
 │   ├── profile.js / person.js / quote.js / broadcast.js / ws.js / identity.js
 ├── utils/util.js                  # 日期格式化、随机等纯工具
-└── pages/                         # 20 个页面（5 tab + 15 子页），每个页面 4 件套 js/json/wxml/wxss
+└── pages/                         # 25 个页面（5 tab + 20 子页），每个页面 4 件套 js/json/wxml/wxss
 ```
 
 ### 3.1 分层依赖规则（单向，禁止反向）
@@ -103,6 +103,6 @@ services -> request.js / config.js
 
 ## 7. 背景知识速查
 
-- 5 个 tab：首页 `home` / 长征 `march` / 答题 `quiz` / 排行 `rank` / 我的 `mine`；首页面 launch（启动自动登录 + 入驻二维码落地页）；15 个子页：login、org-select、node-detail、quiz-answer、quiz-result、sport-records、quiz-records、medals、profile、calendar、person、ticket、ceremony、bind、account。
+- 5 个 tab：首页 `home` / 长征 `march` / AI 问答 `ai-chat` / 排行 `rank` / 我的 `mine`；首页面 launch（启动自动登录 + 入驻二维码落地页）；19 个子页：login、org-select、onboard、node-detail、quiz（今日长征情报，由首页情报卡进入）、quiz-answer、quiz-result、sport-records、quiz-records、medals、points、profile、calendar、person、ticket、ceremony、activity、bind、account。
 - 登录态：`app.globalData.user / loggedIn`（auth.js 登录/校验成功后自动同步）；登出调 `app.logout()`（写退出标记，之后需登录页手动登录）。
 - 服务层请求示例：`const res = await request({ url: '/quiz/daily' });`（JWT 由 request.js 自动注入；401 自动静默重登并重试一次，仍失败回启动页）。

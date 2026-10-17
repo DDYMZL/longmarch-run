@@ -23,7 +23,8 @@
     "pages/account/account",
     "pages/onboard/onboard",
     "pages/points/points",
-    "pages/activity/activity"
+    "pages/activity/activity",
+    "pages/ai-chat/ai-chat"
   ],
   "window": {
     "navigationBarBackgroundColor": "#C8102E",
@@ -51,10 +52,10 @@
         "selectedIconPath": "images/tabbar/march-active.png"
       },
       {
-        "pagePath": "pages/quiz/quiz",
-        "text": "情报",
-        "iconPath": "images/tabbar/quiz.png",
-        "selectedIconPath": "images/tabbar/quiz-active.png"
+        "pagePath": "pages/ai-chat/ai-chat",
+        "text": "AI 问答",
+        "iconPath": "images/tabbar/ai.png",
+        "selectedIconPath": "images/tabbar/ai-active.png"
       },
       {
         "pagePath": "pages/rank/rank",

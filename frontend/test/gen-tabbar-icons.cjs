@@ -76,6 +76,10 @@ const CUP = [[22, 14], [59, 14], ...arc(40.5, 32, 18.5, 20, 0, 180)];
 const HANDLE_L = arc(22, 26, 10, 9, 90, 270, 16);
 const HANDLE_R = arc(59, 26, 10, 9, -90, 90, 16);
 const BODY = [...arc(40.5, 70, 25, 22, 180, 360), [65.5, 70]];
+// AI 问答：对话气泡 + 左下尾巴 + 内部三点
+const BUBBLE = [[12, 16], [69, 16], [69, 54], [12, 54]];
+const TAIL = [[26, 54], [20, 68], [40, 54]];
+const AI_DOTS = [[28, 35], [40.5, 35], [53, 35]];
 
 const ICONS = {
   home: {
@@ -137,6 +141,23 @@ const ICONS = {
       ['add', disk(40.5, 26, 14.75)],
       ['add', inPoly(BODY)],
       ['add', stroke([[15.5, 70], [65.5, 70]], W)]
+    ]
+  },
+  ai: {
+    normal: [
+      ['add', stroke(BUBBLE, W, true)],
+      ['add', stroke([[26, 54], [20, 68]], W)],
+      ['add', stroke([[20, 68], [40, 54]], W)],
+      ['add', disk(28, 35, 4.5)],
+      ['add', disk(40.5, 35, 4.5)],
+      ['add', disk(53, 35, 4.5)]
+    ],
+    selected: [
+      ['add', inPoly(BUBBLE)],
+      ['add', inPoly(TAIL)],
+      ['sub', disk(28, 35, 5)],
+      ['sub', disk(40.5, 35, 5)],
+      ['sub', disk(53, 35, 5)]
     ]
   }
 };

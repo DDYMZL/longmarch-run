@@ -1,0 +1,87 @@
+<view class="ai-page">
+  <!-- 顶部工具条 -->
+  <view class="ai-topbar">
+    <view class="ai-topbtn" bindtap="openSessions">☰ 会话</view>
+    <view class="ai-toptitle">{{title || 'AI 历史助手'}}</view>
+    <view class="ai-topbtn" bindtap="tapNew">＋ 新建</view>
+  </view>
+
+  <!-- 非致命提示条（AI 未开放 / 今日额度用尽） -->
+  <view wx:if="{{banner}}" class="ai-banner">{{banner}}</view>
+
+  <!-- 消息区 -->
+  <scroll-view class="ai-scroll" scroll-y scroll-into-view="{{toView}}" scroll-with-animation>
+    <!-- 空状态：常见问题引导 -->
+    <view wx:if="{{messages.length === 0}}" class="ai-empty">
+      <view class="ai-empty-icon">🏮</view>
+      <view class="ai-empty-title">长征历史助手</view>
+      <view class="ai-empty-desc">我可以为你讲解红军长征的历史。你可以直接提问，或从下面选一个开始：</view>
+      <view class="ai-common">
+        <view class="ai-common-item" wx:for="{{commonQuestions}}" wx:key="*this"
+              data-text="{{item}}" bindtap="tapCommon">{{item}}</view>
+      </view>
+    </view>
+
+    <block wx:for="{{messages}}" wx:key="_k">
+      <view id="msg-{{item._k}}" class="ai-row {{item.role === 'user' ? 'ai-row-user' : 'ai-row-ai'}}">
+        <view class="ai-avatar">{{item.role === 'user' ? '我' : 'AI'}}</view>
+        <view class="ai-bubble-wrap">
+          <view class="ai-bubble {{item.role === 'user' ? 'ai-bubble-user' : 'ai-bubble-ai'}}">
+            <!-- 加载态：三点动画 -->
+            <view wx:if="{{item.loading}}" class="ai-typing">
+              <text class="dot"></text><text class="dot"></text><text class="dot"></text>
+            </view>
+            <text wx:else class="ai-text" user-select>{{item.content}}</text>
+          </view>
+
+          <!-- 失败重试 -->
+          <view wx:if="{{item.failed}}" class="ai-failed" data-k="{{item._k}}" bindtap="tapRetry">
+            发送失败，点击重试 ↻
+          </view>
+
+          <!-- 知识来源 -->
+          <view wx:if="{{item.sources.length > 0}}" class="ai-sources">
+            <view class="ai-sources-title">参考来源</view>
+            <view class="ai-source" wx:for="{{item.sources}}" wx:for-item="src" wx:key="id">
+              <text class="ai-source-name">《{{src.title}}》</text>
+              <text wx:if="{{src.source}}" class="ai-source-from">{{src.source}}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </block>
+    <view class="ai-scroll-pad"></view>
+  </scroll-view>
+
+  <!-- 输入区 -->
+  <view class="ai-inputbar">
+    <textarea class="ai-input" value="{{inputText}}" bindinput="onInput" placeholder="请输入长征历史相关问题…"
+              maxlength="500" auto-height confirm-type="send" bindconfirm="tapSend" disabled="{{sending}}"
+              cursor-spacing="20" show-confirm-bar="{{false}}" />
+    <view class="ai-send {{(sending || !inputText) ? 'ai-send-disabled' : ''}}" bindtap="tapSend">
+      {{sending ? '…' : '发送'}}
+    </view>
+  </view>
+
+  <!-- 会话抽屉 -->
+  <view wx:if="{{showSessions}}" class="ai-mask" bindtap="closeSessions">
+    <view class="ai-drawer" catchtap="noop">
+      <view class="ai-drawer-head">
+        <text>我的会话</text>
+        <text class="ai-drawer-close" bindtap="closeSessions">✕</text>
+      </view>
+      <scroll-view class="ai-drawer-body" scroll-y>
+        <view wx:if="{{sessionsLoading}}" class="ai-drawer-tip">加载中…</view>
+        <view wx:elif="{{sessions.length === 0}}" class="ai-drawer-tip">暂无历史会话</view>
+        <view class="ai-session" wx:for="{{sessions}}" wx:key="conversationId">
+          <view class="ai-session-main" data-id="{{item.conversationId}}" bindtap="tapSession">
+            <view class="ai-session-title">{{item.title}}</view>
+            <view class="ai-session-preview">{{item.preview}}</view>
+            <view class="ai-session-meta">{{item.timeText}} · {{item.messageCount}} 条</view>
+          </view>
+          <view class="ai-session-del" data-id="{{item.conversationId}}" catchtap="tapDeleteSession">删除</view>
+        </view>
+      </scroll-view>
+    </view>
+  </view>
+</view>

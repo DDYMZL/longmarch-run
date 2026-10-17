@@ -570,7 +570,7 @@ async function phase2() {
 /* ================= 阶段 3：每日答题 ================= */
 async function phase3() {
   await ensureLoggedIn();
-  await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz');
+  await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz');
   const quizPage = await waitPage('pages/quiz/quiz');
   await sleep(600);
 

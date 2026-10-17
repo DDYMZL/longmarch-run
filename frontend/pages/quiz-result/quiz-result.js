@@ -61,7 +61,7 @@ Page({
 
         if (!record) {
           wx.showToast({ title: '暂无答题记录', icon: 'none' });
-          setTimeout(() => wx.switchTab({ url: '/pages/quiz/quiz' }), 800);
+          setTimeout(() => wx.navigateBack({ fail: () => wx.navigateTo({ url: '/pages/quiz/quiz' }) }), 800);
           return;
         }
 
@@ -102,7 +102,7 @@ Page({
       })
       .catch(() => {
         wx.showToast({ title: '答题记录加载失败', icon: 'none' });
-        setTimeout(() => wx.switchTab({ url: '/pages/quiz/quiz' }), 800);
+        setTimeout(() => wx.navigateBack({ fail: () => wx.navigateTo({ url: '/pages/quiz/quiz' }) }), 800);
       });
   },
 

@@ -221,7 +221,7 @@ async function ensureLoggedIn() {
 
   /* ---------- S5-05 今日长征情报（期号 + 知识画像） ---------- */
   try {
-    await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz', 2);
+    await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz', 2);
     const quiz = await waitPath('pages/quiz/quiz');
     await waitFor(async () => {
       const d = await cmd(() => quiz.data(), 'quiz data');

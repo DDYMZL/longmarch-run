@@ -170,7 +170,7 @@ const STATES = [
     await sleep(1200);
   }],
   ['s5-06-quiz', async (mini) => {
-    await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz', 2);
+    await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz', 2);
     await waitPath(mini, 'pages/quiz/quiz');
     await sleep(2800);
   }],

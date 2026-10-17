@@ -86,7 +86,7 @@ function eventIcon(eventType) {
 }
 
 /**
- * 答题逐题进度 -> 进度点展示数据（答题 tab 与答题页共用）。
+ * 答题逐题进度 -> 进度点展示数据（quiz 页与答题页共用）。
  * @param {Array<{seq:number, status:string, correct:boolean}>} progress 后端 progress
  * @param {boolean} [reveal=true] 是否揭示对错；交卷模式传 false 时已答题统一显示为 done（中性态，不泄露对错）
  * @returns {Array<{seq:number, cls:string}>} cls：right / wrong / done / timeout / answering / pending

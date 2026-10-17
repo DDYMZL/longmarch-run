@@ -1,7 +1,7 @@
 /**
- * 情报 tab 双答题交互模式验收（情报1 即时判定 / 情报2 交卷看解析）
+ * quiz 页双答题交互模式验收（情报1 即时判定 / 情报2 交卷看解析，quiz 现为子页）
  *
- *   M1 情报 tab 模式切换：默认即时判定；切到情报2 后 data.mode=review 且高亮项切换
+ *   M1 quiz 页模式切换：默认即时判定；切到情报2 后 data.mode=review 且高亮项切换
  *   M2 即时判定回归：提交后即时进入 feedback（对错/解析），进度点 right/wrong
  *   M3 交卷模式不揭示对错：每次提交无 feedback、选项无 right/wrong、静默推进 seq+1
  *   M4 交卷模式进度点为中性 done（无 right/wrong）
@@ -143,9 +143,9 @@ async function openAnswerPage(mode) {
   return page;
 }
 
-/** 回到情报 tab 并切换模式 */
+/** 回到 quiz 页并切换模式 */
 async function switchQuizTabMode(mode) {
-  await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz', 2);
+  await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz', 2);
   const page = await waitPath('pages/quiz/quiz');
   await cmd(() => page.callMethod('handleModeChange', { currentTarget: { dataset: { mode } } }), 'mode ' + mode, 1);
   return page;
@@ -165,8 +165,8 @@ async function run() {
   await resetQuiz();
 
   // ---------- M1 模式切换 ----------
-  await check('M1', '情报 tab 模式切换（默认即时判定→情报2）', async () => {
-    await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz', 2);
+  await check('M1', 'quiz 页模式切换（默认即时判定→情报2）', async () => {
+    await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz', 2);
     let page = await waitPath('pages/quiz/quiz');
     const d0 = await page.data();
     const defaultInstant = d0.mode === 'instant';

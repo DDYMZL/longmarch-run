@@ -1,8 +1,8 @@
 /**
- * 情报 tab 双模式截图（视觉证据，与断言脚本分离）。
+ * quiz 页双模式截图（视觉证据，与断言脚本分离）。
  * 已知：mini.screenshot 会让自动化桥退化——每个状态用独立连接 + 主动导航（见 automator 协议）。
  *
- *   60-v2-quiz-mode-switch.png  情报 tab：模式切换（情报2 高亮）
+ *   60-v2-quiz-mode-switch.png  quiz 页：模式切换（情报2 高亮）
  *   61-v2-quiz2-answering.png   情报2 作答中：已选中但无对错提示
  *   62-v2-quiz2-submitted.png   情报2 交卷态：全部已提交
  *   63-v2-quiz2-result.png      交卷后结果页：逐题解析一次性展示
@@ -143,7 +143,7 @@ async function answerAllReview() {
 }
 
 async function setMode(mode) {
-  await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz');
+  await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz');
   const tab = await waitPath('pages/quiz/quiz');
   await cmd(() => tab.callMethod('handleModeChange', { currentTarget: { dataset: { mode } } }), 'mode ' + mode);
   await waitFor(async () => ((await tab.data()).mode === mode ? true : null), 8000, 'mode ' + mode);
@@ -154,7 +154,7 @@ async function run() {
   const only = (process.argv.find((a) => a.indexOf('--only=') === 0) || '').split('=')[1] || '';
   const want = (id) => !only || only === id;
 
-  // 60：情报 tab 模式切换
+  // 60：quiz 页模式切换
   if (want('60')) await withBridge('60 mode-switch', async () => {
     await loginIfNeeded();
     await setMode('review');

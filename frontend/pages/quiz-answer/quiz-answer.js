@@ -239,6 +239,6 @@ Page({
   },
 
   handleBack() {
-    wx.navigateBack({ fail: () => wx.switchTab({ url: '/pages/quiz/quiz' }) });
+    wx.navigateBack({ fail: () => wx.navigateTo({ url: '/pages/quiz/quiz' }) });
   }
 });

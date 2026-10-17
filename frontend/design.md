@@ -16,7 +16,7 @@
 
 ```
 ┌──────────────────────────────────────────────────────────┐
-│  pages/（24 页，5 tab + 19 子页/首页面）                    │
+│  pages/（25 页，5 tab + 20 子页/首页面）                    │
 │  展示与交互；onShow + refresh() 刷新；未登录守卫            │
 └───────────────┬──────────────────────────────────────────┘
                 │ 调用服务层 API（只依赖返回值结构）
@@ -42,9 +42,9 @@
 
 | 页面 | 类型 | 职责 |
 | --- | --- | --- |
-| `pages/home/home` | tab | 首页：今日行军卡（20000 步目标、状态分档文案/击败百分比/下一站提示/连续行军行）、今日寄语卡（§16，有出处语录+可跳关联节点，按天循环轮换）、长征进度、连续行军卡、今日长征情报入口、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、🌍全员同行卡（全员累计中文大数/进度/下一阶段/里程碑✓○芯片）、抵达事件卡弹层 |
+| `pages/home/home` | tab | 首页：今日行军卡（20000 步目标、状态分档文案/击败百分比/下一站提示/连续行军行）、今日寄语卡（§16，有出处语录+可跳关联节点，按天循环轮换）、长征进度、连续行军卡、今日长征情报入口（navigateTo 答题子页）、长征记忆卡、勋章行、⚡实时行军动态卡（LIVE）、🚩组织同行卡（同行人数/今日共同前进/同行者列表）、🚀集体长征卡（组织进度条/当前到达与下一站/节点pct芯片）、🌍全员同行卡（全员累计中文大数/进度/下一阶段/里程碑✓○芯片）、抵达事件卡弹层 |
 | `pages/march/march` | tab | 长征地图：双模式（默认实景 `<map>` + 可切 Canvas 星空长征），节点点击进详情、点亮进度、到达动画（金光扩散+粒子+抵达事件卡）；星空长征（§13）：节点三态星形、星河轨迹星尘、点亮四阶段动画、拖动/捏合缩放/双击复位（view 变换+命中逆变换+边界钳制）；区域氛围（§12）：星空画布按节点区域主题生成环境粒子（每节点 3 粒封顶 30，ember/mist/snow/star），实景选中卡套主题柔和高光+区域标签；完成仪式（§20）：`ceremonyPending` 时待抵达弹窗播完自动进仪式页，完成横幅为永久入口 |
-| `pages/quiz/quiz` | tab | 今日长征情报：顶部答题交互模式切换（情报1 即时判定 / 情报2 交卷看解析，规则文案随模式变化，进度点交卷模式不揭示对错）、期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
+| `pages/quiz/quiz` | 子页 | 今日长征情报（原 tab，现降级为子页，由首页「今日长征情报」卡 navigateTo 进入）：顶部答题交互模式切换（情报1 即时判定 / 情报2 交卷看解析，规则文案随模式变化，进度点交卷模式不揭示对错）、期号、破译规则、答题状态、知识画像（总正确率 + 分类正确率） |
 | `pages/mine/mine` | tab | 我的：用户信息（昵称修改入口，每人仅一次）、V2.0「我的积分」卡（总积分 = 步行 + 答题、今日获得、积分排名，点卡进积分明细、点排名进排行榜）、勋章、组织（已选定显示 🔒，仅管理员可改），入口（积分明细/我的长征/行军日历/组织架构/运动记录/答题记录）；统计卡「累计运动(步)」为登录以来原始累计步数（与步行积分同口径：walk = 该值 ÷ 1000 向下取整）；「账号与绑定」入口已隐藏（account 页与后端绑定接口保留，仅无前端入口） |
 | `pages/points/points` | 子页 | 积分明细（V2.0）：总积分/排名/步行/答题/今日获得、今日进度（今日步数/答对数与今日获得；规则文案由 `/points` 的 `rules` 下发拼装，前端不写死数值）、每日明细表（日期/步数/步行/答题/合计）分页触底加载，下拉刷新 |
 | `pages/activity/activity` | 子页 | 活动状态页（V2.0）：未发布/未开始/进行中/已结束四态（图标、状态标签、活动时间、结束标题与提示）；`allowView` 时可进首页/查看排行，否则仅「刷新状态」；查看类请求被活动守卫拦截（403 + `X-Activity-Status`）时统一 reLaunch 至此 |
@@ -58,7 +58,7 @@
 | `pages/ceremony/ceremony` | 子页 | 长征完成仪式（§20）：约 8.1s 时间轴（逐段点亮 → 末节点辉光 → 金线扫过 → 全亮脉冲 → 星空展开 →「我的长征/完成了」→ 完成数据卡：行军/运动天数/答题/路线/勋章/积分，取 `/march/route` + `/profile/summary`）；可跳过；首次确认后 `POST /march/ceremony` 标记，再进为「已完成长征」静态回顾；收尾快照最终帧为静态图并移除画布，数据卡浮于快照上（原生 canvas 层会盖住 DOM） |
 | `pages/ticket/ticket` | 子页 | 节点纪念票（§19）：纯 Canvas 2d 绘制（米黄纸面/红头/虚线撕裂线/编号），数据取 `/march/node/{id}` + `/march/footprints`（点亮日期/当日步数/累计），未点亮节点显示提示；保存相册走 `canvasToTempFilePath`（传 canvas 节点）+ `saveImageToPhotosAlbum` |
 | `pages/person/person` | 子页 | 长征人物志详情（§14）：头像（无图姓名首字占位）/名称/简介、相关历史事件卡（节点事件+历史时间+简述），点击事件卡回跳节点详情（人物 → 节点双向） |
-| `pages/quiz-answer/quiz-answer` | 子页 | V2.0 逐题限时，两种交互模式（由情报 tab 经 `?mode=` 传入）：进入即 `quiz.start()` 开题（幂等，中途返回继续当前题）→ 90 秒环形倒计时（最后 10 秒警示色，截止时间 = 收到响应时刻 + 服务器 `remainingMs`，切后台回来按 `Date.now` 重算）→ 选择并提交（每题一次）；`instant` 即时判定：提交后反馈对错/正确答案/解析/得分 → 下一题，进度点 right/wrong/timeout 三态；`review` 交卷看解析（情报2）：作答中不揭示对错（进度点 answered 显示 done 中性态）、提交后逐题静默推进，最后一题提交进入交卷态 → 跳 quiz-result 统一查看全部解析；倒计时归零进入超时态不可提交 |
+| `pages/quiz-answer/quiz-answer` | 子页 | V2.0 逐题限时，两种交互模式（由 quiz 页经 `?mode=` 传入）：进入即 `quiz.start()` 开题（幂等，中途返回继续当前题）→ 90 秒环形倒计时（最后 10 秒警示色，截止时间 = 收到响应时刻 + 服务器 `remainingMs`，切后台回来按 `Date.now` 重算）→ 选择并提交（每题一次）；`instant` 即时判定：提交后反馈对错/正确答案/解析/得分 → 下一题，进度点 right/wrong/timeout 三态；`review` 交卷看解析（情报2）：作答中不揭示对错（进度点 answered 显示 done 中性态）、提交后逐题静默推进，最后一题提交进入交卷态 → 跳 quiz-result 统一查看全部解析；倒计时归零进入超时态不可提交 |
 | `pages/quiz-result/quiz-result` | 子页 | 情报任务结果（V2.0）：答对题数、正确率滚动、答题积分、超时题数、逐题结果（题干/我的答案/正确答案/正确·错误·超时/本题积分/解析）；历史记录无 details 时回退错题解析；全对彩带 |
 | `pages/sport-records/sport-records` | 子页 | 最近运动记录 |
 | `pages/quiz-records/quiz-records` | 子页 | 答题历史记录 |
@@ -66,8 +66,9 @@
 | `pages/rank/rank` | tab | 积分排行榜（V2.0，与 PC 同源 `/rank/points`）：前三名金银铜领奖台（2-1-3 排布）、4-10 名卡片、11 名起分页列表（触底加载）、本人高亮，本人 >10 名时底部常驻「我的排名」条；下拉刷新/错误重试 |
 | `pages/bind/bind` | 子页 | 扫码确认：解析 `?scene=`（L{token} PC 登录 / B{token} 身份绑定），未登录先经启动页自动登录（redirect 返回）；`qrInfo` 查询后按状态渲染确认卡（pending/scanned）/完成态（confirmed/used/cancelled）/错误态（failed 展示后端原因、凭证失效/格式非法）；确认/取消提交防重复 |
 | `pages/account/account` | 子页 | 账号与绑定：已绑定身份列表（渠道名/AppID/验证时间/绑定时间），wx_mini 登录凭证不可解绑，wx_web 可解绑（showModal 确认），空态提示 |
+| `pages/ai-chat/ai-chat` | tab | AI 历史助手（长征历史问答，AI 智能中心 §3.1）：连续对话（conversationId 为空新建、追问沿用同一会话，后端注入历史上下文）、消息气泡（用户右/AI 左）+ 加载三点动画、AI 回答下方展示后端核验过的已发布知识来源、空状态常见问题引导、发送失败气泡内「点击重试」、AI 未开放(403)/额度用尽(429) 转顶部常驻提示条、右上「会话」抽屉查看/切换/删除本人会话（归属由后端 JWT 判定，前端不传 user_id）；tabBar tab（替换原「情报」tab），`onShow` 登录守卫且账号切换时重置当前会话 |
 
-> 数据展示页统一「`onShow` → `refresh()`」刷新；非 tab 子页自行判断 `app.globalData.loggedIn`。
+> 数据展示页统一「`onShow` → `refresh()`」刷新；非 tab 子页自行判断 `app.globalData.loggedIn`（tab 页 ai-chat 同样保留该守卫，并在账号切换时重置会话）。
 
 ### 2.3 服务层与后端接口映射
 
@@ -88,6 +89,7 @@
 | `org.js` | 组织树下钻 / `getMine()` / 选定组织 / `getCompanions(limit)` / `getOrgMarch()` | `/api/org/children, mine, select, companions, march` | 组织树（任意层级可选）；V2.0 组织锁定：`/org/mine` 返回 `locked`，已选定后 `POST /org/select` 返回 403 `ORG_LOCKED`，仅管理员可在后台调整（留审计）；同组织同行者；组织共同长征目标 |
 | `rank.js` | `getPointsRank(page, pageSize)` | `/api/rank/points?page=&page_size=` | V2.0 积分总榜（与 PC 同源）：`top`（1-10）、`list`（11 名起分页）、`me`、`hasMore`、`total` |
 | `identity.js` | `qrInfo(scene)` / `qrConfirm(scene, action)` / `listIdentities()` / `unbind(id)` | `/api/auth/qr/info, qr/confirm, identities, identities/{id}` | 扫码确认（L 登录/B 绑定场景查询与确认取消）与身份绑定管理（列表/解绑，主身份禁解绑） |
+| `ai.js` | `chat(message, conversationId?, nodeId?)` / `listConversations(page, pageSize)` / `getConversation(id)` / `deleteConversation(id)` | `/api/ai/chat, conversations, conversations/{id}` | AI 历史助手（§3.1）：连续对话（conversationId 为空新建），回答含后端核验的已发布知识来源；会话归属由后端 JWT 判定，前端不传 user_id，读写他人会话后端返回 404；403 未开放 / 429 额度用尽 / 502 上游异常由 request.js 抛带 message 的 Error 交页面提示；chat 超时放宽至 60s |
 | `store.js` | `migrateUserData()` | （后端无对应，落库到 DB） | 遗留：登录时 Mock→真实用户 ID 数据迁移 |
 | `request.js` | `request(options)` / `getToken()` / `setReauthHandler(fn)` | — | 统一 wx.request 封装：Bearer JWT、401 静默重登并重试一次（`skipAuthRetry` 跳过）、失败清理回启动页、错误分类（`statusCode` / `network` / `activityStatus`）、FastAPI 错误解析；活动守卫 403（header `X-Activity-Status`）：GET 查看类请求 3s 防抖 reLaunch 活动状态页（`skipActivityRedirect` 跳过），写操作仅抛错由页面展示后端提示 |
 | `config.js` | `API_BASE_URL` | — | API 地址集中配置：`ENV` 常量一键切换联调环境——`'remote'`（默认）直连已部署后端 `https://swkjdj.sz-watech.com/api`（HTTPS，走默认 443；域名须与公众平台「服务器域名 → request 合法域名」一致，否则体验版/正式版报「网络异常」），开发者工具与真机一致；`'local'` 走本机后端，开发者工具用 `127.0.0.1:8010/api`，真机自动切换 `http://<电脑局域网IP>:8010/api`（LAN_IP 常量，电脑 IP 变化时需同步更新） |

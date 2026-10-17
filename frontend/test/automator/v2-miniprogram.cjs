@@ -309,7 +309,7 @@ async function run() {
   });
 
   // ---------- 答题（逐题 90 秒） ----------
-  await cmd(() => mini.switchTab('/pages/quiz/quiz'), 'switchTab quiz', 2);
+  await cmd(() => mini.reLaunch('/pages/quiz/quiz'), 'reLaunch quiz', 2);
   await waitPath('pages/quiz/quiz');
   let page = null;
   await check('Q01', '开题：90 秒服务器倒计时、第 1 题、进度点', async () => {

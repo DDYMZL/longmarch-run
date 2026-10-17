@@ -199,7 +199,7 @@ async function api(p, token, method, data) {
   }
 
   await check('R11 答题结果页：星级 {id,on} 结构', async () => {
-    await mini.switchTab('/pages/quiz/quiz');
+    await mini.reLaunch('/pages/quiz/quiz');
     await waitPath(mini, 'pages/quiz/quiz', 10000);
     await mini.navigateTo('/pages/quiz-result/quiz-result');
     const page = await waitPath(mini, 'pages/quiz-result/quiz-result', 10000).catch(() => null);

@@ -364,10 +364,10 @@ Page({
   },
 
   /**
-   * 开始答题
+   * 开始答题（答题已非 tab，页内跳转）
    */
   goQuiz() {
-    wx.switchTab({ url: '/pages/quiz/quiz' });
+    wx.navigateTo({ url: '/pages/quiz/quiz' });
   },
 
   /**

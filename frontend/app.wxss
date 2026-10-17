@@ -119,7 +119,7 @@ page {
   font-weight: normal;
 }
 
-/* 答题逐题进度点（情报 tab / 答题页共用） */
+/* 答题逐题进度点（quiz 页 / 答题页共用） */
 .quiz-dots {
   display: flex;
   justify-content: center;
