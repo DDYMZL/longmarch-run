@@ -183,7 +183,9 @@ core/*              基础设施：config database security wx ws rate_limit
 
 - 小程序侧 `services/request.js:77` 对 2xx **直接 `resolve(res.data)`，不做任何拆包**。
 - 小程序侧 `errorMessage(data, fallback)`（`request.js:48-54`）负责解析 `detail`：字符串直接用；数组（Pydantic 校验错误）则取各项 `msg` 用 `；` 拼接。
-- 管理后台侧 `admin/src/api/request.ts:27-51` 的成功拦截器**直接返回 `response.data`**，调用方拿到的即业务对象。
+- 管理后台侧 `admin/src/api/request.ts:27-51` 的成功拦截器**原样返回整个 `AxiosResponse`**（`:28` 即 `(response) => response,`），**不做任何拆包**；`.data` 由各调用方自行取（如 `admin/src/views/DashboardView.vue:43` 的 `(await fetchDashboard()).data`、`:63` 的 `(await fetchActivities(20)).data.items`）。该拦截器只在**错误分支**参与响应体解析：取 `error.response.data.detail`（`:32`），401 时清令牌并按「是否登录页」分别提示或跳转（`:35-45`），其余非 `silent` 请求统一 `ElMessage.error`（`:46-48`）。
+
+> **更正（2026-10-17）**：本节原写「管理后台成功拦截器**直接返回 `response.data`**，调用方拿到的即业务对象」，**有误**。依据：`admin/src/api/request.ts:27-28` 的成功回调是 `(response) => response,`，返回的是完整 `AxiosResponse`；`admin/src/api/admin.ts` 全文对 `.data` **零命中**（即 API 层不拆包）；实际拆包发生在视图层，形如 `(await fn()).data`（`admin/src/views/DashboardView.vue:43`、`:53`、`:63` 等）。因此**两端拆包位置不同**：小程序在 `services/request.js:77` 统一拆包，管理后台在调用方各自拆包。
 
 ### 4.2 双命名契约（重要）
 
@@ -437,7 +439,9 @@ core/*              基础设施：config database security wx ws rate_limit
 3. **错误回传格式**（`:280-286`，Schema 见 `schemas.py:1115-1131`）：逐行携带行号与错误原因，前端 `ExcelImportDialog.vue` 表格化展示。
 4. **模板下载**：`routes/admin.py:411-416`、`:429-435`。
 
-前端 `admin/src/components/ExcelImportDialog.vue` 通过 `api: ExcelImportApi` prop（`:10-14`）接收四个接口函数，因此**同一个组件复用于所有导入场景**；`defineExpose({downloadTemplate})`（`:101`）允许父组件直接触发模板下载。
+前端 `admin/src/components/ExcelImportDialog.vue` 通过 `api: ExcelImportApi` prop（`:10-14`）接收**三个**接口函数（`downloadTemplate`/`preview`/`confirm`），因此**同一个组件复用于所有导入场景**；`defineExpose({downloadTemplate})`（`:101`）允许父组件直接触发模板下载。
+
+> **更正（2026-10-17）**：上段原写「接收四个接口函数」，与 `ExcelImportDialog.vue:10-14` 的 `ExcelImportApi` 接口声明（3 个成员）不符，已按源码更正。
 
 ### 8.3 流式 CSV 导出
 

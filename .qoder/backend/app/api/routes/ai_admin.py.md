@@ -157,7 +157,7 @@
 
 `status` 取值域：`ai_knowledge.status ∈ draft/pending/published/rejected/archived`（`ai_knowledge_service.py:20`）；`ai_generation_jobs.status ∈ pending/running/success/partial/failed`（`backend/app/models/models.py:613`）；`ai_generated_questions.status ∈ pending/approved/rejected/imported`（`DRAFT_STATUSES`，`ai_question_service.py:395`；`models.py:637`）。
 
-**无统一响应包裹层**：2xx 直接是上表结构，错误为 FastAPI 默认 `{"detail": ...}`；管理后台 `admin/src/api/request.ts:27-51` 成功拦截器直接返回 `response.data`（`.qoder/ARCHITECTURE.md` §4.1）。
+**无统一响应包裹层**：2xx 直接是上表结构，错误为 FastAPI 默认 `{"detail": ...}`。管理后台 `admin/src/api/request.ts:27-51` 的成功拦截器**原样返回整个 `AxiosResponse`**（`:28` 即 `(response) => response,`），`admin/src/api/admin.ts` 不拆包，由各视图调用方自行取 `.data`（`.qoder/ARCHITECTURE.md` §4.1，该节已于 2026-10-17 更正原「直接返回 `response.data`」的误述）。
 
 ### 5.2 错误码矩阵
 
