@@ -284,7 +284,7 @@
       "id": "L01",
       "name": "真实调用 Agent 完成一次历史助手对话（回答非空、捕获平台用量）",
       "ok": true,
-      "detail": "status=200 reply_len=143 usedTokens=19715"
+      "detail": "status=200 reply_len=163 usedTokens=19989"
     }
   ]
 }

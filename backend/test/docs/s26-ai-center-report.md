@@ -25,7 +25,7 @@
 - H11 上游故障：502 且会话/消息数不变（不残留半截对话）。
 - Q02 防作弊服务端兜底：提示词 `ans_in_prompt=True`（以库内正确答案为准，不信客户端）。
 - W06/W07 导入：仅 approved 入库并回填 question_id；重复导入 skipped，题库不增。
-- L01 真实 Agent：reply 143 字、usedTokens=19715；空来源场景模型拒答不编造。
+- L01 真实 Agent：reply 163 字、usedTokens=19989（2026-10-17 关闭外网 VPN 后无 dns_shim 复跑值；此前带 shim 首跑为 143 字/19715）；空来源场景模型拒答不编造。
 
 ## 2. 真实 openGauss 验证（docker 容器 longmarch-opengauss，5118）
 
@@ -37,10 +37,15 @@
 4. JSON 列写入/读回 round-trip 正常；验证数据随后回滚删除，库恢复干净（不污染现有业务数据）。
 5. 真库上真实 Agent 对话一次：reply 194 字、usedTokens=431，内容为 1934–1936 年长征史实概述，与已发布知识来源一致。
 
+## 2b. 复跑记录（2026-10-17，外网 VPN 关闭后）
+
+- 本机对 CloudBase 网关域名的 fake-ip 劫持（198.18.x）根因确认为外网 VPN 的 DNS 接管；VPN 关闭后 `socket.getaddrinfo` 返回真实 IP（81.69.x）。
+- 不设 `LM_TEST_DNS_MAP`（dns_shim 空转）重跑全量：**47/47 PASS**，L01 真实 Agent 原生网络直达（reply 163 字、usedTokens=19989），`s26-ai-center-results.json` 已更新为该次结果。dns_shim 仅保留为网络异常时的兜底手段。
+
 ## 3. 环境与限制说明
 
-- 本机网关对 CloudBase 域名存在 DNS 劫持（fake-ip），真实 Agent 调用仅在执行进程内通过 `dns_shim` + `LM_TEST_DNS_MAP` 指定真实 IP 时可达；普通 uvicorn/httpx 进程超时。属环境限制，非代码缺陷。
-- 小程序真机直连真实 Agent 的全链路因此未能在本地验收，标记**待验证**（后端侧真实调用已验证，见上）。
+- 本机网关对 CloudBase 域名的 DNS 劫持（fake-ip 198.18.x）已于 2026-10-17 确认根因为外网 VPN；VPN 关闭后真实 Agent 调用无需任何 hosts/DNS 干预（见 §2b）。普通 uvicorn/httpx 进程在 VPN 开启态超时属环境限制，非代码缺陷。
+- 小程序模拟器真实链路（UI → 本机后端 → Agent）已验收，见 `frontend/test/docs/ai-chat-page-report.md`；真机链路待验证。
 
 ## 4. 待验证 / 后续阶段
 
