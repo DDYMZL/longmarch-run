@@ -15,7 +15,7 @@
 | 微信小程序（用户端） | `frontend/` | 原生小程序，CommonJS，无构建链 | 微信客户端内运行 |
 | 后端 API 服务 | `backend/` | FastAPI + SQLAlchemy 2.0 同步 ORM | `:8010`（生产经 nginx 反代到 443） |
 | 管理后台 | `admin/` | Vue 3.5 + Element Plus 2.9 + Vite 6，构建为静态资源 | 生产为静态站点，走同一域名的 `/api` |
-| 数据库 | `docker/` | openGauss 容器（`opengauss/opengauss-server:latest`） | 本机 `:5118`；生产地址见 `backend/.env.prod`（**版本与端口待确认**） |
+| 数据库 | `docker/` | openGauss 容器（`opengauss/opengauss-server:latest`） | 本机 `:5118`（实测 7.0.0-RC3）；生产 `127.0.0.1:5432`、**openGauss 6.0.1**（据 `backend/.env.prod:7` 注释与 `:9` 连接串，非直连实测） |
 | 数据库迁移脚本 | `docker/init/` | 001–022 编号 SQL，容器初始化时按字典序执行 | — |
 
 ### 1.2 调用关系图
@@ -128,7 +128,9 @@
 | WebSocket | **1** | `/api/ws/updates`，不出现在 OpenAPI 中 |
 | **端点总计** | **126** | 125 HTTP + 1 WebSocket |
 
-各模块 HTTP 端点数：`admin.py` **57**、`ai_admin.py` **15**、`march.py` **7**、`auth.py` **6**、`quiz.py` **6**、`ai.py` **6**、`sport.py` **5**、`org.py` **5**、`identity.py` **4**、`medal.py` **2**、`rank.py` **2**、`profile.py` **2**、`broadcast.py` **2**、`activity.py` **1**、`points.py` **1**、`persons.py` **1**、`quotes.py` **1**、`ws.py` **1**（WebSocket），合计 124。
+各模块端点数（2026-10-17 以 `grep -c "^@router\."` 逐文件实测，与 `app.openapi()` 双向吻合）：`admin.py` **57**、`ai_admin.py` **15**、`march.py` **7**、`quiz.py` **6**、`auth.py` **6**、`ai.py` **6**、`sport.py` **5**、`org.py` **5**、`identity.py` **4**、`rank.py` **2**、`profile.py` **2**、`points.py` **2**、`medal.py` **2**、`broadcast.py` **2**、`activity.py` **1**、`persons.py` **1**、`quotes.py` **1** —— HTTP 小计 **124**；另 `ws.py` **1** 个 WebSocket，18 个路由模块装饰器合计 **125**；再加 `main.py:91` 的 `GET /` 健康检查，**HTTP 方法级操作共 125**。
+
+> **更正（2026-10-17）**：本段原写 `points.py` **1** 个端点、合计 124（把 WebSocket 也计入了该合计）。实测 `backend/app/api/routes/points.py` 有 **2** 个：`@router.get("")`（`:14`，即 `GET /api/points`，空路径装饰器易被漏数）与 `@router.get("/daily")`（`:23`）。前端两处调用可交叉印证：`frontend/services/points.js:16`、`:27`。修正后 HTTP 小计 124、装饰器合计 125，与 `app.openapi()` 实测的 125 个 HTTP 操作一致（其中 1 个是不经 router 的健康检查）。上表 107/125/1/126 四项总数**不受影响**，此前即已按 `app.openapi()` 实测得出。
 
 > **统计陷阱**：该 FastAPI 版本的 `include_router` 是**惰性挂载**，`app.routes` 里 18 个路由模块表现为 `_IncludedRouter` 对象而**不会展开成 `APIRoute`**。直接遍历 `app.routes` 只能数到 1 个 `APIRoute`（健康检查），必须走 `app.openapi()` 或 `_IncludedRouter.original_router.routes` 才能拿到真实端点。
 
@@ -388,7 +390,7 @@ core/*              基础设施：config database security wx ws rate_limit
 
 - **服务端不发心跳帧**，只被动 `receive_text()` 并忽略。
 - **无消息重放/离线补偿**：断连期间的事件永久丢失，客户端重连后必须自己全量刷新。
-- **单进程内存连接表**：`_connections` 是进程级变量，**多进程部署（gunicorn -w N）会导致广播只命中同进程的连接**。当前生产为单进程（进程管理方式**待确认**），故尚未暴露该问题。未引入 Redis/Celery（见 PROJECT.md §3）。
+- **单进程内存连接表**：`_connections` 是进程级变量，**多进程部署（gunicorn -w N）会导致广播只命中同进程的连接**。当前生产由 systemd 服务 `longmarch-backend` 托管（依据：`backend/test/docs/s26-ai-question-backend-report.md:96` 的 `systemctl restart longmarch-backend`），仓库内未见任何多 worker 配置，故按单进程理解、问题尚未暴露；**实际 worker 数未核实**，若改用 `gunicorn -w N` 必须先引入跨进程连接表。未引入 Redis/Celery（见 PROJECT.md §3）。
 
 ---
 
@@ -507,7 +509,7 @@ core/*              基础设施：config database security wx ws rate_limit
 ### 10.3 错误处理与日志
 
 - 后端：**无全局异常处理器**，未捕获异常由 FastAPI 默认转 500。业务错误统一 `HTTPException`。
-- 日志：**未配置结构化日志框架**，无 logging 配置文件（**待确认**是否有 uvicorn 默认访问日志的落盘策略）。
+- 日志：**未配置结构化日志框架**，无 logging 配置文件，仓库内亦无落盘/轮转策略。生产由 systemd 托管，进程 stdout/stderr 默认进 journald（查 `journalctl -u longmarch-backend`）——该结论来自运维会话实测，**非仓库内证据**。
 - 小程序：`services/request.js:94-101` 的 `fail` 回调把原始 `errMsg` **追加进用户可见的 message**，注释说明理由「真机看不到 console，必须把错误带到界面上」；`/url not in domain list/i` 单独提示域名白名单问题。
 - 小程序 `app.js` **没有 `onError` / `onUnhandledRejection` / `onPageNotFound`** —— 未捕获异常只在开发者工具 console 可见，**线上无任何回收手段**，微信侧错误上报能力也未配置（是否为有意取舍**待确认**）。
 
@@ -537,11 +539,14 @@ core/*              基础设施：config database security wx ws rate_limit
 
 | 项 | 状态 | 备注 |
 |---|---|---|
-| 管理后台 5 个 AI 子页面（知识库/配置/题目工坊/运行概览/调用记录） | **待开发** | 后端接口已就绪，`admin/src/router/menus.ts` 未登记 |
+| 管理后台 AI 子页面：知识库 / 配置 / 题目工坊 | **待开发** | 后端接口已就绪（`routes/ai_admin.py` 15 个端点，守卫菜单码 `ai_knowledge`/`ai_config`/`ai_workshop`）；`admin/src/router/menus.ts` 未登记 |
+| 管理后台 AI 子页面：运行概览 / 调用记录 | **待开发** | 菜单码 `ai_overview`、`ai_logs` 已由 `022:14-15`、`:23-24` 种入，但**后端接口亦未实现**：`backend/app/api/` 全量 grep 无路由引用这两个码，`AiUsageLog` 在 api 层零引用 |
 | `node-detail` AI 讲解面板 | **待开发** | `GET /api/ai/route-guide/{node_id}` 已就绪 |
 | 答题页「AI 讲解」按钮 | **待开发** | `GET /api/ai/quiz-explanation/{question_id}` 已就绪 |
-| usage / cost 统计页 | **待开发** | `ai_usage_logs` 表已建 |
+| usage / cost 统计页 | **待开发** | `ai_usage_logs` 表已建、写入侧 `ai_usage_service.py` 已实现，**读取侧接口未实现**（见上「调用记录」） |
 | 小程序真机真实 Agent 全链路 | **待验证** | 本机 DNS 劫持限制，需 dns_shim 或真机网络 |
+
+> **更正（2026-10-17）**：上表首行原写「管理后台 5 个 AI 子页面（知识库/配置/题目工坊/运行概览/调用记录）| 待开发 | 后端接口已就绪」，把「接口已就绪」套用到全部 5 个页面。实测：`022_ai_admin_menus.sql:14-27` 种入 5 个菜单码，但 `backend/app/api/routes/ai_admin.py` 的 15 个端点只覆盖 3 个（`ai_knowledge` 6 个 `/knowledge*`、`ai_workshop` 7 个 `/jobs*`+`/drafts*`、`ai_config` 2 个 `/config`）；`ai_overview`、`ai_logs` 在 `backend/app/api/` 下零命中，`AiUsageLog` 仅被 `models/models.py` 与写入侧 `services/ai_usage_service.py` 引用。故拆为两行。同样的口径修正见 `REQUIREMENTS.md` §10.6、§13 与 `CHANGELOG.md`。
 
 **题目工坊已实现的部分**：管理后台 `admin/src/components/AiGenerateDialog.vue` 已落地（表单字段 `:55-61`、`:326-366`；`AbortController` 中断 `:128-164`、`:170-173`；行内编辑 + `validateItem` `:86-104` 与后端 `_validate_question` 对齐；深监听签名比较 `:106-118` 避免递归更新；`batchSaveAiQuestions` `:276-305`，`failures.index` 为 1 基）。**注意：这与上表「题目工坊子页面待开发」并不矛盾** —— 已落地的是嵌在题库页的生成对话框，待开发的是独立的题目工坊管理页。
 
@@ -569,7 +574,7 @@ core/*              基础设施：config database security wx ws rate_limit
                   ▼
    ┌──────────────────────────┐    ┌──────────────────────────┐
    │ uvicorn :8010（单进程）    │───▶│ openGauss                │
-   │ 进程管理方式待确认         │    │ 生产版本/端口待确认        │
+   │ systemd 托管服务         │    │ 6.0.1 / 端口 5432        │
    └──────────────────────────┘    └──────────────────────────┘
 ```
 
@@ -579,6 +584,11 @@ core/*              基础设施：config database security wx ws rate_limit
 |---|---|---|
 | 域名 | `swkjdj.sz-watech.com`，HTTPS 443 | `frontend/services/config.js:9`；`docs/迭代记录.md` 生产化条目 |
 | nginx 反代 | `/api` → `127.0.0.1:8010` | `docs/迭代记录.md` |
+| nginx 配置文件 | **不在本仓库**，服务器上的路径**未核实**；反代规则由运行行为反推（`/api` → `127.0.0.1:8010`，静态资源为 admin 构建产物） | 全仓 grep 无任何 nginx 配置文件 |
+| 服务器部署 | 代码目录 `/mnt/data/longmarch-run`；systemd 服务 `longmarch-backend`，环境变量 `APP_ENV=prod`；日志 `journalctl -u longmarch-backend`。Python 3.14，venv `backend/.venv` | 目录/服务名/`APP_ENV`：`backend/test/docs/s26-ai-question-backend-report.md:94-96`；Python 版本与 journalctl 用法来自运维会话实测，**非仓库内证据** |
+| 生产 openGauss | **6.0.1**（Ubuntu），库 `longmarch`，端口 **5432**，应用账号非开发库的 `gaussdb`。与开发容器 **7.0.0-RC3 / 5118** 存在**版本偏斜**——涉及 DDL 与方言的改动不能只靠开发库验证 | `backend/.env.prod:7` 注释与 `:9` 连接串；`docs/迭代记录.md` `fc2597e` 条目。**非直连实测**，兼容模式未知 |
+| 生产迁移补跑 | `docker compose run --rm database-init`，只执行 `schema_migrations` 中缺失的编号；手工 `gsql -f` 后**必须回填**该表，否则下次重复执行 | `docker/init/init-db.sh`；PROJECT.md §数据库迁移执行 |
+| `.env.prod` 占位符现状 | `DATABASE_URL` 与 `ADMIN_PASSWORD` **已填入真实值**（`:8` 的「⚠ 占位」注释已过期）；`JWT_SECRET` **仍是 `REPLACE_WITH_STRONG_RANDOM_SECRET`**；`CLOUDBASE_API_KEY` 已填入。服务器上就地改过的副本是否与仓库一致**无法核实** | `backend/.env.prod` 逐行 `grep -c` 实测（值不录入本文档） |
 | 小程序合法域名 | **request 合法域名已配置**；**socket 合法域名未配置** | `docs/迭代记录.md` |
 | 管理后台环境切换 | 单一变量 `VITE_API_PROXY`：`.env.development:3` / `.env.prod:4` | — |
 | Vite 代理 | `admin/vite.config.ts:11-17`，`/api` → 目标，`changeOrigin: true`、`ws: true` | — |

@@ -73,7 +73,9 @@ Vue 3.5 `<script setup>` + vue-router 4（History 模式）+ Element Plus 2.9（
 
 openGauss，Docker 镜像 `opengauss/opengauss-server:latest`（**未固定版本号**）。库运行在 **Oracle 兼容模式（A 模式）**，空字符串 `''` 按 `NULL` 存储，因此所有字符串内容列一律设计为可空。libpq 兼容层把 `server_version_num` 报告为 `90204`（等价 PostgreSQL 9.2.4）。
 
-**开发库实测（2026-10-17，容器 `longmarch-opengauss`，宿主端口 5118）**：`version()` 返回 `openGauss 7.0.0-RC3 build 01b7e318`（compiled 2026-03-25）；`datcompatibility='A'`、`sql_compatibility='A'`；库编码 `UTF8`、collate `en_US.utf8`；`schema_migrations` 已登记 001→022 全部 22 个迁移。**注意 `compose.yml` 与 `init-db.sh` 均未显式指定编码与兼容模式，A 模式来自镜像默认值**——换镜像版本可能改变该默认值。生产库的版本、端口与兼容模式**未核实**（见 §10 待确认 2）。
+**开发库实测（2026-10-17，容器 `longmarch-opengauss`，宿主端口 5118）**：`version()` 返回 `openGauss 7.0.0-RC3 build 01b7e318`（compiled 2026-03-25）；`datcompatibility='A'`、`sql_compatibility='A'`；库编码 `UTF8`、collate `en_US.utf8`；`schema_migrations` 已登记 001→022 全部 22 个迁移。**注意 `compose.yml` 与 `init-db.sh` 均未显式指定编码与兼容模式，A 模式来自镜像默认值**——换镜像版本可能改变该默认值。
+
+**生产库（2026-10-17 二次复核）**：据 `backend/.env.prod:7` 注释与 `:9` 连接串，生产为 **openGauss 6.0.1**（Ubuntu 服务器，库 `longmarch`，端口 **5432**，应用账号非开发库的 `gaussdb`），与开发库 **7.0.0-RC3 / 5118 存在版本偏斜**——涉及 DDL 与方言的改动不能只靠开发库验证（同一缺列在 openGauss 有两种报错文案，见 `.qoder/backend/app/core/database.py.md`）。该版本/端口出自配置文件注释而非直连查询，**兼容模式仍未核实**（见 §10 待确认 2）。
 
 ---
 
@@ -143,8 +145,8 @@ Vue3 管理后台（静态资源）    ─┘         │
 
 - 云主机历史联调 IP 为 `120.25.171.125`，后绑定域名 `swkjdj.sz-watech.com`；因体验版强制域名校验，接口从 `http://域名:8010` 改为 `https://域名`（443）——见 `docs/迭代记录.md` 2026-10-14 条目。
 - 微信公众平台已配置 **request 合法域名** `https://swkjdj.sz-watech.com`；**socket 合法域名未配置**（已知遗留）。
-- **nginx 配置文件不在本仓库内**，仓库中无任何 nginx 配置；后端进程管理方式（systemd / nohup / supervisor）**待确认**。
-- 生产 openGauss 的版本号与端口**待确认**（仓库内无记录；`docker/compose.yml` 用 `latest` 镜像，本地为 5118）。
+- **nginx 配置文件不在本仓库内**（全仓 grep 零命中），服务器上的路径**未核实**；反代规则由运行行为反推。后端由 **systemd 服务 `longmarch-backend`** 托管、`APP_ENV=prod`，代码目录 `/mnt/data/longmarch-run`（依据：`backend/test/docs/s26-ai-question-backend-report.md:94-96`）；日志走 journald，查 `journalctl -u longmarch-backend`（运维会话实测，非仓库内证据）。
+- 生产 openGauss 为 **6.0.1**（Ubuntu），库 `longmarch`、端口 **5432**——依据 `backend/.env.prod:7` 注释与 `:9` 连接串，**非直连实测**，兼容模式未知。与开发容器（`docker/compose.yml` 用 `latest` 镜像，实测 7.0.0-RC3、宿主 5118）**存在版本偏斜**，涉及 DDL 与方言的改动不能只靠开发库验证。
 
 ### 发布产物（三者均被 `.gitignore` 忽略）
 
@@ -329,12 +331,15 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 
 ### 待确认问题清单（汇总）
 
-2026-10-17 复核后，原 16 项中 **9 项已由代码与开发库实测查证解决**（见下表），**2 项经用户决定转为需求状态记录**（原 14、15），剩余 **5 项**（原 1、2、8、10、16）合并为下面 **4 条**仍需生产环境或后续工作才能确认的条目（原 2 与 8 同属生产部署事实，合并为第 2 条）。
+2026-10-17 复核后，原 16 项中 **9 项已由代码与开发库实测查证解决**（见下表），**2 项经用户决定转为需求状态记录**（原 14、15），剩余 **5 项**（原 1、2、8、10、16）合并为下面 **4 条**仍需生产环境或后续工作才能确认的条目（原 2 与 8 同属生产部署事实，合并为第 2 条）。**同日二次复核**又把第 2 条中的「进程管理方式」与「生产库版本/端口」查证落定（依据是 `backend/.env.prod` 注释与测试报告里的部署步骤，**非直连生产实测**），该条已收窄为下面列出的少数几项。
 
 **仍需确认（4 项）**
 
 1. **生产环境实际活动窗口**：`activity_settings` 生产库值未知。开发库实测为 1 行、`start=2026-08-31 16:00`、`end=2026-12-31 15:59`、`published=true`，**不代表生产**。
-2. **生产部署事实**：生产 openGauss 版本与端口、后端进程管理方式（systemd / nohup / supervisor）、nginx 配置文件位置、`ORG_SYNC_API_URL` 是否在生产启用。开发环境已实测（openGauss 7.0.0-RC3、5118、`datcompatibility='A'`），生产未核实。**用户决定：标注为待确认，不阻塞建档。**
+2. **生产部署事实（二次复核后已大幅收窄）**：
+   - **已定**：后端由 **systemd 服务 `longmarch-backend`** 托管、`APP_ENV=prod`、代码目录 `/mnt/data/longmarch-run`、日志走 journald（`backend/test/docs/s26-ai-question-backend-report.md:94-96` + 运维会话实测）；生产 openGauss **6.0.1**、库 `longmarch`、端口 **5432**（`backend/.env.prod:7`、`:9`）。
+   - **仍未核实**：nginx 配置文件在服务器上的路径；uvicorn 实际 worker 数（§WebSocket 的单进程内存连接表依赖此结论）；`ORG_SYNC_API_URL` 是否在生产启用；生产库兼容模式 `datcompatibility`；服务器上就地修改过的 `.env.prod` 副本是否与仓库一致——**仓库副本的 `JWT_SECRET` 仍是 `REPLACE_WITH_STRONG_RANDOM_SECRET` 占位符**，而 `DATABASE_URL`、`ADMIN_PASSWORD` 已填入真实值（`:8` 的「⚠ 占位」注释因此已过期）。
+   - **用户决定：标注为待确认，不阻塞建档。**
 3. **早期迁移语法兼容性**：002/005/013/015/017/019/020 含 `SQL_CONSTRAINTS.md` 后来禁用的 `ADD/DROP COLUMN IF NOT EXISTS`、`CREATE INDEX IF NOT EXISTS`；在**全新空库首次全量执行 001→022** 是否可行只有推理、无实测。**用户决定：暂不做 dry-run，仅标注风险。**
 4. **81 份测试报告与当前代码的对应关系**：`frontend/test/docs/` 32 份、`backend/test/docs/` 33 份、`admin/test/docs/` 16 份，未逐份核对。
 

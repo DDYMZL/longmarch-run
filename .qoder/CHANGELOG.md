@@ -313,10 +313,10 @@
   - 报告：`backend/test/docs/s26-ai-center-report.md`、`frontend/test/docs/ai-chat-page-report.md`、`frontend/test/docs/ai-tab-swap-report.md`
 - **部署情况**：**待确认**。**部署前必须按 `opengauss-migration-gap` 流程补跑 021/022**。
 - **未解决的问题**（Phase A 明确延后，勿当作已完成）：
-  1. 管理后台 5 个 AI 子页面（接口已就绪，`admin/src/router/menus.ts` 未登记菜单码）
+  1. 管理后台 5 个 AI 子页面（`admin/src/router/menus.ts` 未登记菜单码）。**口径更正（2026-10-17）**：原写「接口已就绪」，实测只有知识库/配置/题目工坊 3 个页面有后端接口（`routes/ai_admin.py` 15 个端点，守卫 `ai_knowledge`/`ai_config`/`ai_workshop`）；运行概览（`ai_overview`）与调用记录（`ai_logs`）**后端接口亦未实现**——这两个菜单码在 `backend/app/api/` 下零命中，`AiUsageLog` 在 api 层零引用
   2. `node-detail` AI 讲解面板（`GET /api/ai/route-guide/{node_id}` 已就绪）
   3. 答题页「AI 讲解」按钮（`GET /api/ai/quiz-explanation/{question_id}` 已就绪）
-  4. usage / cost 统计页（`ai_usage_logs` 表已建）
+  4. usage / cost 统计页（`ai_usage_logs` 表已建、写入侧 `ai_usage_service.py` 已实现，**读取侧接口未实现**）
   5. 小程序真机真实 Agent 全链路（本机 DNS 劫持限制，需 dns_shim 或真机网络）
   6. AI 知识库检索为**关键词匹配**，非向量检索（召回质量有限）
   7. `admin_menus.sort_order` 因 `022` 新增而产生**重复值**：`invites`=10 与 `ai_overview`=10、`activity`=11 与 `ai_knowledge`=11，菜单排序不稳定

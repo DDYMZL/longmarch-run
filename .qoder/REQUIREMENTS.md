@@ -476,7 +476,7 @@
 | AI 问答（小程序聊天页） | `POST /api/ai/chat`；`frontend/pages/ai-chat/ai-chat.js`（256 行） |
 | 路线讲解 | `GET /api/ai/route-guide/{node_id}`（**后端就绪，前端面板待开发**） |
 | 答题讲解 | `GET /api/ai/quiz-explanation/{question_id}`（**后端就绪，前端按钮待开发**） |
-| 后台 AI 接口 | `/api/admin/ai/*`（`routes/ai_admin.py:43`，前缀 `/admin/ai`）：知识库、配置、题目工坊、调用记录 |
+| 后台 AI 接口 | `/api/admin/ai/*`（`routes/ai_admin.py:43`，前缀 `/admin/ai`）：知识库（6）、题目工坊（7：`/jobs*` + `/drafts*`）、配置（2），共 **15 个端点**。**无「运行概览」「调用记录」端点**（更正见 §10.6） |
 | AI 出题对话框（管理端） | `admin/src/components/AiGenerateDialog.vue` |
 | 数据表 | `ai_knowledge`、`ai_conversations`、`ai_messages`、`ai_generation_jobs`、`ai_generated_questions`、`ai_usage_logs`（`docker/init/021_ai_center.sql`） |
 | 菜单码 | 5 个 AI 菜单（`docker/init/022_ai_admin_menus.sql`）；**`admin/src/router/menus.ts` 尚未登记** |
@@ -524,12 +524,15 @@
 
 | 项 | 状态 |
 |---|---|
-| 管理后台 5 个 AI 子页面（知识库 / 配置 / 题目工坊 / 运行概览 / 调用记录） | **待开发**（接口已就绪） |
+| 管理后台 AI 子页面：知识库 / 配置 / 题目工坊 | **待开发**（后端接口已就绪：`routes/ai_admin.py` 15 个端点，分别由 `require_menu("ai_knowledge"/"ai_config"/"ai_workshop")` 守卫） |
+| 管理后台 AI 子页面：运行概览 / 调用记录 | **待开发**（菜单码 `ai_overview`、`ai_logs` 已由 `022_ai_admin_menus.sql:14-15`、`:23-24` 种入 `admin_menus`，但**后端接口亦未实现**——`backend/app/api/` 全量 grep 无任何路由引用这两个菜单码，`AiUsageLog` 在 api 层零引用，即无用量/成本读取接口） |
 | `node-detail` 讲解面板 | **待开发**（`GET /api/ai/route-guide/{node_id}` 已就绪） |
 | 答题页 AI 讲解按钮 | **待开发**（`GET /api/ai/quiz-explanation/{question_id}` 已就绪） |
-| usage / cost 统计页 | **待开发**（`ai_usage_logs` 表已建） |
+| usage / cost 统计页 | **待开发**（`ai_usage_logs` 表已建、写入侧 `ai_usage_service.py` 已实现；**读取侧接口未实现**，见本表「运行概览 / 调用记录」行） |
 | 小程序真机真实 Agent 全链路 | **待验证**（本机 DNS 劫持限制，需 dns_shim 或真机网络） |
 | AI 知识库检索为**关键词匹配**，非向量检索 | 已知限制（Phase A 取舍） |
+
+> **更正（2026-10-17）**：本表首行原写「管理后台 5 个 AI 子页面（知识库 / 配置 / 题目工坊 / 运行概览 / 调用记录）| 待开发（接口已就绪）」，把「接口已就绪」笼统套用到全部 5 个页面，属于把未实现的部分说成已就绪。实测依据：`docker/init/022_ai_admin_menus.sql:14-27` 种入 5 个菜单码（`ai_overview` sort 10、`ai_knowledge` 11、`ai_workshop` 12、`ai_logs` 13、`ai_config` 14），而 `backend/app/api/routes/ai_admin.py` 的 15 个端点只用到其中 3 个菜单码（`ai_knowledge` 6 个 `/knowledge*`、`ai_workshop` 7 个 `/jobs*`+`/drafts*`、`ai_config` 2 个 `/config`）；`ai_overview`、`ai_logs` 在 `backend/app/api/` 下零命中，`AiUsageLog` 仅被 `models/models.py` 与 `services/ai_usage_service.py`（写入侧）引用，api 层零引用。故拆为两行分别标注。
 
 ---
 
@@ -640,10 +643,11 @@
 
 | # | 项 | 前置条件 |
 |---|---|---|
-| 1 | 管理后台 5 个 AI 子页面（知识库 / 配置 / 题目工坊 / 运行概览 / 调用记录） | 后端 `/api/admin/ai/*` 已就绪；需在 `admin/src/router/menus.ts` 登记菜单码 |
+| 1 | 管理后台 AI 子页面：知识库 / 配置 / 题目工坊 | 后端 `/api/admin/ai/*` 已就绪（15 个端点，守卫 `ai_knowledge`/`ai_config`/`ai_workshop`）；需在 `admin/src/router/menus.ts` 登记菜单码 |
+| 1a | 管理后台 AI 子页面：运行概览 / 调用记录 | **后端接口未实现**：菜单码 `ai_overview`、`ai_logs` 已由 `022` 种入但无任何路由引用（`AiUsageLog` 在 `backend/app/api/` 零引用）；需先补后端读取接口，再登记菜单码 |
 | 2 | 小程序 `node-detail` AI 讲解面板 | `GET /api/ai/route-guide/{node_id}` 已就绪 |
 | 3 | 小程序答题页「AI 讲解」按钮 | `GET /api/ai/quiz-explanation/{question_id}` 已就绪 |
-| 4 | AI usage / cost 统计页 | `ai_usage_logs` 表已建 |
+| 4 | AI usage / cost 统计页 | `ai_usage_logs` 表已建、写入侧 `ai_usage_service.py` 已实现；**读取侧接口未实现**（同 1a） |
 | 5 | 章节（`CHAPTERS`）管理端可视化编辑 | 当前硬编码于 `march_service.py:23-44` |
 | 6 | 全员共同目标（`GLOBAL_GOAL_STEPS` / `GLOBAL_MILESTONES`）管理端可视化编辑 | 当前硬编码于 `march_service.py:48-54` |
 | 7 | 里程碑仪式相关钩子 | `march_service.py:242` 标记延后 |
@@ -655,6 +659,8 @@
 | 13 | 调试端点 `/api/quiz/reset`、`/api/sport/add` 的生产环境开关 | 当前生产暴露 |
 | 14 | 管理后台 403 处理与 `X-Account-Status` / `X-Activity-Status` 消费 | 当前无专门分支 |
 | 15 | `ElResult` 组件注册 | 当前被引用但未注册 |
+
+> **更正（2026-10-17）**：本表第 1 项原为「管理后台 5 个 AI 子页面（知识库 / 配置 / 题目工坊 / 运行概览 / 调用记录）| 后端 `/api/admin/ai/*` 已就绪」，第 4 项原为「`ai_usage_logs` 表已建」。实测「运行概览 / 调用记录」两个页面对应的菜单码 `ai_overview`、`ai_logs` 在 `backend/app/api/` 下零命中、`AiUsageLog` 在 api 层零引用，后端读取接口**尚未实现**，故拆出第 1a 项并修正第 4 项。完整依据见 §10.6 的更正说明。
 
 ---
 
