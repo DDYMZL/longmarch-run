@@ -77,6 +77,19 @@ class Settings(BaseSettings):
     AI_QUESTION_MAX_CONCURRENCY: int = 3  # 批间并发上限
     AI_QUESTION_MAX_COUNT: int = 100  # 单次生成 / 单次保存的题数上限
 
+    # AI 智能中心（历史助手 / 路线讲解 / 答题解析）运行时默认值。
+    # 以下为 .env 初始默认；管理端「配置中心」可在 system_settings 中逐项覆盖，
+    # 生效值由 ai_config_service.get_effective(db) 合并（DB 覆盖 > env 默认）。
+    AI_ENABLED: bool = True  # AI 总开关；关闭后所有 AI 接口返回明确提示，不影响其它业务
+    AI_CHAT_DAILY_LIMIT: int = 10  # 普通用户每天最多模型调用次数（按北京时间当日）
+    AI_GLOBAL_DAILY_LIMIT: int = 2000  # 全站每天模型调用上限（防成本失控）
+    AI_MAX_INPUT_CHARS: int = 500  # 单次用户输入最大字符数
+    AI_MAX_OUTPUT_TOKENS: int = 800  # 单次回答 Token 上限（约束约 500 汉字）
+    AI_REQUEST_TIMEOUT: int = 60  # 单次对话/讲解调用超时（秒）
+    AI_MAX_RETRIES: int = 1  # 可恢复失败的最大重试次数
+    AI_CONTEXT_TURNS: int = 4  # 对话默认携带的最近有效历史轮数
+    AI_KNOWLEDGE_TOP_K: int = 4  # 检索已发布知识资料的最大条数
+
     # 长征活动规则
     STRIDE_M: float = 0.7  # 平均步长（米），估算距离(km) = 步数 × 步长 / 1000
     STREAK_GOAL_STEPS: int = 5000  # 连续行军每日达标步数（当天达到即计入连续行军）

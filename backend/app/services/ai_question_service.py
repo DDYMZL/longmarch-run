@@ -17,8 +17,9 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.models import Question
-from app.services import admin_service, cloudbase_service
+from app.core.helpers import now_utc
+from app.models.models import AiGeneratedQuestion, AiGenerationJob, AiKnowledge, Question
+from app.services import admin_service, ai_knowledge_service, cloudbase_service
 
 logger = logging.getLogger(__name__)
 
@@ -57,10 +58,20 @@ def _split_batches(count: int, batch_size: int) -> List[int]:
 
 
 def _build_prompt(
-    topic: str, count: int, difficulty: str, category: str, extra: str
+    topic: str, count: int, difficulty: str, category: str, extra: str, references: str = ""
 ) -> str:
-    """构建提示词：约束 Agent 只输出可直接 json.loads 的题目数组。"""
-    lines = [
+    """构建提示词：约束 Agent 只输出可直接 json.loads 的题目数组。
+
+    references 非空时作为「参考资料」前置注入，要求出题以其为准（题目工坊按已发布知识出题）。
+    """
+    lines = []
+    if references.strip():
+        lines += [
+            "请严格依据以下已审核的参考资料出题，不要超出资料范围编造史实：",
+            references.strip(),
+            "",
+        ]
+    lines += [
         f"请围绕主题「{topic}」生成 {count} 道中国工农红军长征相关的单项选择题。",
         f"难度要求：{_DIFFICULTY_TEXT.get(difficulty, _DIFFICULTY_TEXT['medium'])}。",
     ]
@@ -187,17 +198,22 @@ def _duplicate_reasons(text: str, existing: Set[str], seen: Set[str]) -> List[st
 
 
 def _generate_batch(
-    topic: str, count: int, difficulty: str, category: str, extra: str
+    topic: str, count: int, difficulty: str, category: str, extra: str, references: str = ""
 ) -> List[Any]:
     """调用 Agent 生成一批题目，返回解析后的原始元素列表。"""
     reply = cloudbase_service.prompt(
-        _build_prompt(topic, count, difficulty, category, extra)
+        _build_prompt(topic, count, difficulty, category, extra, references)
     )
     return _extract_json_array(reply)
 
 
 def _run_batches(
-    topic: str, batches: List[int], difficulty: str, category: str, extra: str
+    topic: str,
+    batches: List[int],
+    difficulty: str,
+    category: str,
+    extra: str,
+    references: str = "",
 ) -> Tuple[List[Any], List[str], Optional[Exception]]:
     """并发执行各批次；返回（题目元素、批次级错误消息、首个异常）。
 
@@ -208,7 +224,9 @@ def _run_batches(
     outcomes: List[Tuple[int, Optional[List[Any]], Optional[Exception]]] = []
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {
-            pool.submit(_generate_batch, topic, size, difficulty, category, extra): index
+            pool.submit(
+                _generate_batch, topic, size, difficulty, category, extra, references
+            ): index
             for index, size in enumerate(batches)
         }
         for future in as_completed(futures):
@@ -254,16 +272,15 @@ def _build_drafts(db: Session, elements: List[Any], category: str) -> List[Dict]
     return drafts
 
 
-def generate_questions(
-    db: Session,
+def _validate_params(
     topic: str,
     count: int,
-    question_type: str = "single",
-    difficulty: str = "medium",
-    category: str = "",
-    extra_requirements: str = "",
-) -> Dict:
-    """生成题目草稿并做校验/查重，返回草稿与统计；不写入正式题库。"""
+    question_type: str,
+    difficulty: str,
+    category: str,
+    extra_requirements: str,
+) -> Tuple[str, int, str, str, str]:
+    """校验并规整出题参数，返回 (topic, count, difficulty, category, extra)。"""
     topic = (topic or "").strip()
     if not topic:
         raise ValueError("出题主题不能为空")
@@ -282,6 +299,22 @@ def generate_questions(
     max_count = settings.AI_QUESTION_MAX_COUNT
     if not 1 <= count <= max_count:
         raise ValueError(f"生成数量必须在 1~{max_count} 之间")
+    return topic, count, difficulty, category, extra
+
+
+def generate_questions(
+    db: Session,
+    topic: str,
+    count: int,
+    question_type: str = "single",
+    difficulty: str = "medium",
+    category: str = "",
+    extra_requirements: str = "",
+) -> Dict:
+    """生成题目草稿并做校验/查重，返回草稿与统计；不写入正式题库（内存态，供旧预览链路）。"""
+    topic, count, difficulty, category, extra = _validate_params(
+        topic, count, question_type, difficulty, category, extra_requirements
+    )
 
     batches = _split_batches(count, settings.AI_QUESTION_BATCH_SIZE)
     elements, batch_errors, first_error = _run_batches(
@@ -353,3 +386,310 @@ def batch_save_questions(db: Session, items: List[Dict]) -> Dict:
             raise ValueError("保存失败，请稍后重试")
     logger.info("ai batch save: saved=%d failed=%d", len(pending), len(failures))
     return {"saved": len(pending), "failed": len(failures), "failures": failures}
+
+
+# ============ 持久化题目工坊（需求 §3.4 题目工坊）============
+# 与上面的内存态 generate/batch-save 不同：一次生成落一条 ai_generation_jobs 任务，
+# 每道草稿落一条 ai_generated_questions，支持列表回溯、逐条编辑/审核、幂等导入题库。
+# 现有 admin 前端的旧链路（generate-questions/batch-save）保持不变，本组接口供新工坊页使用。
+DRAFT_STATUSES = ("pending", "approved", "rejected", "imported")
+
+
+def _references_from_knowledge(db: Session, knowledge_ids: List[Any]) -> str:
+    """按传入的已发布知识资料 ID 拼「参考资料」，用于知识接地出题；未发布的忽略。"""
+    ids: List[int] = []
+    for kid in knowledge_ids or []:
+        try:
+            ids.append(int(kid))
+        except (TypeError, ValueError):
+            continue
+    if not ids:
+        return ""
+    rows = (
+        db.query(AiKnowledge)
+        .filter(AiKnowledge.id.in_(ids), AiKnowledge.status == "published")
+        .all()
+    )
+    order = {kid: i for i, kid in enumerate(ids)}
+    rows.sort(key=lambda r: order.get(r.id, 0))
+    return ai_knowledge_service.format_context(rows)
+
+
+def job_view(job: AiGenerationJob, drafts: Optional[List[AiGeneratedQuestion]] = None) -> Dict:
+    view = {
+        "id": job.id,
+        "job_type": job.job_type,
+        "topic": job.topic,
+        "params": job.params or {},
+        "requested": job.requested,
+        "succeeded": job.succeeded,
+        "failed": job.failed,
+        "status": job.status,
+        "error": job.error or "",
+        "created_by": job.created_by or "",
+        "created_at": job.created_at,
+        "finished_at": job.finished_at,
+    }
+    if drafts is not None:
+        view["drafts"] = [draft_view(d) for d in drafts]
+    return view
+
+
+def draft_view(draft: AiGeneratedQuestion) -> Dict:
+    return {
+        "id": draft.id,
+        "job_id": draft.job_id,
+        "data": draft.data or {},
+        "errors": draft.errors or [],
+        "status": draft.status,
+        "question_id": draft.question_id,
+        "reviewed_by": draft.reviewed_by or "",
+        "reviewed_at": draft.reviewed_at,
+        "created_at": draft.created_at,
+    }
+
+
+def run_job(
+    db: Session,
+    actor: str,
+    topic: str,
+    count: int,
+    question_type: str = "single",
+    difficulty: str = "medium",
+    category: str = "",
+    extra_requirements: str = "",
+    knowledge_ids: Optional[List[Any]] = None,
+) -> Dict:
+    """执行一次生成任务：落任务记录 + 草稿，返回任务视图（含草稿）。
+
+    生成失败（上游故障/无返回）时任务标记 failed 并落库，再抛出原始异常供路由区分 502/400。
+    """
+    topic, count, difficulty, category, extra = _validate_params(
+        topic, count, question_type, difficulty, category, extra_requirements
+    )
+    references = _references_from_knowledge(db, knowledge_ids or [])
+    job = AiGenerationJob(
+        job_type="question",
+        topic=topic,
+        params={
+            "count": count,
+            "question_type": question_type,
+            "difficulty": difficulty,
+            "category": category,
+            "extra_requirements": extra,
+            "knowledge_ids": [int(k) for k in (knowledge_ids or []) if str(k).strip().isdigit()],
+        },
+        requested=count,
+        status="running",
+        created_by=actor,
+    )
+    db.add(job)
+    db.flush()
+
+    try:
+        batches = _split_batches(count, settings.AI_QUESTION_BATCH_SIZE)
+        elements, batch_errors, first_error = _run_batches(
+            topic, batches, difficulty, category, extra, references
+        )
+    except Exception as exc:  # 上游/网络异常：任务落 failed 后原样抛出
+        job.status = "failed"
+        job.error = str(exc)[:500]
+        job.finished_at = now_utc()
+        db.commit()
+        raise
+
+    if not elements:
+        job.status = "failed"
+        job.failed = count
+        job.error = (str(first_error) if first_error is not None else "AI 未返回任何题目")[:500]
+        job.finished_at = now_utc()
+        db.commit()
+        if first_error is not None:
+            raise first_error
+        raise ValueError("AI 未返回任何题目，请重试")
+
+    built = _build_drafts(db, elements, category)
+    draft_rows: List[AiGeneratedQuestion] = []
+    for d in built:
+        row = AiGeneratedQuestion(
+            job_id=job.id, data=d["data"], errors=d["errors"], status="pending"
+        )
+        db.add(row)
+        draft_rows.append(row)
+
+    generated = len(built)
+    job.succeeded = generated
+    job.failed = max(0, count - generated)
+    job.status = (
+        "success" if (job.failed == 0 and not batch_errors) else "partial"
+    )
+    if batch_errors:
+        job.error = "；".join(batch_errors)[:500]
+    job.finished_at = now_utc()
+    db.flush()
+    view = job_view(job, draft_rows)  # 提交前构建视图，规避 commit 后属性过期再查
+    db.commit()
+    logger.info(
+        "ai job %s: requested=%d generated=%d status=%s", job.id, count, generated, job.status
+    )
+    return view
+
+
+def list_jobs(db: Session, page: int = 1, page_size: int = 20) -> Tuple[int, List[Dict]]:
+    query = db.query(AiGenerationJob)
+    total = query.count()
+    rows = (
+        query.order_by(AiGenerationJob.created_at.desc(), AiGenerationJob.id.desc())
+        .offset((max(1, page) - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return total, [job_view(j) for j in rows]
+
+
+def get_job(db: Session, job_id: int) -> Dict:
+    job = db.query(AiGenerationJob).filter(AiGenerationJob.id == job_id).first()
+    if job is None:
+        raise ValueError("任务不存在")
+    drafts = (
+        db.query(AiGeneratedQuestion)
+        .filter(AiGeneratedQuestion.job_id == job_id)
+        .order_by(AiGeneratedQuestion.id.asc())
+        .all()
+    )
+    return job_view(job, drafts)
+
+
+def list_drafts(
+    db: Session, job_id: Optional[int] = None, status: str = "", page: int = 1, page_size: int = 50
+) -> Tuple[int, List[Dict]]:
+    query = db.query(AiGeneratedQuestion)
+    if job_id:
+        query = query.filter(AiGeneratedQuestion.job_id == job_id)
+    if status:
+        query = query.filter(AiGeneratedQuestion.status == status)
+    total = query.count()
+    rows = (
+        query.order_by(AiGeneratedQuestion.id.desc())
+        .offset((max(1, page) - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return total, [draft_view(d) for d in rows]
+
+
+def _get_draft(db: Session, draft_id: int) -> AiGeneratedQuestion:
+    draft = db.query(AiGeneratedQuestion).filter(AiGeneratedQuestion.id == draft_id).first()
+    if draft is None:
+        raise ValueError("草稿不存在")
+    return draft
+
+
+def update_draft(db: Session, draft_id: int, data: Dict, actor: str) -> Dict:
+    """编辑草稿内容并重算待修正问题；已导入的草稿不可改，改动后回到待审核。"""
+    draft = _get_draft(db, draft_id)
+    if draft.status == "imported":
+        raise ValueError("已导入题库的题目不能再修改")
+    draft.data = dict(data)
+    errors: List[str] = []
+    try:
+        admin_service._validate_question(dict(data))
+    except ValueError as exc:
+        errors.append(str(exc))
+    errors.extend(
+        _duplicate_reasons(str(data.get("question") or ""), _existing_question_texts(db), set())
+    )
+    draft.errors = errors
+    if draft.status in ("approved", "rejected"):
+        draft.status = "pending"
+    db.flush()
+    return draft_view(draft)
+
+
+def set_draft_status(db: Session, draft_id: int, status: str, actor: str) -> Dict:
+    """审核草稿：approved（通过前重新结构校验）/ rejected / pending。"""
+    if status not in ("approved", "rejected", "pending"):
+        raise ValueError("草稿状态非法")
+    draft = _get_draft(db, draft_id)
+    if draft.status == "imported":
+        raise ValueError("已导入题库的题目不能再修改状态")
+    if status == "approved":
+        data = dict(draft.data or {})
+        try:
+            admin_service._validate_question(data)
+        except ValueError as exc:
+            raise ValueError(f"题目仍有问题，无法通过：{exc}")
+        draft.data = data
+        draft.errors = []
+    draft.status = status
+    draft.reviewed_by = actor
+    draft.reviewed_at = now_utc()
+    db.flush()
+    return draft_view(draft)
+
+
+def import_drafts(db: Session, draft_ids: List[int], actor: str) -> Dict:
+    """把审核通过的草稿幂等导入正式题库：重新校验 + 库内/批内查重，导入后置 imported。
+
+    已导入的草稿直接跳过（幂等）；未通过审核或校验失败的计入 failures，不阻断其他条目。
+    """
+    if not draft_ids:
+        raise ValueError("没有需要导入的题目")
+    if len(draft_ids) > settings.AI_QUESTION_MAX_COUNT:
+        raise ValueError(f"单次最多导入 {settings.AI_QUESTION_MAX_COUNT} 道题目")
+
+    rows = db.query(AiGeneratedQuestion).filter(AiGeneratedQuestion.id.in_(draft_ids)).all()
+    by_id = {d.id: d for d in rows}
+    existing = _existing_question_texts(db)
+    seen: Set[str] = set()
+    to_import: List[Tuple[AiGeneratedQuestion, Dict]] = []
+    failures: List[Dict] = []
+    skipped = 0
+    for did in draft_ids:
+        draft = by_id.get(did)
+        if draft is None:
+            failures.append({"id": did, "reason": "草稿不存在"})
+            continue
+        if draft.status == "imported":
+            skipped += 1
+            continue
+        if draft.status != "approved":
+            failures.append({"id": did, "reason": "只有审核通过的草稿才能导入"})
+            continue
+        data = dict(draft.data or {})
+        try:
+            admin_service._validate_question(data)
+        except ValueError as exc:
+            failures.append({"id": did, "reason": str(exc)})
+            continue
+        reasons = _duplicate_reasons(data["question"], existing, seen)
+        if reasons:
+            failures.append({"id": did, "reason": "；".join(reasons)})
+            continue
+        seen.add(data["question"].strip())
+        to_import.append((draft, data))
+
+    imported = 0
+    if to_import:
+        base_id = db.query(func.max(Question.id)).scalar() or 0
+        try:
+            for offset, (draft, data) in enumerate(to_import, start=1):
+                qid = base_id + offset
+                db.add(Question(id=qid, **data))
+                draft.status = "imported"
+                draft.question_id = qid
+                draft.reviewed_by = draft.reviewed_by or actor
+                draft.reviewed_at = now_utc()
+            db.flush()  # 不在此提交：由路由连同审计日志一起 commit，保证原子落库
+            imported = len(to_import)
+        except Exception:
+            db.rollback()
+            logger.exception("ai draft import failed")
+            raise ValueError("导入失败，请稍后重试")
+    logger.info("ai import: imported=%d skipped=%d failed=%d", imported, skipped, len(failures))
+    return {
+        "imported": imported,
+        "skipped": skipped,
+        "failed": len(failures),
+        "failures": failures,
+    }

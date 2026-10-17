@@ -6,7 +6,7 @@
 - 请求模型（如登录、提交答卷）接受 camelCase 入参。
 """
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
@@ -1614,3 +1614,245 @@ class AdminActivitySettingUpdate(BaseModel):
 
 class AdminActivityPublishRequest(BaseModel):
     published: bool
+
+
+# ============ AI 智能中心（需求 V1.0）============
+# 小程序契约（camelCase，继承 CamelModel）：历史助手对话/会话、节点讲解、答题解析。
+class AiSourceOut(CamelModel):
+    """对外知识来源：后端核验过的已发布资料，不含内部状态/审核人等字段。"""
+
+    id: int
+    title: str
+    source: str = ""
+    category: str = ""
+
+
+class AiChatRequest(BaseModel):
+    """历史助手提问。conversationId 为空则新建会话；nodeId 非空表示在某节点上下文追问。
+
+    小程序以 camelCase 传参，故启用 to_camel 别名（同时兼容 snake_case 字段名）。
+    """
+
+    model_config = ConfigDict(alias_generator=to_camel, populate_by_name=True)
+
+    message: str = Field(min_length=1, max_length=500)
+    conversation_id: Optional[int] = None
+    node_id: Optional[int] = None
+
+
+class AiChatOut(CamelModel):
+    conversation_id: int
+    title: str
+    reply: str
+    sources: List[AiSourceOut] = []
+    used_tokens: Optional[int] = None
+
+
+class AiConversationItemOut(CamelModel):
+    conversation_id: int
+    title: str
+    preview: str = ""
+    message_count: int = 0
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+
+
+class AiConversationListOut(CamelModel):
+    total: int
+    items: List[AiConversationItemOut] = []
+
+
+class AiMessageOut(CamelModel):
+    id: int
+    role: str
+    content: str
+    sources: List[AiSourceOut] = []
+    created_at: Optional[datetime] = None
+
+
+class AiConversationDetailOut(CamelModel):
+    conversation_id: int
+    title: str
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    messages: List[AiMessageOut] = []
+
+
+class AiRouteGuideOut(CamelModel):
+    """节点固定讲解：source_type=knowledge（已发布资料）/ node（节点字段拼装）。"""
+
+    node_id: int
+    name: str
+    title: str
+    content: str
+    source: str = ""
+    source_type: str = "node"
+    knowledge_id: Optional[int] = None
+    related_questions: List[str] = []
+
+
+class AiQuizExplanationOut(CamelModel):
+    """答题解析：source_type=bank（题库已有解析）/ ai（无解析时模型生成）。"""
+
+    question_id: int
+    question: str
+    options: List[AdminQuestionOption] = []
+    answer: List[str] = []
+    analysis: str = ""
+    source_type: str = "bank"
+    sources: List[AiSourceOut] = []
+
+
+# ---- 管理端 AI 智能中心契约（snake_case，独立于小程序 camelCase）----
+class AdminAiKnowledgeUpsert(BaseModel):
+    """知识资料新增/编辑请求体。status ∈ draft/pending/published/rejected/archived。"""
+
+    title: str = Field(min_length=1, max_length=200)
+    content: str = Field(min_length=1)
+    source: str = Field("", max_length=300)
+    related: List[str] = []
+    category: str = ""
+    node_id: Optional[int] = None
+    status: str = "draft"
+
+
+class AdminAiKnowledgeOut(BaseModel):
+    id: int
+    title: str
+    content: str
+    source: str = ""
+    related: List[str] = []
+    category: str = ""
+    node_id: Optional[int] = None
+    status: str
+    created_by: str = ""
+    reviewed_by: str = ""
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+
+
+class AdminAiKnowledgeListOut(BaseModel):
+    total: int
+    items: List[AdminAiKnowledgeOut] = []
+
+
+class AdminAiKnowledgeStatusRequest(BaseModel):
+    status: str
+
+
+class AdminAiConfigValues(BaseModel):
+    """配置中心可编辑的运行参数（布尔/整数），逐项可选，未传的保持不变。"""
+
+    enabled: Optional[bool] = None
+    chat_daily_limit: Optional[int] = None
+    global_daily_limit: Optional[int] = None
+    max_input_chars: Optional[int] = None
+    max_output_tokens: Optional[int] = None
+    request_timeout: Optional[int] = None
+    max_retries: Optional[int] = None
+    context_turns: Optional[int] = None
+    knowledge_top_k: Optional[int] = None
+
+
+class AdminAiConfigPatchRequest(BaseModel):
+    """配置更新：values 改运行参数，prompts 改提示词模板，prompt_version 改版本号。"""
+
+    values: Optional[AdminAiConfigValues] = None
+    prompts: Optional[Dict[str, str]] = None
+    prompt_version: Optional[str] = None
+
+
+class AdminAiConfigRange(BaseModel):
+    min: Optional[int] = None
+    max: Optional[int] = None
+    type: str = "int"
+
+
+class AdminAiConfigOut(BaseModel):
+    """配置视图：values 生效值，defaults env 默认，ranges 取值范围，prompts 提示词。不含任何密钥。"""
+
+    values: AdminAiConfigValues
+    defaults: Dict[str, Any] = {}
+    ranges: Dict[str, AdminAiConfigRange] = {}
+    prompts: Dict[str, str] = {}
+    prompt_version: str = ""
+    overridden: List[str] = []
+
+
+class AdminAiJobCreateRequest(BaseModel):
+    """题目工坊生成任务请求。knowledge_ids 非空时以这些已发布资料为参考资料接地出题。"""
+
+    topic: str = Field(min_length=1, max_length=100)
+    count: int = Field(10, ge=1, le=100)
+    question_type: str = "single"
+    difficulty: str = "medium"
+    category: str = ""
+    extra_requirements: str = Field("", max_length=300)
+    knowledge_ids: List[int] = []
+
+
+class AdminAiDraftOut(BaseModel):
+    """题目草稿：data 为题面，errors 为待修正问题，status ∈ pending/approved/rejected/imported。"""
+
+    id: int
+    job_id: Optional[int] = None
+    data: Dict[str, Any] = {}
+    errors: List[str] = []
+    status: str
+    question_id: Optional[int] = None
+    reviewed_by: str = ""
+    reviewed_at: Optional[datetime] = None
+    created_at: Optional[datetime] = None
+
+
+class AdminAiJobOut(BaseModel):
+    id: int
+    job_type: str
+    topic: str
+    params: Dict[str, Any] = {}
+    requested: int
+    succeeded: int
+    failed: int
+    status: str
+    error: str = ""
+    created_by: str = ""
+    created_at: Optional[datetime] = None
+    finished_at: Optional[datetime] = None
+    drafts: List[AdminAiDraftOut] = []
+
+
+class AdminAiJobListOut(BaseModel):
+    total: int
+    items: List[AdminAiJobOut] = []
+
+
+class AdminAiDraftListOut(BaseModel):
+    total: int
+    items: List[AdminAiDraftOut] = []
+
+
+class AdminAiDraftUpdateRequest(BaseModel):
+    """编辑草稿题面（沿用题目结构），后端重算校验/查重问题。"""
+
+    data: Dict[str, Any]
+
+
+class AdminAiDraftStatusRequest(BaseModel):
+    status: str
+
+
+class AdminAiImportRequest(BaseModel):
+    draft_ids: List[int] = Field(min_length=1)
+
+
+class AdminAiImportFailure(BaseModel):
+    id: int
+    reason: str
+
+
+class AdminAiImportOut(BaseModel):
+    imported: int
+    skipped: int
+    failed: int
+    failures: List[AdminAiImportFailure] = []

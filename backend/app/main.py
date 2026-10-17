@@ -15,6 +15,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import (
     activity,
     admin,
+    ai,
+    ai_admin,
     auth,
     broadcast,
     identity,
@@ -71,6 +73,7 @@ app.include_router(identity.router, prefix=_prefix)
 app.include_router(sport.router, prefix=_prefix)
 app.include_router(march.router, prefix=_prefix)
 app.include_router(quiz.router, prefix=_prefix)
+app.include_router(ai.router, prefix=_prefix)
 app.include_router(points.router, prefix=_prefix)
 app.include_router(medal.router, prefix=_prefix)
 app.include_router(org.router, prefix=_prefix)
@@ -81,6 +84,7 @@ app.include_router(quotes.router, prefix=_prefix)
 app.include_router(broadcast.router, prefix=_prefix)
 app.include_router(ws.router, prefix=_prefix)
 app.include_router(admin.router, prefix=_prefix)
+app.include_router(ai_admin.router, prefix=_prefix)
 
 
 @app.get("/", tags=["health"], summary="健康检查")

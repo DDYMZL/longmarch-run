@@ -1,0 +1,290 @@
+{
+  "suite": "s26_ai_center",
+  "total": 47,
+  "passed": 47,
+  "failed": 0,
+  "results": [
+    {
+      "id": "C01",
+      "name": "读取配置：生效值/默认/范围/提示词齐备，含三类提示词",
+      "ok": true,
+      "detail": "status=200 values_keys=['chat_daily_limit', 'context_turns', 'enabled', 'global_daily_limit', 'knowledge_top_k'] prompts=['chat', 'quiz', 'route']"
+    },
+    {
+      "id": "C02",
+      "name": "覆盖运行参数生效并持久（max_input_chars=50/context_turns=2），overridden 标记",
+      "ok": true,
+      "detail": "status=200 max_input_chars=50 reread=50 overridden=['ai_max_input_chars', 'ai_context_turns', 'ai_knowledge_top_k', 'ai_prompt_version']"
+    },
+    {
+      "id": "C03",
+      "name": "非法配置拒绝：越界整数 400、未知提示词类型 400",
+      "ok": true,
+      "detail": "bad_int=400 bad_prompt_kind=400"
+    },
+    {
+      "id": "C04",
+      "name": "配置中心鉴权：未登录 401、无 ai_config 菜单管理员 403（读+写）",
+      "ok": true,
+      "detail": "anon=401 restricted_get=403 restricted_patch=403"
+    },
+    {
+      "id": "C05",
+      "name": "配置响应不泄露 CLOUDBASE_API_KEY",
+      "ok": true,
+      "detail": "key_configured=True"
+    },
+    {
+      "id": "K01",
+      "name": "新增知识资料（草稿）成功",
+      "ok": true,
+      "detail": "status=200 id=1 st=draft"
+    },
+    {
+      "id": "K02",
+      "name": "状态流转发布：published_at 落定、按状态+节点可检索到",
+      "ok": true,
+      "detail": "status=200 published_at=True list_total=1"
+    },
+    {
+      "id": "K03",
+      "name": "编辑知识资料成功",
+      "ok": true,
+      "detail": "status=200 title=遵义会议资料(修订)"
+    },
+    {
+      "id": "K04",
+      "name": "知识校验：空标题 400、非法分类 400、节点不存在 400",
+      "ok": true,
+      "detail": "empty_title=400 bad_cat=400 bad_node=400"
+    },
+    {
+      "id": "K05",
+      "name": "知识库鉴权：无 ai_knowledge 菜单管理员 403（读+写）",
+      "ok": true,
+      "detail": "list=403 create=403"
+    },
+    {
+      "id": "K06",
+      "name": "删除知识资料后再查为 404",
+      "ok": true,
+      "detail": "delete=200 get_after=404"
+    },
+    {
+      "id": "K07",
+      "name": "知识增删改响应不泄露密钥",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "H01",
+      "name": "对话成功：camelCase 契约(conversationId/reply)、用户+助手消息落库",
+      "ok": true,
+      "detail": "status=200 keys=['conversationId', 'reply', 'sources', 'title', 'usedTokens'] msgs=2"
+    },
+    {
+      "id": "H02",
+      "name": "连续对话：复用会话、历史与系统提示注入、会话数不增",
+      "ok": true,
+      "detail": "status=200 hist=True sys=True conv_count=1"
+    },
+    {
+      "id": "H03",
+      "name": "会话列表与详情：列表含该会话、详情消息按序含 user/assistant",
+      "ok": true,
+      "detail": "list_total=1 roles=['user', 'assistant', 'user', 'assistant']"
+    },
+    {
+      "id": "H05",
+      "name": "跨账号隔离：他人会话读/删均 404、带他人会话ID提问 400，会话未被破坏",
+      "ok": true,
+      "detail": "get=404 del=404 chat=400 alive=1"
+    },
+    {
+      "id": "H07",
+      "name": "输入超长被拒（>max_input_chars=50）返回 400",
+      "ok": true,
+      "detail": "status=400 detail=单次提问不能超过 50 字"
+    },
+    {
+      "id": "H08",
+      "name": "空输入被拒（422 参数校验）",
+      "ok": true,
+      "detail": "status=422"
+    },
+    {
+      "id": "H12",
+      "name": "回答附带后端核验的已发布知识来源",
+      "ok": true,
+      "detail": "sources=[{'id': 1, 'title': '遵义会议资料(修订)', 'source': '修订来源', 'category': 'event'}]"
+    },
+    {
+      "id": "H11",
+      "name": "上游故障映射 502，回滚本次用户消息（会话/消息数不变），记 error 日志",
+      "ok": true,
+      "detail": "status=502 conv 1->1 msg 4->4 errlog=1"
+    },
+    {
+      "id": "H09",
+      "name": "AI 总开关关闭时对话返回 403 且不调用模型",
+      "ok": true,
+      "detail": "status=403 model_called=0 detail=AI 助手当前未开放，请稍后再试"
+    },
+    {
+      "id": "H10",
+      "name": "用户日限额：前 2 次成功，第 3 次 429",
+      "ok": true,
+      "detail": "1st=200 2nd=200 3rd=429"
+    },
+    {
+      "id": "H06",
+      "name": "删除本人会话：200 后详情 404、消息一并清除",
+      "ok": true,
+      "detail": "del=200 get_after=404 msgs_left=0"
+    },
+    {
+      "id": "H13",
+      "name": "对话相关响应不泄露密钥",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "H14",
+      "name": "成功调用写入 ai_usage_logs（feature=chat）",
+      "ok": true,
+      "detail": "success_logs=4"
+    },
+    {
+      "id": "R01",
+      "name": "节点讲解优先取已发布知识：source_type=knowledge、正文/来源/相关问题来自知识",
+      "ok": true,
+      "detail": "status=200 type=knowledge related=['中央红军何时出发？']"
+    },
+    {
+      "id": "R02/R03",
+      "name": "无已发布知识时回退节点字段(source_type=node)，且草稿内容绝不出现",
+      "ok": true,
+      "detail": "status=200 type=node content=于都河渡口\n\n历史意义：红军夜渡于都河"
+    },
+    {
+      "id": "R04",
+      "name": "节点不存在返回 404",
+      "ok": true,
+      "detail": "status=404"
+    },
+    {
+      "id": "R05/R06",
+      "name": "节点讲解不调用模型（AI 关闭仍 200，模型未被触发）",
+      "ok": true,
+      "detail": "status=200 model_called=0"
+    },
+    {
+      "id": "Q01",
+      "name": "题库已有解析直接返回：source_type=bank、解析为题库原文、不调模型",
+      "ok": true,
+      "detail": "status=200 type=bank model_called=0"
+    },
+    {
+      "id": "Q03",
+      "name": "防作弊：未作答/未超时的题目查看解析被拒（400）",
+      "ok": true,
+      "detail": "status=400 detail=请先完成该题作答后再查看解析"
+    },
+    {
+      "id": "Q02",
+      "name": "题库无解析时调用模型：source_type=ai、提示词以库内正确答案为准",
+      "ok": true,
+      "detail": "status=200 type=ai answer=['A'] ans_in_prompt=True"
+    },
+    {
+      "id": "Q05",
+      "name": "AI 关闭且题库无解析时返回 403",
+      "ok": true,
+      "detail": "status=403"
+    },
+    {
+      "id": "Q06",
+      "name": "题目不存在返回 400",
+      "ok": true,
+      "detail": "status=400"
+    },
+    {
+      "id": "W01",
+      "name": "发起出题任务：任务与草稿持久化落库",
+      "ok": true,
+      "detail": "status=200 job_status=success drafts=2 db_job=1 db_draft=2"
+    },
+    {
+      "id": "W02",
+      "name": "任务列表与详情可回溯（详情含草稿）",
+      "ok": true,
+      "detail": "list_total=1 detail_drafts=2"
+    },
+    {
+      "id": "W03",
+      "name": "按任务查草稿列表",
+      "ok": true,
+      "detail": "total=2 ids=[2, 1]"
+    },
+    {
+      "id": "W04",
+      "name": "编辑草稿重算待修正问题（题干为空 → errors 非空）",
+      "ok": true,
+      "detail": "status=200 errors=['题干不能为空']"
+    },
+    {
+      "id": "W05",
+      "name": "审核草稿：通过→approved、驳回→rejected",
+      "ok": true,
+      "detail": "approve=approved reject=rejected"
+    },
+    {
+      "id": "W06",
+      "name": "导入审核通过草稿到题库：仅通过项入库、置 imported 且回填 question_id、驳回项计入 failed",
+      "ok": true,
+      "detail": "imported=1 failed=1 q 2->3 draft_status=imported qid=9003"
+    },
+    {
+      "id": "W07",
+      "name": "导入幂等：重复导入已导入草稿被 skipped，题库不再新增",
+      "ok": true,
+      "detail": "imported=0 skipped=1 q 3->3"
+    },
+    {
+      "id": "W09",
+      "name": "题目工坊鉴权：无 ai_workshop 菜单管理员 403",
+      "ok": true,
+      "detail": "jobs=403 drafts=403"
+    },
+    {
+      "id": "W10",
+      "name": "知识接地出题：所选已发布资料正文进入提示词",
+      "ok": true,
+      "detail": "status=200 grounded=True"
+    },
+    {
+      "id": "W11",
+      "name": "生成失败：返回 502 且任务以 failed 落库（可回溯）",
+      "ok": true,
+      "detail": "status=502 failed_jobs=1"
+    },
+    {
+      "id": "G01",
+      "name": "旧内存态出题链路(generate-questions)不受影响",
+      "ok": true,
+      "detail": "status=200 generated=1"
+    },
+    {
+      "id": "G02",
+      "name": "工坊/导入/旧链路响应不泄露密钥",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "L01",
+      "name": "真实调用 Agent 完成一次历史助手对话（回答非空、捕获平台用量）",
+      "ok": true,
+      "detail": "status=200 reply_len=143 usedTokens=19715"
+    }
+  ]
+}

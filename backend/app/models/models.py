@@ -534,3 +534,151 @@ class ImportPreview(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     expires_at: Mapped[datetime] = mapped_column(DateTime)
     confirmed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+
+
+# ---------------- AI 智能中心（021） ----------------
+class AiKnowledge(Base):
+    """AI 知识资料（历史助手 / 路线讲解的检索源）。
+
+    status: draft 草稿 / pending 待审核 / published 已发布 / rejected 已驳回 / archived 已归档；
+    仅 published 参与正式问答检索。category 复用题库口径 event/route/figure，另允许 custom。
+    node_id 非空表示绑定某路线节点（route-guide 固定讲解优先取该节点已发布资料）。
+    本库空字符串按 NULL 存储（Oracle 兼容模式），可空文本列读取时 None 即空值。
+    """
+
+    __tablename__ = "ai_knowledge"
+    __table_args__ = (
+        Index("ix_ai_knowledge_status_cat", "status", "category"),
+        Index("ix_ai_knowledge_node", "node_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    title: Mapped[str] = mapped_column(String(200))
+    content: Mapped[str] = mapped_column(Text)
+    source: Mapped[Optional[str]] = mapped_column(String(300), nullable=True, default=None)
+    # 相关/推荐问题（路线节点固定讲解用），字符串数组
+    related: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
+    category: Mapped[Optional[str]] = mapped_column(String(20), nullable=True, default=None)
+    node_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("route_nodes.id"), nullable=True, default=None
+    )
+    status: Mapped[str] = mapped_column(String(16), default="draft")
+    created_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    published_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+
+
+class AiConversation(Base):
+    """AI 会话（历史助手）。归属由 JWT 用户确定，跨用户不可读写。
+
+    status: active 正常 / archived 归档。删除会话时服务层显式连同消息一并删除，不依赖数据库级联。
+    """
+
+    __tablename__ = "ai_conversations"
+    __table_args__ = (Index("ix_ai_conversations_user_updated", "user_id", "updated_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"))
+    title: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, default=None)
+    status: Mapped[str] = mapped_column(String(16), default="active")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AiMessage(Base):
+    """AI 消息。role: user / assistant / system。sources 为后端核验过的知识来源列表。
+
+    used_tokens 为平台 usage_update.used 原值（assistant 消息，未报告时为空）。
+    """
+
+    __tablename__ = "ai_messages"
+    __table_args__ = (Index("ix_ai_messages_conv_id", "conversation_id", "id"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    conversation_id: Mapped[int] = mapped_column(
+        ForeignKey("ai_conversations.id", ondelete="CASCADE")
+    )
+    role: Mapped[str] = mapped_column(String(16))
+    content: Mapped[str] = mapped_column(Text)
+    sources: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
+    used_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AiGenerationJob(Base):
+    """AI 题目生成任务（题目工坊）。一次生成请求对应一条任务，记录请求/成功/失败数与状态。
+
+    status: pending 待执行 / running 执行中 / success 全部成功 / partial 部分成功 / failed 全部失败。
+    params 存生成参数快照（topic/count/difficulty/category/extra/knowledge_ids）。
+    """
+
+    __tablename__ = "ai_generation_jobs"
+    __table_args__ = (Index("ix_ai_jobs_created", "created_at"),)
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_type: Mapped[str] = mapped_column(String(20), default="question")
+    topic: Mapped[str] = mapped_column(String(100))
+    params: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=None)
+    requested: Mapped[int] = mapped_column(Integer, default=0)
+    succeeded: Mapped[int] = mapped_column(Integer, default=0)
+    failed: Mapped[int] = mapped_column(Integer, default=0)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    error: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    created_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+
+
+class AiGeneratedQuestion(Base):
+    """AI 题目草稿（题目工坊）。data 为题目内容 JSON，errors 为待修正问题列表。
+
+    status: pending 待审核 / approved 已通过 / rejected 已驳回 / imported 已导入。
+    question_id 为导入正式题库后的 questions.id（幂等：已导入的草稿不再重复入库）。
+    """
+
+    __tablename__ = "ai_generated_questions"
+    __table_args__ = (
+        Index("ix_ai_genq_status", "status"),
+        Index("ix_ai_genq_job", "job_id"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    job_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("ai_generation_jobs.id"), nullable=True, default=None
+    )
+    data: Mapped[dict] = mapped_column(JSON)
+    errors: Mapped[Optional[list]] = mapped_column(JSON, nullable=True, default=None)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    reviewed_by: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
+    question_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+
+class AiUsageLog(Base):
+    """AI 调用日志。用于日限额计数（user_id + day_key）与后续用量/成本统计。
+
+    feature: chat / route_guide / quiz_explanation / question_gen。
+    status: success / error。day_key 为北京时间当日 YYYY-MM-DD（helpers.today_str）。
+    used_tokens 为平台原值，未报告为空；model 暂存 Agent ID（底层模型名需控制台确认）。
+    """
+
+    __tablename__ = "ai_usage_logs"
+    __table_args__ = (
+        Index("ix_ai_usage_user_day", "user_id", "day_key"),
+        Index("ix_ai_usage_day", "day_key"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    conversation_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    feature: Mapped[str] = mapped_column(String(30))
+    model: Mapped[Optional[str]] = mapped_column(String(64), nullable=True, default=None)
+    used_tokens: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    elapsed_ms: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=None)
+    status: Mapped[str] = mapped_column(String(16), default="success")
+    error_code: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default=None)
+    day_key: Mapped[str] = mapped_column(String(10))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
