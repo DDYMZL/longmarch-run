@@ -29,7 +29,7 @@ class Settings(BaseSettings):
 
     # 数据库（openGauss 兼容 PostgreSQL 协议，使用 psycopg2 驱动）
     # 必填：不提供任何默认连接串，缺失时启动即报错，避免回退到错误/过期的库或泄露内置凭证。
-    # 本地开发配置在 backend/.env（模板 backend/.env.example）；生产配置在 backend/.env.prod
+    # 本地开发配置在 backend/.env；生产配置在 backend/.env.prod
     # （APP_ENV=prod 时加载，生产库地址与强密码部署前须替换为服务器真实值）。
     DATABASE_URL: str
 

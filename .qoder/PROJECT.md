@@ -150,7 +150,7 @@ Vue3 管理后台（静态资源）    ─┘         │
 
 | 产物 | 生成方式 | 内容与排除项 |
 | --- | --- | --- |
-| `backend-update.tar.gz` | 仓库根 `build-backend.bat` | 后端源码 + `.env.prod` + `.env.example`；**排除** `.venv/`、`__pycache__/`、`backend/test/`、`backend/.env`、`*.db`；脚本自带产物校验（实测条目 144 → 76） |
+| `backend-update.tar.gz` | 仓库根 `build-backend.bat` | 后端源码 + `.env.prod`；**排除** `.venv/`、`__pycache__/`、`backend/test/`、`backend/.env`、`*.db`；脚本自带产物校验（2026-10-17 实测 83 条目 / 74 个文件，含 `backend/.env.prod`、不含 `backend/.env`） |
 | `sql.tar.gz` | 仓库根 `build-sql.bat` | `docker/init/` 全量打包；**服务器端需人工执行迁移** |
 | `admin/dist.zip` | `npm run build` 末段自动调用 `admin/scripts/zip-dist.mjs` | `dist/` 的**内容**（zip 根即 `index.html`、`assets/`），便于直接解压部署。该脚本**零第三方依赖**，用 Node 内置 `zlib.deflateRawSync` 手写 Zip 结构（自实现 CRC-32），规避环境无 `zip`/`7z` 的问题；36 文件约 520KB |
 | 小程序包 | 微信开发者工具手工上传，**无 CI** | `packOptions.ignore` 已排除 `test/`、`design.md`、`AGENTS.md` |
@@ -284,11 +284,12 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | --- | --- |
 | `backend/.env` | **高**：微信小程序 AppSecret、JWT 签名密钥、管理员口令、数据库连接串明文。`.gitignore` 以 `!backend/.env` 显式放行——**这是用户的明确决定** |
 | `backend/.env.prod` | **高**：生产参数。其中生产库连接串 / `JWT_SECRET` / `ADMIN_PASSWORD` 为**占位符**，部署前须替换为服务器真实值；替换后不得回填入库 |
-| `backend/.env.example` | **中**：模板。历史上 `865aec4` 曾误含真实 `WX_SECRET`，`1b02985` 已移除，但**旧值仍可从 git 历史检出**，须在微信公众平台重置该密钥 |
 | `docker/compose.yml`、`docker/init/init-db.sh` | **中**：开发库初始口令与环境变量明文（仅开发用途） |
 | `project.config.json` | **中**：含小程序 appid |
 | `docs/迭代记录.md` | **中**：2026-10-09 一条记录的正文中含开发管理员账号与明文口令、`WX_APPID`。**引用该文件时不得复制这些值** |
 | `admin/.env.development`、`admin/.env.prod` | **低**：仅 API 代理地址，无凭据 |
+
+> **已删除但风险仍在 git 历史中的文件**：`backend/.env.example` 于 2026-10-17 删除（`backend/.env` 本身已入库，模板失去存在必要；本地开发直接读 `.env`，生产由 `APP_ENV=prod` 读 `.env.prod`）。但历史上 `865aec4` 曾把真实 `WX_SECRET` 明文写入该文件并推送远程，`1b02985` 虽已改回占位符，**旧值仍可从 git 历史检出**，须在微信公众平台重置该密钥（详见 `.qoder/backend/.env.md`）。
 
 ### 未跟踪（`.gitignore` 忽略，仅存本地）
 

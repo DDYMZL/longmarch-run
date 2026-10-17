@@ -23,7 +23,7 @@
 | `:3` | `fastapi>=0.110.0` | `app/api/deps.py:4-5`、`app/api/routes/*.py`（全部 18 个）、`app/main.py` | 路由、依赖注入、`HTTPException`、`HTTPBearer`、OpenAPI 文档 |
 | `:4` | `uvicorn[standard]>=0.29.0` | `backend/run.py:8` | ASGI 服务器；`[standard]` extra 提供 `uvloop`/`httptools`/`websockets` 等 |
 | `:5` | `sqlalchemy>=2.0.25` | `app/models/models.py`、`app/core/database.py`、`app/services/*.py`、`app/api/deps.py:6` | ORM 与会话管理 |
-| `:6` | `psycopg2-binary>=2.9.9` | **无任何直接 import** | 作为 DBAPI 驱动被 SQLAlchemy 按 `DATABASE_URL` 的 `postgresql+psycopg2://` 方案间接加载。三份 env 文件（`.env`、`.env.example`、`.env.prod`）的 `DATABASE_URL` 均使用该方案 |
+| `:6` | `psycopg2-binary>=2.9.9` | **无任何直接 import** | 作为 DBAPI 驱动被 SQLAlchemy 按 `DATABASE_URL` 的 `postgresql+psycopg2://` 方案间接加载。两份 env 文件（`.env`、`.env.prod`）的 `DATABASE_URL` 均使用该方案 |
 | `:7` | `pydantic>=2.6.0` | `app/schemas/schemas.py:11-12`（`BaseModel`、`ConfigDict`、`Field`、`field_validator`、`to_camel`） | 请求/响应模型与 camelCase 别名生成 |
 | `:8` | `pydantic-settings>=2.2.0` | `app/core/config.py:7`（`BaseSettings`、`SettingsConfigDict`） | 从 env 文件加载 `Settings` |
 | `:9` | `pyjwt>=2.8.0` | `app/core/security.py:5`（`import jwt`） | HS256 JWT 签发与校验 |

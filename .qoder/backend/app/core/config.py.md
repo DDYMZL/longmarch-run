@@ -134,7 +134,7 @@
 | `CORS_ORIGINS` | List[str] | `["*"]` | CORSMiddleware 允许来源；`main.py:63` |
 
 ## 6. 依赖关系
-- **依赖**：标准库 `os`、`functools.lru_cache`、`pathlib.Path`、`typing.List`；第三方 `pydantic_settings.BaseSettings / SettingsConfigDict`（`:2-7`）。读取 `backend/.env` 或 `backend/.env.prod`（模板 `backend/.env.example`）。
+- **依赖**：标准库 `os`、`functools.lru_cache`、`pathlib.Path`、`typing.List`；第三方 `pydantic_settings.BaseSettings / SettingsConfigDict`（`:2-7`）。读取 `backend/.env`（本地开发，默认）或 `backend/.env.prod`（`APP_ENV=prod`）。原模板 `backend/.env.example` 已于 2026-10-17 删除。
 - **被依赖（backend/app 内 18 个文件 import 本模块）**：`core/database.py:8`、`core/security.py:7`、`core/wx.py:13`、`main.py`、`api/routes/admin.py`，以及 services 层 13 个模块（`admin_service`、`ai_chat_service`、`ai_config_service`、`ai_question_service`、`auth_service`、`cloudbase_service`、`event_service`（用 `get_settings`）、`identity_service`、`points_service`、`quiz_service`、`sport_service`、`streak_service`、`wechat_service`）。
 - 测试脚本（如 `test/s11_sport_sync_werun.py:173-176`、`s19_invite_admission.py:81-83`、`s20_v2_regression.py:303-304`）**直接改写 `settings` 单例属性**来模拟配置状态，用后还原。
 

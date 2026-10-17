@@ -36,9 +36,13 @@ if not exist backend\.venv\Scripts\python.exe (
 )
 backend\.venv\Scripts\python -m pip install -q -r backend\requirements.txt || goto :fail
 if not exist backend\.env (
-  copy backend\.env.example backend\.env >nul
-  echo   created backend\.env from .env.example
+  echo   backend\.env is missing. It is a tracked file, so this checkout is broken -
+  echo   restore it with: git checkout -- backend\.env
+  echo   Locally the backend loads backend\.env; production loads backend\.env.prod
+  echo   because APP_ENV=prod is set in the systemd unit.
+  goto :fail
 )
+echo   backend loads backend\.env   (production uses backend\.env.prod via APP_ENV=prod)
 call :ai_config
 call :port_in_use 8010
 if errorlevel 1 (
@@ -112,9 +116,10 @@ for %%K in (CLOUDBASE_ENV_ID CLOUDBASE_AGENT_ID CLOUDBASE_API_KEY) do (
 )
 if defined AI_MISSING (
   echo   [WARN] AI center not configured in backend\.env - missing or empty: !AI_MISSING!
-  echo       /api/ai/* and admin AI generation answer 403 without them. Put the real
-  echo       CLOUDBASE_* values in backend\.env only - that file is gitignored. Never
-  echo       write the API Key into .env.prod, the mini program or the admin build.
+  echo       /api/ai/* and admin AI generation answer 403 without them. Copy the real
+  echo       CLOUDBASE_* values into backend\.env - that file and backend\.env.prod are
+  echo       both tracked by git, so a key must never reach the mini program or the
+  echo       admin build.
 ) else (
   echo   AI center configured: CLOUDBASE_ENV_ID, CLOUDBASE_AGENT_ID, CLOUDBASE_API_KEY
 )

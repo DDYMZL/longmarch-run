@@ -27,7 +27,6 @@ docker/
     └── 010_admin_identity.sql  # 身份关联/RBAC/审计八表 + 菜单与内置角色种子
 backend/
 ├── requirements.txt          # 依赖
-├── .env.example              # 环境变量样例（复制为 .env）
 ├── .env / .env.prod          # 本地开发配置 / 生产配置（均入库；.env.prod 由 APP_ENV=prod 启用）
 ├── run.py                    # 开发启动入口
 └── app/
@@ -56,7 +55,7 @@ python -m venv .venv
 # Windows:  .venv\Scripts\activate
 # macOS/Linux: source .venv/bin/activate
 pip install -r requirements.txt
-copy .env.example .env        # Windows；macOS/Linux 用 cp
+# .env 已随仓库入库，本地开发直接可用，无需复制模板
 python run.py                 # 或 uvicorn app.main:app --reload
 ```
 
