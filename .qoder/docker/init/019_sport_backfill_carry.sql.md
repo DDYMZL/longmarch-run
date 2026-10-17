@@ -97,7 +97,7 @@
   - `:30-47` 的 INSERT 可安全重跑（`NOT EXISTS` 防重），但同样只会按有上限口径补建行。
   - 结论：**重跑 019 = 用过期口径覆写现行台账 + 抹掉管理员对 walk 行 `delta` 的手工调整**，与 `SQL_CONSTRAINTS.md` §6 的告警一致。
 - **ORM 与 DDL 分歧**：
-  1. **单日 20000 步上限（重要）**：DDL `:21`、`:37` 用 `LEAST(GREATEST(steps,0), 20000)`；ORM `points_service.walk_chain:40` 只有 `max(int(steps or 0), 0)`，**无上限**，docstring `:4` 明写「不设单日上限」，`config.py:102-104` 无对应配置项。→ 迁移回填值会被运行期覆盖，019 的 walk 口径实际是**过渡态**。
+  1. **单日 20000 步上限（重要）**：DDL `:21`、`:37` 用 `LEAST(GREATEST(steps,0), 20000)`；ORM `points_service.walk_chain:40` 只有 `max(int(steps or 0), 0)`，**无上限**，docstring `:4` 明写「不设单日上限」，`config.py:102-104` 无对应配置项。→ 迁移回填值会被运行期覆盖，019 的 walk 口径实际是**过渡态**。**（2026-10-17 查证：该过渡由提交 `9cb65b8`「步行积分取消单日 20000 封顶，改为累计步数 ÷ 1000 计分」造成，本文件冻结于调整之前，无上限才是现行口径；本文件的 DDL 部分仍不可省，见 §8。）**
   2. **时间默认值两套写法**：DDL `:9` 的 `synced_at` 可空且**无默认值**，ORM `models.py:251` 同样 `default=None`——一致；但写入侧 `sport_service.py:129` 用 `now_utc()`（应用侧 UTC），而 DDL `:16`、`:32` 的 `updated_at` 用 `CURRENT_TIMESTAMP AT TIME ZONE 'UTC'`（DB 侧 UTC），两条 UTC 来源不同（`.qoder/ARCHITECTURE.md` §13.2）。
   3. **`source` / `sync_status` 默认值机制**：DDL 是 `DEFAULT 'werun'` / `DEFAULT 'processed'`（服务端默认），ORM `models.py:250`、`:252` 是 `default="werun"` / `default="processed"`（客户端默认、无 `server_default`）。取值一致，但 ORM 侧不带 server_default 意味着**任何绕过 ORM 的裸 INSERT 依赖 DDL 默认值**。
   4. **`sync_status` 是死列**：ORM `models.py:252` 声明、`sport_service.py:130` 恒写 `"processed"`，全仓 grep 未发现读取方，也未发现任何非 `processed` 取值——列存在但不承载信息（与 `019:7`「行存在即已成功处理」的设计一致）。
