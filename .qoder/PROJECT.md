@@ -110,7 +110,7 @@ cd admin && npm install && npm run dev
 | openGauss | 5118（宿主机）→ 5118（容器） | `docker/compose.yml` 的 `GS_*` 变量 |
 | 后端 | 8010 | 系统环境变量 `APP_ENV=prod` → 加载 `backend/.env.prod`；否则加载 `backend/.env`。`APP_ENV` **不能写进 env 文件**（文件选择发生在解析之前） |
 | 管理后台 dev | 5173（`host: true`，局域网可访问） | `admin/.env.development`（本地）/ `admin/.env.prod`（`npm run dev:prod` 联调生产）；两者都只定义 `VITE_API_PROXY` |
-| 小程序 | — | `frontend/services/config.js` 的 `ENV` 常量：`'remote'`（**当前值**，直连 `https://swkjdj.sz-watech.com/api`）/ `'local'`（devtools 走 127.0.0.1:8010，真机走硬编码 `LAN_IP`）。**模块加载时求值一次，运行期不可切换** |
+| 小程序 | — | `frontend/services/config.js` 按运行环境 `envVersion` 自动判定：`trial`/`release` 恒连 `https://swkjdj.sz-watech.com/api`（**发布前无需改配置**）；`develop`（devtools/真机调试）由 `DEV_TARGET` 常量决定——`'remote'`（**当前值**，直连上述远程）/ `'local'`（devtools 走 127.0.0.1:8010，真机走硬编码 `LAN_IP`）。**模块加载时求值一次，运行期不可切换** |
 
 ### 管理后台构建命令
 

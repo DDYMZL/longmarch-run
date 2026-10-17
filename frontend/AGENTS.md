@@ -6,7 +6,7 @@
 
 本目录是「长征主题运动 + 每日答题」的**原生微信小程序**（WXML / WXSS / JS，**无任何构建工具**）。仓库根目录 `project.config.json` 已设 `miniprogramRoot=frontend/`，请使用**微信开发者工具**打开仓库根目录（根目录存在 `mini.project.json` 是支付宝遗留文件，**不要用支付宝开发者工具**打开）。
 
-- **已全量对接后端** `../backend`（FastAPI）：登录、组织、步数、路线、答题、积分、勋章、排名均走真实接口，业务数据统一落库，不写死在前端；接口地址由 `services/config.js` 的 `ENV` 常量集中配置（`'remote'` 默认直连已部署后端 `https://swkjdj.sz-watech.com/api`，该 HTTPS 域名须与公众平台 request 合法域名一致；`'local'` 走本机后端，真机调试自动改局域网 IP）；
+- **已全量对接后端** `../backend`（FastAPI）：登录、组织、步数、路线、答题、积分、勋章、排名均走真实接口，业务数据统一落库，不写死在前端；接口地址由 `services/config.js` 按运行环境自动判定（`envVersion` 为 `trial`/`release` 时恒连已部署后端 `https://swkjdj.sz-watech.com/api`，**发布前无需改配置**；`develop`（开发者工具/真机调试）由 `DEV_TARGET` 常量决定，默认 `'remote'` 直连远程，改 `'local'` 走本机后端且真机自动改局域网 IP）；
 - 「服务层返回结构稳定」是最高优先级约束：页面只依赖 service 的返回值结构，不依赖其内部实现。
 
 ## 2. 技术栈与工具链

@@ -69,7 +69,7 @@
 
 ### 1.3 请求方向约束
 
-- 小程序 → 后端：`services/request.js` 统一封装，baseURL 由 `services/config.js` 的 `ENV` 常量在**模块加载时求值一次**，运行期不可切换（`frontend/services/config.js:7`、`:15-27`）。当前 `ENV = 'remote'`，指向 `https://swkjdj.sz-watech.com/api`。
+- 小程序 → 后端：`services/request.js` 统一封装，baseURL 由 `services/config.js` 在**模块加载时求值一次**，运行期不可切换（`frontend/services/config.js:11`、`:28-40`）。判定依据运行环境 `envVersion`：`trial`/`release` 恒为 `https://swkjdj.sz-watech.com/api`（发布前无需改文件）；`develop` 由 `DEV_TARGET` 常量决定（当前 `'remote'`，同上；改 `'local'` 才连本机 8010）。
 - 管理后台 → 后端：axios `baseURL = '/api'`（`admin/src/api/request.ts:14-17`），开发期由 Vite 代理转发（`admin/vite.config.ts:11-17`，`changeOrigin: true`、`ws: true`），生产期与后端同域。
 - 后端 → 小程序/管理后台：**只有 WebSocket 一条反向推送通道**（见第 6 节），无服务端主动 HTTP 回调。
 - 后端 → 数据库：同步阻塞驱动，请求线程内完成；唯一的例外是流式 CSV 导出使用独立 Session（见 §5.4）。
@@ -562,7 +562,7 @@ core/*              基础设施：config database security wx ws rate_limit
 | 管理后台环境切换 | 单一变量 `VITE_API_PROXY`：`.env.development:3` / `.env.prod:4` | — |
 | Vite 代理 | `admin/vite.config.ts:11-17`，`/api` → 目标，`changeOrigin: true`、`ws: true` | — |
 | 后端环境切换 | `APP_ENV` **只从系统环境变量读取**（写进 `.env` 不生效，因为 env 文件选择发生在解析 `.env` 之前）；`APP_ENV=prod` 加载 `.env.prod`，否则 `.env` | `core/config.py:11-15` |
-| 小程序环境切换 | `services/config.js:7` 常量 `ENV`，`'remote'` / `'local'`；`local` 时真机改用硬编码 `LAN_IP`（`:11`） | — |
+| 小程序环境切换 | `services/config.js` 按运行环境 `envVersion` 自动判定：`trial`/`release` 恒连远程；`develop` 由常量 `DEV_TARGET`（`:11`，`'remote'`/`'local'`）决定，`local` 时真机改用硬编码 `LAN_IP`（`:15`） | — |
 | 交付产物（均 gitignore） | `backend-update.tar.gz`、`sql.tar.gz`、`admin/dist.zip` | `.gitignore` |
 | `admin/dist.zip` 构建 | `admin/scripts/zip-dist.mjs`，**零依赖手写 Zip**（`zlib.deflateRawSync` + 自实现 CRC-32 + MS-DOS 时间戳；安全护栏 `:17-19`、`:65`、`:127-139`） | — |
 | `vite.config.ts` **无 build 段** | 使用 Vite 默认构建配置 | `admin/vite.config.ts` |

@@ -178,7 +178,7 @@ PROJECT="D:/project/longmarch-run"     # 注意：指向仓库根，不是 front
 
 ### 5.1 前置条件
 
-1. **后端已运行**：`ui-test.cjs:15` 明确「前置：后端 `http://127.0.0.1:8010` 已运行」。但注意 `frontend/services/config.js:7` 当前 `ENV = 'remote'`（指向 `https://swkjdj.sz-watech.com/api`），**跑本地后端前必须先把 `ENV` 改为 `'local'`**，否则测试打的是生产环境。
+1. **后端已运行**：`ui-test.cjs:15` 明确「前置：后端 `http://127.0.0.1:8010` 已运行」。但注意 `frontend/services/config.js` 在开发版（开发者工具/真机调试）由 `DEV_TARGET` 常量决定后端地址，当前为 `'remote'`（指向 `https://swkjdj.sz-watech.com/api`），**跑本地后端前必须先把 `DEV_TARGET` 改为 `'local'`**，否则测试打的是生产环境；体验版/正式版不受该常量影响，恒连远程。
 2. **开发者工具已开自动化端口 9420**。
 3. `cd frontend/test/automator && npm install`（首次）。
 4. **必须用微信开发者工具**，不能用支付宝小程序工具（CE1000.01）。

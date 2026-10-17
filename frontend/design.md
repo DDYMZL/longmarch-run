@@ -92,7 +92,7 @@
 | `ai.js` | `chat(message, conversationId?, nodeId?)` / `listConversations(page, pageSize)` / `getConversation(id)` / `deleteConversation(id)` | `/api/ai/chat, conversations, conversations/{id}` | AI 历史助手（§3.1）：连续对话（conversationId 为空新建），回答含后端核验的已发布知识来源；会话归属由后端 JWT 判定，前端不传 user_id，读写他人会话后端返回 404；403 未开放 / 429 额度用尽 / 502 上游异常由 request.js 抛带 message 的 Error 交页面提示；chat 超时放宽至 60s |
 | `store.js` | `migrateUserData()` | （后端无对应，落库到 DB） | 遗留：登录时 Mock→真实用户 ID 数据迁移 |
 | `request.js` | `request(options)` / `getToken()` / `setReauthHandler(fn)` | — | 统一 wx.request 封装：Bearer JWT、401 静默重登并重试一次（`skipAuthRetry` 跳过）、失败清理回启动页、错误分类（`statusCode` / `network` / `activityStatus`）、FastAPI 错误解析；活动守卫 403（header `X-Activity-Status`）：GET 查看类请求 3s 防抖 reLaunch 活动状态页（`skipActivityRedirect` 跳过），写操作仅抛错由页面展示后端提示 |
-| `config.js` | `API_BASE_URL` | — | API 地址集中配置：`ENV` 常量一键切换联调环境——`'remote'`（默认）直连已部署后端 `https://swkjdj.sz-watech.com/api`（HTTPS，走默认 443；域名须与公众平台「服务器域名 → request 合法域名」一致，否则体验版/正式版报「网络异常」），开发者工具与真机一致；`'local'` 走本机后端，开发者工具用 `127.0.0.1:8010/api`，真机自动切换 `http://<电脑局域网IP>:8010/api`（LAN_IP 常量，电脑 IP 变化时需同步更新） |
+| `config.js` | `API_BASE_URL` | — | API 地址集中配置：按运行环境 `wx.getAccountInfoSync().miniProgram.envVersion` 自动判定，**发布前无需改文件**——`trial`（体验版）/`release`（正式版）恒为已部署后端 `https://swkjdj.sz-watech.com/api`（HTTPS，走默认 443；域名须与公众平台「服务器域名 → request 合法域名」一致，否则报「网络异常」）；`develop`（开发者工具/真机调试）由 `DEV_TARGET` 常量决定：`'remote'`（默认）直连上述远程后端（automator 回归走这条），`'local'` 走本机后端——开发者工具用 `127.0.0.1:8010/api`，真机自动切 `http://<电脑局域网IP>:8010/api`（`LAN_IP` 常量，电脑 IP 变化时需同步更新；须同 Wi-Fi 并勾选「不校验合法域名」）。取不到 envVersion 时按非开发版处理（回落远程），避免误发本地地址 |
 
 ## 3. 核心数据模型
 
