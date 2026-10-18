@@ -11,5 +11,10 @@ export const MENUS = [
   { code: 'access', path: '/access', title: '人员授权', icon: 'Setting' },
   { code: 'invites', path: '/invites', title: '入驻邀请码', icon: 'Promotion' },
   { code: 'audit', path: '/audit', title: '审计日志', icon: 'Document' },
-  { code: 'activity', path: '/activity', title: '活动设置', icon: 'Flag' }
+  { code: 'activity', path: '/activity', title: '活动设置', icon: 'Flag' },
+  { code: 'persons', path: '/persons', title: '人物志', icon: 'User' },
+  { code: 'medals', path: '/medals', title: '勋章管理', icon: 'Medal' },
+  { code: 'chapters', path: '/chapters', title: '章节配置', icon: 'Notebook' },
+  { code: 'operation_config', path: '/operation-config', title: '运营参数', icon: 'SetUp' },
+  { code: 'analytics', path: '/analytics', title: '数据分析', icon: 'TrendCharts' }
 ] as const

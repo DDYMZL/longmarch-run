@@ -13,6 +13,7 @@ import {
   fetchDashboardTrend,
   type ActivityItem,
   type DashboardResult,
+  type PointsHealthResult,
   type TrendResult
 } from '../api/admin'
 import { useLiveUpdates } from '../utils/liveUpdates'
@@ -26,7 +27,7 @@ const days = ref<7 | 30>(7)
 const dashboard = ref<DashboardResult>({ metrics: { total_users: 0, today_users: 0, total_steps: 0, avg_steps: 0, completion_rate: 0, quiz_users: 0, medals_granted: 0 }, route_overview: [] })
 const trend = ref<TrendResult>({ days: 7, points: [] })
 const activities = ref<ActivityItem[]>([])
-
+const pointsHealth = ref<PointsHealthResult | null>(null)
 const metricCards = computed(() => [
   { key: 'total_users', label: '参与总人数', value: dashboard.value.metrics.total_users, icon: '👥' },
   { key: 'today_users', label: '今日运动人数', value: dashboard.value.metrics.today_users, icon: '🏃' },
@@ -168,6 +169,18 @@ onBeforeUnmount(() => {
 
 <template>
   <div v-loading="loading" class="dashboard">
+    <!-- 积分健康告警横幅 -->
+    <div
+      v-if="pointsHealth && pointsHealth.mismatches > 0"
+      class="health-banner"
+    >
+      <span class="health-banner-icon">⚠️</span>
+      <span class="health-banner-text">
+        积分健康异常：检测到 <strong>{{ pointsHealth.mismatches }}</strong> 处积分差异，请前往「数据分析」页核对修复。
+      </span>
+      <router-link to="/analytics" class="health-banner-link">查看详情 →</router-link>
+    </div>
+
     <!-- 指标卡 -->
     <div class="metric-grid">
       <div v-for="card in metricCards" :key="card.key" class="metric-card">
@@ -386,5 +399,48 @@ onBeforeUnmount(() => {
 .node-name {
   font-weight: 600;
   color: #5a1a1a;
+}
+
+.health-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 18px;
+  background: linear-gradient(90deg, #fef2f2, #fff7ed);
+  border: 1px solid #fecaca;
+  border-radius: 10px;
+  animation: banner-pulse 2s ease-in-out infinite;
+}
+
+@keyframes banner-pulse {
+  0%, 100% { border-color: #fecaca; }
+  50% { border-color: #f87171; }
+}
+
+.health-banner-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+
+.health-banner-text {
+  font-size: 13px;
+  color: #991b1b;
+  flex: 1;
+}
+
+.health-banner-text strong {
+  font-size: 15px;
+}
+
+.health-banner-link {
+  font-size: 13px;
+  color: #C8102E;
+  text-decoration: none;
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.health-banner-link:hover {
+  text-decoration: underline;
 }
 </style>

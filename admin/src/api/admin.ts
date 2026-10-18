@@ -743,6 +743,225 @@ export const quoteImportApi = {
   confirm: (token: string) => confirmImport('/admin/quotes/import-confirm', token)
 }
 
+// ---------------- 人物志 ----------------
+export interface PersonItem {
+  id: number
+  name: string
+  avatar: string
+  brief: string
+  node_ids: number[]
+}
+
+export interface PersonUpsert {
+  name: string
+  avatar: string
+  brief: string
+  node_ids: number[]
+}
+
+export interface PersonListResult {
+  total: number
+  items: PersonItem[]
+}
+
+export function fetchPersons(page: number, pageSize: number, keyword = '') {
+  return request.get<PersonListResult>('/admin/persons', {
+    params: { page, page_size: pageSize, keyword: keyword || undefined }
+  })
+}
+
+export function createPerson(data: PersonUpsert) {
+  return request.post<PersonItem>('/admin/persons', data)
+}
+
+export function updatePerson(id: number, data: PersonUpsert) {
+  return request.put<PersonItem>(`/admin/persons/${id}`, data)
+}
+
+export function deletePerson(id: number) {
+  return request.delete<MessageResult>(`/admin/persons/${id}`)
+}
+
+export function uploadPersonAvatar(file: File) {
+  const fd = new FormData()
+  fd.append('file', file)
+  return request.post<{ url: string }>('/admin/persons/avatar', fd)
+}
+
+export const personImportApi = {
+  downloadTemplate: () => downloadImportTemplate('/admin/persons/import-template'),
+  preview: (file: File) => previewImport('/admin/persons/import-preview', file),
+  confirm: (token: string) => confirmImport('/admin/persons/import-confirm', token)
+}
+
+// ---------------- 勋章 ----------------
+export interface MedalItem {
+  id: string
+  name: string
+  icon: string
+  desc: string
+  category: string
+  hidden: boolean
+  sort_order: number
+}
+
+export interface MedalUpsert {
+  id?: string
+  name: string
+  icon: string
+  desc: string
+  category: string
+  hidden: boolean
+  sort_order: number
+}
+
+export interface MedalListResult {
+  total: number
+  items: MedalItem[]
+}
+
+export function fetchMedals(page: number, pageSize: number, keyword = '') {
+  return request.get<MedalListResult>('/admin/medals', {
+    params: { page, page_size: pageSize, keyword: keyword || undefined }
+  })
+}
+
+export function createMedal(data: MedalUpsert) {
+  return request.post<MedalItem>('/admin/medals', data)
+}
+
+export function updateMedal(id: string, data: MedalUpsert) {
+  return request.put<MedalItem>(`/admin/medals/${id}`, data)
+}
+
+export function deleteMedal(id: string) {
+  return request.delete<MessageResult>(`/admin/medals/${id}`)
+}
+
+// ---------------- 章节 ----------------
+export interface ChapterItem {
+  id: number
+  name: string
+  title: string
+  intro: string
+  node_ids: number[]
+  sort_order: number
+}
+
+export interface ChapterUpsert {
+  name: string
+  title: string
+  intro: string
+  node_ids: number[]
+  sort_order: number
+}
+
+export interface ChapterListResult {
+  total: number
+  items: ChapterItem[]
+}
+
+export function fetchChapters(page: number, pageSize: number, keyword = '') {
+  return request.get<ChapterListResult>('/admin/chapters', {
+    params: { page, page_size: pageSize, keyword: keyword || undefined }
+  })
+}
+
+export function createChapter(data: ChapterUpsert) {
+  return request.post<ChapterItem>('/admin/chapters', data)
+}
+
+export function updateChapter(id: number, data: ChapterUpsert) {
+  return request.put<ChapterItem>(`/admin/chapters/${id}`, data)
+}
+
+export function deleteChapter(id: number) {
+  return request.delete<MessageResult>(`/admin/chapters/${id}`)
+}
+
+export function reorderChapters(ids: number[]) {
+  return request.post<ChapterListResult>('/admin/chapters/reorder', { ordered_ids: ids })
+}
+
+// ---------------- 运营参数 ----------------
+export interface OperationConfigRange {
+  min: number
+  max: number
+  step?: number
+}
+
+export interface OperationConfigView {
+  values: Record<string, number | boolean | string>
+  defaults: Record<string, number | boolean | string>
+  ranges: Record<string, OperationConfigRange>
+  overridden: string[]
+}
+
+export function fetchOperationConfig() {
+  return request.get<OperationConfigView>('/admin/operation-config')
+}
+
+export function saveOperationConfig(values: Record<string, number | boolean | string>) {
+  return request.put<OperationConfigView>('/admin/operation-config', { values })
+}
+
+// ---------------- 数据运营分析 ----------------
+export interface OrgCompareItem {
+  org_id: number
+  org_name: string
+  member_count: number
+  total_steps: number
+  avg_steps: number
+  active_users: number
+  lit_nodes: number
+  avg_points: number
+}
+
+export interface InviteFunnelItem {
+  invite_id: number
+  invite_name: string
+  invite_code: string
+  scans: number
+  onboarded: number
+  first_logins: number
+  synced: number
+}
+
+export interface SyncFailureItem {
+  user_id: number
+  nickname: string
+  org_name: string
+  date: string
+  fail_reason: string
+}
+
+export interface SyncFailureResult {
+  total: number
+  items: SyncFailureItem[]
+}
+
+export interface PointsHealthResult {
+  mismatches: number
+  users: number
+  checked_days: number
+}
+
+export function fetchAnalyticsOrgs() {
+  return request.get<{ items: OrgCompareItem[] }>('/admin/analytics/orgs')
+}
+
+export function fetchInviteFunnel() {
+  return request.get<{ items: InviteFunnelItem[] }>('/admin/analytics/invite-funnel')
+}
+
+export function fetchSyncFailures(days = 7) {
+  return request.get<SyncFailureResult>('/admin/analytics/sync-failures', { params: { days } })
+}
+
+export function fetchPointsHealth() {
+  return request.get<PointsHealthResult>('/admin/analytics/points-health', { silent: true })
+}
+
 // ---------------- 组织架构 ----------------
 export function fetchOrgTree(silent = false) {
   return request.get<OrgTreeResult>('/admin/orgs', { silent })

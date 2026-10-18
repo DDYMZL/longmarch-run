@@ -88,6 +88,36 @@ const routes: RouteRecordRaw[] = [
         name: 'activity',
         component: () => import('../views/ActivityView.vue'),
         meta: { title: '活动设置', menu: 'activity' }
+      },
+      {
+        path: 'persons',
+        name: 'persons',
+        component: () => import('../views/PersonsView.vue'),
+        meta: { title: '人物志', menu: 'persons' }
+      },
+      {
+        path: 'medals',
+        name: 'medals',
+        component: () => import('../views/MedalsView.vue'),
+        meta: { title: '勋章管理', menu: 'medals' }
+      },
+      {
+        path: 'chapters',
+        name: 'chapters',
+        component: () => import('../views/ChaptersView.vue'),
+        meta: { title: '章节配置', menu: 'chapters' }
+      },
+      {
+        path: 'operation-config',
+        name: 'operation-config',
+        component: () => import('../views/OperationConfigView.vue'),
+        meta: { title: '运营参数', menu: 'operation_config' }
+      },
+      {
+        path: 'analytics',
+        name: 'analytics',
+        component: () => import('../views/AnalyticsView.vue'),
+        meta: { title: '数据分析', menu: 'analytics' }
       }
     ]
   },
