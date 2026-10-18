@@ -18,3 +18,23 @@ export const MENUS = [
   { code: 'operation_config', path: '/operation-config', title: '运营参数', icon: 'SetUp' },
   { code: 'analytics', path: '/analytics', title: '数据分析', icon: 'TrendCharts' }
 ] as const
+
+export type MenuCode = (typeof MENUS)[number]['code']
+
+// 侧边栏一级分组（按功能划分）：children 为 MENUS 的 code，仅影响侧边栏展示形态，
+// 权限码、路由守卫、角色勾选仍基于 MENUS 平铺列表不变；
+// 未列入任何分组的菜单自动作为一级菜单平铺展示（新增菜单不会从侧边栏丢失）
+export interface MenuGroupDef {
+  code: string
+  title: string
+  icon: string
+  children: MenuCode[]
+}
+
+export const MENU_GROUPS: MenuGroupDef[] = [
+  { code: 'grp_overview', title: '数据总览', icon: 'DataLine', children: ['screen', 'rankings', 'analytics'] },
+  { code: 'grp_content', title: '内容管理', icon: 'Files', children: ['route_nodes', 'chapters', 'questions', 'quotes', 'persons', 'medals'] },
+  { code: 'grp_org', title: '组织与人员', icon: 'OfficeBuilding', children: ['orgs', 'access', 'invites'] },
+  { code: 'grp_operation', title: '运营配置', icon: 'SetUp', children: ['activity', 'operation_config'] },
+  { code: 'grp_system', title: '系统管理', icon: 'Setting', children: ['audit'] }
+]
