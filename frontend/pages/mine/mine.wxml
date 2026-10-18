@@ -2,9 +2,12 @@
   <!-- 用户信息 -->
   <view class="mine-header">
     <button class="mine-avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
-      <view class="mine-avatar anim-float">
-        <image wx:if="{{user.avatar}}" src="{{user.avatar}}" mode="aspectFill" />
-        <text wx:else class="avatar-placeholder">🏃</text>
+      <!-- 飘动动画挂在无裁剪的包裹层上：button 默认 overflow:hidden 会裁掉上浮部分，圆形头像的 overflow:hidden 会裁掉角标 -->
+      <view class="mine-avatar-wrap anim-float">
+        <view class="mine-avatar">
+          <image wx:if="{{user.avatar}}" src="{{user.avatar}}" mode="aspectFill" />
+          <text wx:else class="avatar-placeholder">🏃</text>
+        </view>
         <view class="avatar-edit-badge">✎</view>
       </view>
     </button>

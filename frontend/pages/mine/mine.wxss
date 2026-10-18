@@ -13,23 +13,31 @@
 .mine-avatar {
   width: 130rpx;
   height: 130rpx;
+  box-sizing: border-box;
   border-radius: 50%;
   overflow: hidden;
-  margin: 0 auto 20rpx;
   background: rgba(255, 255, 255, 0.2);
   border: 4rpx solid rgba(255, 255, 255, 0.5);
-  position: relative;
 }
 
-/* 头像按钮：去除默认样式，保留点击区域 */
+/* 飘动包裹层：承载 anim-float 与编辑角标，不裁剪内容（上浮行程与角标都不被裁） */
+.mine-avatar-wrap {
+  position: relative;
+  width: 130rpx;
+  height: 130rpx;
+  margin: 0 auto;
+}
+
+/* 头像按钮：去除默认样式，保留点击区域；须 overflow:visible（button 默认 overflow:hidden 会裁掉上浮行程） */
 .mine-avatar-btn {
   background: none;
   border: none;
   padding: 0;
-  margin: 0 auto;
+  margin: 0 auto 20rpx;
   display: block;
   width: 130rpx;
   line-height: normal;
+  overflow: visible;
 }
 
 .mine-avatar-btn::after {
