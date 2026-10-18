@@ -174,6 +174,43 @@
   white-space: pre-wrap;
 }
 
+/* AI 回答轻量 markdown 块 */
+.ai-md {
+  white-space: normal;
+}
+.ai-md-p {
+  margin: 6rpx 0;
+}
+.ai-md-p:first-child,
+.ai-md-h:first-child,
+.ai-md-li:first-child {
+  margin-top: 0;
+}
+.ai-md-b {
+  font-weight: 700;
+}
+.ai-md-h {
+  font-weight: 700;
+  margin: 14rpx 0 4rpx;
+  color: #5A1A1A;
+}
+.ai-md-h1 { font-size: 34rpx; }
+.ai-md-h2 { font-size: 32rpx; }
+.ai-md-h3 { font-size: 30rpx; }
+.ai-md-h4 { font-size: 28rpx; }
+.ai-md-li {
+  display: flex;
+  margin: 4rpx 0;
+}
+.ai-md-mark {
+  flex: none;
+  margin-right: 10rpx;
+  color: #A00D26;
+}
+.ai-md-li-text {
+  flex: 1;
+}
+
 /* 加载三点 */
 .ai-typing {
   display: flex;

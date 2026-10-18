@@ -99,6 +99,62 @@ function quizDots(progress, reveal) {
   }));
 }
 
+/**
+ * 行内 **加粗** 解析：只配对的 ** 生效，孤立的保留原文。
+ * @param {string} text
+ * @param {string} keyPrefix 段 key 前缀（同一 wx:for 内唯一即可）
+ * @returns {Array<{_sk:string, t:string, b:boolean}>} b=true 为加粗段
+ */
+function mdInline(text, keyPrefix) {
+  const segs = [];
+  const re = /\*\*([^*]+)\*\*/g;
+  let last = 0;
+  let m;
+  let i = 0;
+  while ((m = re.exec(text))) {
+    if (m.index > last) segs.push({ _sk: keyPrefix + 's' + (i++), t: text.slice(last, m.index), b: false });
+    segs.push({ _sk: keyPrefix + 's' + (i++), t: m[1], b: true });
+    last = m.index + m[0].length;
+  }
+  if (last < text.length) segs.push({ _sk: keyPrefix + 's' + (i++), t: text.slice(last), b: false });
+  if (!segs.length) segs.push({ _sk: keyPrefix + 's0', t: '', b: false });
+  return segs;
+}
+
+/**
+ * 轻量 markdown 解析（AI 回答气泡渲染用）：支持 **加粗**、#~#### 标题、-/* 无序列表、
+ * 数字. 有序列表；其余非空行各自成段，空行忽略。不引入第三方库，输出结构供 WXML 直接渲染。
+ * @param {string} content AI 回答原文
+ * @returns {Array<{_bk:string, type:'h'|'p'|'li', level?:number, mark?:string, segs:Array}>}
+ */
+function parseMarkdownLite(content) {
+  const lines = String(content || '').split('\n');
+  const blocks = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const key = 'b' + i;
+    const trimmed = line.replace(/^\s+|\s+$/g, '');
+    if (!trimmed) continue;
+    const h = /^(#{1,4})\s+(.+)$/.exec(trimmed);
+    if (h) {
+      blocks.push({ _bk: key, type: 'h', level: h[1].length, segs: mdInline(h[2], key) });
+      continue;
+    }
+    const ul = /^[-*•]\s+(.+)$/.exec(trimmed);
+    if (ul) {
+      blocks.push({ _bk: key, type: 'li', mark: '•', segs: mdInline(ul[1], key) });
+      continue;
+    }
+    const ol = /^(\d+)[.、)]\s*(.+)$/.exec(trimmed);
+    if (ol) {
+      blocks.push({ _bk: key, type: 'li', mark: ol[1] + '.', segs: mdInline(ol[2], key) });
+      continue;
+    }
+    blocks.push({ _bk: key, type: 'p', segs: mdInline(trimmed, key) });
+  }
+  return blocks;
+}
+
 module.exports = {
   pad,
   formatDate,
@@ -107,5 +163,6 @@ module.exports = {
   formatTime,
   formatRelative,
   eventIcon,
-  quizDots
+  quizDots,
+  parseMarkdownLite
 };

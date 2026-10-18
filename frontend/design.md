@@ -66,7 +66,7 @@
 | `pages/rank/rank` | tab | 积分排行榜（V2.0，与 PC 同源 `/rank/points`）：前三名金银铜领奖台（2-1-3 排布）、4-10 名卡片、11 名起分页列表（触底加载）、本人高亮，本人 >10 名时底部常驻「我的排名」条；下拉刷新/错误重试 |
 | `pages/bind/bind` | 子页 | 扫码确认：解析 `?scene=`（L{token} PC 登录 / B{token} 身份绑定），未登录先经启动页自动登录（redirect 返回）；`qrInfo` 查询后按状态渲染确认卡（pending/scanned）/完成态（confirmed/used/cancelled）/错误态（failed 展示后端原因、凭证失效/格式非法）；确认/取消提交防重复 |
 | `pages/account/account` | 子页 | 账号与绑定：已绑定身份列表（渠道名/AppID/验证时间/绑定时间），wx_mini 登录凭证不可解绑，wx_web 可解绑（showModal 确认），空态提示 |
-| `pages/ai-chat/ai-chat` | tab | AI 历史助手（长征历史问答，AI 智能中心 §3.1）：连续对话（conversationId 为空新建、追问沿用同一会话，后端注入历史上下文）、消息气泡（用户右/AI 左）+ 加载三点动画、AI 回答下方展示后端核验过的已发布知识来源、空状态常见问题引导、发送失败气泡内「点击重试」、AI 未开放(403)/额度用尽(429) 转顶部常驻提示条、右上「会话」抽屉查看/切换/删除本人会话（归属由后端 JWT 判定，前端不传 user_id）；tabBar tab（替换原「情报」tab），`onShow` 登录守卫且账号切换时重置当前会话 |
+| `pages/ai-chat/ai-chat` | tab | AI 历史助手（长征历史问答，AI 智能中心 §3.1）：连续对话（conversationId 为空新建、追问沿用同一会话，后端注入历史上下文）、消息气泡（用户右/AI 左）+ 加载三点动画、AI 回答下方展示后端核验过的已发布知识来源、空状态常见问题引导、发送失败气泡内「点击重试」、AI 未开放(403)/额度用尽(429) 转顶部常驻提示条、右上「会话」抽屉查看/切换/删除本人会话（归属由后端 JWT 判定，前端不传 user_id）；tabBar tab（替换原「情报」tab），`onShow` 登录守卫且账号切换时重置当前会话；AI 回答气泡经 `util.parseMarkdownLite` 轻量 markdown 渲染（`**加粗**`、`#~####` 标题、`-/*` 无序列表、`数字.` 有序列表，孤立 `**` 保留原文），用户消息保持纯文本 |
 
 > 数据展示页统一「`onShow` → `refresh()`」刷新；非 tab 子页自行判断 `app.globalData.loggedIn`（tab 页 ai-chat 同样保留该守卫，并在账号切换时重置会话）。
 

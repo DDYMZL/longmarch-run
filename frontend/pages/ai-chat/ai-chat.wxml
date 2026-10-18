@@ -38,7 +38,22 @@
             <view wx:if="{{item.loading}}" class="ai-typing">
               <text class="dot"></text><text class="dot"></text><text class="dot"></text>
             </view>
-            <text wx:else class="ai-text" user-select>{{item.content}}</text>
+            <text wx:elif="{{item.role === 'user' || !item.blocks}}" class="ai-text" user-select>{{item.content}}</text>
+            <!-- AI 回答：轻量 markdown 渲染（加粗/标题/列表/段落），结构与 util.parseMarkdownLite 对应 -->
+            <view wx:else class="ai-text ai-md">
+              <block wx:for="{{item.blocks}}" wx:for-item="blk" wx:key="_bk">
+                <view wx:if="{{blk.type === 'h'}}" class="ai-md-h ai-md-h{{blk.level}}">
+                  <text wx:for="{{blk.segs}}" wx:for-item="seg" wx:key="_sk" user-select class="{{seg.b ? 'ai-md-b' : ''}}">{{seg.t}}</text>
+                </view>
+                <view wx:elif="{{blk.type === 'li'}}" class="ai-md-li">
+                  <text class="ai-md-mark">{{blk.mark}}</text>
+                  <text class="ai-md-li-text"><text wx:for="{{blk.segs}}" wx:for-item="seg" wx:key="_sk" user-select class="{{seg.b ? 'ai-md-b' : ''}}">{{seg.t}}</text></text>
+                </view>
+                <view wx:else class="ai-md-p">
+                  <text wx:for="{{blk.segs}}" wx:for-item="seg" wx:key="_sk" user-select class="{{seg.b ? 'ai-md-b' : ''}}">{{seg.t}}</text>
+                </view>
+              </block>
+            </view>
           </view>
 
           <!-- 失败重试 -->

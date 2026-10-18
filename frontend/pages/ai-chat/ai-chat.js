@@ -166,6 +166,7 @@ Page({
           _k: 'm' + (++_seq),
           role: 'assistant',
           content: res.reply || '',
+          blocks: util.parseMarkdownLite(res.reply || ''),
           sources: res.sources || [],
           usedTokens: res.usedTokens
         });
@@ -284,6 +285,8 @@ Page({
           _k: 'm' + (++_seq),
           role: m.role === 'user' ? 'user' : 'assistant',
           content: m.content || '',
+          // 仅助手消息做 markdown 块解析；用户消息保持纯文本
+          blocks: m.role === 'user' ? null : util.parseMarkdownLite(m.content || ''),
           sources: m.sources || []
         }));
         this.setData({
