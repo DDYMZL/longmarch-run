@@ -41,3 +41,13 @@ longmarch-run/
 ```
 
 跨子项目的变更（如前后端契约同步调整）视为一个任务，可在同一提交中包含多个子目录的改动，但提交信息需说明涉及范围。
+
+## 4. 数据库迁移 SQL（`docker/init/*.sql`）
+
+**新增或修改任何迁移 SQL 前，必须先读仓库根目录 `SQL_CONSTRAINTS.md`**——它是生产 openGauss 实测口径的唯一权威约束（`docker/init/SQL_CONSTRAINTS.md` 只是指向它的指针）。硬性要求：
+
+1. **语法**：禁止 `ALTER TABLE ... ADD/DROP COLUMN IF NOT EXISTS`（生产实测 `syntax error at or near "NOT EXISTS"`）；DDL 一律用 `DO $$ ... END $$;` + `information_schema` / `pg_indexes` 判定实现幂等。`CREATE INDEX IF NOT EXISTS`、`INSERT ... ON CONFLICT` 新迁移也不得依赖。
+2. **事务与幂等**：首尾包 `START TRANSACTION; ... COMMIT;`；禁止 `DROP TABLE` / `TRUNCATE` / 无 `WHERE` 的 `DELETE`；重算类 `UPDATE` 必须带收敛条件，不得全表覆写管理员手工调整过的数据。
+3. **生产执行六步**（缺一不可）：上传 `sql.tar.gz` → 进 gsql（`su - omm` 交互 + `export LD_LIBRARY_PATH`）→ `-v ON_ERROR_STOP=1 -f` 执行 → **回查列/表/索引是否真到位** → 登记 `schema_migrations` → 补 `GRANT` 并做「打得到新结构」的接口冒烟。`ON_ERROR_STOP` + `START TRANSACTION` 下失败是**静默整体回滚**，「跑过了」不等于「生效了」。
+4. **权限**：生产 DDL 由 `omm` 执行、应用连 `longmarch_app`，迁移脚本不含 `GRANT`；新建表与序列必须单独授权（漏序列会在第一次 `INSERT` 取号时才炸）。
+5. **本地不能代替生产验证**：本地容器用浮动 `latest` 镜像、且由 `init-db.sh` 执行，与生产版本和执行路径都不同，**本地跑通不构成生产可用的证据**；语法拿不准就跑 `SQL_CONSTRAINTS.md` §7 的探针脚本（事务内探测、`ROLLBACK` 零残留）。

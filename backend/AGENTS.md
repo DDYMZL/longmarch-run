@@ -83,7 +83,7 @@ schemas 被 routes/services 引用；core 不 import 业务模块
 
 1. **先读**：修改某域（如 quiz）前，先读 `app/api/routes/<域>.py`、`app/services/<域>_service.py`、`app/schemas/schemas.py` 相关段、`app/models/models.py` 相关模型；涉及规则时对照 `../frontend/services/<域>.js`。
 2. **改接口必改三处**：新增/修改 API 需同步更新 ① `routes` ② `services`（如有业务） ③ `schemas`，并检查 `main.py` 注册与前端 Mock 结构一致性。
-3. **改表结构**：同步修改 `app/models/models.py`、`data/seed.py`（如涉及默认数据）和 `../docker/init/`；新增递增编号 SQL，禁止修改已在共享数据库执行过的脚本。
+3. **改表结构**：同步修改 `app/models/models.py`、`data/seed.py`（如涉及默认数据）和 `../docker/init/`；新增递增编号 SQL，禁止修改已在共享数据库执行过的脚本。迁移 SQL 的语法、幂等、生产执行与验证口径以**仓库根 `SQL_CONSTRAINTS.md`** 为准：禁止 `ADD/DROP COLUMN IF NOT EXISTS`，DDL 用 `DO $$` 块 + `information_schema`/`pg_indexes` 判定；生产补跑后必须回查列/索引真到位、登记 `schema_migrations`、并给 `longmarch_app` 补新表与序列的 `GRANT`。**ORM 加列而生产库缺列时，全实体查询 `db.query(Model)` 的读写接口会全部 500（前端只显示兜底文案「请求失败」），而启动自检若只用投影列查询（如 `DailySport.date, .steps`）根本发现不了**——部署含新列的版本后，冒烟必须打得到该列的接口。
 4. **禁止行为**：
    - 禁止在路由中写业务规则；
    - 禁止绕过 `points_service` 直接写积分流水；
