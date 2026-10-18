@@ -1,5 +1,15 @@
 name: longmarch
 
+# 说明（上传目录持久化 / #18）：
+#   后端静态上传目录由 backend 配置项 UPLOAD_ROOT 指定（默认 backend/uploads），
+#   /uploads 静态服务与用户/人物头像均落此目录。若后端以容器方式部署，务必为
+#   UPLOAD_ROOT 挂载持久化卷（named volume 或宿主机 bind mount），否则容器重建
+#   会丢失已上传头像；同时确保 UPLOAD_ROOT 指向独立子目录而非项目根（后端启动时
+#   _assert_upload_layout 会断言其不含 .env、不是项目根）。示例（按需加入 backend 服务）：
+#     volumes:
+#       - longmarch-uploads:/app/backend/uploads   # 与 UPLOAD_ROOT 一致
+#   本 compose 当前仅编排数据库与初始化，故此处只作注释说明，不改动服务结构。
+
 services:
   opengauss:
     image: opengauss/opengauss-server:latest
