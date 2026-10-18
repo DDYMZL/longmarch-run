@@ -18,6 +18,39 @@
   margin: 0 auto 20rpx;
   background: rgba(255, 255, 255, 0.2);
   border: 4rpx solid rgba(255, 255, 255, 0.5);
+  position: relative;
+}
+
+/* 头像按钮：去除默认样式，保留点击区域 */
+.mine-avatar-btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0 auto;
+  display: block;
+  width: 130rpx;
+  line-height: normal;
+}
+
+.mine-avatar-btn::after {
+  border: none;
+}
+
+/* 头像编辑角标 */
+.avatar-edit-badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 36rpx;
+  height: 36rpx;
+  border-radius: 50%;
+  background: rgba(200, 16, 46, 0.85);
+  color: #FFFFFF;
+  font-size: 18rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2rpx solid rgba(255, 255, 255, 0.7);
 }
 
 .mine-avatar image {

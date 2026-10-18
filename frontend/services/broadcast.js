@@ -15,7 +15,9 @@ function toActivityView(item) {
     icon: util.eventIcon(item.eventType),
     nickname: item.nickname || '战友',
     text: item.text || '',
-    timeText: util.formatRelative(atIso)
+    timeText: util.formatRelative(atIso),
+    // 点亮节点类事件携带 nodeId，点击可进入节点详情（B7）
+    nodeId: item.nodeId || null
   };
 }
 

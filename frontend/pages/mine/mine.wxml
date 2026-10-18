@@ -1,10 +1,13 @@
 <view class="mine-page">
   <!-- 用户信息 -->
   <view class="mine-header">
-    <view class="mine-avatar anim-float">
-      <image wx:if="{{user.avatar}}" src="{{user.avatar}}" mode="aspectFill" />
-      <text wx:else class="avatar-placeholder">🏃</text>
-    </view>
+    <button class="mine-avatar-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+      <view class="mine-avatar anim-float">
+        <image wx:if="{{user.avatar}}" src="{{user.avatar}}" mode="aspectFill" />
+        <text wx:else class="avatar-placeholder">🏃</text>
+        <view class="avatar-edit-badge">✎</view>
+      </view>
+    </button>
     <view class="mine-name-row">
       <view class="mine-name">{{user.nickname}}</view>
       <!-- 修改入口：仅未修改过时展示，已改名（nicknameChangedAt 有值）则隐藏 -->

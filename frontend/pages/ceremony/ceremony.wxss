@@ -89,3 +89,25 @@
   margin-top: 8rpx;
   background: linear-gradient(135deg, #B8860B, #8C6D2F);
 }
+
+/* 保存 / 分享按钮组 */
+.ceremony-actions {
+  display: flex;
+  gap: 20rpx;
+  margin: 8rpx 0 16rpx;
+}
+
+.ceremony-btn {
+  flex: 1;
+  font-size: 26rpx;
+  line-height: 2.4;
+  padding: 0;
+  border-radius: 40rpx;
+  color: #FFE9A8;
+  background: rgba(255, 255, 255, 0.08);
+  border: 2rpx solid rgba(212, 160, 23, 0.5);
+}
+
+.ceremony-btn::after {
+  border: none;
+}

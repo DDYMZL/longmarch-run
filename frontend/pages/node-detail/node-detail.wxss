@@ -248,3 +248,9 @@
   margin-bottom: 20rpx;
   background: linear-gradient(135deg, #B8860B, #8C6D2F);
 }
+
+.ask-ai-btn {
+  width: 100%;
+  margin-bottom: 20rpx;
+  box-sizing: border-box;
+}

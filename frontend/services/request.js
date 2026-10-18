@@ -32,6 +32,8 @@ function clearSession() {
   } catch (e) {
     // Storage 清理失败时仍重置当前会话
   }
+  // 清除 last-good 缓存，杜绝下一账号弱网兜底时读到上一账号数据
+  clearAllCache();
   try {
     const app = getApp();
     if (app && app.globalData) {
@@ -128,7 +130,27 @@ function redirectActivityClosed() {
  */
 function request(options) {
   const opts = options || {};
-  return send(opts).catch((err) => {
+  const method = (opts.method || 'GET').toUpperCase();
+  const useCache = method === 'GET' && !opts.skipCache && isCachePath(opts.url);
+
+  return send(opts).then(
+    (data) => {
+      // 核心 GET 成功：写入 last-good 缓存
+      if (useCache) writeCache(opts.url, data);
+      return data;
+    },
+    (err) => {
+      // 核心 GET 网络失败：尝试读缓存兜底（附加 _fromCache 标记供调用方提示）
+      if (useCache && err.network) {
+        const cached = readCache(opts.url);
+        if (cached !== null) {
+          const patched = Object.assign({}, cached, { _fromCache: true });
+          return Promise.resolve(patched);
+        }
+      }
+      throw err;
+    }
+  ).catch((err) => {
     if (err.activityStatus) {
       const isView = (opts.method || 'GET').toUpperCase() === 'GET';
       if (isView && !opts.skipActivityRedirect) redirectActivityClosed();
@@ -159,9 +181,120 @@ function request(options) {
   });
 }
 
+/**
+ * 文件上传（wx.uploadFile）：不设 Content-Type（由微信自动拼 multipart boundary），
+ * 复用 Authorization 头与错误分类。
+ * @param {string} url   相对路径（如 /auth/avatar）
+ * @param {string} filePath  本地临时文件路径
+ * @returns {Promise<any>}   解析后的 JSON 响应
+ */
+function uploadFile(url, filePath) {
+  const token = getToken();
+  const header = {};
+  if (token) header.Authorization = 'Bearer ' + token;
+
+  return new Promise((resolve, reject) => {
+    wx.uploadFile({
+      url: API_BASE_URL + url,
+      filePath: filePath,
+      name: 'file',
+      header: header,
+      timeout: 15000,
+      success: (res) => {
+        let data = null;
+        try { data = JSON.parse(res.data); } catch (e) { /* 非 JSON 响应 */ }
+        if (res.statusCode >= 200 && res.statusCode < 300) {
+          resolve(data);
+          return;
+        }
+        const fallback = res.statusCode === 401 ? '登录已过期，请重新登录' : '上传失败';
+        reject(buildError(errorMessage(data, fallback), { statusCode: res.statusCode }));
+      },
+      fail: (err) => {
+        const raw = (err && err.errMsg) || '';
+        reject(buildError(raw ? '文件上传失败｜' + raw : '文件上传失败，请检查网络', { network: true, rawErrMsg: raw }));
+      }
+    });
+  });
+}
+
+/**
+ * 需要"last-good 缓存"的核心 GET 接口白名单（仅对这些路径写 Storage）。
+ * 缓存键前缀 lm_cache_ 且按用户隔离，网络失败时回读并附加 fromCache 标记。
+ */
+const CACHE_PATHS = ['/march/route', '/sport/today', '/medal/list'];
+const CACHE_PREFIX = 'lm_cache_';
+
+/** 判断某请求路径是否应使用 last-good 缓存 */
+function isCachePath(url) {
+  if (!url) return false;
+  const path = url.split('?')[0];
+  return CACHE_PATHS.indexOf(path) >= 0;
+}
+
+/** 当前登录用户 ID（缓存隔离标识）；未登录返回 ''。 */
+function currentUserId() {
+  try {
+    const u = wx.getStorageSync(USER_KEY);
+    return u && u.id !== undefined && u.id !== null ? String(u.id) : '';
+  } catch (e) {
+    return '';
+  }
+}
+
+/** 缓存键：lm_cache_{userId}_{path去掉斜杠}，按用户隔离，杜绝跨账号脏读。 */
+function cacheKey(url) {
+  const uid = currentUserId() || 'anon';
+  return CACHE_PREFIX + uid + '_' + url.split('?')[0].replace(/\//g, '_').replace(/^_/, '');
+}
+
+/** 写入 last-good 缓存（记录 ownerId 供读取时二次校验；未登录或 Storage 满时静默忽略）。 */
+function writeCache(url, data) {
+  const uid = currentUserId();
+  if (!uid) return; // 未登录不缓存鉴权数据
+  try {
+    wx.setStorageSync(cacheKey(url), { ownerId: uid, data: data });
+  } catch (e) { /* 静默 */ }
+}
+
+/**
+ * 读取 last-good 缓存：校验 ownerId 与当前登录用户一致，不一致（含旧格式无 ownerId）则丢弃。
+ * @returns {any|null} 缓存数据；无缓存或不属于当前用户时返回 null
+ */
+function readCache(url) {
+  const uid = currentUserId();
+  if (!uid) return null;
+  try {
+    const entry = wx.getStorageSync(cacheKey(url));
+    if (!entry || entry.ownerId !== uid) return null;
+    return entry.data !== undefined ? entry.data : null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/** 清除所有 last-good 缓存项（切换账号 / 登出 / 会话失效时调用）。 */
+function clearAllCache() {
+  try {
+    const keys = wx.getStorageInfoSync().keys || [];
+    keys.forEach((k) => {
+      if (typeof k === 'string' && k.indexOf(CACHE_PREFIX) === 0) {
+        try { wx.removeStorageSync(k); } catch (e) { /* 单项失败忽略 */ }
+      }
+    });
+  } catch (e) {
+    // 无法枚举时退化不清理；读取端 ownerId 校验仍可兜底防脏读
+  }
+}
+
 module.exports = {
   TOKEN_KEY,
   getToken,
   setReauthHandler,
-  request
+  request,
+  uploadFile,
+  isCachePath,
+  writeCache,
+  readCache,
+  clearAllCache
 };

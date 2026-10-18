@@ -35,6 +35,9 @@
   <view class="march-header">
     <view class="march-header-title">长征路线</view>
     <view class="march-header-sub">累计 {{currentSteps}} / {{totalSteps}} 步 · 已点亮 {{litCount}}/{{totalCount}}</view>
+    <view class="march-sync-btn {{syncing ? 'syncing' : ''}}" bindtap="handleSyncSteps">
+      {{syncing ? '同步中…' : '⟳ 同步行军'}}
+    </view>
     <view wx:if="{{finished}}" class="finish-banner" bindtap="goCeremony">🎉 恭喜完成长征路线！查看完成仪式 ›</view>
   </view>
 

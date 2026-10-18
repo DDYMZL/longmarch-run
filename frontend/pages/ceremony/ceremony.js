@@ -11,6 +11,7 @@ const march = require('../../services/march');
 const profile = require('../../services/profile');
 const util = require('../../utils/util');
 const routeCanvas = require('../../utils/routeCanvas');
+const { ensureScope } = require('../../utils/authGuide');
 
 // 仪式时间轴（秒）：各阶段起始时刻
 const TL = {
@@ -34,7 +35,8 @@ Page({
     // 画布快照（动画收尾后把最终帧导出为静态图，DOM 数据卡浮于其上，
     // 规避 canvas 原生层在开发者工具中覆盖 DOM 的问题）
     sceneShot: '',
-    coverCanvas: false
+    coverCanvas: false,
+    saving: false
   },
 
   onLoad() {
@@ -42,6 +44,7 @@ Page({
       wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
+    wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] });
     Promise.all([march.getRoute(), profile.getSummary().catch(() => null)])
       .then(([route, summary]) => {
         if (!route || !route.finished) {
@@ -426,5 +429,80 @@ Page({
       .markCeremony()
       .catch(() => {})
       .then(back);
+  },
+
+  /**
+   * 保存仪式画面到相册：优先复用画布快照 sceneShot（已在收尾时导出），
+   * 无快照时从画布实时导出；授权失败引导前往设置页开启（复用 ticket 保存模式）。
+   */
+  handleSave() {
+    if (this.data.saving || !this.data.ready) return;
+    this.setData({ saving: true });
+    if (this.data.sceneShot) {
+      this._saveToAlbum(this.data.sceneShot);
+      return;
+    }
+    if (!this._canvas) {
+      this.setData({ saving: false });
+      wx.showToast({ title: '画面尚未就绪', icon: 'none' });
+      return;
+    }
+    wx.canvasToTempFilePath({
+      canvas: this._canvas,
+      success: (res) => this._saveToAlbum(res.tempFilePath),
+      fail: () => {
+        this.setData({ saving: false });
+        wx.showToast({ title: '生成图片失败', icon: 'none' });
+      }
+    });
+  },
+
+  /** 实际写入相册；权限被拒时引导用户前往设置页开启 */
+  _saveToAlbum(filePath) {
+    wx.saveImageToPhotosAlbum({
+      filePath,
+      success: () => {
+        wx.showToast({ title: '已保存到相册', icon: 'success' });
+        this.setData({ saving: false });
+      },
+      fail: (err) => {
+        this.setData({ saving: false });
+        if (err && /auth|authorize/.test(err.errMsg || '')) {
+          ensureScope('scope.writePhotosAlbum', '需要相册写入权限才能保存长征完成画面，请在设置中开启。')
+            .then((granted) => {
+              if (granted) {
+                this.setData({ saving: true });
+                this._saveToAlbum(filePath);
+              }
+            });
+        } else {
+          wx.showToast({ title: '保存失败', icon: 'none' });
+        }
+      }
+    });
+  },
+
+  /** 分享标题：带个人成绩 */
+  _shareTitle() {
+    const s = this.data.stats;
+    if (s) {
+      return '我完成了长征步迹！累计行军 ' + s.totalStepsText + ' 步，点亮 ' + s.litCount + '/' + s.totalCount + ' 个节点';
+    }
+    return '我完成了长征步迹！';
+  },
+
+  onShareAppMessage() {
+    return {
+      title: this._shareTitle(),
+      imageUrl: this.data.sceneShot || undefined,
+      path: '/pages/home/home'
+    };
+  },
+
+  onShareTimeline() {
+    return {
+      title: this._shareTitle(),
+      imageUrl: this.data.sceneShot || undefined
+    };
   }
 });

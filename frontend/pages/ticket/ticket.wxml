@@ -11,9 +11,12 @@
     </view>
 
     <view class="ticket-tip">长按或点击下方按钮，保存你的长征纪念票</view>
-    <button class="btn-primary save-btn" loading="{{saving}}" disabled="{{saving}}" bindtap="handleSave">
-      保存到相册
-    </button>
+    <view class="ticket-actions">
+      <button class="btn-primary save-btn" loading="{{saving}}" disabled="{{saving}}" bindtap="handleSave">
+        保存到相册
+      </button>
+      <button class="share-btn" open-type="share">分享给好友</button>
+    </view>
   </block>
 
   <view wx:else class="loading-tip">纪念票生成中…</view>

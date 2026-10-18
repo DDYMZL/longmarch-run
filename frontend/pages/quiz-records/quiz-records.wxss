@@ -47,3 +47,30 @@
   color: #D4A017;
   font-weight: 600;
 }
+
+/* 错误态 / 加载中 / 触底提示（与 rank.wxss 同风格） */
+.state-box {
+  padding: 120rpx 60rpx 0;
+  text-align: center;
+}
+
+.state-icon {
+  font-size: 80rpx;
+}
+
+.state-text {
+  margin: 20rpx 0 40rpx;
+  font-size: 28rpx;
+  color: #666666;
+}
+
+.state-btn {
+  width: 100%;
+}
+
+.load-tip {
+  padding: 24rpx 0 4rpx;
+  text-align: center;
+  font-size: 24rpx;
+  color: #999999;
+}

@@ -114,6 +114,7 @@
       class="btn-primary ticket-btn"
       bindtap="goTicket"
     >🎫 生成纪念票</button>
+    <button class="btn-ghost ask-ai-btn" bindtap="goAskAI">💬 问 AI</button>
     <button class="btn-primary" bindtap="handleContinue">
       {{node.status === 'completed' ? '继续运动' : '去运动点亮'}}
     </button>

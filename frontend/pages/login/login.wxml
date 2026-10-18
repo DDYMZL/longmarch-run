@@ -2,8 +2,6 @@
   <view class="login-hero">
     <view class="logo">🚩</view>
     <view class="app-name">长征运动挑战</view>
-
-    <!-- 不展示昵称输入框：登录后昵称默认为「长征小战士」，可在「我的」页修改一次 -->
     <view class="slogan">行万里路 · 学长征历史</view>
     <view class="flag-line">
       <view class="flag-dot"></view>
@@ -16,14 +14,40 @@
 
   <view class="login-actions">
     <view wx:if="{{errorMsg}}" class="error-tip">{{errorMsg}}</view>
-    <!-- 微信授权登录：按钮本身即头像选择器，点击后先选微信头像（首项“用微信头像”）再完成登录 -->
+
+    <!-- 头像选择（可选）：带默认占位，点击后弹出微信头像选择器 -->
+    <view class="avatar-pick-area">
+      <button class="avatar-pick-btn" open-type="chooseAvatar" bindchooseavatar="onChooseAvatar">
+        <view class="avatar-pick-inner">
+          <image wx:if="{{avatarUrl}}" class="avatar-pick-img" src="{{avatarUrl}}" mode="aspectFill" />
+          <view wx:else class="avatar-pick-placeholder">
+            <text class="avatar-pick-icon">👤</text>
+            <text class="avatar-pick-hint">选择头像</text>
+          </view>
+        </view>
+      </button>
+      <view class="avatar-pick-tip">可选 · 不选则使用默认头像</view>
+    </view>
+
+    <!-- 协议勾选 -->
+    <view class="agree-row" bindtap="toggleAgree">
+      <view class="agree-check {{agreed ? 'checked' : ''}}">
+        <text wx:if="{{agreed}}" class="agree-tick">✓</text>
+      </view>
+      <view class="agree-text">
+        我已阅读并同意
+        <text class="agree-link" catchtap="goAgreement">《用户协议》</text>
+        和
+        <text class="agree-link" catchtap="goPrivacy">《隐私政策》</text>
+      </view>
+    </view>
+
+    <!-- 微信授权登录（普通按钮，不再依赖 chooseAvatar） -->
     <button
       class="btn-primary login-btn"
-      open-type="chooseAvatar"
-      bindchooseavatar="onChooseAvatar"
       loading="{{loading}}"
       disabled="{{loading}}"
+      bindtap="doLogin"
     >微信授权登录</button>
-    <view class="agreement">点击后将选择微信头像并登录 · 同意相关用户协议</view>
   </view>
 </view>

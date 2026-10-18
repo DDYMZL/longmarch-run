@@ -28,9 +28,31 @@
   color: #8C6D2F;
 }
 
-.save-btn {
+.ticket-actions {
   margin-top: 24rpx;
   width: 640rpx;
+  display: flex;
+  gap: 20rpx;
+}
+
+.save-btn {
+  flex: 1;
+  margin: 0;
+}
+
+.share-btn {
+  flex: 1;
+  margin: 0;
+  font-size: 30rpx;
+  color: #A00D26;
+  background: #FFFFFF;
+  border: 2rpx solid #C8102E;
+  border-radius: 44rpx;
+  line-height: 2.6;
+}
+
+.share-btn::after {
+  border: none;
 }
 
 .error-block {

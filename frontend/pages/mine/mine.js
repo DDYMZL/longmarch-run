@@ -70,6 +70,28 @@ Page({
       });
   },
 
+  /** 更换头像：chooseAvatar 回调后上传到服务端（用户主动，失败提示并回滚原头像） */
+  onChooseAvatar(e) {
+    const avatarUrl = (e.detail && e.detail.avatarUrl) || '';
+    if (!avatarUrl) return;
+    const prevUser = this.data.user; // 失败回滚用
+    wx.showLoading({ title: '上传中…', mask: true });
+    auth
+      .uploadAvatar(avatarUrl) // 非静默：失败会抛出
+      .then((updated) => {
+        wx.hideLoading();
+        if (updated) {
+          this.setData({ user: updated });
+          wx.showToast({ title: '头像已更新', icon: 'success' });
+        }
+      })
+      .catch(() => {
+        wx.hideLoading();
+        this.setData({ user: prevUser }); // 回滚为原头像
+        wx.showToast({ title: '头像上传失败，请重试', icon: 'none' });
+      });
+  },
+
   goPoints() {
     wx.navigateTo({ url: '/pages/points/points' });
   },

@@ -184,6 +184,8 @@ Page({
       .answer(this._question.id, selected)
       .then((res) => {
         this.stopTimer();
+        // 答题影响首页情报卡/积分：置脏标记，返回首页时强制刷新（绕过 30s 节流）
+        app.globalData.homeDirty = true;
         if (this.mode === 'review') {
           // 交卷模式：不揭示对错，逐题静默推进；最后一题提交后进入交卷态
           if (res.finished) {

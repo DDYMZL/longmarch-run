@@ -11,6 +11,7 @@
  */
 const app = getApp();
 const march = require('../../services/march');
+const sport = require('../../services/sport');
 const arrivePopup = require('../../utils/arrivePopup');
 const routeCanvas = require('../../utils/routeCanvas');
 const nodeThemes = require('../../data/node-themes');
@@ -64,7 +65,9 @@ Page({
     showIntro: false,
     showVeil: false,
     // 抵达事件卡弹层（light-up 返回新点亮节点/新完成章节后按队列播放）
-    litPopup: null
+    litPopup: null,
+    // 就地同步行军步数（B6）：syncing 锁防止重复触发
+    syncing: false
   },
 
   onShow() {
@@ -152,23 +155,64 @@ Page({
 
     // 先尝试点亮达标节点（幂等，仅返回本次新点亮与新完成章节），再拉取路线；
     // 有新点亮时播放到达动画序列（轨迹推进 → 节点发光扩散 → 抵达事件卡 → 章节仪式）。
-    march
+    return march
       .lightUpNodes()
       .catch(() => ({ newlyLit: [], newlyCompletedChapters: [] }))
       .then((res) => {
         if (this._refreshRequestId !== requestId) return null;
         this._pendingLit = res.newlyLit;
         this._pendingChapters = res.newlyCompletedChapters;
+        // 有新点亮/新完成章节：影响首页路线与进度，置脏让首页强制刷新
+        if ((res.newlyLit && res.newlyLit.length) || (res.newlyCompletedChapters && res.newlyCompletedChapters.length)) {
+          app.globalData.homeDirty = true;
+        }
         return march.getRoute();
       })
       .then((route) => {
         if (!route || this._refreshRequestId !== requestId) return;
+        // last-good 缓存兜底：网络失败回读缓存时提示可能非最新
+        if (route._fromCache) wx.showToast({ title: '网络异常，当前为最近缓存数据', icon: 'none' });
         this.renderRoute(route);
         this.playArriveIfNeeded();
         this.maybeStartCeremony(route);
       })
       .catch(() => {
         // 网络失败时保留上一次渲染的路线
+      });
+  },
+
+  /** 下拉刷新：重新点亮并拉取路线 */
+  onPullDownRefresh() {
+    this.refresh().then(() => wx.stopPullDownRefresh());
+  },
+
+  /**
+   * 就地同步行军步数（B6）：复用首页 handleSyncSteps 模式。
+   * sport.syncToday 内部已处理微信运动授权（拒绝时走 authGuide 引导前往设置页）；
+   * 成功后调 refresh()（内部 lightUpNodes + 抵达事件队列 + 路线重绘）。
+   */
+  handleSyncSteps() {
+    if (this.data.syncing) return;
+    this.setData({ syncing: true });
+    sport
+      .syncToday()
+      .then((result) => {
+        // 同步步数影响首页今日行军卡：置脏标记，返回首页时强制刷新（绕过 30s 节流）
+        app.globalData.homeDirty = true;
+        if (result && result.synced) {
+          wx.showToast({ title: result.historyDetailsAvailable ? '近7天步数已同步' : '步数已同步', icon: 'success' });
+        } else if (result && result.failedDates && result.failedDates.length > 0) {
+          wx.showToast({ title: '部分日期同步失败，请稍后重试', icon: 'none' });
+        } else {
+          wx.showToast({ title: '步数已是最新', icon: 'none' });
+        }
+        this.refresh();
+      })
+      .catch((err) => {
+        wx.showToast({ title: (err && err.message) || '暂时无法获取微信运动数据，请稍后重试', icon: 'none' });
+      })
+      .finally(() => {
+        this.setData({ syncing: false });
       });
   },
 

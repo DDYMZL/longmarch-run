@@ -8,14 +8,18 @@
  */
 const app = getApp();
 const ai = require('../../services/ai');
+const march = require('../../services/march');
 const util = require('../../utils/util');
 
+// 建议问题接口失败时的兜底文案
 const COMMON_QUESTIONS = [
   '红军长征是从什么时候开始的？',
   '遵义会议有什么历史意义？',
   '红军长征翻越了哪些雪山？',
   '飞夺泸定桥是怎么回事？'
 ];
+
+const SESSION_PAGE_SIZE = 20;
 
 let _seq = 0;
 
@@ -28,17 +32,23 @@ Page({
     sending: false,
     toView: '',
     commonQuestions: COMMON_QUESTIONS,
+    // 节点上下文（B5）：从节点详情「问 AI」进入时携带，展示为可清除的 chip
+    nodeContext: null,
     // 会话抽屉
     showSessions: false,
     sessions: [],
     sessionsLoading: false,
+    sessionsHasMore: false,
     // 顶部提示条（AI 未开放/额度用尽等，非致命错误）
     banner: ''
   },
 
   onLoad(options) {
-    // 支持从节点讲解等入口带 nodeId 追问（Phase A 先不接入，保留参数通道）
+    // 支持从节点讲解等入口带 nodeId 追问（tab 页主要走 globalData.pendingAiNodeId）
     this.nodeId = options && options.nodeId ? Number(options.nodeId) : null;
+    this._sessionsPage = 0;
+    this._sessionsTotal = 0;
+    this.loadSuggestedQuestions(this.nodeId);
   },
 
   onShow() {
@@ -52,7 +62,55 @@ Page({
       this._uid = uid;
       this.setData({ messages: [], conversationId: null, title: '', banner: '', sessions: [], showSessions: false });
     }
+    // 消费节点详情「问 AI」传入的上下文（switchTab 不支持 query，走 globalData）
+    const pendingId = app.globalData.pendingAiNodeId;
+    if (pendingId) {
+      app.globalData.pendingAiNodeId = null;
+      this.applyNodeContext(Number(pendingId));
+    }
   },
+
+  /**
+   * 应用节点上下文：记录 nodeId、拉取节点名做 chip 展示，并刷新该节点的建议问题。
+   * @param {number} nodeId
+   */
+  applyNodeContext(nodeId) {
+    if (!nodeId) return;
+    this.nodeId = nodeId;
+    // 先占位展示，节点名加载成功后补全
+    this.setData({ nodeContext: { id: nodeId, name: '' } });
+    this.loadSuggestedQuestions(nodeId);
+    march.getNodeDetail(nodeId)
+      .then((node) => {
+        if (this.nodeId === nodeId && node) {
+          this.setData({ nodeContext: { id: nodeId, name: node.name || '' } });
+        }
+      })
+      .catch(() => { /* 名称加载失败不影响追问，chip 仍展示 id 上下文 */ });
+  },
+
+  /** 清除节点上下文：恢复无上下文的默认建议问题 */
+  clearNodeContext() {
+    this.nodeId = null;
+    this.setData({ nodeContext: null });
+    this.loadSuggestedQuestions(null);
+  },
+
+  /**
+   * 加载建议问题（B5）：优先调后端接口，失败回退硬编码常见问题。
+   * @param {number|null} nodeId
+   */
+  loadSuggestedQuestions(nodeId) {
+    ai.getSuggestedQuestions(nodeId)
+      .then((res) => {
+        const items = ((res && res.items) || []).map((it) => it.text).filter((t) => t);
+        this.setData({ commonQuestions: items.length ? items : COMMON_QUESTIONS });
+      })
+      .catch(() => {
+        this.setData({ commonQuestions: COMMON_QUESTIONS });
+      });
+  },
+
 
   /** 输入框实时同步 */
   onInput(e) {
@@ -167,7 +225,7 @@ Page({
   // ---------------- 会话抽屉 ----------------
   openSessions() {
     this.setData({ showSessions: true });
-    this.loadSessions();
+    this.loadSessions(true);
   },
 
   closeSessions() {
@@ -176,24 +234,44 @@ Page({
 
   noop() {},
 
-  loadSessions() {
+  /** 抽屉打开时加载更多会话（下一页） */
+  loadMoreSessions() {
+    if (this.data.sessionsLoading || !this.data.sessionsHasMore) return;
+    this.loadSessions(false);
+  },
+
+  /**
+   * 加载会话列表（分页）。
+   * @param {boolean} reset true=重新从第一页加载；false=追加下一页
+   */
+  loadSessions(reset) {
+    const page = reset ? 1 : this._sessionsPage + 1;
     this.setData({ sessionsLoading: true });
-    ai.listConversations(1, 50)
+    ai.listConversations(page, SESSION_PAGE_SIZE)
       .then((res) => {
-        const items = (res.items || []).map((it) => ({
+        const rawItems = res.items || [];
+        const items = rawItems.map((it) => ({
           conversationId: it.conversationId,
           title: it.title || '未命名会话',
           preview: it.preview || '',
           messageCount: it.messageCount || 0,
           timeText: util.formatRelative(it.updatedAt || it.createdAt)
         }));
-        this.setData({ sessions: items, sessionsLoading: false });
+        const sessions = reset ? items : this.data.sessions.concat(items);
+        this._sessionsPage = page;
+        this._sessionsTotal = res.total || sessions.length;
+        this.setData({
+          sessions,
+          sessionsLoading: false,
+          sessionsHasMore: sessions.length < this._sessionsTotal && rawItems.length > 0
+        });
       })
       .catch((err) => {
         this.setData({ sessionsLoading: false });
         wx.showToast({ title: (err && err.message) || '会话列表加载失败', icon: 'none' });
       });
   },
+
 
   /** 切换到某个历史会话：拉详情并渲染消息 */
   tapSession(e) {

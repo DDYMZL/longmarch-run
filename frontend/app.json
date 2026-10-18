@@ -33,6 +33,10 @@
     "backgroundColor": "#F7F1E5",
     "backgroundTextStyle": "dark"
   },
+  "networkTimeout": {
+    "request": 10000,
+    "uploadFile": 15000
+  },
   "tabBar": {
     "color": "#999999",
     "selectedColor": "#C8102E",

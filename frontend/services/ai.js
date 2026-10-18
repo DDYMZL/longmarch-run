@@ -60,9 +60,21 @@ function deleteConversation(conversationId) {
   });
 }
 
+/**
+ * 建议问题（B5）：按节点上下文返回引导提问。
+ * @param {number} [nodeId] 节点 ID，携带则返回该节点相关建议问题
+ * @returns {Promise<{items:Array<{text:string}>}>}
+ */
+function getSuggestedQuestions(nodeId) {
+  const data = {};
+  if (nodeId) data.nodeId = nodeId;
+  return requestService.request({ url: '/ai/suggested-questions', data });
+}
+
 module.exports = {
   chat,
   listConversations,
   getConversation,
-  deleteConversation
+  deleteConversation,
+  getSuggestedQuestions
 };

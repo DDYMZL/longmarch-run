@@ -23,6 +23,23 @@
   animation: fadeUp 0.6s ease 0.15s both;
 }
 
+/* 就地同步行军按钮（B6） */
+.march-sync-btn {
+  display: inline-block;
+  margin-top: 16rpx;
+  padding: 10rpx 28rpx;
+  font-size: 26rpx;
+  color: #FFFFFF;
+  background: rgba(255, 255, 255, 0.18);
+  border: 2rpx solid rgba(255, 255, 255, 0.45);
+  border-radius: 32rpx;
+  animation: fadeUp 0.6s ease 0.2s both;
+}
+
+.march-sync-btn.syncing {
+  opacity: 0.6;
+}
+
 .finish-banner {
   margin-top: 16rpx;
   font-size: 28rpx;

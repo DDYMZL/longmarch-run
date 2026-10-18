@@ -1,6 +1,6 @@
 <view class="records-page">
-  <!-- 汇总 -->
-  <view class="summary-card">
+  <!-- 汇总（后端全局汇总字段 totalSteps/avgSteps，精确全量） -->
+  <view wx:if="{{!errorMsg && records.length > 0}}" class="summary-card">
     <view class="summary-item">
       <view class="summary-num">{{totalSteps}}</view>
       <view class="summary-label">总累计步数</view>
@@ -11,9 +11,21 @@
     </view>
   </view>
 
+  <!-- 网络失败错误态 -->
+  <view wx:if="{{errorMsg}}" class="state-box">
+    <view class="state-icon">📶</view>
+    <view class="state-text">{{errorMsg}}</view>
+    <button class="btn-primary state-btn" bindtap="handleRetry">重新加载</button>
+  </view>
+
+  <!-- 首屏加载中 -->
+  <view wx:elif="{{loading}}" class="state-box">
+    <view class="state-text">加载中…</view>
+  </view>
+
   <!-- 列表 -->
-  <view class="card list-card">
-    <view class="card-title">最近 30 天</view>
+  <view wx:else class="card list-card">
+    <view class="card-title">运动记录</view>
     <block wx:if="{{records.length > 0}}">
       <view class="record-row" wx:for="{{records}}" wx:key="date">
         <view class="record-date">
@@ -24,6 +36,7 @@
         </view>
         <view class="record-steps">{{item.steps}} 步</view>
       </view>
+      <view class="load-tip">{{loadingMore ? '加载中…' : (hasMore ? '上拉加载更多' : '— 已显示全部 —')}}</view>
     </block>
     <view wx:else class="empty-tip">暂无运动记录，去首页同步步数吧</view>
   </view>

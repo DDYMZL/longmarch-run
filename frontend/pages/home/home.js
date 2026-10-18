@@ -13,9 +13,14 @@ const broadcast = require('../../services/broadcast');
 const org = require('../../services/org');
 const quote = require('../../services/quote');
 const activity = require('../../services/activity');
+const rank = require('../../services/rank');
 const ws = require('../../services/ws');
 const util = require('../../utils/util');
 const arrivePopup = require('../../utils/arrivePopup');
+const { ensureScope } = require('../../utils/authGuide');
+
+// 首页刷新节流：30s 内非强制刷新（如快速切 tab 回到首页）不重复请求，减轻弱网压力
+const REFRESH_THROTTLE = 30000;
 
 /**
  * 今日行军状态文案（需求 §6.3/6.4：按真实数据分档，不随机生成）
@@ -108,7 +113,11 @@ Page({
     // 抵达事件卡弹层
     litPopup: null,
     // 活动未进行中横幅
-    activityBanner: null
+    activityBanner: null,
+    // 同行人用户卡抽屉（B7：复用排行榜用户卡逻辑）
+    showUserCard: false,
+    userCardLoading: false,
+    userCard: null
   },
 
   onShow() {
@@ -121,7 +130,13 @@ Page({
     if (!this._wsUnsub) {
       this._wsUnsub = ws.subscribe((msg) => this.handleWsMessage(msg));
     }
-    this.refreshAll();
+    // 跨页写操作（答题/点亮/同步）置脏标记：强制刷新绕过 30s 节流，保证返回首页即最新
+    if (app.globalData.homeDirty) {
+      app.globalData.homeDirty = false;
+      this.refreshAll(true);
+    } else {
+      this.refreshAll();
+    }
   },
 
   onHide() {
@@ -136,23 +151,42 @@ Page({
     if (this._wsUnsub) { this._wsUnsub(); this._wsUnsub = null; }
   },
 
+  /** 下拉刷新：强制刷新全部数据（绕过节流） */
+  onPullDownRefresh() {
+    this.refreshAll(true).then(() => wx.stopPullDownRefresh());
+  },
+
   /**
-   * WS 推送：activity 消息实时插入动态流顶部（最多保留 6 条，单条小 setData）
+   * WS 推送：
+   * - activity：实时插入动态流顶部（最多保留 6 条，单条小 setData）；
+   * - data_changed：后端数据变更（答题/点亮/同步等），绕过 30s 节流强制刷新，避免首页显示旧值。
    */
   handleWsMessage(msg) {
-    if (!msg || msg.type !== 'activity') return;
+    if (!msg) return;
+    if (msg.type === 'data_changed') {
+      this.refreshAll(true);
+      return;
+    }
+    if (msg.type !== 'activity') return;
     const item = broadcast.toActivityView(msg);
     this.setData({ activities: [item].concat(this.data.activities).slice(0, 6) });
   },
 
   /**
-   * 刷新首页全部数据
+   * 刷新首页全部数据。
+   * @param {boolean} [force] 强制刷新（同步步数后、下拉刷新时传 true，绕过节流）
    */
-  refreshAll() {
+  refreshAll(force) {
+    // 节流：30s 内的非强制刷新直接跳过（onShow 快速切 tab 回首页时避免重复请求）
+    const now = Date.now();
+    if (!force && this._lastRefreshTs && now - this._lastRefreshTs < REFRESH_THROTTLE) {
+      return Promise.resolve();
+    }
+    this._lastRefreshTs = now;
     // 请求序号：onShow 与同步后刷新并发时，只采纳最后一次结果
     const requestId = (this._refreshRequestId || 0) + 1;
     this._refreshRequestId = requestId;
-    Promise.all([
+    return Promise.all([
       sport.getToday(),
       march.getRoute(),
       quiz.getDaily(),
@@ -239,6 +273,7 @@ Page({
             orgTodayStepsText: util.formatNumber(orgData.todayTotalSteps),
             companions: (orgData.companions || []).map((c, i) => ({
               rowKey: i + '_' + (c.nickname || ''),
+              userId: c.userId || null,
               nickname: c.nickname || '战友',
               avatar: c.avatar || '',
               isSelf: !!c.isSelf,
@@ -278,6 +313,11 @@ Page({
           });
         }
         this.setData(patch);
+
+        // last-good 缓存兜底：核心 GET 网络失败回读缓存时（request.js 附加 _fromCache），提示可能非最新
+        if (today._fromCache || route._fromCache) {
+          wx.showToast({ title: '网络异常，当前为最近缓存数据', icon: 'none' });
+        }
 
         // 步数滚动动画
         this.animateSteps(today.steps);
@@ -342,7 +382,7 @@ Page({
             icon: 'none'
           });
         }
-        this.refreshAll();
+        this.refreshAll(true);
       })
       .catch((err) => {
         this.setData({ syncError: (err && err.message) || '暂时无法获取微信运动数据，请稍后重试。' });
@@ -354,6 +394,63 @@ Page({
 
   goActivity() {
     wx.navigateTo({ url: '/pages/activity/activity' });
+  },
+
+  /** 点击实时动态：点亮节点类事件（含 nodeId）进入节点详情（B7） */
+  goFeedNode(e) {
+    const nodeId = e.currentTarget.dataset.nodeid;
+    if (!nodeId) return;
+    wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + nodeId });
+  },
+
+  /** 点击同行人：拉取用户卡并弹出抽屉（复用排行榜用户卡逻辑，B7） */
+  goCompanionCard(e) {
+    const userId = e.currentTarget.dataset.userid;
+    if (!userId) return;
+    this.setData({ showUserCard: true, userCardLoading: true, userCard: null });
+    rank
+      .getUserCard(userId)
+      .then((card) => {
+        this.setData({
+          userCardLoading: false,
+          userCard: {
+            nickname: card.nickname || '长征小战士',
+            avatar: card.avatar || '',
+            orgName: card.orgName || '未选择组织',
+            points: card.points || 0,
+            steps: card.steps || 0,
+            litNodes: card.litNodes || 0,
+            medalCount: card.medalCount || 0,
+            rank: card.rank || 0
+          }
+        });
+      })
+      .catch((err) => {
+        this.setData({ userCardLoading: false, showUserCard: false });
+        const code = err && err.statusCode;
+        // 越权/不存在（/rank/user 越权返回 404，或无权限 403）：优雅兜底提示，不崩溃
+        const msg = (code === 404 || code === 403)
+          ? '暂无该用户的排行信息'
+          : ((err && err.message) || '用户信息加载失败');
+        wx.showToast({ title: msg, icon: 'none' });
+      });
+  },
+
+  closeUserCard() {
+    this.setData({ showUserCard: false });
+  },
+
+  noop() {},
+
+  /** 「去开启」引导：打开设置页让用户重新授权微信运动 */
+  handleOpenWeRunSetting() {
+    ensureScope('scope.werun', '需要「微信运动」权限才能同步行军步数，请在设置中开启。')
+      .then((granted) => {
+        if (granted) {
+          this.setData({ syncError: '' });
+          this.handleSyncSteps();
+        }
+      });
   },
 
   /**

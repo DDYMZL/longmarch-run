@@ -43,6 +43,36 @@
   text-align: center;
 }
 
+/* 节点上下文 chip（B5） */
+.ai-ctx {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 12rpx 28rpx;
+  background: #FDECEF;
+  font-size: 24rpx;
+}
+
+.ai-ctx-label {
+  color: #A00D26;
+  margin-right: 10rpx;
+}
+
+.ai-ctx-name {
+  color: #C8102E;
+  font-weight: 600;
+  flex: 1;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.ai-ctx-clear {
+  color: #999999;
+  padding: 0 8rpx;
+  font-size: 26rpx;
+}
+
 /* 消息滚动区 */
 .ai-scroll {
   flex: 1;
@@ -276,6 +306,12 @@
   color: #999999;
   font-size: 26rpx;
   padding: 60rpx 0;
+}
+.ai-drawer-more {
+  text-align: center;
+  color: #C8102E;
+  font-size: 26rpx;
+  padding: 24rpx 0 32rpx;
 }
 .ai-session {
   display: flex;

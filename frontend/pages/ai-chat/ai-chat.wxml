@@ -9,6 +9,13 @@
   <!-- 非致命提示条（AI 未开放 / 今日额度用尽） -->
   <view wx:if="{{banner}}" class="ai-banner">{{banner}}</view>
 
+  <!-- 节点上下文 chip（B5）：从节点详情「问 AI」进入时展示，可点 × 清除 -->
+  <view wx:if="{{nodeContext}}" class="ai-ctx">
+    <text class="ai-ctx-label">正在聊节点</text>
+    <text class="ai-ctx-name">{{nodeContext.name || ('#' + nodeContext.id)}}</text>
+    <text class="ai-ctx-clear" bindtap="clearNodeContext">✕</text>
+  </view>
+
   <!-- 消息区 -->
   <scroll-view class="ai-scroll" scroll-y scroll-into-view="{{toView}}" scroll-with-animation>
     <!-- 空状态：常见问题引导 -->
@@ -71,7 +78,7 @@
         <text class="ai-drawer-close" bindtap="closeSessions">✕</text>
       </view>
       <scroll-view class="ai-drawer-body" scroll-y>
-        <view wx:if="{{sessionsLoading}}" class="ai-drawer-tip">加载中…</view>
+        <view wx:if="{{sessionsLoading && sessions.length === 0}}" class="ai-drawer-tip">加载中…</view>
         <view wx:elif="{{sessions.length === 0}}" class="ai-drawer-tip">暂无历史会话</view>
         <view class="ai-session" wx:for="{{sessions}}" wx:key="conversationId">
           <view class="ai-session-main" data-id="{{item.conversationId}}" bindtap="tapSession">
@@ -80,6 +87,9 @@
             <view class="ai-session-meta">{{item.timeText}} · {{item.messageCount}} 条</view>
           </view>
           <view class="ai-session-del" data-id="{{item.conversationId}}" catchtap="tapDeleteSession">删除</view>
+        </view>
+        <view wx:if="{{sessionsHasMore}}" class="ai-drawer-more" bindtap="loadMoreSessions">
+          {{sessionsLoading ? '加载中…' : '加载更多'}}
         </view>
       </scroll-view>
     </view>

@@ -49,11 +49,18 @@ function getKnowledge() {
 }
 
 /**
- * 答题记录（新到旧），含正确率 accuracy 与超时题数 timeoutCount。
- * @returns {Promise<Array>}
+ * 分页答题记录（对接后端 A7：GET /quiz/records，新到旧），
+ * 每条含正确率 accuracy 与超时题数 timeoutCount。
+ * 响应除分页字段外，含后端全局汇总 totalCorrect（全量答对题数）/ avgScore（全量平均整数），
+ * request 直接透传整个响应对象，页面可直接消费（无需在此裁剪）。
+ * @param {number} page     页码，从 1 开始
+ * @param {number} pageSize 每页条数
+ * @returns {Promise<{items:Array, total:number, page:number, pageSize:number, hasMore:boolean,
+ *   totalCorrect:number, avgScore:number}>}
  */
-function getRecords() {
-  return requestService.request({ url: '/quiz/records' });
+function getRecords(page, pageSize) {
+  const query = 'page=' + (page || 1) + '&pageSize=' + (pageSize || 20);
+  return requestService.request({ url: '/quiz/records?' + query });
 }
 
 /**

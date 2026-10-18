@@ -225,5 +225,15 @@ Page({
    */
   goTicket() {
     wx.navigateTo({ url: '/pages/ticket/ticket?id=' + this.data.node.id });
+  },
+
+  /**
+   * 问 AI（B5）：ai-chat 是 tab 页，switchTab 不支持 query，
+   * 故通过 globalData.pendingAiNodeId 传节点上下文，由 ai-chat onShow 消费。
+   */
+  goAskAI() {
+    if (!this.data.node) return;
+    app.globalData.pendingAiNodeId = this.data.node.id;
+    wx.switchTab({ url: '/pages/ai-chat/ai-chat' });
   }
 });

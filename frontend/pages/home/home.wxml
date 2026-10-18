@@ -74,7 +74,10 @@
     <view class="streak-inline" wx:if="{{currentStreak > 0}}">🔥 连续行军 {{currentStreak}} 天</view>
     <view class="streak-inline dim" wx:else>连续行军未开始，今天走起来</view>
 
-    <view wx:if="{{syncError}}" class="error-tip">{{syncError}}</view>
+    <view wx:if="{{syncError}}" class="error-tip">
+      {{syncError}}
+      <text class="error-open-setting" bindtap="handleOpenWeRunSetting">去开启 ›</text>
+    </view>
 
     <view class="sport-actions">
       <button class="btn-primary sync-btn" loading="{{syncing}}" disabled="{{syncing}}" bindtap="handleSyncSteps">
@@ -201,7 +204,8 @@
     </view>
     <view wx:if="{{activities.length === 0}}" class="empty-tip">还没有动态，等你迈出第一步</view>
     <view class="feed-list" wx:else>
-      <view class="feed-item" wx:for="{{activities}}" wx:key="id">
+      <view class="feed-item" wx:for="{{activities}}" wx:key="id"
+            data-nodeid="{{item.nodeId}}" bindtap="goFeedNode" hover-class="{{item.nodeId ? 'feed-hover' : 'none'}}">
         <view class="feed-icon">{{item.icon}}</view>
         <view class="feed-body">
           <text class="feed-nick">{{item.nickname}}</text>
@@ -235,7 +239,8 @@
     </view>
     <view wx:if="{{companions.length === 0}}" class="empty-tip">还没有同伴动态，邀请战友一起走起来</view>
     <view class="companion-list" wx:else>
-      <view class="companion-item {{item.isSelf ? 'self' : ''}}" wx:for="{{companions}}" wx:key="rowKey">
+      <view class="companion-item {{item.isSelf ? 'self' : ''}}" wx:for="{{companions}}" wx:key="rowKey"
+            data-userid="{{item.userId}}" bindtap="goCompanionCard" hover-class="{{item.userId ? 'companion-hover' : 'none'}}">
         <view class="companion-avatar">
           <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
           <text wx:else class="avatar-placeholder">👤</text>
@@ -300,6 +305,43 @@
         <text class="gg-ms-name">{{item.name}}</text>
         <text class="gg-ms-mark">{{item.mark}}</text>
       </view>
+    </view>
+  </view>
+
+  <!-- 同行人用户卡抽屉（B7） -->
+  <view wx:if="{{showUserCard}}" class="uc-mask" bindtap="closeUserCard">
+    <view class="uc-drawer" catchtap="noop">
+      <view class="uc-close" bindtap="closeUserCard">✕</view>
+      <view wx:if="{{userCardLoading}}" class="uc-loading">加载中…</view>
+      <block wx:elif="{{userCard}}">
+        <view class="uc-head">
+          <view class="uc-avatar">
+            <image wx:if="{{userCard.avatar}}" src="{{userCard.avatar}}" mode="aspectFill" />
+            <text wx:else class="avatar-placeholder">👤</text>
+          </view>
+          <view class="uc-rank-badge" wx:if="{{userCard.rank > 0}}">No.{{userCard.rank}}</view>
+        </view>
+        <view class="uc-name">{{userCard.nickname}}</view>
+        <view class="uc-org">{{userCard.orgName}}</view>
+        <view class="uc-stats">
+          <view class="uc-stat">
+            <view class="uc-num gold">{{userCard.points}}</view>
+            <view class="uc-label">总积分</view>
+          </view>
+          <view class="uc-stat">
+            <view class="uc-num">{{userCard.steps}}</view>
+            <view class="uc-label">累计步数</view>
+          </view>
+          <view class="uc-stat">
+            <view class="uc-num">{{userCard.litNodes}}</view>
+            <view class="uc-label">点亮节点</view>
+          </view>
+          <view class="uc-stat">
+            <view class="uc-num">{{userCard.medalCount}}</view>
+            <view class="uc-label">勋章</view>
+          </view>
+        </view>
+      </block>
     </view>
   </view>
 </view>

@@ -1,10 +1,10 @@
-<view class="rank-page {{me && me.rank > 10 ? 'with-me-bar' : ''}}">
+<view class="rank-page {{me && me.rank > 10 && tab === 'person' ? 'with-me-bar' : ''}}">
   <!-- 荣耀征程 Hero -->
   <view class="hero">
     <view class="hero-grid"></view>
     <view class="hero-title">长征步迹 · 荣耀征程</view>
-    <view class="hero-sub">总积分 = 步行积分 + 答题积分 · 全员工同榜</view>
-    <view class="my-strip">
+    <view class="hero-sub">总积分 = 步行积分 + 答题积分</view>
+    <view class="my-strip" wx:if="{{tab === 'person'}}">
       <view class="my-cell">
         <text class="my-num">{{me ? me.rank : '-'}}</text>
         <text class="my-label">我的名次</text>
@@ -22,6 +22,18 @@
     </view>
   </view>
 
+  <!-- 榜单维度切换：个人榜 / 部门榜 -->
+  <view class="rank-tabs">
+    <view class="rank-tab {{tab === 'person' ? 'active' : ''}}" data-tab="person" bindtap="switchTab">个人榜</view>
+    <view class="rank-tab {{tab === 'org' ? 'active' : ''}}" data-tab="org" bindtap="switchTab">部门榜</view>
+  </view>
+
+  <!-- 范围切换：全员 / 我的部门（仅个人榜） -->
+  <view wx:if="{{tab === 'person'}}" class="scope-switch">
+    <view class="scope-btn {{scope === 'all' ? 'active' : ''}}" data-scope="all" bindtap="switchScope">全员</view>
+    <view class="scope-btn {{scope === 'org' ? 'active' : ''}} {{hasOrg ? '' : 'disabled'}}" data-scope="org" bindtap="switchScope">我的部门</view>
+  </view>
+
   <view wx:if="{{loading}}" class="skeleton">
     <view class="sk-podium"></view>
     <view class="sk-row"></view>
@@ -35,15 +47,40 @@
     <button class="btn-primary state-btn" bindtap="handleRetry">重新加载</button>
   </view>
 
-  <view wx:elif="{{podium.length === 0}}" class="state-box">
-    <view class="state-icon">🏁</view>
-    <view class="state-text">暂无排名数据，同步步数或完成答题即可上榜</view>
-  </view>
+  <!-- 部门榜 -->
+  <block wx:elif="{{tab === 'org'}}">
+    <view wx:if="{{orgList.length === 0}}" class="state-box">
+      <view class="state-icon">🏢</view>
+      <view class="state-text">暂无部门数据</view>
+    </view>
+    <view wx:else class="org-list">
+      <view wx:for="{{orgList}}" wx:key="orgId" class="org-card">
+        <view class="org-rank {{item.rank <= 3 ? 'top' : ''}}">{{item.rank}}</view>
+        <view class="org-info">
+          <view class="org-name">{{item.orgName}}</view>
+          <view class="org-meta">{{item.memberCount}} 人 · 点亮 {{item.litNodes}} 节点</view>
+        </view>
+        <view class="org-score">
+          <view class="org-avg">{{item.avgPoints}}<text class="unit">均分</text></view>
+          <view class="org-steps">{{item.totalSteps}} 步</view>
+        </view>
+      </view>
+    </view>
+  </block>
+
+  <!-- 个人榜 -->
+  <block wx:elif="{{podium.length === 0}}">
+    <view class="state-box">
+      <view class="state-icon">🏁</view>
+      <view class="state-text">暂无排名数据，同步步数或完成答题即可上榜</view>
+    </view>
+  </block>
 
   <block wx:else>
     <!-- 前 3 名领奖台 -->
     <view class="podium">
-      <view wx:for="{{podium}}" wx:key="userId" class="podium-col {{item.medal}} {{item.isMe ? 'is-me' : ''}}">
+      <view wx:for="{{podium}}" wx:key="userId" class="podium-col {{item.medal}} {{item.isMe ? 'is-me' : ''}}"
+            data-userid="{{item.userId}}" bindtap="openUserCard" hover-class="tap-hover">
         <view class="podium-crown">{{item.rank === 1 ? '👑' : ''}}</view>
         <view class="podium-avatar">
           <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
@@ -62,7 +99,8 @@
     <!-- 第 4~10 名荣誉卡 -->
     <view wx:if="{{elite.length > 0}}" class="section-title"><text class="line"></text>荣誉榜 · 第 4~10 名<text class="line"></text></view>
     <view class="elite">
-      <view wx:for="{{elite}}" wx:key="userId" class="elite-card {{item.isMe ? 'is-me' : ''}}">
+      <view wx:for="{{elite}}" wx:key="userId" class="elite-card {{item.isMe ? 'is-me' : ''}}"
+            data-userid="{{item.userId}}" bindtap="openUserCard" hover-class="tap-hover">
         <view class="elite-rank">{{item.rank}}</view>
         <view class="row-avatar">
           <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
@@ -80,7 +118,8 @@
     <!-- 第 11 名起分页 -->
     <view wx:if="{{list.length > 0}}" class="section-title"><text class="line"></text>征程榜 · 第 11 名起<text class="line"></text></view>
     <view wx:if="{{list.length > 0}}" class="rank-list">
-      <view wx:for="{{list}}" wx:key="userId" class="rank-row {{item.isMe ? 'is-me' : ''}}">
+      <view wx:for="{{list}}" wx:key="userId" class="rank-row {{item.isMe ? 'is-me' : ''}}"
+            data-userid="{{item.userId}}" bindtap="openUserCard" hover-class="tap-hover">
         <view class="list-rank">{{item.rank}}</view>
         <view class="row-avatar small">
           <image wx:if="{{item.avatar}}" src="{{item.avatar}}" mode="aspectFill" lazy-load />
@@ -99,7 +138,8 @@
   </block>
 
   <!-- 名次在 10 名以外：底部常驻我的名次 -->
-  <view wx:if="{{me && me.rank > 10 && !loading}}" class="me-bar">
+  <view wx:if="{{tab === 'person' && me && me.rank > 10 && !loading}}" class="me-bar"
+        data-userid="{{me.userId}}" bindtap="openUserCard">
     <view class="list-rank">{{me.rank}}</view>
     <view class="row-avatar small">
       <image wx:if="{{me.avatar}}" src="{{me.avatar}}" mode="aspectFill" />
@@ -110,5 +150,42 @@
       <view class="row-org">步行 {{me.walkPoints}} · 答题 {{me.quizPoints}}</view>
     </view>
     <view class="row-points small">{{me.points}}<text class="unit">分</text></view>
+  </view>
+
+  <!-- 用户卡抽屉（B7）：点击榜单项弹出 -->
+  <view wx:if="{{showUserCard}}" class="uc-mask" bindtap="closeUserCard">
+    <view class="uc-drawer" catchtap="noop">
+      <view class="uc-close" bindtap="closeUserCard">✕</view>
+      <view wx:if="{{userCardLoading}}" class="uc-loading">加载中…</view>
+      <block wx:elif="{{userCard}}">
+        <view class="uc-head">
+          <view class="uc-avatar">
+            <image wx:if="{{userCard.avatar}}" src="{{userCard.avatar}}" mode="aspectFill" />
+            <text wx:else class="avatar-ph">{{userCard.initial}}</text>
+          </view>
+          <view class="uc-rank-badge" wx:if="{{userCard.rank > 0}}">No.{{userCard.rank}}</view>
+        </view>
+        <view class="uc-name">{{userCard.nickname}}</view>
+        <view class="uc-org">{{userCard.orgName}}</view>
+        <view class="uc-stats">
+          <view class="uc-stat">
+            <view class="uc-num gold">{{userCard.points}}</view>
+            <view class="uc-label">总积分</view>
+          </view>
+          <view class="uc-stat">
+            <view class="uc-num">{{userCard.steps}}</view>
+            <view class="uc-label">累计步数</view>
+          </view>
+          <view class="uc-stat">
+            <view class="uc-num">{{userCard.litNodes}}</view>
+            <view class="uc-label">点亮节点</view>
+          </view>
+          <view class="uc-stat">
+            <view class="uc-num">{{userCard.medalCount}}</view>
+            <view class="uc-label">勋章</view>
+          </view>
+        </view>
+      </block>
+    </view>
   </view>
 </view>

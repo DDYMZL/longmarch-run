@@ -9,21 +9,33 @@
  * 仅开发模式（mock 登录用户或未配置微信凭证）由后端按日期模拟，真实用户绝不编造步数。
  */
 const requestService = require('./request');
+const { ensureScope } = require('../utils/authGuide');
 
 const DAILY_TARGET = 20000;
 
 /**
- * 发起微信运动授权
+ * 发起微信运动授权。
+ * 已授权 → resolve(true)；未授权 → wx.authorize 触发弹窗；
+ * 已拒绝 → ensureScope 引导前往设置页开启后 resolve(true)。
  * @returns {Promise<boolean>} 是否授权成功
  */
 function authorizeWeRun() {
-  return new Promise((resolve) => {
-    wx.authorize({
-      scope: 'scope.werun',
-      success: () => resolve(true),
-      fail: () => resolve(false)
+  return ensureScope('scope.werun', '需要「微信运动」权限才能同步行军步数，请在设置中开启。')
+    .then((alreadyGranted) => {
+      if (alreadyGranted) return true;
+      // 从未请求过：触发 wx.authorize 弹窗
+      return new Promise((resolve) => {
+        wx.authorize({
+          scope: 'scope.werun',
+          success: () => resolve(true),
+          fail: () => {
+            // 用户拒绝：引导前往设置页
+            ensureScope('scope.werun', '需要「微信运动」权限才能同步行军步数，请在设置中开启。')
+              .then(resolve);
+          }
+        });
+      });
     });
-  });
 }
 
 /**
@@ -131,9 +143,24 @@ function getRecent(n) {
   return requestService.request({ url: '/sport/recent?n=' + (n || 7) });
 }
 
+/**
+ * 分页获取运动记录（对接后端 A7：GET /sport/records，新到旧）。
+ * 响应除分页字段外，含后端全局汇总 totalSteps（全量累计步数）/ avgSteps（全量平均整数），
+ * request 直接透传整个响应对象，页面可直接消费（无需在此裁剪）。
+ * @param {number} page     页码，从 1 开始
+ * @param {number} pageSize 每页条数
+ * @returns {Promise<{items:Array<{date:string,text:string,steps:number,distance:number}>,
+ *   total:number, page:number, pageSize:number, hasMore:boolean, totalSteps:number, avgSteps:number}>}
+ */
+function getRecords(page, pageSize) {
+  const query = 'page=' + (page || 1) + '&pageSize=' + (pageSize || 20);
+  return requestService.request({ url: '/sport/records?' + query });
+}
+
 module.exports = {
   syncToday,
   getToday,
   getCalendar,
-  getRecent
+  getRecent,
+  getRecords
 };

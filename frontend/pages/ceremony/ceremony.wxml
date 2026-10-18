@@ -35,6 +35,10 @@
         <view class="stats-label">累计积分</view>
       </view>
     </view>
+    <view class="ceremony-actions">
+      <button class="ceremony-btn save-btn" loading="{{saving}}" disabled="{{saving}}" bindtap="handleSave">保存画面</button>
+      <button class="ceremony-btn share-btn" open-type="share">分享给好友</button>
+    </view>
     <button class="btn-primary confirm-btn" bindtap="handleConfirm">{{pending ? '收下这份荣光' : '返回'}}</button>
   </view>
 </view>

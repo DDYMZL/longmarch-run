@@ -33,6 +33,26 @@ function persistAvatar(tempPath) {
   });
 }
 
+/**
+ * 上传头像到服务端（POST /auth/avatar，multipart 字段名 file）。
+ * 成功后更新 globalData.user 与本地 lm_login_user，返回新用户。
+ * @param {string} tempPath chooseAvatar 返回的临时路径或已持久化的本地路径
+ * @param {boolean} [silent] 登录/入驻链路静默模式：失败吞掉返回 null（不阻塞、不提示）；
+ *                           用户主动换头像时传 falsy，失败将抛出由页面提示并回滚。
+ */
+function uploadAvatar(tempPath, silent) {
+  if (!tempPath) return Promise.resolve(null);
+  return requestService.uploadFile('/auth/avatar', tempPath)
+    .then((serverUser) => {
+      if (serverUser) return saveServerUser(serverUser, readLocalUser());
+      return null;
+    })
+    .catch((err) => {
+      if (silent) return null; // 登录链路：静默失败，不影响登录
+      throw err;               // 用户主动：交由页面提示 + 回滚
+    });
+}
+
 /** 读取本地缓存用户（仅作展示与合并依据，不代表已登录）。 */
 function readLocalUser() {
   try {
@@ -80,6 +100,7 @@ function admissionError(status, message) {
 
 /**
  * 调后端 /auth/login：status=active 则落 Token 并返回用户；其余状态抛出 admission 错误。
+ * 头像不再通过登录接口传递，改为登录成功后单独上传（uploadAvatar）。
  */
 function callLogin(avatar) {
   const previousUser = readLocalUser();
@@ -87,15 +108,12 @@ function callLogin(avatar) {
     wx.login({
       success: (res) => {
         if (!res.code) return reject(new Error('微信登录失败'));
-        persistAvatar(avatar || '')
-          .then((persisted) =>
-            requestService.request({
-              url: '/auth/login',
-              method: 'POST',
-              skipAuthRetry: true,
-              data: { code: res.code, avatar: persisted }
-            })
-          )
+        requestService.request({
+          url: '/auth/login',
+          method: 'POST',
+          skipAuthRetry: true,
+          data: { code: res.code }
+        })
           .then((result) => {
             if (result.status === 'active' && result.token && result.user) {
               wx.setStorageSync(requestService.TOKEN_KEY, result.token);
@@ -104,7 +122,13 @@ function callLogin(avatar) {
               }
               const user = saveServerUser(result.user, previousUser);
               wx.removeStorageSync(LOGGED_OUT_KEY);
-              return resolve(user);
+              // 登录成功：清除上一账号遗留的 last-good 缓存，杜绝跨账号脏读
+              requestService.clearAllCache();
+              // 头像上传不阻塞登录（fire-and-forget）：成功后 uploadAvatar 内部已更新 globalData/本地 user，
+              // 页面下次 onShow 读取 globalData 即刷新头像；失败静默忽略。
+              if (avatar) uploadAvatar(avatar, true);
+              resolve(user);
+              return;
             }
             if (result.status === 'disabled') {
               return reject(admissionError('disabled', '账号已停用，请联系活动管理员'));
@@ -175,6 +199,7 @@ function verifyInvite(inviteCode) {
 
 /**
  * 持邀请码入驻：先 wx.login 换 code，再 POST /auth/onboard。
+ * 头像不再通过入驻接口传递，改为入驻成功后单独上传（uploadAvatar）。
  * 已入驻身份重复提交后端幂等返回同一用户。
  */
 function onboard(params) {
@@ -187,21 +212,17 @@ function onboard(params) {
     wx.login({
       success: (res) => {
         if (!res.code) return reject(new Error('微信登录失败'));
-        persistAvatar(avatarRaw)
-          .then((avatar) =>
-            requestService.request({
-              url: '/auth/onboard',
-              method: 'POST',
-              skipAuthRetry: true,
-              data: {
-                code: res.code,
-                inviteCode: inviteCode,
-                nickname: nickname,
-                orgId: orgId,
-                avatar: avatar
-              }
-            })
-          )
+        requestService.request({
+          url: '/auth/onboard',
+          method: 'POST',
+          skipAuthRetry: true,
+          data: {
+            code: res.code,
+            inviteCode: inviteCode,
+            nickname: nickname,
+            orgId: orgId
+          }
+        })
           .then((result) => {
             wx.setStorageSync(requestService.TOKEN_KEY, result.token);
             if (previousUser && previousUser.id !== undefined && previousUser.id !== result.user.id) {
@@ -210,6 +231,10 @@ function onboard(params) {
             const user = saveServerUser(result.user, previousUser);
             wx.removeStorageSync(LOGGED_OUT_KEY);
             wx.removeStorageSync(INVITE_KEY);
+            // 入驻成功：清除上一账号遗留的 last-good 缓存，杜绝跨账号脏读
+            requestService.clearAllCache();
+            // 头像上传不阻塞入驻（fire-and-forget，静默失败）
+            if (avatarRaw) uploadAvatar(avatarRaw, true);
             resolve({ user: user, created: !!result.created });
           })
           .catch(reject);
@@ -251,6 +276,8 @@ function clearLocalUser() {
   wx.removeStorageSync(USER_KEY);
   wx.removeStorageSync(requestService.TOKEN_KEY);
   wx.setStorageSync(LOGGED_OUT_KEY, 1);
+  // 登出即清除 last-good 缓存，避免下一账号弱网兜底脏读
+  requestService.clearAllCache();
 }
 
 /** 待入驻的邀请码缓存：扫码后进入入驻页；入驻成功或主动放弃时清除。 */
@@ -279,6 +306,7 @@ module.exports = {
   ensureLogin,
   verifyInvite,
   onboard,
+  uploadAvatar,
   updateNickname,
   setInitialNickname,
   updateLocalUser,

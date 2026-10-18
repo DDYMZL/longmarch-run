@@ -7,6 +7,7 @@ const app = getApp();
 const march = require('../../services/march');
 const util = require('../../utils/util');
 const routeCanvas = require('../../utils/routeCanvas');
+const { ensureScope } = require('../../utils/authGuide');
 
 Page({
   data: {
@@ -21,6 +22,7 @@ Page({
       wx.reLaunch({ url: '/pages/launch/launch' });
       return;
     }
+    wx.showShareMenu({ withShareTicket: true, menus: ['shareAppMessage', 'shareTimeline'] });
     const id = parseInt(options.id, 10);
     Promise.all([march.getNodeDetail(id), march.getFootprints()])
       .then(([node, footprints]) => {
@@ -30,6 +32,7 @@ Page({
           return;
         }
         this._ticket = {
+          id: id,
           icon: node.icon,
           name: node.name,
           historicalTime: node.historicalTime,
@@ -65,6 +68,14 @@ Page({
         ctx.scale(dpr, dpr);
         this._canvas = node;
         this.paint(ctx, width, height);
+        // 绘制完成后异步导出分享图（失败不影响主流程）
+        try {
+          wx.canvasToTempFilePath({
+            canvas: node,
+            success: (r) => { this._shareImg = r.tempFilePath; },
+            fail: () => { /* 分享图导出失败时 onShareAppMessage 降级无图 */ }
+          });
+        } catch (e) { /* 低版本基础库不支持时静默降级 */ }
       });
   },
 
@@ -141,7 +152,7 @@ Page({
   },
 
   /**
-   * 保存纪念票到相册
+   * 保存纪念票到相册（授权失败时引导前往设置页开启）
    */
   handleSave() {
     if (this.data.saving || !this.data.ready || !this._canvas) return;
@@ -149,20 +160,56 @@ Page({
     wx.canvasToTempFilePath({
       canvas: this._canvas,
       success: (res) => {
-        wx.saveImageToPhotosAlbum({
-          filePath: res.tempFilePath,
-          success: () => wx.showToast({ title: '已保存到相册', icon: 'success' }),
-          fail: (err) => {
-            if (err && /auth|authorize/.test(err.errMsg || '')) {
-              wx.showToast({ title: '请授权保存到相册', icon: 'none' });
-            } else {
-              wx.showToast({ title: '保存失败', icon: 'none' });
-            }
-          }
-        });
+        this._saveToAlbum(res.tempFilePath);
       },
-      fail: () => wx.showToast({ title: '生成图片失败', icon: 'none' }),
-      complete: () => this.setData({ saving: false })
+      fail: () => {
+        wx.showToast({ title: '生成图片失败', icon: 'none' });
+        this.setData({ saving: false });
+      }
     });
+  },
+
+  /** 实际写入相册；权限被拒时引导用户前往设置页开启 */
+  _saveToAlbum(filePath) {
+    wx.saveImageToPhotosAlbum({
+      filePath,
+      success: () => {
+        wx.showToast({ title: '已保存到相册', icon: 'success' });
+        this.setData({ saving: false });
+      },
+      fail: (err) => {
+        this.setData({ saving: false });
+        if (err && /auth|authorize/.test(err.errMsg || '')) {
+          ensureScope('scope.writePhotosAlbum', '需要相册写入权限才能保存纪念票，请在设置中开启。')
+            .then((granted) => {
+              if (granted) {
+                this.setData({ saving: true });
+                this._saveToAlbum(filePath);
+              }
+            });
+        } else {
+          wx.showToast({ title: '保存失败', icon: 'none' });
+        }
+      }
+    });
+  },
+
+  /** 分享给好友：标题带节点名，分享图用绘制完成后导出的 _shareImg（失败降级无图） */
+  onShareAppMessage() {
+    const t = this._ticket;
+    const title = t ? '我在长征步迹完成了「' + t.name + '」节点！' : '长征步迹 · 节点纪念票';
+    // 分享图：尝试导出画布临时路径，失败则用默认
+    try {
+      const img = this._shareImg;
+      return { title, imageUrl: img || undefined, path: '/pages/ticket/ticket?id=' + (this._ticket && this._ticket.id || '') };
+    } catch (e) {
+      return { title };
+    }
+  },
+
+  onShareTimeline() {
+    const t = this._ticket;
+    const title = t ? '长征步迹 · 我完成了「' + t.name + '」' : '长征步迹 · 节点纪念票';
+    return { title, imageUrl: this._shareImg || undefined };
   }
 });

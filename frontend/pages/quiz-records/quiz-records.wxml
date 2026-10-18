@@ -1,5 +1,17 @@
 <view class="records-page">
-  <view class="card">
+  <!-- 网络失败错误态 -->
+  <view wx:if="{{errorMsg}}" class="state-box">
+    <view class="state-icon">📶</view>
+    <view class="state-text">{{errorMsg}}</view>
+    <button class="btn-primary state-btn" bindtap="handleRetry">重新加载</button>
+  </view>
+
+  <!-- 首屏加载中 -->
+  <view wx:elif="{{loading}}" class="state-box">
+    <view class="state-text">加载中…</view>
+  </view>
+
+  <view wx:else class="card">
     <view class="card-title">答题记录</view>
     <block wx:if="{{records.length > 0}}">
       <!-- 表头 -->
@@ -17,6 +29,7 @@
         <text class="col-num">{{item.timeoutCount}}题</text>
         <text class="col-num gold">+{{item.points}}</text>
       </view>
+      <view class="load-tip">{{loadingMore ? '加载中…' : (hasMore ? '上拉加载更多' : '— 已显示全部 —')}}</view>
     </block>
     <view wx:else class="empty-tip">暂无答题记录，去完成今日答题吧</view>
   </view>
