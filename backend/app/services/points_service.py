@@ -23,6 +23,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.helpers import today_str
 from app.models.models import DailyQuestion, DailySport, PointsLog, QuizAnswer, QuizRecord, User
+from app.services import operation_config_service
+from app.services.operation_config_service import OperationConfig
 
 WALK = "walk"
 QUIZ = "quiz"
@@ -31,9 +33,16 @@ REASONS = {WALK: "步行积分", QUIZ: "答题积分"}
 RECOMPUTE_BATCH = 500
 
 
-def walk_chain(prior_total: int, steps_in_order: Iterable[int]) -> Iterator[Tuple[int, int]]:
+def _per_walk(cfg: Optional[OperationConfig]) -> int:
+    """每满多少步得 1 分：有生效配置快照用其值，否则回退 env 默认（纯函数无 db 场景）。"""
+    return cfg.points_walk_steps_per_point if cfg else settings.POINTS_WALK_STEPS_PER_POINT
+
+
+def walk_chain(
+    prior_total: int, steps_in_order: Iterable[int], cfg: Optional[OperationConfig] = None
+) -> Iterator[Tuple[int, int]]:
     """按日期顺序逐日产出 (当日步行积分, 当日结束后的结余步数)；prior_total 为此前各日步数之和。"""
-    per = settings.POINTS_WALK_STEPS_PER_POINT
+    per = _per_walk(cfg)
     total = prior_total
     for steps in steps_in_order:
         before = total // per
@@ -41,24 +50,29 @@ def walk_chain(prior_total: int, steps_in_order: Iterable[int]) -> Iterator[Tupl
         yield total // per - before, total % per
 
 
-def walk_carry(db: Session, user_id: int) -> int:
+def walk_carry(db: Session, user_id: int, cfg: Optional[OperationConfig] = None) -> int:
     """当前结余步数（尚未折算积分、计入下一条记录的零头）。"""
+    cfg = cfg or operation_config_service.get_effective(db)
     total = (
         db.query(func.coalesce(func.sum(DailySport.steps), 0))
         .filter(DailySport.user_id == user_id)
         .scalar()
     )
-    return int(total or 0) % settings.POINTS_WALK_STEPS_PER_POINT
+    return int(total or 0) % cfg.points_walk_steps_per_point
 
 
-def walk_points(steps: int) -> int:
+def walk_points(steps: int, cfg: Optional[OperationConfig] = None) -> int:
     """无历史结余时单日步行积分；台账入账应使用 recompute_walk / recompute_walk_all。"""
-    return max(int(steps or 0), 0) // settings.POINTS_WALK_STEPS_PER_POINT
+    return max(int(steps or 0), 0) // _per_walk(cfg)
 
 
-def quiz_points(correct_count: int) -> int:
-    earned = max(int(correct_count or 0), 0) * settings.POINTS_QUIZ_PER_CORRECT
-    return min(earned, settings.POINTS_QUIZ_DAILY_CAP)
+def quiz_points(correct_count: int, cfg: Optional[OperationConfig] = None) -> int:
+    if cfg is None:
+        per_correct, cap = settings.POINTS_QUIZ_PER_CORRECT, settings.POINTS_QUIZ_DAILY_CAP
+    else:
+        per_correct, cap = cfg.points_quiz_per_correct, cfg.points_quiz_daily_cap
+    earned = max(int(correct_count or 0), 0) * per_correct
+    return min(earned, cap)
 
 
 def biz_key(source: str, date: str) -> str:
@@ -122,7 +136,8 @@ def sync_quiz_day(
     db: Session, user_id: int, date: str, correct_count: int, ref_id: Optional[int]
 ) -> bool:
     """按当日答对题数重算答题积分（调用方负责提交）。"""
-    return set_daily(db, user_id, QUIZ, date, quiz_points(correct_count), ref_id)
+    cfg = operation_config_service.get_effective(db)
+    return set_daily(db, user_id, QUIZ, date, quiz_points(correct_count, cfg), ref_id)
 
 
 def quiz_correct_counts(
@@ -186,6 +201,7 @@ def get_total(db: Session, user_id: int) -> int:
 def get_summary(db: Session, user_id: int) -> Dict:
     """积分概览：累计三项 + 今日两项（含今日步数/答对数，供展示计分依据）+ 当前步数结余。"""
     date = today_str()
+    cfg = operation_config_service.get_effective(db)
     today = _sum_by_source(db, user_id, date)
     sport = (
         db.query(DailySport.steps)
@@ -199,16 +215,23 @@ def get_summary(db: Session, user_id: int) -> Dict:
         "today_quiz": today[QUIZ],
         "today_steps": int(sport or 0),
         "today_correct": correct,
-        "walk_carry": walk_carry(db, user_id),
-        "rules": rules(),
+        "walk_carry": walk_carry(db, user_id, cfg),
+        "rules": rules(cfg),
     }
 
 
-def rules() -> Dict[str, int]:
+def rules(cfg: Optional[OperationConfig] = None) -> Dict[str, int]:
+    """计分规则（对外展示）：无生效配置快照时回退 env 默认。"""
+    if cfg is None:
+        return {
+            "walk_steps_per_point": settings.POINTS_WALK_STEPS_PER_POINT,
+            "quiz_per_correct": settings.POINTS_QUIZ_PER_CORRECT,
+            "quiz_daily_cap": settings.POINTS_QUIZ_DAILY_CAP,
+        }
     return {
-        "walk_steps_per_point": settings.POINTS_WALK_STEPS_PER_POINT,
-        "quiz_per_correct": settings.POINTS_QUIZ_PER_CORRECT,
-        "quiz_daily_cap": settings.POINTS_QUIZ_DAILY_CAP,
+        "walk_steps_per_point": cfg.points_walk_steps_per_point,
+        "quiz_per_correct": cfg.points_quiz_per_correct,
+        "quiz_daily_cap": cfg.points_quiz_daily_cap,
     }
 
 
@@ -268,13 +291,14 @@ def _expected_for(
 ) -> Dict[Tuple[int, str], Tuple[int, Optional[int]]]:
     """按源数据计算应得积分 {(user_id, biz_key): (delta, ref_id)}。"""
     expected: Dict[Tuple[int, str], Tuple[int, Optional[int]]] = {}
+    cfg = operation_config_service.get_effective(db)  # 每批复用一次，避免逐条查配置
     if WALK in sources:
         totals: Dict[int, int] = {}
         for sid, uid, date, steps in db.query(
             DailySport.id, DailySport.user_id, DailySport.date, DailySport.steps
         ).filter(DailySport.user_id.in_(user_ids)).order_by(DailySport.user_id, DailySport.date):
             prior = totals.get(uid, 0)
-            points, _carry = next(walk_chain(prior, (steps,)))
+            points, _carry = next(walk_chain(prior, (steps,), cfg))
             totals[uid] = prior + max(int(steps or 0), 0)
             expected[(uid, biz_key(WALK, date))] = (points, sid)
     if QUIZ in sources:
@@ -285,7 +309,7 @@ def _expected_for(
             ).filter(DailyQuestion.user_id.in_(user_ids))
         )
         for (uid, date), correct in quiz_correct_counts(db, user_ids).items():
-            expected[(uid, biz_key(QUIZ, date))] = (quiz_points(correct), sessions.get((uid, date)))
+            expected[(uid, biz_key(QUIZ, date))] = (quiz_points(correct, cfg), sessions.get((uid, date)))
     return expected
 
 

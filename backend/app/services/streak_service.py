@@ -1,6 +1,6 @@
 """连续行军服务。
 
-规则：当天步数 >= settings.STREAK_GOAL_STEPS（默认 5000）即完成当日行军。
+规则：当天步数 >= 运营参数 streak_goal_steps（默认 5000）即完成当日行军。
 - 写入侧（on_sport_written）：达标状态变化时重算连续天数缓存；首次达标并跨越里程碑时
   写 STREAK_* 事件（一次性成就，以事件表去重；V2.0 起里程碑不再发放积分）；
 - 读取侧（compute_streaks）：以 daily_sport.is_goal_completed 为准重算，
@@ -13,10 +13,9 @@ from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.helpers import now_beijing
 from app.models.models import DailySport, User
-from app.services import event_service
+from app.services import event_service, operation_config_service
 
 
 def longest_run(days: Iterable[str]) -> int:
@@ -74,7 +73,7 @@ def on_sport_written(db: Session, user_id: int, date: str) -> Optional[int]:
     if record is None:
         return None
 
-    reached = (record.steps or 0) >= settings.STREAK_GOAL_STEPS
+    reached = (record.steps or 0) >= operation_config_service.get_effective(db).streak_goal_steps
     if reached == bool(record.is_goal_completed):
         return None  # 达标状态未变化，不产生新事件
     record.is_goal_completed = reached

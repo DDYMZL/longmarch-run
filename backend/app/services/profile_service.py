@@ -84,7 +84,9 @@ def get_summary(db: Session, user: User) -> Dict:
             func.coalesce(func.sum(DailySport.distance), 0),
             func.coalesce(func.max(DailySport.steps), 0),
         )
-        .filter(DailySport.user_id == user.id)
+        # #2：只统计有真实步数的记录，排除 _mark_failed 建的 steps=0 失败占位行，
+        # 使 sport_days 与 avg_daily_steps（total_steps/sport_days）不被占位行稀释。
+        .filter(DailySport.user_id == user.id, DailySport.steps > 0)
         .one()
     )
     sport_days, total_steps, max_day_steps = int(sport_days), int(total_steps), int(max_day_steps)
@@ -182,10 +184,17 @@ def get_summary(db: Session, user: User) -> Dict:
 
 
 def get_timeline(db: Session, user_id: int, limit: int = 50) -> List[Dict]:
-    """长征足迹时间轴（user_event 倒序，文案后端生成）。"""
+    """长征足迹时间轴（user_event 倒序，文案后端生成）。
+
+    #21：过滤分析型事件（INVITE_SCAN/FIRST_LOGIN），与 event_service.recent_events 口径
+    一致，不让运营埋点混入用户可见的足迹时间轴。
+    """
     rows = (
         db.query(UserEvent)
-        .filter(UserEvent.user_id == user_id)
+        .filter(
+            UserEvent.user_id == user_id,
+            UserEvent.event_type.notin_(event_service.ANALYTICS_EVENTS),
+        )
         .order_by(UserEvent.event_time.desc(), UserEvent.id.desc())
         .limit(limit)
         .all()

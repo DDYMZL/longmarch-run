@@ -12,6 +12,7 @@ from app.schemas.schemas import (
     AddStepsRequest,
     RecentItem,
     SportCalendarOut,
+    SportRecordsOut,
     SportSync,
     SportSyncRequest,
     SportToday,
@@ -57,6 +58,24 @@ def recent(
     db: Session = Depends(get_db),
 ):
     return sport_service.get_recent(db, current.id, n)
+
+
+@router.get("/records", response_model=SportRecordsOut, summary="运动记录（分页）")
+def records(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    page_size_camel: Optional[int] = Query(
+        None, ge=1, le=100, alias="pageSize", include_in_schema=False
+    ),
+    current: User = Depends(require_activity_view),
+    db: Session = Depends(get_db),
+):
+    """分页返回每日运动记录（新到旧），附带基于全量（非当页）的累计/平均步数汇总。
+
+    #16：分页参数同时接受 page_size 与 pageSize（pageSize 优先），避免旧调用方静默失效。
+    """
+    effective_page_size = page_size_camel if page_size_camel is not None else page_size
+    return sport_service.get_records(db, current.id, page, effective_page_size)
 
 
 @router.get("/calendar", response_model=SportCalendarOut, summary="行军日历")

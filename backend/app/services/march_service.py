@@ -11,13 +11,14 @@ CHAPTERS 配置（管理端可视化编辑为后续增强）；章节状态由�
 """
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
+import time
 
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.helpers import to_local
-from app.models.models import DailySport, LitNode, RouteNode, User
-from app.services import event_service, person_service, sport_service
+from app.models.models import Chapter, DailySport, LitNode, RouteNode, User
+from app.services import event_service, operation_config_service, person_service, sport_service
 
 # 长征章节配置（node_ids 对应 route_nodes 主键；介绍为公开史实概述，供章节完成仪式展示）
 CHAPTERS: List[Dict] = [
@@ -43,9 +44,8 @@ CHAPTERS: List[Dict] = [
     },
 ]
 
-# 全员共同长征目标配置（需求 §11）：活动总目标与阶段里程碑。
-# name 为展示文案（随配置调整）；管理端可视化编辑为后续增强。
-GLOBAL_GOAL_STEPS = 200_000_000
+# 全员共同长征目标配置（需求 §11）：总目标步数外化到运营参数（global_goal_steps），
+# 里程碑 name 为展示文案（阶段步数仍为固定档，管理端可视化编辑为后续增强）。
 GLOBAL_MILESTONES: List[Dict] = [
     {"name": "5000万", "steps": 50_000_000},
     {"name": "1亿", "steps": 100_000_000},
@@ -68,20 +68,71 @@ def _ordered_nodes(db: Session) -> List[RouteNode]:
     )
 
 
+def _effective_chapters(db: Session) -> List[Dict]:
+    """返回生效章节配置：优先读 chapters 表（023 外化，管理端可编辑），
+    库空时回退模块常量 CHAPTERS，保证迁移未执行时功能不中断。
+
+    性能（#15）：章节配置全局且极少变更，加进程内短 TTL 缓存（_CHAPTERS_TTL 秒），
+    避免 get_route / light_up_nodes 等高频路径反复全表查 chapters（N+1）。
+    管理端增删改章节后调用 invalidate_chapter_cache() 立即失效。
+    """
+    now = time.monotonic()
+    cached = _CHAPTERS_CACHE["val"]
+    if cached is not None and now - _CHAPTERS_CACHE["at"] < _CHAPTERS_TTL:
+        return cached
+    chapters = _compute_effective_chapters(db)
+    _CHAPTERS_CACHE["at"] = now
+    _CHAPTERS_CACHE["val"] = chapters
+    return chapters
+
+
+def _compute_effective_chapters(db: Session) -> List[Dict]:
+    """实际查库计算生效章节配置（_effective_chapters 的未缓存实现）。"""
+    rows = (
+        db.query(Chapter)
+        .order_by(Chapter.sort_order.asc(), Chapter.id.asc())
+        .all()
+    )
+    if not rows:
+        return CHAPTERS
+    return [
+        {
+            "id": r.id,
+            "name": r.name,
+            "title": r.title,
+            "node_ids": list(r.node_ids or []),
+            "intro": r.intro or "",
+        }
+        for r in rows
+    ]
+
+
+# 章节配置进程内短 TTL 缓存（#15）：全局且极少变更，缓存 _CHAPTERS_TTL 秒消除高频全表查。
+_CHAPTERS_TTL = 30.0
+_CHAPTERS_CACHE: Dict[str, object] = {"at": 0.0, "val": None}
+
+
+def invalidate_chapter_cache() -> None:
+    """失效章节缓存（管理端增删改章节 / 重排后调用）。"""
+    _CHAPTERS_CACHE["at"] = 0.0
+    _CHAPTERS_CACHE["val"] = None
+
+
 def get_route_nodes(db: Session) -> List[RouteNode]:
     """返回供小程序展示的启用节点配置。"""
     return _ordered_nodes(db)
 
 
-def _chapter_views(nodes: List[Dict]) -> Tuple[List[Dict], Optional[int]]:
+def _chapter_views(nodes: List[Dict], chapters: List[Dict]) -> Tuple[List[Dict], Optional[int]]:
     """按路线节点状态计算章节视图与当前章节 id。
 
+    chapters 为生效章节配置（_effective_chapters）；
     status：COMPLETED 全部点亮 / ACTIVE 第一个未完成章 / LOCKED 之后各章；
     节点全部停用的章节跳过不下发。
     """
     status_by_id = {x["id"]: x["status"] for x in nodes}
     views: List[Dict] = []
-    for ch in CHAPTERS:
+    for ch in chapters:
         ids = [nid for nid in ch["node_ids"] if nid in status_by_id]
         if not ids:
             continue
@@ -110,10 +161,10 @@ def _chapter_views(nodes: List[Dict]) -> Tuple[List[Dict], Optional[int]]:
     return views, current_chapter_id
 
 
-def _completed_chapters(lit_ids: Set[int], enabled_ids: Set[int]) -> List[Dict]:
+def _completed_chapters(lit_ids: Set[int], enabled_ids: Set[int], chapters: List[Dict]) -> List[Dict]:
     """返回指定点亮集合下已完成的章节配置（route 顺序）。"""
     done: List[Dict] = []
-    for ch in CHAPTERS:
+    for ch in chapters:
         ids = [nid for nid in ch["node_ids"] if nid in enabled_ids]
         if ids and all(nid in lit_ids for nid in ids):
             done.append(ch)
@@ -199,7 +250,7 @@ def get_route(db: Session, user_id: int) -> Dict:
             lit.add(n.id)
 
     state = _route_state(nodes_def, lit, current_steps)
-    chapters, current_chapter_id = _chapter_views(state["nodes"])
+    chapters, current_chapter_id = _chapter_views(state["nodes"], _effective_chapters(db))
 
     # 完成仪式触发（需求 §20.4）：全部点亮且未观看过仪式时下发 ceremony_pending，
     # 前端播放完整仪式动画后调 POST /march/ceremony 标记；仅完成时查一次 users。
@@ -244,6 +295,7 @@ def get_global_goal(db: Session) -> Dict:
     total = int(
         db.query(func.coalesce(func.sum(DailySport.steps), 0)).scalar() or 0
     )
+    goal_steps = operation_config_service.get_effective(db).global_goal_steps
     milestones = [
         {"name": m["name"], "steps": m["steps"], "reached": total >= m["steps"]}
         for m in GLOBAL_MILESTONES
@@ -251,10 +303,10 @@ def get_global_goal(db: Session) -> Dict:
     upcoming = next((m for m in milestones if not m["reached"]), None)
     return {
         "total_steps": total,
-        "target_steps": GLOBAL_GOAL_STEPS,
+        "target_steps": goal_steps,
         "progress_pct": (
-            min(100.0, round(total / GLOBAL_GOAL_STEPS * 100, 1))
-            if GLOBAL_GOAL_STEPS > 0
+            min(100.0, round(total / goal_steps * 100, 1))
+            if goal_steps > 0
             else 0.0
         ),
         "milestones": milestones,
@@ -366,7 +418,8 @@ def light_up_nodes(db: Session, user_id: int) -> Tuple[List[Dict], List[Dict]]:
     lit = _lit_node_ids(db, user_id)
     nodes_def = _ordered_nodes(db)
     enabled_ids = {n.id for n in nodes_def}
-    chapters_before = {ch["id"] for ch in _completed_chapters(lit, enabled_ids)}
+    chapter_defs = _effective_chapters(db)
+    chapters_before = {ch["id"] for ch in _completed_chapters(lit, enabled_ids, chapter_defs)}
 
     newly: List[Dict] = []
     lit_records: List[LitNode] = []
@@ -418,7 +471,7 @@ def light_up_nodes(db: Session, user_id: int) -> Tuple[List[Dict], List[Dict]]:
 
     # 章节完成判定：本次点亮后新完成的章节写 CHAPTER_COMPLETE 事件
     new_chapters: List[Dict] = []
-    for ch in _completed_chapters(lit, enabled_ids):
+    for ch in _completed_chapters(lit, enabled_ids, chapter_defs):
         if ch["id"] in chapters_before:
             continue
         event_service.record(

@@ -181,8 +181,8 @@ def get_companions(db: Session, user: User, limit: int = 6) -> Dict:
     """同组织同行者（需求 §9）：我的组织 + 同行人数 + 今日共同前进 + 同行者列表。
 
     口径：同组织 = 用户所选组织的整棵子树（含下级）；今日共同前进 = 子树成员
-    当日步数之和。隐私（§9.4）：同行者只下发昵称/头像/今日步数与是否本人，
-    不含用户 id、openid 等敏感字段。
+    当日步数之和。隐私（§9.4）：同行者下发昵称/头像/今日步数/是否本人，并附带
+    user_id（#9，供同组织内点击下钻到公开摘要卡）；不含 openid 等敏感字段。
     """
     if not user.org_id:
         return {"org": None, "member_count": 0, "today_total_steps": 0, "companions": []}
@@ -214,6 +214,7 @@ def get_companions(db: Session, user: User, limit: int = 6) -> Dict:
         "today_total_steps": int(today_total or 0),
         "companions": [
             {
+                "user_id": uid,
                 "nickname": nickname or "",
                 "avatar": avatar,
                 "today_steps": int(steps or 0),

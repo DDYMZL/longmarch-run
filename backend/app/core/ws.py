@@ -25,14 +25,25 @@ def build_event(reason: str, user_id: int) -> dict:
     return {"type": "data_changed", "reason": reason, "user_id": user_id, "at": _now_iso()}
 
 
-def build_activity(event_type: str, user_id: int, nickname: str, text: str) -> dict:
-    """构造实时动态事件（管理端驾驶舱/大屏动态流直接展示 text）。"""
+def build_activity(
+    event_type: str,
+    user_id: int,
+    nickname: str,
+    text: str,
+    node_id: Optional[int] = None,
+) -> dict:
+    """构造实时动态事件（管理端驾驶舱/大屏动态流直接展示 text）。
+
+    #9：节点类事件（NODE_UNLOCK/CHAPTER_COMPLETE）附带 nodeId（camel），供前端下钻；
+    其余事件 nodeId 为 None。
+    """
     return {
         "type": "activity",
         "eventType": event_type,
         "userId": user_id,
         "nickname": nickname,
         "text": text,
+        "nodeId": node_id,
         "at": _now_iso(),
     }
 

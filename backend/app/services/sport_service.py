@@ -22,7 +22,7 @@ from app.core.config import settings
 from app.core.helpers import BEIJING_TZ, local_to_utc, now_utc, recent_dates, seeded_steps, to_local, today_str
 from app.core.wx import code2session, decrypt_werun
 from app.models.models import DailySport, LitNode, QuizRecord, RouteNode, User
-from app.services import event_service, points_service, streak_service
+from app.services import event_service, operation_config_service, points_service, streak_service
 
 DAILY_TARGET = 20000  # 今日目标步数（展示用）
 TOTAL_MILESTONES = [(100000, "TOTAL_STEPS_100000"), (500000, "TOTAL_STEPS_500000")]
@@ -38,9 +38,9 @@ def get_total_steps(db: Session, user_id: int) -> int:
     return int(total or 0)
 
 
-def _distance_of(steps: int) -> float:
-    """按配置步长估算距离（km，保留两位）。"""
-    return round(steps * settings.STRIDE_M / 1000, 2)
+def _distance_of(steps: int, stride_m: float) -> float:
+    """按步长估算距离（km，保留两位）；stride_m 取自运营参数快照。"""
+    return round(steps * stride_m / 1000, 2)
 
 
 def _after_written(
@@ -112,24 +112,58 @@ def _lock_day(db: Session, user_id: int, date: str) -> Optional[DailySport]:
 
 
 def _upsert_day(
-    db: Session, user_id: int, date: str, steps: int, source: str
+    db: Session, user_id: int, date: str, steps: int, source: str, stride_m: float
 ) -> Tuple[DailySport, int, bool, bool]:
     """锁内按微信最终值覆盖某日记录，返回（记录、原步数、是否新建、是否变化）。"""
     record = _lock_day(db, user_id, date)
     created = record is None
     if created:
-        record = DailySport(user_id=user_id, date=date, steps=steps, distance=_distance_of(steps))
+        record = DailySport(user_id=user_id, date=date, steps=steps, distance=_distance_of(steps, stride_m))
         db.add(record)
         previous = 0
     else:
         previous = record.steps or 0
         record.steps = steps
-        record.distance = _distance_of(steps)
+        record.distance = _distance_of(steps, stride_m)
     record.source = source
     record.synced_at = now_utc()
     record.sync_status = "processed"
+    record.fail_reason = None  # 成功入账，清除历史失败标记
     db.flush()
     return record, previous, created, created or previous != steps
+
+
+def _mark_failed(db: Session, user_id: int, date: str, reason: str, source: str) -> None:
+    """把某日标记为同步失败（sync_status='failed' + fail_reason），供管理端失败清单只读感知。
+
+    无记录时以 steps=0 占位（不计入累计步数与积分）。已有记录分两种（#3）：
+    - 仍是 steps=0 的占位行：本次未取到数据，降级为 failed + fail_reason，保留在失败清单；
+    - 已有真实步数（steps>0）：说明历史已成功入账，本次缺该日数据不应把它误判为失败，
+      只更新 synced_at（最近尝试时间），不改 sync_status/fail_reason，避免污染失败清单。
+    不提交，由调用方统一提交。
+    """
+    record = _lock_day(db, user_id, date)
+    if record is None:
+        db.add(
+            DailySport(
+                user_id=user_id,
+                date=date,
+                steps=0,
+                distance=0,
+                source=source,
+                synced_at=now_utc(),
+                sync_status="failed",
+                fail_reason=reason[:200],
+            )
+        )
+    elif (record.steps or 0) == 0:
+        record.synced_at = now_utc()
+        record.sync_status = "failed"
+        record.fail_reason = reason[:200]
+    else:
+        # 已有真实步数：仅刷新最近同步尝试时间，保留既有成功状态，不降级为失败。
+        record.synced_at = now_utc()
+    db.flush()
 
 
 def sync_today(
@@ -148,10 +182,17 @@ def sync_today(
     expected_dates = recent_dates(7)
     steps_by_date = _resolve_steps(openid, code, encrypted_data, iv, date, user_id)
     source = "mock" if openid.startswith("mock_") or not (settings.WX_APPID and settings.WX_SECRET) else "werun"
+    cfg = operation_config_service.get_effective(db)
     db.query(User.id).filter(User.id == user_id).with_for_update().first()
     before_points = points_service.get_total(db, user_id)
     prev_total_steps = get_total_steps(db, user_id)
-    had_any = db.query(DailySport.id).filter(DailySport.user_id == user_id).first() is not None
+    # 仅按真实步数（steps>0）判定是否首次运动：失败占位行（steps=0）不应抑制 FIRST_STEP。
+    had_any = (
+        db.query(DailySport.id)
+        .filter(DailySport.user_id == user_id, DailySport.steps > 0)
+        .first()
+        is not None
+    )
 
     processed: List[str] = []
     failed = [
@@ -171,10 +212,14 @@ def sync_today(
         if value < 0:
             failed.append({"date": day, "reason": "微信运动返回的步数无效"})
             continue
-        record, previous, created, changed = _upsert_day(db, user_id, day, value, source)
+        record, previous, created, changed = _upsert_day(db, user_id, day, value, source, cfg.stride_m)
         processed.append(day)
         if changed:
             written.append((day, record, previous, created))
+
+    # 持久化同步失败日期（点13）：供管理端「同步失败清单」只读感知，允许后续重试覆盖。
+    for item in failed:
+        _mark_failed(db, user_id, item["date"], item["reason"], source)
 
     if processed:
         points_service.recompute_walk(db, user_id)
@@ -203,7 +248,7 @@ def sync_today(
         "failed_dates": failed,
         "points_change": after_points - before_points,
         "today_walk_points": points_service.walk_on(db, user_id, date),
-        "walk_carry": points_service.walk_carry(db, user_id),
+        "walk_carry": points_service.walk_carry(db, user_id, cfg),
     }
 
 
@@ -226,7 +271,7 @@ def get_today(db: Session, user_id: int) -> Dict:
         "total_steps": get_total_steps(db, user_id),
         "current_streak": current_streak,
         "max_streak": max_streak,
-        "streak_goal": settings.STREAK_GOAL_STEPS,
+        "streak_goal": operation_config_service.get_effective(db).streak_goal_steps,
         "today_goal_completed": bool(record.is_goal_completed) if record else False,
         "next_streak_milestone": next_milestone,
         "streak_remain": (next_milestone - current_streak) if next_milestone else 0,
@@ -327,6 +372,51 @@ def get_recent(db: Session, user_id: int, n: int) -> List[Dict]:
     return [{"date": d, "steps": step_map.get(d, 0), "text": d[5:]} for d in dates]
 
 
+def get_records(db: Session, user_id: int, page: int = 1, page_size: int = 20) -> Dict:
+    """分页运动记录（工作流 A7，新到旧）+ 全局汇总（累计/平均步数，基于全量非当页）。
+
+    仅返回有效记录（steps>0），排除同步失败占位行；avgSteps 按有步数天数取整。
+    """
+    query = db.query(DailySport).filter(
+        DailySport.user_id == user_id, DailySport.steps > 0
+    )
+    total = query.count()
+    rows = (
+        query.order_by(DailySport.date.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size + 1)
+        .all()
+    )
+    has_more = len(rows) > page_size
+    total_steps, active_days = (
+        db.query(
+            func.coalesce(func.sum(DailySport.steps), 0),
+            func.count(DailySport.id),
+        )
+        .filter(DailySport.user_id == user_id, DailySport.steps > 0)
+        .first()
+    )
+    total_steps = int(total_steps or 0)
+    active_days = int(active_days or 0)
+    return {
+        "items": [
+            {
+                "date": r.date,
+                "text": r.date[5:] if r.date else "",
+                "steps": int(r.steps or 0),
+                "distance": float(r.distance or 0),
+            }
+            for r in rows[:page_size]
+        ],
+        "total": int(total),
+        "page": page,
+        "page_size": page_size,
+        "has_more": has_more,
+        "total_steps": total_steps,
+        "avg_steps": round(total_steps / active_days) if active_days > 0 else 0,
+    }
+
+
 def add_steps(db: Session, user_id: int, delta: int) -> None:
     """手动补充步数（演示用）：当天累加 delta，并按运动源数据全量修复步行台账。"""
     date = today_str()
@@ -335,7 +425,8 @@ def add_steps(db: Session, user_id: int, delta: int) -> None:
     db.query(User.id).filter(User.id == user_id).with_for_update().first()
     existing = _lock_day(db, user_id, date)
     value = (existing.steps or 0) + delta if existing is not None else delta
-    record, prev_steps, created, changed = _upsert_day(db, user_id, date, value, "manual")
+    stride_m = operation_config_service.get_effective(db).stride_m
+    record, prev_steps, created, changed = _upsert_day(db, user_id, date, value, "manual", stride_m)
     points_service.recompute_walk(db, user_id)
     db.commit()
     if changed:

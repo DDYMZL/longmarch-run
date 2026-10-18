@@ -9,8 +9,12 @@
 """
 from contextlib import asynccontextmanager
 
+import os
+from pathlib import Path
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from app.api.routes import (
     activity,
@@ -38,9 +42,35 @@ from app.data.seed import init_seed
 from app.services import points_service, streak_service
 
 
+def _assert_upload_layout() -> None:
+    """启动安全断言：AVATAR_DIR 在 UPLOAD_ROOT 内；UPLOAD_ROOT 不是项目根/不含 .env。
+
+    防止运维将 UPLOAD_ROOT 配错导致 /uploads 直接暴露项目根（包括 .env 凭证）。
+    """
+    root = Path(settings.UPLOAD_ROOT).resolve()
+    avatar = Path(settings.AVATAR_DIR).resolve()
+    backend_root = Path(__file__).resolve().parents[1]
+    repo_root = Path(__file__).resolve().parents[2]
+    if not avatar.is_relative_to(root):
+        raise RuntimeError(
+            f"AVATAR_DIR({avatar}) 必须位于 UPLOAD_ROOT({root}) 内"
+        )
+    if root == backend_root or root == repo_root:
+        raise RuntimeError(
+            f"UPLOAD_ROOT({root}) 不能是项目根目录，须为独立上传子目录"
+        )
+    if (root / ".env").exists() or (root / ".env.prod").exists():
+        raise RuntimeError(
+            f"UPLOAD_ROOT({root}) 下不得包含 .env 文件，疑似指向了项目根"
+        )
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """应用启动：幂等写入种子数据，并以运动源数据修复派生统计。"""
+    """应用启动：确保上传目录存在，幂等写入种子数据，并以运动源数据修复派生统计。"""
+    _assert_upload_layout()
+    os.makedirs(settings.UPLOAD_ROOT, exist_ok=True)
+    os.makedirs(settings.AVATAR_DIR, exist_ok=True)
     db = SessionLocal()
     try:
         init_seed(db)
@@ -67,6 +97,13 @@ app.add_middleware(
 )
 
 _prefix = settings.API_PREFIX
+# 静态资源：把独立配置的上传根目录 UPLOAD_ROOT（默认 backend/uploads）挂到 /uploads，
+# 与 /api 平级，供小程序 <image> 直接加载头像等文件。挂载点由 UPLOAD_ROOT 决定，
+# 不再从 AVATAR_DIR 反推父级，避免误配导致暴露项目根（启动时 _assert_upload_layout 兜底校验）。
+_UPLOAD_ROOT = str(Path(settings.UPLOAD_ROOT).resolve())
+os.makedirs(_UPLOAD_ROOT, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=_UPLOAD_ROOT), name="uploads")
+
 app.include_router(activity.router, prefix=_prefix)
 app.include_router(auth.router, prefix=_prefix)
 app.include_router(identity.router, prefix=_prefix)

@@ -464,6 +464,39 @@ class QuizRecordOut(CamelModel):
     answer_at: int
 
 
+class QuizRecordsOut(CamelModel):
+    """答题记录分页（工作流 A7）：含基于全量的累计答对/平均得分汇总。"""
+
+    items: List[QuizRecordOut] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+    has_more: bool = False
+    total_correct: int = 0
+    avg_score: int = 0
+
+
+class SportRecordItem(CamelModel):
+    """运动记录单条（工作流 A7）。"""
+
+    date: str
+    text: str = ""
+    steps: int = 0
+    distance: float = 0.0
+
+
+class SportRecordsOut(CamelModel):
+    """运动记录分页（工作流 A7）：totalSteps/avgSteps 为基于全量的累计/平均步数。"""
+
+    items: List[SportRecordItem] = []
+    total: int = 0
+    page: int = 1
+    page_size: int = 20
+    has_more: bool = False
+    total_steps: int = 0
+    avg_steps: int = 0
+
+
 class QuizProgressItem(CamelModel):
     seq: int
     status: str  # answering / answered / timeout / pending
@@ -711,13 +744,18 @@ class BroadcastTodayOut(CamelModel):
 
 
 class ActivityItemOut(CamelModel):
-    """实时行军动态条目（需求 §8.5：仅昵称/行为文案/类型/时间，不含 user_id 与事件参数）。"""
+    """实时行军动态条目（需求 §8.5：仅昵称/行为文案/类型/时间，不含 user_id 与事件参数）。
+
+    #9：节点类事件（NODE_UNLOCK/CHAPTER_COMPLETE）附带 node_id（camel 输出 nodeId），
+    供前端点击动态下钻到对应节点/章节；其余事件为 None。
+    """
 
     id: int
     event_type: str
     event_time: datetime
     nickname: str = ""
     text: str = ""
+    node_id: Optional[int] = None
 
 
 class ActivitiesOut(CamelModel):
@@ -759,8 +797,13 @@ class UserOrgOut(CamelModel):
 
 
 class CompanionItemOut(CamelModel):
-    """同组织同行者条目（需求 §9.4：仅昵称/头像/今日步数与是否本人，不含用户 id）。"""
+    """同组织同行者条目（需求 §9.4：昵称/头像/今日步数与是否本人）。
 
+    #9：补 user_id（camel 输出 userId），供同组织同行者点击下钻到其公开摘要卡；
+    同行者本就限定在调用者所属组织子树内（org_service.get_companions），故同组织可见。
+    """
+
+    user_id: Optional[int] = None
     nickname: str = ""
     avatar: Optional[str] = None
     today_steps: int = 0
@@ -834,7 +877,11 @@ class RankListOut(CamelModel):
 
 
 class PointsRankOut(CamelModel):
-    """总积分榜：top 第 1~10 名；list 第 11 名起分页；me 当前用户。"""
+    """总积分榜：top 第 1~10 名；list 第 11 名起分页；me 当前用户。
+
+    #17：scope_applied（camel 输出 scopeApplied）标识本次实际生效口径——'org' 表示按组织
+    子树统计，'all' 表示全员榜（scope=org 但调用者无组织时退化为全员），供前端设置文案。
+    """
 
     top: List[RankItem] = []
     list: List[RankItem] = []
@@ -843,6 +890,35 @@ class PointsRankOut(CamelModel):
     page_size: int = 20
     has_more: bool = False
     total: int = 0
+    scope_applied: str = "all"
+
+
+class OrgRankItem(CamelModel):
+    """部门榜单项（需求 §8）：按组织聚合的成员数/总步数/人均积分/点亮节点数。"""
+
+    org_id: int
+    org_name: str = ""
+    member_count: int = 0
+    total_steps: int = 0
+    avg_points: int = 0
+    lit_nodes: int = 0
+
+
+class OrgRankOut(CamelModel):
+    items: List[OrgRankItem] = []
+
+
+class UserCardOut(CamelModel):
+    """用户公开摘要卡（需求 §8）：昵称按运营参数脱敏，不含 openid 等敏感字段。"""
+
+    nickname: str = ""
+    avatar: str = ""
+    org_name: str = ""
+    points: int = 0
+    steps: int = 0
+    lit_nodes: int = 0
+    medal_count: int = 0
+    rank: Optional[int] = None
 
 
 # ---------------- 管理后台（admin 前端项目专用契约，独立于小程序 camelCase 契约） ----------------
@@ -1549,6 +1625,56 @@ class AdminPointsVerifyOut(BaseModel):
     samples: List[AdminPointsDiff] = []
 
 
+class AdminOrgCompareItem(BaseModel):
+    """组织横向对比单项（数据运营分析·点13）。"""
+
+    org_id: int
+    org_name: str = ""
+    member_count: int = 0
+    total_steps: int = 0
+    avg_steps: int = 0
+    active_users: int = 0
+    lit_nodes: int = 0
+    avg_points: int = 0
+
+
+class AdminOrgCompareOut(BaseModel):
+    items: List[AdminOrgCompareItem] = []
+
+
+class AdminInviteFunnelItem(BaseModel):
+    """邀请漏斗单项（按邀请码分组：扫码→入驻→首登→首次同步）。"""
+
+    invite_id: int
+    invite_name: str = ""
+    invite_code: str = ""
+    scans: int = 0
+    onboarded: int = 0
+    first_logins: int = 0
+    synced: int = 0
+
+
+class AdminInviteFunnelOut(BaseModel):
+    items: List[AdminInviteFunnelItem] = []
+
+
+class AdminSyncFailureItem(BaseModel):
+    """同步失败清单单项（sync_status='failed'，只读感知）。"""
+
+    user_id: int
+    nickname: str = ""
+    org_name: str = ""
+    date: str = ""
+    fail_reason: str = ""
+    synced_at: Optional[datetime] = None
+
+
+class AdminSyncFailuresOut(BaseModel):
+    days: int = 7
+    total: int = 0
+    items: List[AdminSyncFailureItem] = []
+
+
 class AdminUserOverviewOut(BaseModel):
     """排名洞察点击人员后的完整详情聚合。"""
 
@@ -1701,6 +1827,18 @@ class AiQuizExplanationOut(CamelModel):
     analysis: str = ""
     source_type: str = "bank"
     sources: List[AiSourceOut] = []
+
+
+class AiSuggestedQuestionItem(CamelModel):
+    """AI 建议问题单条（工作流 A6）。"""
+
+    text: str
+
+
+class AiSuggestedQuestionsOut(CamelModel):
+    """AI 建议问题：通用问题 + （指定节点时）节点相关问题。"""
+
+    items: List[AiSuggestedQuestionItem] = []
 
 
 # ---- 管理端 AI 智能中心契约（snake_case，独立于小程序 camelCase）----
@@ -1856,3 +1994,133 @@ class AdminAiImportOut(BaseModel):
     skipped: int
     failed: int
     failures: List[AdminAiImportFailure] = []
+
+
+class AdminOperationConfigValues(BaseModel):
+    """运营参数可编辑项（步长/达标/积分/答题时限等），逐项可选，未传的保持不变。
+
+    extra="allow"：保留白名单外的键，交由 patch_config 统一校验并返回
+    「不支持的配置项：xxx」明确文案（否则 Pydantic 默认丢弃，误报「没有需要更新的配置」）。
+    """
+
+    model_config = ConfigDict(extra="allow")
+
+    stride_m: Optional[float] = None
+    streak_goal_steps: Optional[int] = None
+    points_walk_steps_per_point: Optional[int] = None
+    points_quiz_per_correct: Optional[int] = None
+    points_quiz_daily_cap: Optional[int] = None
+    quiz_question_seconds: Optional[int] = None
+    quiz_answer_grace_seconds: Optional[int] = None
+    global_goal_steps: Optional[int] = None
+    activity_mask_nickname: Optional[bool] = None
+
+
+class AdminOperationConfigPatchRequest(BaseModel):
+    """运营参数更新请求：仅 values 内的非空字段生效。"""
+
+    values: Optional[AdminOperationConfigValues] = None
+
+
+class AdminOperationConfigRange(BaseModel):
+    min: Optional[float] = None
+    max: Optional[float] = None
+    type: str = "int"
+    # 前端步长控件步进：浮点型 0.1 / 整数型 1 / 布尔型 None（无步进语义）
+    step: Optional[float] = None
+
+
+class AdminOperationConfigOut(BaseModel):
+    """运营参数视图：values 生效值，defaults env 默认，ranges 取值范围，overridden 已覆盖项。"""
+
+    values: Dict[str, Any] = {}
+    defaults: Dict[str, Any] = {}
+    ranges: Dict[str, AdminOperationConfigRange] = {}
+    overridden: List[str] = []
+
+
+class AdminChapterOut(BaseModel):
+    """章节（工作流 A3）：node_ids 为归属路线节点主键列表，sort_order 升序即章节顺序。"""
+
+    id: int
+    name: str
+    title: str = ""
+    intro: str = ""
+    node_ids: List[int] = []
+    sort_order: int = 0
+
+
+class AdminChapterListOut(BaseModel):
+    total: int
+    items: List[AdminChapterOut] = []
+
+
+class AdminChapterUpsert(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    title: str = Field(default="", max_length=100)
+    intro: str = ""
+    node_ids: List[int] = []
+    sort_order: int = Field(default=0, ge=0)
+
+
+class AdminChapterReorder(BaseModel):
+    """章节重排：ordered_ids 为按新顺序排列的全部章节 id。"""
+
+    ordered_ids: List[int] = Field(min_length=1)
+
+
+class AdminPersonOut(BaseModel):
+    """人物志（工作流 A4）：node_ids 为关联路线节点主键列表。"""
+
+    id: int
+    name: str
+    avatar: str = ""
+    brief: str = ""
+    node_ids: List[int] = []
+
+
+class AdminPersonListOut(BaseModel):
+    total: int
+    items: List[AdminPersonOut] = []
+
+
+class AdminPersonUpsert(BaseModel):
+    name: str = Field(min_length=1, max_length=50)
+    avatar: str = Field(default="", max_length=500)
+    brief: str = ""
+    node_ids: List[int] = []
+
+
+class AdminUploadUrlOut(BaseModel):
+    """通用上传结果：仅返回落盘后的绝对 URL，由前端填入表单再提交 CRUD。"""
+
+    url: str
+
+
+class AdminMedalOut(BaseModel):
+    """勋章定义（工作流 A4）：id 为字符串主键，hidden 为 True 时未获得不公开条件。"""
+
+    id: str
+    name: str
+    icon: str
+    desc: str = ""
+    category: str = ""
+    hidden: bool = False
+    sort_order: int = 0
+
+
+class AdminMedalListOut(BaseModel):
+    total: int
+    items: List[AdminMedalOut] = []
+
+
+class AdminMedalUpsert(BaseModel):
+    """勋章新增/编辑：新增时 id 可指定（留空由后端生成 medal_{ms}），编辑时 id 不可改。"""
+
+    id: Optional[str] = Field(default=None, max_length=50)
+    name: str = Field(min_length=1, max_length=50)
+    icon: str = Field(min_length=1, max_length=16)
+    desc: str = Field(default="", max_length=200)
+    category: str = Field(default="", max_length=20)
+    hidden: bool = False
+    sort_order: int = Field(default=0, ge=0)

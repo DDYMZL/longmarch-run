@@ -13,11 +13,17 @@ from typing import Dict, List, Optional, Tuple
 from sqlalchemy.orm import Session
 
 from app.core import ws as ws_manager
-from app.core.config import get_settings
 from app.models.models import User, UserEvent
+from app.services import operation_config_service
 
 # 连续行军里程碑（天）：达成时写 STREAK_* 事件（一次性成就）
 STREAK_MILESTONES: List[int] = [3, 7, 14, 30, 60]
+
+# 邀请漏斗埋点（点13 数据运营分析）：仅供分析统计，不进入公开/管理端实时动态流。
+INVITE_SCAN = "INVITE_SCAN"  # 扫码/校验邀请码（匿名，user_id 为空，按邀请码分组）
+FIRST_LOGIN = "FIRST_LOGIN"  # 新用户首次登录
+# 分析型事件：不在「实时行军动态」与「管理端动态」中展示，也不 WS 广播。
+ANALYTICS_EVENTS = {INVITE_SCAN, FIRST_LOGIN}
 
 
 def build_text(event_type: str, data: Optional[dict] = None) -> str:
@@ -47,6 +53,10 @@ def build_text(event_type: str, data: Optional[dict] = None) -> str:
         return "累计步数突破 500,000"
     if event_type == "COMPLETE_ROUTE":
         return "完成长征路线，全部节点点亮"
+    if event_type == INVITE_SCAN:
+        return "扫码校验邀请码"
+    if event_type == FIRST_LOGIN:
+        return "首次登录长征步迹"
     return event_type
 
 
@@ -58,6 +68,20 @@ def has_event(db: Session, user_id: int, event_type: str) -> bool:
         .first()
         is not None
     )
+
+
+def extract_node_id(event_type: str, data: Optional[dict] = None) -> Optional[int]:
+    """从事件参数提取下钻用 nodeId（#9）：仅节点类事件（NODE_UNLOCK 等）含 nodeId。
+
+    供实时动态（list_public_activities）与 WS 广播（record）统一附带 nodeId，
+    使前端点击动态可下钻到对应节点；无 nodeId 的事件返回 None。
+    """
+    d = data or {}
+    raw = d.get("nodeId")
+    try:
+        return int(raw) if raw is not None else None
+    except (TypeError, ValueError):
+        return None
 
 
 def mask_nickname(nickname: str) -> str:
@@ -73,10 +97,15 @@ def mask_nickname(nickname: str) -> str:
 
 
 def recent_events(db: Session, limit: int) -> List[Tuple[UserEvent, str]]:
-    """最近 limit 条事件及其用户昵称（单次外连接查询，事件倒序）。"""
+    """最近 limit 条事件及其用户昵称（单次外连接查询，事件倒序）。
+
+    过滤分析型事件（INVITE_SCAN/FIRST_LOGIN）：它们仅供运营漏斗统计，
+    不进入小程序实时动态与管理端动态流。
+    """
     rows = (
         db.query(UserEvent, User.nickname)
         .outerjoin(User, User.id == UserEvent.user_id)
+        .filter(UserEvent.event_type.notin_(ANALYTICS_EVENTS))
         .order_by(UserEvent.event_time.desc(), UserEvent.id.desc())
         .limit(limit)
         .all()
@@ -88,9 +117,9 @@ def list_public_activities(db: Session, limit: int = 10) -> List[Dict]:
     """小程序实时行军动态（user_event 倒序，关联昵称）。
 
     隐私边界（需求 §8.5）：只下发昵称 / 行为文案 / 事件类型与时间，
-    不含 user_id、openid 与事件参数；ACTIVITY_MASK_NICKNAME 开启时昵称脱敏。
+    不含 user_id、openid 与事件参数；运营参数 activity_mask_nickname 开启时昵称脱敏。
     """
-    mask = get_settings().ACTIVITY_MASK_NICKNAME
+    mask = operation_config_service.get_effective(db).activity_mask_nickname
     return [
         {
             "id": r.id,
@@ -98,6 +127,7 @@ def list_public_activities(db: Session, limit: int = 10) -> List[Dict]:
             "event_time": r.event_time,
             "nickname": mask_nickname(nickname) if mask else nickname,
             "text": build_text(r.event_type, r.event_data or {}),
+            "node_id": extract_node_id(r.event_type, r.event_data or {}),
         }
         for r, nickname in recent_events(db, limit)
     ]
@@ -105,12 +135,16 @@ def list_public_activities(db: Session, limit: int = 10) -> List[Dict]:
 
 def record(
     db: Session,
-    user_id: int,
+    user_id: Optional[int],
     event_type: str,
     data: Optional[dict] = None,
     event_time: Optional[datetime] = None,
 ) -> UserEvent:
-    """写入用户事件并广播管理端动态（activity 消息含文案与昵称）。"""
+    """写入用户事件并广播管理端动态（activity 消息含文案与昵称）。
+
+    分析型事件（INVITE_SCAN/FIRST_LOGIN）仅供运营漏斗统计：user_id 可为空（匿名扫码），
+    不查询昵称、不 WS 广播，避免污染实时动态流。
+    """
     event = UserEvent(
         user_id=user_id,
         event_type=event_type,
@@ -120,10 +154,16 @@ def record(
     db.add(event)
     db.commit()
 
+    if event_type in ANALYTICS_EVENTS:
+        return event
+
     nickname = db.query(User.nickname).filter(User.id == user_id).scalar() or ""
-    if get_settings().ACTIVITY_MASK_NICKNAME:
+    if operation_config_service.get_effective(db).activity_mask_nickname:
         nickname = mask_nickname(nickname)
     ws_manager.broadcast(
-        ws_manager.build_activity(event_type, user_id, nickname, build_text(event_type, data))
+        ws_manager.build_activity(
+            event_type, user_id, nickname, build_text(event_type, data),
+            extract_node_id(event_type, data),
+        )
     )
     return event

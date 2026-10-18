@@ -1,7 +1,7 @@
 """答题路由：今日状态、开题、逐题提交、记录、重置。"""
-from typing import List
+from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_activity_participation, require_activity_view
@@ -14,7 +14,7 @@ from app.schemas.schemas import (
     QuizAnswerRequest,
     QuizDailyOut,
     QuizKnowledgeOut,
-    QuizRecordOut,
+    QuizRecordsOut,
 )
 from app.services import medal_service, quiz_service
 
@@ -53,9 +53,22 @@ def answer(
     return result
 
 
-@router.get("/records", response_model=List[QuizRecordOut], summary="答题记录")
-def records(current: User = Depends(require_activity_view), db: Session = Depends(get_db)):
-    return quiz_service.get_records(db, current.id)
+@router.get("/records", response_model=QuizRecordsOut, summary="答题记录（分页）")
+def records(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    page_size_camel: Optional[int] = Query(
+        None, ge=1, le=100, alias="pageSize", include_in_schema=False
+    ),
+    current: User = Depends(require_activity_view),
+    db: Session = Depends(get_db),
+):
+    """分页返回答题记录（新到旧），附带基于全量（非当页）的累计答对/平均得分汇总。
+
+    #16：分页参数同时接受 page_size 与 pageSize（pageSize 优先），避免旧调用方静默失效。
+    """
+    effective_page_size = page_size_camel if page_size_camel is not None else page_size
+    return quiz_service.get_records(db, current.id, page, effective_page_size)
 
 
 @router.get("/knowledge", response_model=QuizKnowledgeOut, summary="知识画像")

@@ -1,7 +1,7 @@
 """每日答题服务（每题限时作答，V2.0 需求六）。
 
 规则：
-  每用户按个人使用历史分轮随机，每日最多 5 题且同日固定；逐题开题，每题 settings.QUIZ_QUESTION_SECONDS（90）秒，计时只认服务器时间；
+  每用户按个人使用历史分轮随机，每日最多 5 题且同日固定；逐题开题，每题运营参数 quiz_question_seconds（默认 90）秒，计时只认服务器时间；
   每题仅可提交一次，提交即判定；超时不得分且之后不可再提交；全部题目结束后生成当日答题记录。
   答题积分 = 答对数 × 2（单日上限 10，不扣分），每次判定与积分台账同一事务写入（见 points_service）。
 安全：
@@ -28,7 +28,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.helpers import today_str
 from app.models.models import DailyQuestion, PointsLog, Question, QuizAnswer, QuizRecord
-from app.services import event_service, points_service
+from app.services import event_service, operation_config_service, points_service
+from app.services.operation_config_service import OperationConfig
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +61,8 @@ def _ms(dt: datetime) -> int:
     return int(dt.replace(tzinfo=timezone.utc).timestamp() * 1000)
 
 
-def _grace() -> timedelta:
-    return timedelta(seconds=settings.QUIZ_ANSWER_GRACE_SECONDS)
+def _grace(cfg: OperationConfig) -> timedelta:
+    return timedelta(seconds=cfg.quiz_answer_grace_seconds)
 
 
 def _public_question(q: Question) -> Dict:
@@ -219,7 +220,9 @@ def _detail(r: QuizAnswer, q: Optional[Question]) -> Dict:
     }
 
 
-def _finalize(db: Session, user_id: int, session: DailyQuestion, rows: List[QuizAnswer]) -> QuizRecord:
+def _finalize(
+    db: Session, user_id: int, session: DailyQuestion, rows: List[QuizAnswer], cfg: OperationConfig
+) -> QuizRecord:
     """全部题目结束后生成当日答题记录（user+date 唯一，并发只写一次）并记录事件。"""
     existing = _get_record(db, user_id, session.date)
     if existing is not None:
@@ -249,7 +252,7 @@ def _finalize(db: Session, user_id: int, session: DailyQuestion, rows: List[Quiz
         total_count=len(rows),
         correct_count=correct_count,
         score=score,
-        points=points_service.quiz_points(correct_count),
+        points=points_service.quiz_points(correct_count, cfg),
         wrong_list=wrong_list,
         details=details,
         answer_at=int(time.time() * 1000),
@@ -279,6 +282,7 @@ def _state(
     total: int,
     rows: List[QuizAnswer],
     record: Optional[QuizRecord],
+    cfg: OperationConfig,
 ) -> Dict:
     """今日答题状态：逐题进度、当前题（含服务器截止时间与剩余毫秒）、已完成记录。"""
     current = next((r for r in rows if r.status == ANSWERING), None)
@@ -309,20 +313,20 @@ def _state(
         "shortage_message": (
             f"当前题库仅有 {total} 道可用题目，本期按实际题量作答" if total < DAILY_COUNT else ""
         ),
-        "time_limit": settings.QUIZ_QUESTION_SECONDS,
+        "time_limit": cfg.quiz_question_seconds,
         "server_time": _ms(now),
         "progress": progress,
         "current": current_out,
         "correct_count": correct_count,
-        "points": points_service.quiz_points(correct_count),
+        "points": points_service.quiz_points(correct_count, cfg),
         "record": _record_out(record) if record else None,
     }
 
 
-def _completed_state(db: Session, record: QuizRecord, now: datetime) -> Dict:
+def _completed_state(db: Session, record: QuizRecord, now: datetime, cfg: OperationConfig) -> Dict:
     session = _session(db, record.user_id, record.date, create=False)
     rows = _answers(db, session.id) if session else []
-    return _state(db, record.date, now, record.total_count, rows, record)
+    return _state(db, record.date, now, record.total_count, rows, record, cfg)
 
 
 def get_daily(db: Session, user_id: int) -> Dict:
@@ -331,17 +335,18 @@ def get_daily(db: Session, user_id: int) -> Dict:
     未开题时 current 为空，需调用 start 开题后才下发题目。
     """
     date, now = today_str(), datetime.utcnow()
+    cfg = operation_config_service.get_effective(db)
     record = _get_record(db, user_id, date)
     if record is not None:
-        return _completed_state(db, record, now)
+        return _completed_state(db, record, now, cfg)
     session = _session(db, user_id, date, create=True)
     rows = _answers(db, session.id)
-    if _expire(db, rows, now - _grace()):
+    if _expire(db, rows, now - _grace(cfg)):
         rows = _answers(db, session.id)
     total, next_qid = _plan(db, session, rows)
     if rows and next_qid is None and all(r.status != ANSWERING for r in rows):
-        return _state(db, date, now, total, rows, _finalize(db, user_id, session, rows))
-    return _state(db, date, now, total, rows, None)
+        return _state(db, date, now, total, rows, _finalize(db, user_id, session, rows, cfg), cfg)
+    return _state(db, date, now, total, rows, None, cfg)
 
 
 def start(db: Session, user_id: int) -> Dict:
@@ -350,9 +355,10 @@ def start(db: Session, user_id: int) -> Dict:
     当前题已截止则判超时并开下一题；全部结束则生成记录返回。开题/截止时间取服务器时间。
     """
     date, now = today_str(), datetime.utcnow()
+    cfg = operation_config_service.get_effective(db)
     record = _get_record(db, user_id, date)
     if record is not None:
-        return _completed_state(db, record, now)
+        return _completed_state(db, record, now, cfg)
     session = _session(db, user_id, date, create=True)
     for _ in range(3):
         rows = _answers(db, session.id)
@@ -360,10 +366,10 @@ def start(db: Session, user_id: int) -> Dict:
             rows = _answers(db, session.id)
         total, next_qid = _plan(db, session, rows)
         if any(r.status == ANSWERING for r in rows):
-            return _state(db, date, now, total, rows, None)
+            return _state(db, date, now, total, rows, None, cfg)
         if next_qid is None:
-            record = _finalize(db, user_id, session, rows) if rows else None
-            return _state(db, date, now, total, rows, record)
+            record = _finalize(db, user_id, session, rows, cfg) if rows else None
+            return _state(db, date, now, total, rows, record, cfg)
         db.add(
             QuizAnswer(
                 session_id=session.id,
@@ -372,7 +378,7 @@ def start(db: Session, user_id: int) -> Dict:
                 seq=len(rows) + 1,
                 question_id=next_qid,
                 started_at=now,
-                deadline_at=now + timedelta(seconds=settings.QUIZ_QUESTION_SECONDS),
+                deadline_at=now + timedelta(seconds=cfg.quiz_question_seconds),
                 status=ANSWERING,
             )
         )
@@ -381,7 +387,7 @@ def start(db: Session, user_id: int) -> Dict:
         except IntegrityError:
             db.rollback()  # 并发开题：以先写入的为准，重新读取
     rows = _answers(db, session.id)
-    return _state(db, date, now, _plan(db, session, rows)[0], rows, None)
+    return _state(db, date, now, _plan(db, session, rows)[0], rows, None, cfg)
 
 
 def answer(db: Session, user_id: int, question_id: int, labels: List[str]) -> Dict:
@@ -390,6 +396,7 @@ def answer(db: Session, user_id: int, question_id: int, labels: List[str]) -> Di
     判定与当日答题积分同一事务写入；最后一题提交后生成当日记录。
     """
     date, now = today_str(), datetime.utcnow()
+    cfg = operation_config_service.get_effective(db)
     session = _session(db, user_id, date, create=False)
     row = (
         db.query(QuizAnswer)
@@ -421,14 +428,16 @@ def answer(db: Session, user_id: int, question_id: int, labels: List[str]) -> Di
         .count()
     )
     gained = (
-        points_service.quiz_points(prior + 1) - points_service.quiz_points(prior) if is_right else 0
+        points_service.quiz_points(prior + 1, cfg) - points_service.quiz_points(prior, cfg)
+        if is_right
+        else 0
     )
     updated = (
         db.query(QuizAnswer)
         .filter(
             QuizAnswer.id == row.id,
             QuizAnswer.status == ANSWERING,
-            QuizAnswer.deadline_at >= now - _grace(),
+            QuizAnswer.deadline_at >= now - _grace(cfg),
         )
         .update(
             {
@@ -446,7 +455,7 @@ def answer(db: Session, user_id: int, question_id: int, labels: List[str]) -> Di
         rows = _answers(db, session.id)
         if next(r for r in rows if r.id == row.id).status == ANSWERED:
             raise ValueError(ALREADY_ANSWERED)
-        _expire(db, rows, now - _grace())
+        _expire(db, rows, now - _grace(cfg))
         raise ValueError(ANSWER_TIMEOUT)
     correct_count = prior + (1 if is_right else 0)
     points_service.sync_quiz_day(db, user_id, date, correct_count, session.id)
@@ -454,7 +463,7 @@ def answer(db: Session, user_id: int, question_id: int, labels: List[str]) -> Di
 
     rows = _answers(db, session.id)
     total, next_qid = _plan(db, session, rows)
-    record = _finalize(db, user_id, session, rows) if next_qid is None else None
+    record = _finalize(db, user_id, session, rows, cfg) if next_qid is None else None
     return {
         "seq": row.seq,
         "question_id": question_id,
@@ -465,22 +474,44 @@ def answer(db: Session, user_id: int, question_id: int, labels: List[str]) -> Di
         "analysis": q.analysis or "",
         "points": gained,
         "correct_count": correct_count,
-        "today_points": points_service.quiz_points(correct_count),
+        "today_points": points_service.quiz_points(correct_count, cfg),
         "total_count": total,
         "finished": record is not None,
         "record": _record_out(record) if record else None,
     }
 
 
-def get_records(db: Session, user_id: int) -> List[Dict]:
-    """答题记录列表（从新到旧）；列表不含逐题明细以控制体积。"""
+def get_records(db: Session, user_id: int, page: int = 1, page_size: int = 20) -> Dict:
+    """分页答题记录（工作流 A7，新到旧）+ 全局汇总（累计答对/平均得分，基于全量非当页）。
+
+    列表不含逐题明细以控制体积；avgScore 为历史得分均值取整。
+    """
+    query = db.query(QuizRecord).filter(QuizRecord.user_id == user_id)
+    total = query.count()
     rows = (
-        db.query(QuizRecord)
-        .filter(QuizRecord.user_id == user_id)
-        .order_by(QuizRecord.date.desc())
+        query.order_by(QuizRecord.date.desc())
+        .offset((page - 1) * page_size)
+        .limit(page_size + 1)
         .all()
     )
-    return [_record_out(r, with_details=False) for r in rows]
+    has_more = len(rows) > page_size
+    total_correct, avg_score = (
+        db.query(
+            func.coalesce(func.sum(QuizRecord.correct_count), 0),
+            func.coalesce(func.avg(QuizRecord.score), 0),
+        )
+        .filter(QuizRecord.user_id == user_id)
+        .first()
+    )
+    return {
+        "items": [_record_out(r, with_details=False) for r in rows[:page_size]],
+        "total": int(total),
+        "page": page,
+        "page_size": page_size,
+        "has_more": has_more,
+        "total_correct": int(total_correct or 0),
+        "avg_score": int(round(float(avg_score or 0))),
+    }
 
 
 def get_knowledge(db: Session, user_id: int) -> Dict:

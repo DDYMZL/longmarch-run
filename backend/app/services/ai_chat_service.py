@@ -12,6 +12,7 @@
 安全：会话归属一律由传入的 user 决定，读写他人会话一律按「不存在」处理；
 提示词只注入公开史实与已发布资料，用户输入被当作普通文本（防提示词注入）。
 """
+import json
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -32,6 +33,7 @@ from app.services import (
     ai_knowledge_service,
     ai_usage_service,
     cloudbase_service,
+    setting_service,
 )
 
 logger = logging.getLogger(__name__)
@@ -332,6 +334,54 @@ def _default_related(node_name: str) -> List[str]:
         f"{node_name}在长征中发生了什么？",
         f"{node_name}有哪些重要的历史意义？",
     ]
+
+
+# AI 建议问题（工作流 A6）：通用问题默认文案，system_settings 键 ai_suggested_general 可覆盖
+# （存 JSON 字符串数组）。前端不再硬编码，AI 总开关关闭时本能力仍可用（不调模型）。
+_DEFAULT_SUGGESTED_GENERAL: List[str] = [
+    "长征为什么要进行战略转移？",
+    "遵义会议为什么是生死攸关的转折点？",
+    "红军是如何飞夺泸定桥的？",
+    "长征胜利有哪些伟大意义？",
+]
+
+
+def _general_questions(db: Session) -> List[str]:
+    """通用建议问题：优先读 system_settings.ai_suggested_general（JSON 数组），缺失/非法回退默认。"""
+    raw = setting_service.get_value(db, "ai_suggested_general")
+    if raw and raw.strip():
+        try:
+            parsed = json.loads(raw)
+        except (ValueError, TypeError):
+            parsed = None
+        if isinstance(parsed, list):
+            items = [str(x).strip() for x in parsed if str(x).strip()]
+            if items:
+                return items
+    return list(_DEFAULT_SUGGESTED_GENERAL)
+
+
+def suggested_questions(db: Session, node_id: Optional[int] = None) -> List[Dict[str, str]]:
+    """AI 建议问题：通用问题 + （指定 nodeId 时）该节点的相关问题，返回 [{"text": ...}]。
+
+    节点相关问题优先取该节点已发布知识资料的 related，否则用节点名兜底模板；
+    与通用问题去重后追加。不调用模型、不消耗额度。
+    """
+    texts: List[str] = _general_questions(db)
+    if node_id is not None:
+        node = db.query(RouteNode).filter(RouteNode.id == node_id).first()
+        if node is not None:
+            related: List[str] = []
+            knowledge = ai_knowledge_service.published_for_node(db, node_id)
+            if knowledge:
+                related = list(knowledge[0].related or [])
+            if not related:
+                related = _default_related(node.name)
+            for q in related:
+                q = (q or "").strip()
+                if q and q not in texts:
+                    texts.append(q)
+    return [{"text": t} for t in texts]
 
 
 # ---------------- 答题解析（题库优先，无解析才调模型） ----------------

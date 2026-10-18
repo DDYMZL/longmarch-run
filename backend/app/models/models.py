@@ -58,6 +58,25 @@ class RouteNode(Base):
     is_enabled: Mapped[bool] = mapped_column(Boolean, default=True)
 
 
+class Chapter(Base):
+    """长征章节配置（需求 §4，023 迁移外化自 march_service.CHAPTERS）。
+
+    10 个路线节点划分为若干章；node_ids 为归属的 route_nodes 主键列表（JSON），
+    intro 为公开史实概述（章节完成仪式展示）。sort_order 升序即章节顺序。
+    管理端可增删改（chapters CRUD），march_service 查表计算章节状态，
+    库空时回退 march_service.CHAPTERS 常量。
+    """
+
+    __tablename__ = "chapters"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(50))
+    title: Mapped[str] = mapped_column(String(100), default="")
+    intro: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default=None)
+    node_ids: Mapped[list] = mapped_column("node_ids_json", JSON, default=list)
+    sort_order: Mapped[int] = mapped_column(Integer, default=0)
+
+
 class Person(Base):
     """长征人物志（需求 §14）。avatar 为空时前端展示姓名首字占位。"""
 
@@ -234,6 +253,8 @@ class DailySport(Base):
     distance 为估算距离（km）= steps × 步长；is_goal_completed 表示当日达到
     行军目标（连续行军判定依据）；is_makeup / makeup_at 为补签预留字段。
     source 数据来源（werun / mock / manual），synced_at 最近一次写入时间（UTC，019）。
+    sync_status processed 已入账 / failed 同步失败（025）；fail_reason 记录失败原因，
+    供管理端「同步失败清单」只读感知（点13），失败行 steps 可为 0 占位、不计入累计。
     """
 
     __tablename__ = "daily_sport"
@@ -250,6 +271,7 @@ class DailySport(Base):
     source: Mapped[str] = mapped_column(String(16), default="werun")
     synced_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, default=None)
     sync_status: Mapped[str] = mapped_column(String(16), default="processed")
+    fail_reason: Mapped[Optional[str]] = mapped_column(String(200), nullable=True, default=None)
 
 
 class LitNode(Base):
@@ -375,7 +397,8 @@ class UserEvent(Base):
     __table_args__ = (Index("ix_user_event_user_type", "user_id", "event_type"),)
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), index=True)
+    # user_id 可空：匿名事件（如 INVITE_SCAN 扫码校验邀请码）无用户上下文，仅供运营漏斗统计
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
     event_type: Mapped[str] = mapped_column(String(30))
     event_time: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, index=True)
     event_data: Mapped[Optional[dict]] = mapped_column(JSON, nullable=True, default=dict)

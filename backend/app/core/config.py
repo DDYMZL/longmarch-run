@@ -13,6 +13,8 @@ _ENV_DIR = Path(__file__).resolve().parents[2]
 # prod 时加载生产配置 .env.prod，其余情况加载本地开发配置 .env。两份文件均已入库。
 _APP_ENV = os.getenv("APP_ENV", "").strip().lower()
 _ENV_FILE = _ENV_DIR / (".env.prod" if _APP_ENV == "prod" else ".env")
+# 上传文件根目录（挂载到 /uploads 静态服务）；用户/人物头像落在其下 avatars/ 子目录。
+_UPLOAD_ROOT = _ENV_DIR / "uploads"
 
 
 class Settings(BaseSettings):
@@ -97,6 +99,18 @@ class Settings(BaseSettings):
     QUIZ_QUESTION_SECONDS: int = 90  # 每题作答时限（秒，按服务器时间计）
     QUIZ_ANSWER_GRACE_SECONDS: int = 2  # 截止后容许的网络延迟（秒），仅用于接收提交
     ACTIVITY_MASK_NICKNAME: bool = False  # 实时行动态昵称脱敏（需求 §8.5，开启后对外动态展示如「王*明」）
+    GLOBAL_GOAL_STEPS: int = 200_000_000  # 全员共同长征目标总步数（需求 §11）
+
+    # 头像上传与静态服务（点2）：文件落本地 uploads 目录，返回绝对或相对 URL 入库。
+    # PUBLIC_BASE_URL 为对外可访问的站点基址（生产填 https 域名，留空时头像入库为相对
+    # 路径 /uploads/... 由前端拼接当前站点，杜绝用可控 Host 头拼绝对地址）；
+    # 小程序需把该域名加入 downloadFile 合法域名，否则他人头像仍加载失败。
+    # 上传根目录：独立配置项，静态服务 /uploads 挂载此目录（不再从 AVATAR_DIR 反推父级），
+    # 默认 backend/uploads。生产可在 .env.prod 用 UPLOAD_ROOT 指向持久化卷挂载点。
+    UPLOAD_ROOT: str = str(_UPLOAD_ROOT)
+    AVATAR_DIR: str = str(_UPLOAD_ROOT / "avatars")  # 头像落盘目录（挂载点 /uploads 的 avatars 子目录）
+    PUBLIC_BASE_URL: str = ""  # 静态资源公网基址；留空时头像入库为相对路径 /uploads/...
+    AVATAR_MAX_BYTES: int = 2 * 1024 * 1024  # 单张头像大小上限（2MB）
 
     # 积分规则（V2.0）：总积分 = 步行积分 + 答题积分
     POINTS_WALK_STEPS_PER_POINT: int = 1000  # 每满多少步得 1 分（不足不计）

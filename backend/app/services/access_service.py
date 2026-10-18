@@ -24,6 +24,11 @@ from app.models.models import (
 )
 from app.services import audit_service
 
+# 后端已知菜单码全集（#19）：与 docker/init 迁移种子、admin_menus 表保持一致，仅供
+# 参考/校验用途；实际可授予集合以 admin_menus 表为准（_validate_menu_codes 查库校验）。
+# ⚠ 本清单是「后端菜单码全集」而非「admin 前端已落地菜单」：某菜单码是否已在管理端
+# 前端呈现以 admin 项目 router/menus 为准。其中 ai_*（AI 智能中心，022 迁移种子）为
+# 后端已就绪、admin 前端尚未落地的菜单，故本清单不等同于前端可见菜单集合。
 ALL_MENU_CODES = [
     "dashboard",
     "screen",
@@ -36,6 +41,18 @@ ALL_MENU_CODES = [
     "audit",
     "invites",
     "activity",
+    # AI 智能中心（022 迁移种子；后端已就绪，admin 前端尚未落地）
+    "ai_overview",
+    "ai_knowledge",
+    "ai_workshop",
+    "ai_logs",
+    "ai_config",
+    # 运营增强（024）
+    "chapters",
+    "persons",
+    "medals",
+    "operation_config",
+    "analytics",
 ]
 
 ACTOR_SUPER = "super"

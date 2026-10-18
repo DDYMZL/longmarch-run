@@ -20,10 +20,13 @@ from app.core.database import SessionLocal
 from app.core.helpers import to_local
 from app.data.seed import ORGANIZATIONS
 from app.models.models import (
+    Chapter,
     DailySport,
     LitNode,
     MedalDef,
     Organization,
+    Person,
+    PersonNode,
     PointsLog,
     Question,
     QuizRecord,
@@ -31,7 +34,7 @@ from app.models.models import (
     User,
     UserMedal,
 )
-from app.services import org_service, points_service, rank_service, sport_service
+from app.services import march_service, org_service, points_service, rank_service, sport_service
 
 
 # ---------------- 路线节点维护 ----------------
@@ -136,6 +139,386 @@ def _validate_enabled_route(db: Session) -> None:
             raise ValueError(
                 f"启用节点“{current.name}”的目标步数必须大于上一节点“{previous.name}”"
             )
+
+
+# ---------------- 章节维护（工作流 A3） ----------------
+def _chapter_out(row: Chapter) -> Dict:
+    """Chapter ORM → 契约 dict（intro/node_ids 可空回退默认）。"""
+    return {
+        "id": row.id,
+        "name": row.name,
+        "title": row.title or "",
+        "intro": row.intro or "",
+        "node_ids": list(row.node_ids or []),
+        "sort_order": row.sort_order,
+    }
+
+
+def _normalize_chapter_data(data: Dict) -> None:
+    """归一化章节字段并校验：名称必填、node_ids 为去重整数列表、sort_order 非负。"""
+    data["name"] = (data.get("name") or "").strip()
+    data["title"] = (data.get("title") or "").strip()
+    data["intro"] = (data.get("intro") or "").strip()
+    if not data["name"]:
+        raise ValueError("章节名称不能为空")
+    node_ids: List[int] = []
+    for raw in (data.get("node_ids") or []):
+        try:
+            nid = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError("章节节点必须为整数 id")
+        if nid not in node_ids:
+            node_ids.append(nid)
+    data["node_ids"] = node_ids
+    try:
+        sort_order = int(data.get("sort_order", 0) or 0)
+    except (TypeError, ValueError):
+        raise ValueError("排序必须为整数")
+    if sort_order < 0:
+        raise ValueError("排序不能小于 0")
+    data["sort_order"] = sort_order
+
+
+def list_chapters(
+    db: Session, page: int = 1, page_size: int = 20, keyword: str = ""
+) -> Tuple[int, List[Dict]]:
+    """分页返回章节（管理端可视化编辑）。
+
+    keyword 模糊匹配 name/title（为空不过滤）；先 count 再 offset/limit；
+    按 sort_order 升序、id 兜底保证排序稳定。返回 (过滤后总数, 当页 items)。
+    """
+    query = db.query(Chapter)
+    kw = keyword.strip()
+    if kw:
+        query = query.filter(
+            or_(
+                Chapter.name.contains(kw, autoescape=True),
+                Chapter.title.contains(kw, autoescape=True),
+            )
+        )
+    total = query.count()
+    rows = (
+        query.order_by(Chapter.sort_order, Chapter.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return total, [_chapter_out(r) for r in rows]
+
+
+def create_chapter(db: Session, data: Dict) -> Dict:
+    """新增章节（只 flush，路由层审计并 commit）。"""
+    _normalize_chapter_data(data)
+    row = Chapter(
+        name=data["name"],
+        title=data["title"],
+        intro=data["intro"] or None,
+        node_ids=data["node_ids"],
+        sort_order=data["sort_order"],
+    )
+    db.add(row)
+    db.flush()
+    db.refresh(row)
+    march_service.invalidate_chapter_cache()  # #15：章节变更，失效生效章节缓存
+    return _chapter_out(row)
+
+
+def update_chapter(db: Session, chapter_id: int, data: Dict) -> Optional[Dict]:
+    """更新章节；不存在返回 None。"""
+    _normalize_chapter_data(data)
+    row = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if row is None:
+        return None
+    row.name = data["name"]
+    row.title = data["title"]
+    row.intro = data["intro"] or None
+    row.node_ids = data["node_ids"]
+    row.sort_order = data["sort_order"]
+    db.flush()
+    db.refresh(row)
+    march_service.invalidate_chapter_cache()  # #15：章节变更，失效生效章节缓存
+    return _chapter_out(row)
+
+
+def delete_chapter(db: Session, chapter_id: int) -> bool:
+    """删除章节（无外键依赖，硬删除）；不存在返回 False。"""
+    row = db.query(Chapter).filter(Chapter.id == chapter_id).first()
+    if row is None:
+        return False
+    db.delete(row)
+    db.flush()
+    march_service.invalidate_chapter_cache()  # #15：章节变更，失效生效章节缓存
+    return True
+
+
+def reorder_chapters(db: Session, ordered_ids: List[int]) -> List[Dict]:
+    """按给定 id 顺序重排章节（sort_order 从 1 递增）；含未知 id 抛 ValueError。"""
+    rows = {r.id: r for r in db.query(Chapter).all()}
+    unknown = [cid for cid in ordered_ids if cid not in rows]
+    if unknown:
+        raise ValueError(f"章节不存在：{unknown}")
+    if len(set(ordered_ids)) != len(rows):
+        raise ValueError("排序列表必须包含全部章节且不重复")
+    for idx, cid in enumerate(ordered_ids):
+        rows[cid].sort_order = idx + 1
+    db.flush()
+    march_service.invalidate_chapter_cache()  # #15：章节重排，失效生效章节缓存
+    ordered = db.query(Chapter).order_by(Chapter.sort_order, Chapter.id).all()
+    return [_chapter_out(r) for r in ordered]
+
+
+# ---------------- 人物志维护（工作流 A4） ----------------
+def _person_out(row: Person, node_ids: List[int]) -> Dict:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "avatar": row.avatar or "",
+        "brief": row.brief or "",
+        "node_ids": node_ids,
+    }
+
+
+def _normalize_person_data(data: Dict) -> None:
+    """归一化人物字段：名称必填、node_ids 去重整数列表。"""
+    data["name"] = (data.get("name") or "").strip()
+    data["avatar"] = (data.get("avatar") or "").strip()
+    data["brief"] = (data.get("brief") or "").strip()
+    if not data["name"]:
+        raise ValueError("人物名称不能为空")
+    node_ids: List[int] = []
+    for raw in (data.get("node_ids") or []):
+        try:
+            nid = int(raw)
+        except (TypeError, ValueError):
+            raise ValueError("关联节点必须为整数 id")
+        if nid not in node_ids:
+            node_ids.append(nid)
+    data["node_ids"] = node_ids
+
+
+def _set_person_nodes(db: Session, person_id: int, node_ids: List[int]) -> None:
+    """重建人物-节点关联（删旧建新，事务内）；校验节点存在，含未知 id 抛 ValueError。"""
+    if node_ids:
+        valid = {
+            r[0]
+            for r in db.query(RouteNode.id).filter(RouteNode.id.in_(node_ids)).all()
+        }
+        unknown = [nid for nid in node_ids if nid not in valid]
+        if unknown:
+            raise ValueError(f"关联节点不存在：{unknown}")
+    db.query(PersonNode).filter(PersonNode.person_id == person_id).delete(
+        synchronize_session=False
+    )
+    for nid in node_ids:
+        db.add(PersonNode(person_id=person_id, node_id=nid))
+
+
+def list_persons(
+    db: Session, page: int = 1, page_size: int = 20, keyword: str = ""
+) -> Tuple[int, List[Dict]]:
+    """人物分页列表（含关联节点 id）。
+
+    keyword 模糊匹配 name/brief（为空不过滤）；先 count 再 offset/limit；按 id 升序。
+    仅批量加载「当页人物」的 person_nodes（IN 查询），避免 N+1。返回 (过滤后总数, 当页 items)。
+    """
+    query = db.query(Person)
+    kw = keyword.strip()
+    if kw:
+        query = query.filter(
+            or_(
+                Person.name.contains(kw, autoescape=True),
+                Person.brief.contains(kw, autoescape=True),
+            )
+        )
+    total = query.count()
+    persons = (
+        query.order_by(Person.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    if not persons:
+        return total, []
+    person_ids = [p.id for p in persons]
+    nodes_by_person: Dict[int, List[int]] = {}
+    for pid, nid in (
+        db.query(PersonNode.person_id, PersonNode.node_id)
+        .filter(PersonNode.person_id.in_(person_ids))
+        .all()
+    ):
+        nodes_by_person.setdefault(pid, []).append(nid)
+    for ids in nodes_by_person.values():
+        ids.sort()
+    return total, [_person_out(p, nodes_by_person.get(p.id, [])) for p in persons]
+
+
+def get_person(db: Session, person_id: int) -> Optional[Dict]:
+    row = db.query(Person).filter(Person.id == person_id).first()
+    if row is None:
+        return None
+    node_ids = [
+        r[0]
+        for r in db.query(PersonNode.node_id)
+        .filter(PersonNode.person_id == person_id)
+        .order_by(PersonNode.node_id)
+        .all()
+    ]
+    return _person_out(row, node_ids)
+
+
+def create_person(db: Session, data: Dict) -> Dict:
+    """新增人物（显式主键 max_id+1，Person.id 无自增）并重建关联；只 flush。"""
+    _normalize_person_data(data)
+    max_id = db.query(func.max(Person.id)).scalar() or 0
+    row = Person(
+        id=max_id + 1,
+        name=data["name"],
+        avatar=data["avatar"] or None,
+        brief=data["brief"] or None,
+    )
+    db.add(row)
+    db.flush()
+    _set_person_nodes(db, row.id, data["node_ids"])
+    db.flush()
+    return _person_out(row, sorted(data["node_ids"]))
+
+
+def update_person(db: Session, person_id: int, data: Dict) -> Optional[Dict]:
+    """更新人物（含关联节点删旧建新）；不存在返回 None。"""
+    _normalize_person_data(data)
+    row = db.query(Person).filter(Person.id == person_id).first()
+    if row is None:
+        return None
+    row.name = data["name"]
+    row.avatar = data["avatar"] or None
+    row.brief = data["brief"] or None
+    _set_person_nodes(db, person_id, data["node_ids"])
+    db.flush()
+    return _person_out(row, sorted(data["node_ids"]))
+
+
+def delete_person(db: Session, person_id: int) -> bool:
+    """删除人物及其关联；不存在返回 False。"""
+    row = db.query(Person).filter(Person.id == person_id).first()
+    if row is None:
+        return False
+    db.query(PersonNode).filter(PersonNode.person_id == person_id).delete(
+        synchronize_session=False
+    )
+    db.delete(row)
+    db.flush()
+    return True
+
+
+# ---------------- 勋章维护（工作流 A4） ----------------
+def _medal_out(row: MedalDef) -> Dict:
+    return {
+        "id": row.id,
+        "name": row.name,
+        "icon": row.icon,
+        "desc": row.desc or "",
+        "category": row.category or "",
+        "hidden": bool(row.hidden),
+        "sort_order": row.sort_order,
+    }
+
+
+def _normalize_medal_data(data: Dict) -> None:
+    data["name"] = (data.get("name") or "").strip()
+    data["icon"] = (data.get("icon") or "").strip()
+    data["desc"] = (data.get("desc") or "").strip()
+    data["category"] = (data.get("category") or "").strip()
+    if not data["name"]:
+        raise ValueError("勋章名称不能为空")
+    if not data["icon"]:
+        raise ValueError("勋章图标不能为空")
+    data["hidden"] = bool(data.get("hidden", False))
+    try:
+        data["sort_order"] = int(data.get("sort_order", 0) or 0)
+    except (TypeError, ValueError):
+        raise ValueError("排序必须为整数")
+    if data["sort_order"] < 0:
+        raise ValueError("排序不能小于 0")
+
+
+def list_medals(
+    db: Session, page: int = 1, page_size: int = 20, keyword: str = ""
+) -> Tuple[int, List[Dict]]:
+    """勋章分页列表。
+
+    keyword 模糊匹配 id/name（为空不过滤）；先 count 再 offset/limit；
+    按 sort_order 升序、id 兜底保证排序稳定。返回 (过滤后总数, 当页 items)。
+    """
+    query = db.query(MedalDef)
+    kw = keyword.strip()
+    if kw:
+        query = query.filter(
+            or_(
+                MedalDef.id.contains(kw, autoescape=True),
+                MedalDef.name.contains(kw, autoescape=True),
+            )
+        )
+    total = query.count()
+    rows = (
+        query.order_by(MedalDef.sort_order, MedalDef.id)
+        .offset((page - 1) * page_size)
+        .limit(page_size)
+        .all()
+    )
+    return total, [_medal_out(r) for r in rows]
+
+
+def create_medal(db: Session, data: Dict) -> Dict:
+    """新增勋章：id 缺省时后端生成 medal_{ms}；id 重复抛 ValueError。只 flush。"""
+    _normalize_medal_data(data)
+    medal_id = (data.get("id") or "").strip()
+    if not medal_id:
+        medal_id = f"medal_{int(datetime.now().timestamp() * 1000)}"
+    if db.query(MedalDef).filter(MedalDef.id == medal_id).first() is not None:
+        raise ValueError(f"勋章 id 已存在：{medal_id}")
+    row = MedalDef(
+        id=medal_id,
+        name=data["name"],
+        icon=data["icon"],
+        desc=data["desc"],
+        category=data["category"] or None,
+        hidden=data["hidden"],
+        sort_order=data["sort_order"],
+    )
+    db.add(row)
+    db.flush()
+    db.refresh(row)
+    return _medal_out(row)
+
+
+def update_medal(db: Session, medal_id: str, data: Dict) -> Optional[Dict]:
+    """更新勋章（id 不可改）；不存在返回 None。"""
+    _normalize_medal_data(data)
+    row = db.query(MedalDef).filter(MedalDef.id == medal_id).first()
+    if row is None:
+        return None
+    row.name = data["name"]
+    row.icon = data["icon"]
+    row.desc = data["desc"]
+    row.category = data["category"] or None
+    row.hidden = data["hidden"]
+    row.sort_order = data["sort_order"]
+    db.flush()
+    db.refresh(row)
+    return _medal_out(row)
+
+
+def delete_medal(db: Session, medal_id: str) -> bool:
+    """删除勋章定义并清理已发放记录（user_medals 无 FK，显式清理）；不存在返回 False。"""
+    row = db.query(MedalDef).filter(MedalDef.id == medal_id).first()
+    if row is None:
+        return False
+    db.query(UserMedal).filter(UserMedal.medal_id == medal_id).delete(
+        synchronize_session=False
+    )
+    db.delete(row)
+    db.flush()
+    return True
 
 
 # ---------------- 题库维护 ----------------

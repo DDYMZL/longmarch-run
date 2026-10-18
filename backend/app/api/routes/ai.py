@@ -6,6 +6,8 @@
 - 节点讲解为已审核固定内容、答题解析优先取题库已有解析，二者不调模型、不消耗额度，
   AI 总开关关闭时仍可用；仅历史助手对话与「无解析时的答题解析」会真正调用模型。
 """
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
@@ -19,6 +21,7 @@ from app.schemas.schemas import (
     AiConversationListOut,
     AiQuizExplanationOut,
     AiRouteGuideOut,
+    AiSuggestedQuestionsOut,
     MessageOut,
 )
 from app.services import (
@@ -139,3 +142,15 @@ def quiz_explanation(
         return ai_chat_service.quiz_explanation(db, current, question_id)
     except AI_ERRORS as exc:
         raise ai_http_error(exc)
+
+
+@router.get(
+    "/suggested-questions", response_model=AiSuggestedQuestionsOut, summary="AI 建议问题"
+)
+def suggested_questions(
+    node_id: Optional[int] = Query(None, alias="nodeId", description="指定节点时附带该节点相关问题"),
+    current: User = Depends(require_activity_view),
+    db: Session = Depends(get_db),
+):
+    """通用建议问题（system_settings 可配）+ 指定节点的相关问题；不调模型、AI 关闭时仍可用。"""
+    return {"items": ai_chat_service.suggested_questions(db, node_id)}

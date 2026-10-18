@@ -31,10 +31,23 @@ from app.schemas.schemas import (
     AdminAiGenerateRequest,
     AdminAuditLogListOut,
     AdminDashboardOut,
+    AdminChapterListOut,
+    AdminChapterOut,
+    AdminChapterReorder,
+    AdminChapterUpsert,
+    AdminMedalListOut,
+    AdminMedalOut,
+    AdminMedalUpsert,
+    AdminPersonListOut,
+    AdminPersonOut,
+    AdminPersonUpsert,
+    AdminUploadUrlOut,
     AdminLoginOut,
     AdminLoginRequest,
     AdminMeOut,
     AdminMenuOut,
+    AdminOperationConfigOut,
+    AdminOperationConfigPatchRequest,
     AdminInviteCreate,
     AdminInviteListOut,
     AdminInviteOut,
@@ -44,6 +57,9 @@ from app.schemas.schemas import (
     AdminOrgUserListOut,
     AdminPointsVerifyOut,
     AdminPointsVerifyRequest,
+    AdminOrgCompareOut,
+    AdminInviteFunnelOut,
+    AdminSyncFailuresOut,
     AdminQrCreateOut,
     AdminQrStatusOut,
     AdminRankListOut,
@@ -90,8 +106,10 @@ from app.services import (
     import_service,
     invite_service,
     org_service,
+    operation_config_service,
     points_service,
     quote_service,
+    upload_service,
     wechat_service,
 )
 
@@ -240,6 +258,54 @@ def screen(db: Session = Depends(get_db)):
     return dashboard_service.get_screen(db)
 
 
+# ---------------- 数据运营分析（点13） ----------------
+@router.get(
+    "/analytics/orgs",
+    response_model=AdminOrgCompareOut,
+    summary="组织横向对比（成员/步数/活跃/点亮/人均积分）",
+    dependencies=[Depends(require_menu("analytics"))],
+)
+def analytics_orgs(
+    org_id: Optional[int] = Query(None, alias="orgId"),
+    db: Session = Depends(get_db),
+):
+    """按组织维度横向对比运营指标；传 orgId 时统计其子树内各组织，否则统计全部。"""
+    org_ids = org_service.subtree_org_ids(db, org_id) if org_id is not None else None
+    return dashboard_service.get_org_compare(db, org_ids)
+
+
+@router.get(
+    "/analytics/invite-funnel",
+    response_model=AdminInviteFunnelOut,
+    summary="邀请漏斗（扫码→入驻→首登→首次同步，按邀请码分组）",
+    dependencies=[Depends(require_menu("analytics"))],
+)
+def analytics_invite_funnel(db: Session = Depends(get_db)):
+    return dashboard_service.get_invite_funnel(db)
+
+
+@router.get(
+    "/analytics/sync-failures",
+    response_model=AdminSyncFailuresOut,
+    summary="近 N 日步数同步失败清单（只读感知）",
+    dependencies=[Depends(require_menu("analytics"))],
+)
+def analytics_sync_failures(
+    days: int = Query(7, ge=1, le=90), db: Session = Depends(get_db)
+):
+    return dashboard_service.get_sync_failures(db, days)
+
+
+@router.get(
+    "/analytics/points-health",
+    response_model=AdminPointsVerifyOut,
+    summary="积分台账健康度（dry-run 全量核对，不修复）",
+    dependencies=[Depends(require_menu("analytics"))],
+)
+def analytics_points_health(db: Session = Depends(get_db)):
+    return dashboard_service.get_points_health(db)
+
+
 # ---------------- 路线节点维护 ----------------
 @router.get(
     "/route-nodes",
@@ -341,6 +407,8 @@ def verify_points(
             {"operator": admin.username, **{k: result[k] for k in ("users", "checked_days", "fixed")}},
         )
         db.commit()
+        # #6：修复后台账已变，失效健康度缓存，避免驾驶舱仍读到旧的 dry-run 结果。
+        dashboard_service.invalidate_points_health_cache()
     return result
 
 
@@ -1086,3 +1154,370 @@ def publish_activity(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+# ---------------- 运营参数配置（工作流 A2） ----------------
+@router.get(
+    "/operation-config",
+    response_model=AdminOperationConfigOut,
+    summary="读取运营参数（生效值/默认/范围/已覆盖项）",
+)
+def get_operation_config(
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("operation_config")),
+):
+    return operation_config_service.get_config_view(db)
+
+
+@router.put(
+    "/operation-config",
+    response_model=AdminOperationConfigOut,
+    summary="保存运营参数（即时生效，写审计）",
+)
+def save_operation_config(
+    payload: AdminOperationConfigPatchRequest,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("operation_config")),
+):
+    updates = (
+        payload.values.model_dump(exclude_none=True) if payload.values is not None else {}
+    )
+    try:
+        view = operation_config_service.patch_config(db, updates)
+        actor_type, actor_id = _actor(admin)
+        audit_service.record(
+            db, actor_type, actor_id, "operation.config.patch", None,
+            {"operator": admin.username, "keys": sorted(updates.keys())},
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return view
+
+
+# ---------------- 章节维护（工作流 A3） ----------------
+@router.get(
+    "/chapters",
+    response_model=AdminChapterListOut,
+    summary="章节列表",
+    dependencies=[Depends(require_menu("chapters"))],
+)
+def list_chapters(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str = Query(""),
+    db: Session = Depends(get_db),
+):
+    total, items = admin_service.list_chapters(db, page, page_size, keyword)
+    return {"total": total, "items": items}
+
+
+@router.post(
+    "/chapters",
+    response_model=AdminChapterOut,
+    summary="新增章节",
+)
+def create_chapter(
+    payload: AdminChapterUpsert,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("chapters")),
+):
+    try:
+        out = admin_service.create_chapter(db, payload.model_dump())
+        actor_type, actor_id = _actor(admin)
+        audit_service.record(
+            db, actor_type, actor_id, "chapter.create", None,
+            {"operator": admin.username, "id": out["id"], "name": out["name"]},
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return out
+
+
+@router.post(
+    "/chapters/reorder",
+    response_model=AdminChapterListOut,
+    summary="章节重排",
+)
+def reorder_chapters(
+    payload: AdminChapterReorder,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("chapters")),
+):
+    try:
+        items = admin_service.reorder_chapters(db, payload.ordered_ids)
+        actor_type, actor_id = _actor(admin)
+        audit_service.record(
+            db, actor_type, actor_id, "chapter.reorder", None,
+            {"operator": admin.username, "ordered_ids": payload.ordered_ids},
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"total": len(items), "items": items}
+
+
+@router.put(
+    "/chapters/{chapter_id}",
+    response_model=AdminChapterOut,
+    summary="编辑章节",
+)
+def update_chapter(
+    chapter_id: int,
+    payload: AdminChapterUpsert,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("chapters")),
+):
+    try:
+        out = admin_service.update_chapter(db, chapter_id, payload.model_dump())
+        if out is None:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="章节不存在")
+        actor_type, actor_id = _actor(admin)
+        audit_service.record(
+            db, actor_type, actor_id, "chapter.update", None,
+            {"operator": admin.username, "id": chapter_id},
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return out
+
+
+@router.delete(
+    "/chapters/{chapter_id}",
+    response_model=MessageOut,
+    summary="删除章节",
+)
+def delete_chapter(
+    chapter_id: int,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("chapters")),
+):
+    deleted = admin_service.delete_chapter(db, chapter_id)
+    if not deleted:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="章节不存在")
+    actor_type, actor_id = _actor(admin)
+    audit_service.record(
+        db, actor_type, actor_id, "chapter.delete", None,
+        {"operator": admin.username, "id": chapter_id},
+    )
+    db.commit()
+    return {"message": "已删除"}
+
+
+# ---------------- 人物志维护（工作流 A4） ----------------
+@router.get(
+    "/persons",
+    response_model=AdminPersonListOut,
+    summary="人物列表（含关联节点）",
+    dependencies=[Depends(require_menu("persons"))],
+)
+def list_persons(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str = Query(""),
+    db: Session = Depends(get_db),
+):
+    total, items = admin_service.list_persons(db, page, page_size, keyword)
+    return {"total": total, "items": items}
+
+
+@router.post(
+    "/persons/avatar",
+    response_model=AdminUploadUrlOut,
+    summary="上传人物头像（仅落盘返回 URL，不绑定人物）",
+)
+async def upload_person_avatar(
+    request: Request,
+    file: UploadFile = File(...),
+    admin: AdminPrincipal = Depends(require_menu("persons")),
+    db: Session = Depends(get_db),
+):
+    """接收 multipart 字段 file，复用与用户头像同一套校验与静态目录，返回绝对/相对 URL。
+
+    前端拿到 url 后填入人物表单的 avatar 字段，再随 POST/PUT /admin/persons 提交。
+    仅支持 jpg/jpeg/png/webp，大小上限见 settings.AVATAR_MAX_BYTES；不合法返回 400。
+    分块读取（#5）：累计超限立即中断，不整块 await file.read() 入内存，防内存放大 DoS。
+    """
+    try:
+        content = await upload_service.read_within_limit(file)
+        url = upload_service.save_person_avatar(
+            db, content, file.filename, str(request.base_url)
+        )
+    except upload_service.UploadError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"url": url}
+
+
+@router.post(
+    "/persons",
+    response_model=AdminPersonOut,
+    summary="新增人物",
+)
+def create_person(
+    payload: AdminPersonUpsert,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("persons")),
+):
+    try:
+        out = admin_service.create_person(db, payload.model_dump())
+        actor_type, actor_id = _actor(admin)
+        audit_service.record(
+            db, actor_type, actor_id, "person.create", None,
+            {"operator": admin.username, "id": out["id"], "name": out["name"]},
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return out
+
+
+@router.put(
+    "/persons/{person_id}",
+    response_model=AdminPersonOut,
+    summary="编辑人物（含关联节点删旧建新）",
+)
+def update_person(
+    person_id: int,
+    payload: AdminPersonUpsert,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("persons")),
+):
+    try:
+        out = admin_service.update_person(db, person_id, payload.model_dump())
+        if out is None:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="人物不存在")
+        actor_type, actor_id = _actor(admin)
+        audit_service.record(
+            db, actor_type, actor_id, "person.update", None,
+            {"operator": admin.username, "id": person_id},
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return out
+
+
+@router.delete(
+    "/persons/{person_id}",
+    response_model=MessageOut,
+    summary="删除人物",
+)
+def delete_person(
+    person_id: int,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("persons")),
+):
+    deleted = admin_service.delete_person(db, person_id)
+    if not deleted:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="人物不存在")
+    actor_type, actor_id = _actor(admin)
+    audit_service.record(
+        db, actor_type, actor_id, "person.delete", None,
+        {"operator": admin.username, "id": person_id},
+    )
+    db.commit()
+    return {"message": "已删除"}
+
+
+# ---------------- 勋章维护（工作流 A4） ----------------
+@router.get(
+    "/medals",
+    response_model=AdminMedalListOut,
+    summary="勋章列表",
+    dependencies=[Depends(require_menu("medals"))],
+)
+def list_medals(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    keyword: str = Query(""),
+    db: Session = Depends(get_db),
+):
+    total, items = admin_service.list_medals(db, page, page_size, keyword)
+    return {"total": total, "items": items}
+
+
+@router.post(
+    "/medals",
+    response_model=AdminMedalOut,
+    summary="新增勋章（id 留空由后端生成）",
+)
+def create_medal(
+    payload: AdminMedalUpsert,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("medals")),
+):
+    try:
+        out = admin_service.create_medal(db, payload.model_dump())
+        actor_type, actor_id = _actor(admin)
+        audit_service.record(
+            db, actor_type, actor_id, "medal.create", None,
+            {"operator": admin.username, "id": out["id"], "name": out["name"]},
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return out
+
+
+@router.put(
+    "/medals/{medal_id}",
+    response_model=AdminMedalOut,
+    summary="编辑勋章（id 不可改）",
+)
+def update_medal(
+    medal_id: str,
+    payload: AdminMedalUpsert,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("medals")),
+):
+    try:
+        out = admin_service.update_medal(db, medal_id, payload.model_dump())
+        if out is None:
+            db.rollback()
+            raise HTTPException(status_code=404, detail="勋章不存在")
+        actor_type, actor_id = _actor(admin)
+        audit_service.record(
+            db, actor_type, actor_id, "medal.update", None,
+            {"operator": admin.username, "id": medal_id},
+        )
+        db.commit()
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    return out
+
+
+@router.delete(
+    "/medals/{medal_id}",
+    response_model=MessageOut,
+    summary="删除勋章（并清理已发放记录）",
+)
+def delete_medal(
+    medal_id: str,
+    db: Session = Depends(get_db),
+    admin: AdminPrincipal = Depends(require_menu("medals")),
+):
+    deleted = admin_service.delete_medal(db, medal_id)
+    if not deleted:
+        db.rollback()
+        raise HTTPException(status_code=404, detail="勋章不存在")
+    actor_type, actor_id = _actor(admin)
+    audit_service.record(
+        db, actor_type, actor_id, "medal.delete", None,
+        {"operator": admin.username, "id": medal_id},
+    )
+    db.commit()
+    return {"message": "已删除"}
