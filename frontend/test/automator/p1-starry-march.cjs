@@ -8,13 +8,14 @@
  *   P1J-04 点亮动画：粒子预生成限量（单节点≤14、字段齐备）、fx 超时自动清除、整帧绘制无异常
  * 末尾截图：27-march-starry.png
  *
+ * 断言对象：星空绘制状态与方法全部在渲染内核 page.hud（utils/hudMap）上，页面只留手势转发。
+ *
  *   node p1-starry-march.cjs
  *
- * 前置：后端 8010 运行；开发者工具自动化端口 9420 可用。
+ * 前置：后端 8010 运行；开发者工具自动化端口 9420 可用；模拟器已有有效登录态。
  */
 const path = require('path');
 const fs = require('fs');
-const http = require('http');
 const automator = require('miniprogram-automator');
 
 process.on('unhandledRejection', (e) => {
@@ -22,8 +23,6 @@ process.on('unhandledRejection', (e) => {
 });
 
 const WS = 'ws://127.0.0.1:9420';
-const NICKNAME = 'P1星空';
-const AVATAR = 'https://example.com/auto-avatar.png';
 const RESULTS_FILE = path.join(__dirname, 'results-p1j.json');
 const SHOT_FILE = path.join(__dirname, '..', 'images', '27-march-starry.png');
 
@@ -74,29 +73,6 @@ async function waitFor(fn, timeout = 15000, interval = 400, desc = 'condition') 
   }
 }
 
-function api(path_, token, method, data) {
-  return new Promise((resolve, reject) => {
-    const body = data ? JSON.stringify(data) : null;
-    const req = http.request({
-      host: '127.0.0.1', port: 8010, path: '/api' + path_, method: method || 'GET',
-      headers: Object.assign(
-        token ? { Authorization: 'Bearer ' + token } : {},
-        body ? { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } : {}
-      )
-    }, (res) => {
-      let buf = '';
-      res.on('data', (c) => (buf += c));
-      res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: buf ? JSON.parse(buf) : null }); }
-        catch (e) { resolve({ status: res.statusCode, body: null }); }
-      });
-    });
-    req.on('error', reject);
-    if (body) req.write(body);
-    req.end();
-  });
-}
-
 async function connectMini() {
   for (let i = 0; i < 3; i++) {
     try { return await withTimeout(automator.connect({ wsEndpoint: WS }), 20000, 'connect'); } catch (e) {
@@ -107,42 +83,19 @@ async function connectMini() {
   throw new Error('无法连接自动化桥');
 }
 
-async function freshLogin() {
-  const code = 'automator-p1j-' + Date.now();
-  await cmd(() => mini.evaluate(() => {
-    const app = getApp();
-    app.globalData.user = null;
-    app.globalData.loggedIn = false;
-    try { wx.clearStorageSync(); } catch (e) { /* ignore */ }
-    return true;
-  }), 'resetAuth', 2);
-  await cmd(() => mini.reLaunch('/pages/login/login'), 'reLaunch login', 2);
-  const login = await waitPath('pages/login/login');
-  for (let i = 0; i < 5; i++) {
-    await cmd(() => mini.mockWxMethod('login', { code }), 'mock login', 1).catch(() => {});
-    const got = await cmd(() => mini.evaluate(() => new Promise((resolve) => {
-      wx.login({ success: (r) => resolve(r && r.code ? r.code : 'NO_CODE'), fail: () => resolve('FAIL_BRANCH') });
-    })), 'verify login mock', 1).catch(() => 'EVAL_ERR');
-    if (got === code) break;
-    if (i === 4) throw new Error('wx.login mock 反复未生效');
-    await sleep(2000);
-  }
-  await cmd(() => login.callMethod('doLogin', AVATAR), 'doLogin', 2);
-  const org = await waitPath('pages/org-select/org-select');
-  await cmd(() => org.setData({ nickname: NICKNAME }), 'setData org nickname', 2);
-  await cmd(() => org.callMethod('confirmSelect', 11), 'confirmSelect 11', 2);
-  await waitPath('pages/home/home');
-  await sleep(1200);
-  return code;
-}
-
-async function apiAddSteps(code, delta) {
-  const login = await api('/auth/login', null, 'POST', { code, nickname: NICKNAME });
-  const token = login.body && login.body.token;
-  if (!token) throw new Error('API 登录失败');
-  const r = await api('/sport/add', token, 'POST', { delta });
-  if (r.status !== 200) throw new Error('API 补步数失败: ' + r.status);
-  return r.body;
+/**
+ * 复用模拟器已有登录态。
+ * 原 freshLogin（mock code 登录 + 强制选组织）已随两处变更失效：本地后端配了真实微信凭证，
+ * 固定 mock code 会被 code2Session 拒（502）；V1.0 起登录后直接 switchTab 首页、组织改选填。
+ * P1J 四项断言均不依赖步数，故不再注入步数（避免污染本地库真实用户数据）。
+ */
+async function ensureLoggedIn() {
+  const st = await cmd(() => mini.evaluate(() => {
+    const g = getApp().globalData;
+    return { loggedIn: !!g.loggedIn, orgId: g.user && g.user.orgId ? g.user.orgId : null };
+  }), 'login state', 2);
+  if (!st || !st.loggedIn) throw new Error('模拟器无有效登录态：请先在开发者工具内登录后重跑');
+  console.log('复用持久登录态 orgId=' + st.orgId);
 }
 
 /* 进入长征页并切到星空长征模式：返回 page（开场动画已跳过、canvas 已就绪） */
@@ -154,7 +107,7 @@ async function openStarry() {
   await waitFor(async () => {
     const ok = await cmd(() => mini.evaluate(() => {
       const p = getCurrentPages().pop();
-      return !!(p && p.ctx && p.view && p.nodePts && p.nodePts.length > 0);
+      return !!(p && p.hud && p.hud.view && p.hud.nodePts && p.hud.nodePts.length > 0);
     }), 'canvas ready');
     return ok ? true : null;
   }, 20000, 500, 'canvas ready');
@@ -163,12 +116,12 @@ async function openStarry() {
 
 async function pageState() {
   return cmd(() => mini.evaluate(() => {
-    const p = getCurrentPages().pop();
+    const h = getCurrentPages().pop().hud;
     return {
-      scale: p.view.scale, ox: p.view.ox, oy: p.view.oy,
-      cw: p.cw, ch: p.ch,
-      dust: (p.trailDust || []).length,
-      nodePts: p.nodePts.map((q) => ({ x: q.x, y: q.y }))
+      scale: h.view.scale, ox: h.view.ox, oy: h.view.oy,
+      cw: h.cw, ch: h.ch,
+      dust: (h.trailDust || []).length,
+      nodePts: h.nodePts.map((q) => ({ x: q.x, y: q.y }))
     };
   }), 'read page state');
 }
@@ -180,8 +133,7 @@ async function tap(page, x, y) {
 
 (async () => {
   mini = await connectMini();
-  const code = await freshLogin();
-  await apiAddSteps(code, 8000); // 点亮瑞金/遵义，当前四渡赤水（星空三态齐备）
+  await ensureLoggedIn();
   const page = await openStarry();
 
   /* P1J-01 模式升级 */
@@ -236,19 +188,19 @@ async function tap(page, x, y) {
   try {
     await cmd(() => mini.reLaunch('/pages/march/march'), 'reLaunch march 2', 2);
     await waitPath('pages/march/march');
-    const page2 = await openStarry();
+    await openStarry();
     const fx = await cmd(() => mini.evaluate(() => {
       const p = getCurrentPages().pop();
+      const h = p.hud;
       const id = p.routeData.nodes[0].id;
-      const parts = p.makeArriveParticles([id]);
-      const sample = parts[0] || {};
+      const parts = h.makeArriveParticles([id]);
       // 超时 fx 自动清除
-      p.arriveFx = { ids: [id], start: Date.now() - 3000, particles: parts };
-      p.drawArriveFx();
-      const cleared = p.arriveFx === null;
+      h.arriveFx = { ids: [id], start: Date.now() - 3000, particles: parts };
+      h.drawArriveFx();
+      const cleared = h.arriveFx === null;
       // 活跃 fx 整帧绘制无异常
-      p.arriveFx = { ids: [id], start: Date.now(), particles: parts };
-      p.draw(Date.now() / 1000);
+      h.arriveFx = { ids: [id], start: Date.now(), particles: parts };
+      h.draw(Date.now() / 1000);
       return {
         count: parts.length,
         fieldsOk: parts.every((q) => ['x', 'y', 'vx', 'vy', 'r', 'delay'].every((k) => typeof q[k] === 'number')),
@@ -259,16 +211,20 @@ async function tap(page, x, y) {
     record('P1J-04', '点亮动画：粒子限量/字段齐备/fx 超时清除/整帧绘制无异常',
       fx.count >= 1 && fx.count <= 14 && fx.fieldsOk && fx.cleared && fx.drawOk,
       'particles=' + fx.count + ' cleared=' + fx.cleared);
-    /* 截图：星空长征模式（复位视角） */
-    await cmd(() => page2.callMethod('resetView'), 'resetView', 1).catch(() => {});
-    await sleep(700);
-    await withTimeout(mini.screenshot({ path: SHOT_FILE }), 25000, 'screenshot starry');
-    console.log('SHOT 27-march-starry.png');
   } catch (e) { record('P1J-04', '点亮粒子/fx 生命周期', false, e.message); }
 
   fs.writeFileSync(RESULTS_FILE, JSON.stringify(results, null, 2));
   const failed = results.filter((r) => !r.pass);
   console.log('\n== 共 ' + results.length + ' 用例，失败 ' + failed.length + ' ==');
+
+  /* 截图与断言分离：mini.screenshot 会让自动化桥退化，故在结果落盘后单独补拍，失败不影响判定 */
+  try {
+    await cmd(() => mini.evaluate(() => { getCurrentPages().pop().hud.resetView(); return true; }), 'resetView', 1);
+    await sleep(700);
+    await withTimeout(mini.screenshot({ path: SHOT_FILE }), 25000, 'screenshot starry');
+    console.log('SHOT 27-march-starry.png');
+  } catch (e) { console.log('截图失败（不影响断言）: ' + e.message); }
+
   process.exit(failed.length ? 1 : 0);
 })().catch((e) => {
   console.log('FATAL: ' + (e && e.message));

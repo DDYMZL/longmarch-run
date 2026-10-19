@@ -3,10 +3,12 @@
  *
  * 覆盖：
  *   P0M-01 长征页（实景模式）路线数据齐备（nodes/markers/polylines/进度旗 marker）
- *   P0M-02 calcRouteProgress：后端 routeProgress 字段优先
- *   P0M-03 calcRouteProgress：旧接口降级为步数比例
- *   P0M-04 currentRatio 返回 [0,1] 数值（routeData 链路完好）
- *   P0M-05 切插画模式后画布初始化且 _viewPlayed 语义正确（镜头动画不重复播放）
+ *   P0M-02~05 切星空模式后对渲染内核 page.hud（utils/hudMap）断言：
+ *     P0M-02 calcRouteProgress：后端 routeProgress 字段优先
+ *     P0M-03 calcRouteProgress：旧接口降级为步数比例
+ *     P0M-04 currentRatio 返回 [0,1] 数值（route 链路完好）
+ *     P0M-05 画布初始化且进度链路正常
+ *   P0M-06 切回实景模式正常（_viewPlayed 语义：镜头动画不重复播放）
  *
  *   node p0-march.cjs
  *
@@ -177,39 +179,43 @@ async function ensureLoggedIn() {
 
   const marchPage = await waitPath('pages/march/march');
 
-  /* ---------- P0M-02 routeProgress 字段优先 ---------- */
-  try {
-    const v = await cmd(() => marchPage.callMethod('calcRouteProgress', { routeProgress: 0.7, totalSteps: 100, currentSteps: 50 }), 'calcRouteProgress 后端字段');
-    record('P0M-02', 'calcRouteProgress：后端 routeProgress 优先', Math.abs(v - 0.7) < 1e-9, 'return=' + v);
-  } catch (e) { record('P0M-02', 'calcRouteProgress 后端字段优先', false, e.message); }
-
-  /* ---------- P0M-03 旧接口降级 ---------- */
-  try {
-    const v = await cmd(() => marchPage.callMethod('calcRouteProgress', { totalSteps: 100, currentSteps: 50 }), 'calcRouteProgress 降级');
-    record('P0M-03', 'calcRouteProgress：旧接口降级为步数比例', Math.abs(v - 0.5) < 1e-9, 'return=' + v);
-  } catch (e) { record('P0M-03', 'calcRouteProgress 旧接口降级', false, e.message); }
-
-  /* ---------- P0M-04 currentRatio 链路 ---------- */
-  try {
-    const v = await cmd(() => marchPage.callMethod('currentRatio'), 'currentRatio');
-    const ok = typeof v === 'number' && v >= 0 && v <= 1;
-    record('P0M-04', 'currentRatio 返回 [0,1] 数值', ok, 'return=' + v);
-  } catch (e) { record('P0M-04', 'currentRatio 链路', false, e.message); }
-
-  /* ---------- P0M-05 插画模式切换 + 镜头动画不重复 ---------- */
+  /* ---------- P0M-02~05 星空渲染内核（utils/hudMap）进度链路 ----------
+   * calcRouteProgress / currentRatio 随星空绘制逻辑迁入 hudMap 渲染内核，
+   * 需先切到 canvas 模式建实例（page.hud），再对内核实例断言。 */
   try {
     await cmd(() => marchPage.callMethod('switchMode', { currentTarget: { dataset: { mode: 'canvas' } } }), 'switchMode canvas', 2);
-    await sleep(2500);
+    await waitFor(async () => {
+      const ready = await cmd(() => mini.evaluate(() => {
+        const p = getCurrentPages().slice(-1)[0];
+        return !!(p && p.hud && p.hud.nodePts && p.hud.nodePts.length > 0);
+      }), 'hud ready', 1);
+      return ready ? true : null;
+    }, 20000, 500, 'hud 渲染内核就绪');
+
+    const v2 = await cmd(() => mini.evaluate(() => getCurrentPages().slice(-1)[0].hud
+      .calcRouteProgress({ routeProgress: 0.7, totalSteps: 100, currentSteps: 50 })), 'calcRouteProgress 后端字段');
+    record('P0M-02', 'calcRouteProgress：后端 routeProgress 优先', Math.abs(v2 - 0.7) < 1e-9, 'return=' + v2);
+
+    const v3 = await cmd(() => mini.evaluate(() => getCurrentPages().slice(-1)[0].hud
+      .calcRouteProgress({ totalSteps: 100, currentSteps: 50 })), 'calcRouteProgress 降级');
+    record('P0M-03', 'calcRouteProgress：旧接口降级为步数比例', Math.abs(v3 - 0.5) < 1e-9, 'return=' + v3);
+
+    const v4 = await cmd(() => mini.evaluate(() => getCurrentPages().slice(-1)[0].hud.currentRatio()), 'currentRatio');
+    const ratioOk = typeof v4 === 'number' && v4 >= 0 && v4 <= 1;
+    record('P0M-04', 'currentRatio 返回 [0,1] 数值', ratioOk, 'return=' + v4);
+
     const d = await cmd(() => marchPage.data(), 'march data canvas');
-    const ratio = await cmd(() => marchPage.callMethod('currentRatio'), 'currentRatio canvas');
-    const ok = d.mode === 'canvas' && typeof ratio === 'number' && ratio >= 0 && ratio <= 1;
-    record('P0M-05', '插画模式：画布初始化且进度链路正常', ok, 'mode=' + d.mode + ' ratio=' + ratio);
-    // 切回实景：_viewPlayed 已为 true，不应再重播镜头俯冲（playViewAnim 不再被调用）
+    record('P0M-05', '插画模式：画布初始化且进度链路正常', d.mode === 'canvas' && ratioOk,
+      'mode=' + d.mode + ' ratio=' + v4);
+  } catch (e) { record('P0M-02', '星空渲染内核进度链路', false, e.message); }
+
+  /* ---------- P0M-06 切回实景（_viewPlayed 已为 true，镜头俯冲不重播） ---------- */
+  try {
     await cmd(() => marchPage.callMethod('switchMode', { currentTarget: { dataset: { mode: 'real' } } }), 'switchMode real', 2);
     await sleep(800);
     const d2 = await cmd(() => marchPage.data(), 'march data real2');
     record('P0M-06', '切回实景模式正常', d2.mode === 'real', 'mode=' + d2.mode);
-  } catch (e) { record('P0M-05', '插画模式切换', false, e.message); }
+  } catch (e) { record('P0M-06', '切回实景模式', false, e.message); }
 
   fs.writeFileSync(RESULTS_FILE, JSON.stringify(results, null, 2));
   const failed = results.filter((r) => !r.pass);

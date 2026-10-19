@@ -98,12 +98,12 @@ async function api(p, token, method, data) {
   await check('R4 实景→星空→实景切换：画布重建、离屏缓存释放后 markers 重建', async () => {
     const page = await mini.currentPage();
     await page.callMethod('switchMode', { currentTarget: { dataset: { mode: 'canvas' } } });
-    await waitFor(() => mini.evaluate(() => !!getCurrentPages().slice(-1)[0].ctx), 10000, 'canvas ctx');
+    await waitFor(() => mini.evaluate(() => !!getCurrentPages().slice(-1)[0].hud), 10000, 'canvas hud');
     await sleep(1500);
     await page.callMethod('switchMode', { currentTarget: { dataset: { mode: 'real' } } });
     await sleep(800);
-    const s = await mini.evaluate(() => { const p = getCurrentPages().slice(-1)[0]; return { ctx: !!p.ctx, glow: !!p.glowGold, mode: p.data.mode, markers: p.data.markers.length, sel: p.data.selectedNode && Object.keys(p.data.selectedNode).length }; });
-    assert(s.mode === 'real' && !s.ctx && !s.glow && s.markers > 0, JSON.stringify(s));
+    const s = await mini.evaluate(() => { const p = getCurrentPages().slice(-1)[0]; return { hud: !!p.hud, glow: !!(p.hud && p.hud.glowGold), mode: p.data.mode, markers: p.data.markers.length, sel: p.data.selectedNode && Object.keys(p.data.selectedNode).length }; });
+    assert(s.mode === 'real' && !s.hud && !s.glow && s.markers > 0, JSON.stringify(s));
     return JSON.stringify(s);
   });
 

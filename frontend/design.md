@@ -208,10 +208,10 @@ launch 登录成功 → activity.getStatus()（失败按可进入处理，后端
 
 - **路线节点配置**：节点列表（含经纬度、三态、章节）随 `GET /api/march/route` 响应统一下发；路线页每次 `onShow` 调 `march.getRoute()` 拉取最新数据后渲染/重绘。
 - **实景模式（默认）**：原生 `<map>` + 节点 `latitude/longitude`（来自后端配置）→ `markers`（节点三态图标 + 「🚩 我在这里」进度旗）+ `polyline`（灰色全程 + 金色已完成段，段内线性插值）+ `includePoints` 视野动画（仅首次进入播放，步数刷新不重播）。
-- **插画模式**：「星空远征」深色主题 Canvas 2D；节点画布坐标由 `getCanvasNodePositions()` 按经纬度边界归一化计算（非硬编码），兼容任意节点数量和排列；静态层经 `wx.createOffscreenCanvas` 烘焙一次；动态元素（云、星、光晕精灵、流光彗尾）每帧 rAF 绘制；渐变对象缓存复用；离屏调用包 try/catch 降级。
+- **插画模式**：「星空长征」深色主题 Canvas 2D，绘制状态与方法全部收敛在 `utils/hudMap.js` 渲染内核（页面 `initCanvas` 建实例挂 `page.hud`，每帧只调 `hud.draw(t)`；页面留模式切换、数据拉取、手势转发与命中跳转）；节点画布坐标由 `getCanvasNodePositions()` 按经纬度边界归一化计算（非硬编码），兼容任意节点数量和排列；静态层经 `wx.createOffscreenCanvas` 烘焙一次；动态元素（云、星、光晕精灵、流光彗尾）每帧 rAF 绘制；渐变对象缓存复用；离屏调用包 try/catch 降级。
 - **星空分层闪烁**：远景微星 110 颗随静态层烘焙（零帧开销，位于山峦之后）；中近景 64 颗（含 9 颗带十字光芒的亮星）在同一 rAF 循环内错峰闪烁——每颗独立周期（约 4.5~18s）/亮度区间/色调（冷白·暖白·淡蓝），约半数用三次方曲线呈「长时间微暗→缓慢增亮→渐暗」呼吸感；位置为均匀散布 + 斜向银河带混合采样并避让节点 16px；当前节点在脉冲环外叠加一层慢呼吸红色柔光。`onHide`/切实景模式即停循环，`onShow` 恢复。
 - **tabBar 图标**：原生 tabBar `iconPath`/`selectedIconPath`，资源在 `images/tabbar/<tab>.png`（灰色线框）与 `<tab>-active.png`（主题红实心），81×81 PNG；由 `test/gen-tabbar-icons.cjs` 零依赖生成，改图标改该脚本后重新运行。
-- **行军轨迹（006 P0）**：绘制进度统一取后端 `routeProgress`（旧接口降级为步数比例，见 `calcRouteProgress`/`currentRatio`）；步数刷新只从旧进度插值推进到新进度（约 800ms，`progressAnim`），仅首次渲染播放完整入场描画；当前行军点为「呼吸光点（光晕缩放）+ 3 颗上升光尘 + 摆动红旗」。
+- **行军轨迹（006 P0）**：绘制进度统一取后端 `routeProgress`（旧接口降级为步数比例，见内核 `hud.calcRouteProgress`/`hud.currentRatio`）；步数刷新只从旧进度插值推进到新进度（约 800ms，`hud.progressAnim`），仅首次渲染播放完整入场描画——入场/增量的判定在 `hud.setRoute` 内部按「是否已有采样路径」区分，`initCanvas` 与 `renderRoute` 共用这一条路径；当前行军点为「呼吸光点（光晕缩放）+ 3 颗上升光尘 + 摆动红旗」。
 - **长征章节（006 P0-3）**：章节视图（状态/点亮数/进度/介绍）由后端 `GET /api/march/route` 随路线统一下发；地图上方固定展示当前章节卡（标题 + 已点亮/总数 + 进度条，`progressPct` 渲染前预计算）；章节完成仪式卡由 light-up 响应驱动，与节点抵达卡共用 `utils/arrivePopup.js` 队列播放器（章节卡含历史介绍停留 3400ms，节点卡 2400ms），home 页步数同步弹层同源。
 - **开场动画（006 P0-4，需求 §5）**：首次进入长征 Tab 播放完整开场（1934/瑞金 → 长征开始 → 你的长征旅程正式开始，纯 CSS 淡入叠加，无图片无 rAF，总时长约 3.35s），点击任意处跳过；播放标记写 Storage `lm_march_intro_played`；非首次仅 500ms 过渡纱幕（`pointer-events:none` 不拦截操作）。开场期间地图加载/refresh 并发不阻塞；实景镜头俯冲与抵达事件队列延至开场结束补播（`dismissIntro`）。
 - **区域氛围（P2-2，需求 §12）**：`data/node-themes.js` 为前端主题映射配置（§12.3 明确允许），10 节点 → 5 区域（瑞金/赤水/泸定/雪山/延安），每主题含渐变色三段与环境粒子配置（ember/mist/snow/star）；应用于节点详情 hero（渐变 + 氛围粒子画布）、星空长征画布（每节点 3 粒环境粒子封顶 30）、实景模式选中节点卡（柔和高光 + 区域标签）。

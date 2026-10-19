@@ -11,6 +11,8 @@
  *   TS-07 星空模式点击节点仍可进入详情
  *   TS-08 全程无新增运行时异常
  *
+ * 断言对象：星空绘制状态与方法全部在渲染内核 page.hud（utils/hudMap）上。
+ *
  *   cd frontend/test/automator && node tabbar-starmap.cjs
  * 前置：开发者工具自动化端口 9420 可用、模拟器已有有效登录态。
  */
@@ -24,7 +26,7 @@ const RESULTS_FILE = path.join(__dirname, 'results-tabbar-starmap.json');
 const TABS = [
   ['pages/home/home', '首页', 'home'],
   ['pages/march/march', '长征', 'march'],
-  ['pages/quiz/quiz', '情报', 'quiz'],
+  ['pages/ai-chat/ai-chat', 'AI 问答', 'ai'],
   ['pages/rank/rank', '排行', 'rank'],
   ['pages/mine/mine', '我的', 'mine']
 ];
@@ -69,7 +71,7 @@ function pngSize(file) {
 
 const marchState = () => mini.evaluate(() => {
   const p = getApp().__tsMarch;
-  return { running: !!p.running, hasCtx: !!p.ctx, animId: p.animId === undefined ? null : String(p.animId), mode: p.data.mode };
+  return { running: !!p.running, hasHud: !!p.hud, animId: p.animId === undefined ? null : String(p.animId), mode: p.data.mode };
 });
 
 async function openStarry() {
@@ -79,7 +81,8 @@ async function openStarry() {
   await page.callMethod('switchMode', { currentTarget: { dataset: { mode: 'canvas' } } });
   await waitFor(() => mini.evaluate(() => {
     const p = getCurrentPages().pop();
-    if (!(p && p.ctx && p.routeData && p.nodePts && p.nodePts.length && p.stars)) return false;
+    const h = p && p.hud;
+    if (!(h && p.routeData && h.nodePts && h.nodePts.length && h.stars)) return false;
     getApp().__tsMarch = p;
     return true;
   }), 20000, 'canvas ready');
@@ -132,20 +135,20 @@ async function openStarry() {
   try {
     page = await openStarry();
     const s = await mini.evaluate(() => {
-      const p = getApp().__tsMarch;
-      const near = (q) => p.nodePts.some((n) => Math.abs(n.x - q.x) < 16 && Math.abs(n.y - q.y) < 16);
+      const h = getApp().__tsMarch.hud;
+      const near = (q) => h.nodePts.some((n) => Math.abs(n.x - q.x) < 16 && Math.abs(n.y - q.y) < 16);
       const uniq = (arr) => Object.keys(arr.reduce((m, v) => { m[v] = 1; return m; }, {})).length;
       return {
-        far: (p.farStars || []).length,
-        mid: p.stars.length,
-        baked: !!p.staticLayer,
-        freqs: uniq(p.stars.map((x) => x.freq.toFixed(3))),
-        colors: uniq(p.stars.map((x) => x.color)),
-        slow: p.stars.filter((x) => x.slow).length,
-        glint: p.stars.filter((x) => x.glint).length,
-        loRange: [Math.min.apply(null, p.stars.map((x) => x.lo)), Math.max.apply(null, p.stars.map((x) => x.lo))],
-        nearNode: p.stars.filter(near).length + p.farStars.filter(near).length,
-        inSky: p.stars.every((x) => x.x >= 0 && x.x <= p.cw && x.y >= 0 && x.y <= p.ch * 0.72)
+        far: (h.farStars || []).length,
+        mid: h.stars.length,
+        baked: !!h.staticLayer,
+        freqs: uniq(h.stars.map((x) => x.freq.toFixed(3))),
+        colors: uniq(h.stars.map((x) => x.color)),
+        slow: h.stars.filter((x) => x.slow).length,
+        glint: h.stars.filter((x) => x.glint).length,
+        loRange: [Math.min.apply(null, h.stars.map((x) => x.lo)), Math.max.apply(null, h.stars.map((x) => x.lo))],
+        nearNode: h.stars.filter(near).length + h.farStars.filter(near).length,
+        inSky: h.stars.every((x) => x.x >= 0 && x.x <= h.cw && x.y >= 0 && x.y <= h.ch * 0.72)
       };
     });
     const ok = s.far === 110 && s.mid === 64 && s.baked && s.freqs >= 60 && s.colors >= 2
@@ -156,12 +159,12 @@ async function openStarry() {
   /* TS-04 单帧绘制耗时 */
   try {
     const perf = await mini.evaluate(() => {
-      const p = getApp().__tsMarch;
+      const h = getApp().__tsMarch.hud;
       const N = 120;
       const t0 = Date.now();
-      for (let i = 0; i < N; i++) p.draw(t0 / 1000 + i / 60);
+      for (let i = 0; i < N; i++) h.draw(t0 / 1000 + i / 60);
       const tStars = Date.now();
-      for (let i = 0; i < N; i++) p.drawStars(t0 / 1000 + i / 60);
+      for (let i = 0; i < N; i++) h.drawStars(t0 / 1000 + i / 60);
       return { frameMs: (tStars - t0) / N, starsMs: (Date.now() - tStars) / N };
     });
     record('TS-04', '整帧/星空绘制耗时（模拟器，120 帧均值）', perf.frameMs < 16,
@@ -182,7 +185,7 @@ async function openStarry() {
     await sleep(400);
     const back2 = await marchState();
     const ok = before.running && !hidden.running && hidden.animId === null
-      && back1.running && back1.hasCtx && back2.running && back1.animId !== back2.animId;
+      && back1.running && back1.hasHud && back2.running && back1.animId !== back2.animId;
     record('TS-05', '切走 tab 动画暂停、切回恢复且帧推进', ok,
       'before=' + JSON.stringify(before) + ' hidden=' + JSON.stringify(hidden) + ' back=' + back1.animId + '→' + back2.animId);
   } catch (e) { record('TS-05', '暂停/恢复', false, e.message); }
@@ -195,13 +198,13 @@ async function openStarry() {
     const real = await marchState();
     page = await openStarry();
     const again = await marchState();
-    const ok = real.mode === 'real' && !real.running && !real.hasCtx && again.mode === 'canvas' && again.running && again.hasCtx;
+    const ok = real.mode === 'real' && !real.running && !real.hasHud && again.mode === 'canvas' && again.running && again.hasHud;
     record('TS-06', '实景↔星空往返：画布释放与重建', ok, 'real=' + JSON.stringify(real) + ' canvas=' + JSON.stringify(again));
   } catch (e) { record('TS-06', '模式往返', false, e.message); }
 
   /* TS-07 星空模式点击节点进详情 */
   try {
-    const np = await mini.evaluate(() => { const q = getApp().__tsMarch.nodePts[0]; return { x: q.x, y: q.y }; });
+    const np = await mini.evaluate(() => { const q = getApp().__tsMarch.hud.nodePts[0]; return { x: q.x, y: q.y }; });
     await page.callMethod('onMapTouchStart', { touches: [{ x: np.x, y: np.y }] });
     await page.callMethod('onMapTouchEnd', { touches: [], changedTouches: [{ x: np.x, y: np.y }] });
     await waitPath('pages/node-detail/node-detail', 8000);
