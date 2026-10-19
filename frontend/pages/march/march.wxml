@@ -92,7 +92,9 @@
       bindtouchmove="onMapTouchMove"
       bindtouchend="onMapTouchEnd"
     ></canvas>
-    <view class="map-hint">{{mode === 'real' ? '点击地图节点查看信息，点气泡或「查看详情」看历史' : '拖动/双指缩放查看星图，点击星星看历史，双击复位'}}</view>
+    <!-- 操作提示：仅实景模式用 DOM 浮层；星空模式的 <canvas> 是原生层会盖住 DOM，
+         提示文字由渲染内核 hud.drawHudHint 直接画进画布 -->
+    <view class="map-hint" wx:if="{{mode === 'real'}}">点击地图节点查看信息，点气泡或「查看详情」看历史</view>
 
     <!-- 选中节点信息卡（实景地图）：点 marker 后展示，替代原错位浮动标签；卡片带区域氛围主题色（§12） -->
     <view class="node-card" wx:if="{{mode === 'real' && selectedNode}}" style="{{selectedThemeStyle}}">

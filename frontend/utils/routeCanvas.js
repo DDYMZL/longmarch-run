@@ -132,6 +132,85 @@ function createGlowSprite(stops) {
   }
 }
 
+/**
+ * 描出已采样路线路径（beginPath + moveTo/lineTo 到 endIdx），不设置样式也不 stroke，
+ * 由调用方决定描边/虚线/阴影。抽出来是因为同一段路径在一帧内要描多次（外发光、内核、流光）。
+ * @param {Array<{x:number, y:number}>} path 采样点列
+ * @param {number} endIdx 终点下标（含）；超出长度自动钳制
+ */
+function tracePath(ctx, path, endIdx) {
+  const end = Math.min(endIdx, path.length - 1);
+  ctx.beginPath();
+  ctx.moveTo(path[0].x, path[0].y);
+  for (let i = 1; i <= end; i++) ctx.lineTo(path[i].x, path[i].y);
+}
+
+/**
+ * 沿已采样路线描「流动虚线」（能量管道流光）：dash/gap 固定，靠 offset 逐帧前移产生流动感。
+ * 样式（strokeStyle/lineWidth/lineCap）由调用方设置；内部 save/restore 保证 lineDash 不外泄。
+ * @param {number} offset 传给 setLineDash 的 lineDashOffset，负值表示沿前进方向流动
+ */
+function drawDashFlow(ctx, path, endIdx, dash, gap, offset) {
+  ctx.save();
+  ctx.setLineDash([dash, gap]);
+  ctx.lineDashOffset = offset;
+  tracePath(ctx, path, endIdx);
+  ctx.stroke();
+  ctx.restore();
+}
+
+/**
+ * 正六边形环路径（HUD 节点框）：一次 beginPath 内画外圈，给了 innerRatio 再画内圈，
+ * 单次 stroke 即得双环。只建路径不描边，样式由调用方决定。
+ * @param {number} rot 旋转弧度（0 = 顶点朝右）
+ * @param {number} [innerRatio] 内圈半径比例，省略则只有外圈
+ */
+function drawHexRing(ctx, cx, cy, r, rot, innerRatio) {
+  const hex = (radius) => {
+    for (let i = 0; i < 6; i++) {
+      const a = (rot || 0) + (i * Math.PI) / 3;
+      const x = cx + Math.cos(a) * radius;
+      const y = cy + Math.sin(a) * radius;
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.closePath();
+  };
+  ctx.beginPath();
+  hex(r);
+  if (innerRatio) hex(r * innerRatio);
+}
+
+/**
+ * 雷达扫描扇形路径（以当前坐标系原点为圆心），调用方先 translate + rotate 再 fill。
+ * 圆心固定在原点是刻意的：配合以 (0,0) 为心创建的缓存径向渐变，旋转时渐变随之对齐。
+ * @param {number} arc 扇形张角（弧度），关于 +x 轴对称
+ */
+function drawScanSector(ctx, r, arc) {
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.arc(0, 0, r, -arc / 2, arc / 2);
+  ctx.closePath();
+}
+
+/**
+ * 切角 HUD 面板路径（四角斜切的矩形，科技感边框/底衬），只建路径，fill/stroke 由调用方决定。
+ * @param {number} cut 切角尺寸，自动钳制到不超过宽高一半
+ */
+function drawHudPanel(ctx, x, y, w, h, cut) {
+  const c = Math.min(cut, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + c, y);
+  ctx.lineTo(x + w - c, y);
+  ctx.lineTo(x + w, y + c);
+  ctx.lineTo(x + w, y + h - c);
+  ctx.lineTo(x + w - c, y + h);
+  ctx.lineTo(x + c, y + h);
+  ctx.lineTo(x, y + h - c);
+  ctx.lineTo(x, y + c);
+  ctx.closePath();
+}
+
 module.exports = {
   easeOutCubic,
   drawStar,
@@ -139,5 +218,10 @@ module.exports = {
   getCanvasNodePositions,
   sampleRoutePath,
   distToIndex,
-  createGlowSprite
+  createGlowSprite,
+  tracePath,
+  drawDashFlow,
+  drawHexRing,
+  drawScanSector,
+  drawHudPanel
 };

@@ -140,10 +140,12 @@
   animation: cardIn 0.7s ease both;
 }
 
+/* 星空长征画布：底色与内核 L0 深空底一致，避免首帧前的白闪 */
 .route-map {
   width: 750rpx;
   height: 860rpx;
   display: block;
+  background: #050B16;
 }
 
 /* 实景地图（原生 <map> 组件） */

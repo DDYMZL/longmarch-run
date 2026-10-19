@@ -5,12 +5,18 @@
  * 全部绘制状态（几何采样、星点/粒子、离屏静态层、光晕精灵、观景变换、动画时钟）
  * 与全部绘制逻辑。rAF 循环留在页面（生命周期由 onHide/onUnload 掌控），每帧调 draw(t)。
  *
- * 视觉规则（需求 §13.2/§13.3）：
- *   节点=星星（已点亮=发光金星呼吸 / 当前=红色呼吸星+脉冲环 / 未解锁=暗色星点）
- *   路线=星河轨迹（发光金轨 + 沿线星尘闪烁 + 流光彗尾）
- *   点亮动画：亮起 → 扩大 → 粒子扩散（数量上限+低端降级）→ 稳定发光
+ * 视觉规则（需求 §13.2/§13.3 + S3「深空 HUD 霓虹流光」重构）：
+ *   分七层绘制——L0 深空底与暗角 / L1 带刻度经纬网格 / L2 青蓝等高线山峦（wireframe）
+ *   / L3 切角 HUD 边框 + 雷达坐标环 / L4 旋转雷达扇形 + 水平扫描带 / L5 路线能量管道
+ *   （青蓝外发光 + 金色内核 + 流动虚线）/ L6 节点三态六边环（内含星形）。
+ *   L0~L3 静态烘焙进离屏层，L4~L6 每帧绘制。
+ *   **配色铁律**：路线与节点保留金（#F0C65A）/ 红（#FF3D57）叙事色，青蓝（#3FD8FF）
+ *   只用于仪器层（网格、边框、坐标环、扫描、管道外发光、面板描边）——两者不得混用。
+ *   节点三态：已点亮=金色六边环+发光金星呼吸 / 当前=红色六边环+脉冲环+红星呼吸 /
+ *   未解锁=暗青六边环+暗星点。点亮动画：亮起 → 扩大 → 粒子扩散 → 稳定发光。
  * 性能约束（§13.4）：静态背景离屏烘焙一次；星点/粒子构建期一次性分配，帧内零分配；
- *   金色渐变按 endIdx 缓存；光晕用预渲染精灵 drawImage 复用，不每帧建径向渐变。
+ *   金色渐变按 endIdx 缓存，雷达/扫描渐变建一次复用；光晕与雾带用预渲染精灵 drawImage，
+ *   不每帧建径向渐变；每帧路径描边 ≤4 次、drawImage ≤30 次、fillText ≤22 次。
  *
  * 观景变换 view 由页面手势层直接改写（pan/pinch 数学属于事件层），改完须调 clampView()；
  * 命中测试 hitTest() 内部做屏幕→场景逆变换。
@@ -27,6 +33,18 @@ const CLOUDS = [
 
 // 星色（冷白为主，少量暖白/淡蓝增加层次）
 const STAR_TINTS = ['#EAF2FF', '#EAF2FF', '#EAF2FF', '#FFF1D6', '#CFE0FF'];
+
+/* ---- 深空 HUD 配色与仪器参数（S3）----
+ * CYAN 以「r,g,b」形式存放，便于按不同透明度拼 rgba()；金红叙事色沿用各绘制处的字面值。
+ */
+const CYAN = '63,216,255'; // #3FD8FF，仪器层唯一主色
+const DEEP_SKY = ['#050B16', '#08111F', '#0A1826', '#0E1B2E']; // L0 深空底色带（上→下）
+const GRID = 42; // L1 网格间距（px），每 4 格一条亮主线
+const RADAR_R = 0.4; // L3 雷达坐标环半径（相对 min(cw,ch)）
+const SWEEP_S = 7; // L4 雷达扇形旋转一周秒数
+const SWEEP_ARC = 1.05; // L4 扇形张角（弧度）
+const SCAN_S = 9; // L4 水平扫描带自上而下一趟的秒数
+const HINT_TEXT = '拖动平移 · 双指缩放 · 双击复位 · 点节点看历史';
 
 const INTRO_MS = 1400; // 首次渲染入场描画时长
 const PROGRESS_MS = 800; // 步数刷新增量推进时长
@@ -69,6 +87,7 @@ function createHudMap(opts) {
     staticLayer: null,
     glowGold: null,
     glowRed: null,
+    glowCyan: null,
 
     // 动画时钟
     animStart: 0,
@@ -79,7 +98,10 @@ function createHudMap(opts) {
     _goldGrad: null,
     _goldGradIdx: -1,
     _flagGrad: null,
+    _sweepGrad: null,
+    _scanGrad: null,
     _labelW: null,
+    _hintW: 0,
 
     /* ---------------- 数据与几何 ---------------- */
 
@@ -252,14 +274,18 @@ function createHudMap(opts) {
     /* ---------------- 离屏缓存 ---------------- */
 
     /**
-     * 构建静态背景离屏层（底色渐变 + 网格 + 远景微星 + 山峦 + 边框 + 罗盘 + 虚线路线底）。
+     * 构建静态背景离屏层（L0 深空底与暗角 + L1 刻度网格 + L2 等高线山峦
+     * + L3 切角边框与雷达坐标环 + 远景微星 + 虚线路线底）。
      * 这些元素不随帧变化，缓存后每帧直接 drawImage；离屏画布不可用时降级为每帧直绘。
      */
     buildStatic() {
-      // 画布重建（如切换模式）时路径可能变化，重置渐变缓存
+      // 画布重建（如切换模式）时路径与上下文可能变化，重置全部渐变缓存
       this._goldGrad = null;
       this._goldGradIdx = -1;
       this._flagGrad = null;
+      this._sweepGrad = null;
+      this._scanGrad = null;
+      this._hintW = 0;
       try {
         const dpr = this.dpr;
         const off = wx.createOffscreenCanvas({ type: '2d', width: this.cw * dpr, height: this.ch * dpr });
@@ -274,8 +300,8 @@ function createHudMap(opts) {
     },
 
     /**
-     * 构建光晕精灵（金/红）：将径向光晕预渲染到离屏小画布，
-     * 绘制节点/粒子/旗座时直接 drawImage 缩放复用，避免每帧创建径向渐变，兼顾观感与性能。
+     * 构建光晕精灵（金/红/青）：将径向光晕预渲染到离屏小画布，
+     * 绘制节点/粒子/旗座/雾带时直接 drawImage 缩放复用，避免每帧创建径向渐变，兼顾观感与性能。
      */
     buildGlowSprites() {
       const stops = (rgb) => [
@@ -285,6 +311,12 @@ function createHudMap(opts) {
       ];
       this.glowGold = routeCanvas.createGlowSprite(stops('255,205,90'));
       this.glowRed = routeCanvas.createGlowSprite(stops('255,80,105'));
+      // 青蓝雾带/仪器辉光（drawClouds 用它替代每帧 createRadialGradient；null 时降级回渐变）
+      this.glowCyan = routeCanvas.createGlowSprite([
+        [0, 'rgba(' + CYAN + ',0.16)'],
+        [0.55, 'rgba(' + CYAN + ',0.07)'],
+        [1, 'rgba(' + CYAN + ',0)']
+      ]);
     },
 
     /** 释放离屏层、精灵与构建期数组（切回实景模式时调用） */
@@ -293,6 +325,7 @@ function createHudMap(opts) {
       this.staticLayer = null;
       this.glowGold = null;
       this.glowRed = null;
+      this.glowCyan = null;
       this.arriveFx = null;
       this.progressAnim = null;
       this.route = null;
@@ -306,7 +339,10 @@ function createHudMap(opts) {
       this.regionMotes = null;
       this._goldGrad = null;
       this._flagGrad = null;
+      this._sweepGrad = null;
+      this._scanGrad = null;
       this._labelW = null;
+      this._hintW = 0;
     },
 
     /* ---------------- 单帧绘制 ---------------- */
@@ -322,7 +358,7 @@ function createHudMap(opts) {
       ctx.translate(v.ox, v.oy);
       ctx.scale(v.scale, v.scale);
 
-      // 静态 scenery（底色/山峦/河流）已缓存到离屏层：每帧仅贴图，
+      // 静态 scenery（L0~L3）已缓存到离屏层：每帧仅贴图，
       // 避免重复创建渐变与重建路径，大幅降低主线程开销，保证点击交互不卡顿。
       if (this.staticLayer) {
         ctx.drawImage(this.staticLayer, 0, 0, cw, ch);
@@ -330,6 +366,8 @@ function createHudMap(opts) {
         ctx.clearRect(-v.ox / v.scale, -v.oy / v.scale, cw / v.scale, ch / v.scale);
         this.paintScenery(ctx);
       }
+      this.drawRadar(t);
+      this.drawScanBand(t);
       this.drawClouds(t);
       this.drawStars(t);
       this.drawRegionMotes(t);
@@ -339,45 +377,48 @@ function createHudMap(opts) {
       this.drawProgressFlag(t);
 
       ctx.restore();
+      // 操作提示画在观景变换之外：视口固定，不随拖动/缩放移动
+      this.drawHudHint();
     },
 
     /**
-     * 静态 scenery（离屏缓存）：渐变夜空 + 中心微光 + 经纬网格 + 层叠山峦
-     *   + 金色装饰边框 + 罗盘 + 虚线路线底。深空黄昏质感，营造“远征地图”观感。
+     * 静态 scenery（离屏烘焙一次，L0~L3）：深空底色 + 中心辉光 + 四角暗角 → 雷达坐标环
+     *   → 远景微星 → 等高线山峦 → 带刻度网格 → 虚线路线底 → 切角 HUD 边框。
+     * 顺序即叠放次序：坐标环属远景（山峦之下），网格与边框属前景仪器（山峦之上）。
      */
     paintScenery(ctx) {
       const { cw, ch } = this;
 
-      // 1. 夜空底色（线性渐变）
+      // L0-1 深空底色（四段线性渐变）
       const sky = ctx.createLinearGradient(0, 0, 0, ch);
-      sky.addColorStop(0, '#0A1524');
-      sky.addColorStop(0.42, '#14293F');
-      sky.addColorStop(0.72, '#1C3A52');
-      sky.addColorStop(1, '#274B60');
+      sky.addColorStop(0, DEEP_SKY[0]);
+      sky.addColorStop(0.45, DEEP_SKY[1]);
+      sky.addColorStop(0.75, DEEP_SKY[2]);
+      sky.addColorStop(1, DEEP_SKY[3]);
       ctx.fillStyle = sky;
       ctx.fillRect(0, 0, cw, ch);
 
-      // 2. 中心微光（径向，营造纵深）
-      const halo = ctx.createRadialGradient(cw * 0.5, ch * 0.34, 8, cw * 0.5, ch * 0.34, Math.max(cw, ch) * 0.72);
-      halo.addColorStop(0, 'rgba(96,150,200,0.20)');
-      halo.addColorStop(1, 'rgba(96,150,200,0)');
+      // L0-2 中心青蓝辉光（营造纵深）
+      const halo = ctx.createRadialGradient(cw * 0.5, ch * 0.36, 8, cw * 0.5, ch * 0.36, Math.max(cw, ch) * 0.7);
+      halo.addColorStop(0, 'rgba(' + CYAN + ',0.10)');
+      halo.addColorStop(1, 'rgba(' + CYAN + ',0)');
       ctx.fillStyle = halo;
       ctx.fillRect(0, 0, cw, ch);
 
-      // 3. 经纬网格（地图质感）
-      ctx.save();
-      ctx.strokeStyle = 'rgba(150,195,235,0.05)';
-      ctx.lineWidth = 1;
-      const grid = 42;
-      for (let x = grid; x < cw; x += grid) {
-        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, ch); ctx.stroke();
-      }
-      for (let y = grid; y < ch; y += grid) {
-        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(cw, y); ctx.stroke();
-      }
-      ctx.restore();
+      // L0-3 四角暗角（把视线压回中心路线）
+      const vig = ctx.createRadialGradient(
+        cw * 0.5, ch * 0.5, Math.min(cw, ch) * 0.28,
+        cw * 0.5, ch * 0.5, Math.max(cw, ch) * 0.78
+      );
+      vig.addColorStop(0, 'rgba(0,0,0,0)');
+      vig.addColorStop(1, 'rgba(0,0,0,0.55)');
+      ctx.fillStyle = vig;
+      ctx.fillRect(0, 0, cw, ch);
 
-      // 3.5 远景微星（静态，位于山峦之后；按两档亮度各合批一次 fill）
+      // L3-1 雷达坐标环（静态部分）
+      this.drawRadarRing(ctx);
+
+      // 远景微星（静态，位于山峦之后；按两档亮度各合批一次 fill）
       const far = this.farStars || [];
       [[false, 'rgba(210,225,245,0.22)'], [true, 'rgba(230,238,252,0.5)']].forEach(([bright, color]) => {
         ctx.beginPath();
@@ -390,123 +431,239 @@ function createHudMap(opts) {
         ctx.fill();
       });
 
-      // 4. 层叠山峦（程序化，带渐变与山脊高光）
+      // L2 青蓝等高线山峦
       this.drawRidges(ctx);
 
-      // 5. 金色装饰边框 + 罗盘
-      this.drawFrame(ctx);
-      this.drawCompass(ctx, cw - 46, 48, 20);
+      // L1 带刻度经纬网格（盖在山峦之上，读数感）
+      this.drawGrid(ctx);
 
-      // 6. 虚线路线底（未完成部分的引导线，静态缓存）
+      // 虚线路线底（未完成部分的引导线，仪器青）
       const path = this.path;
       if (path && path.length) {
         ctx.save();
         ctx.setLineDash([7, 7]);
-        ctx.beginPath();
-        ctx.moveTo(path[0].x, path[0].y);
-        for (let i = 1; i < path.length; i++) ctx.lineTo(path[i].x, path[i].y);
-        ctx.strokeStyle = 'rgba(165,195,225,0.30)';
-        ctx.lineWidth = 2.5;
+        ctx.strokeStyle = 'rgba(' + CYAN + ',0.22)';
+        ctx.lineWidth = 2;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
+        routeCanvas.tracePath(ctx, path, path.length - 1);
         ctx.stroke();
         ctx.restore();
       }
+
+      // L3-2 切角 HUD 边框（最上层，压住全部 scenery）
+      this.drawFrame(ctx);
     },
 
-    /** 层叠山峦：3 层由远及近，纵向渐变填充 + 山脊高光线 */
+    /** L3 雷达坐标环（静态）：同心圆 + 虚线十字准线 + 每 30° 刻度（四向加长加亮）+ N/E/S/W */
+    drawRadarRing(ctx) {
+      const { cw, ch } = this;
+      const R = Math.min(cw, ch) * RADAR_R;
+      ctx.save();
+      ctx.translate(cw * 0.5, ch * 0.5);
+      ctx.lineWidth = 1;
+      [1, 0.75, 0.5, 0.25].forEach((k, i) => {
+        ctx.beginPath();
+        ctx.arc(0, 0, R * k, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(' + CYAN + ',' + (i === 0 ? 0.16 : 0.08) + ')';
+        ctx.stroke();
+      });
+      ctx.setLineDash([4, 6]);
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.10)';
+      ctx.beginPath();
+      ctx.moveTo(-R, 0); ctx.lineTo(R, 0);
+      ctx.moveTo(0, -R); ctx.lineTo(0, R);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      for (let i = 0; i < 12; i++) {
+        const a = (i * Math.PI) / 6;
+        const cardinal = i % 3 === 0;
+        const inner = R * (cardinal ? 0.9 : 0.955);
+        ctx.beginPath();
+        ctx.moveTo(Math.cos(a) * inner, Math.sin(a) * inner);
+        ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R);
+        ctx.strokeStyle = 'rgba(' + CYAN + ',' + (cardinal ? 0.4 : 0.2) + ')';
+        ctx.lineWidth = cardinal ? 1.5 : 1;
+        ctx.stroke();
+      }
+      ctx.fillStyle = 'rgba(' + CYAN + ',0.38)';
+      ctx.font = '8px sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      const lo = R + 9;
+      ctx.fillText('N', 0, -lo);
+      ctx.fillText('S', 0, lo);
+      ctx.fillText('E', lo, 0);
+      ctx.fillText('W', -lo, 0);
+      ctx.restore();
+    },
+
+    /** L1 带刻度经纬网格（静态）：42px 细线 + 每 4 格一条亮主线 + 主线端部的标尺齿 */
+    drawGrid(ctx) {
+      const { cw, ch } = this;
+      ctx.save();
+      ctx.lineWidth = 1;
+      const lines = (horizontal) => {
+        const span = horizontal ? ch : cw;
+        for (let p = GRID, i = 1; p < span; p += GRID, i++) {
+          ctx.strokeStyle = 'rgba(' + CYAN + ',' + (i % 4 === 0 ? 0.10 : 0.045) + ')';
+          ctx.beginPath();
+          if (horizontal) { ctx.moveTo(0, p); ctx.lineTo(cw, p); }
+          else { ctx.moveTo(p, 0); ctx.lineTo(p, ch); }
+          ctx.stroke();
+        }
+      };
+      lines(false);
+      lines(true);
+      // 标尺齿：主线与边框交汇处向内画 6px 短线
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.32)';
+      for (let x = GRID * 4; x < cw; x += GRID * 4) {
+        ctx.beginPath();
+        ctx.moveTo(x, 12); ctx.lineTo(x, 18);
+        ctx.moveTo(x, ch - 12); ctx.lineTo(x, ch - 18);
+        ctx.stroke();
+      }
+      for (let y = GRID * 4; y < ch; y += GRID * 4) {
+        ctx.beginPath();
+        ctx.moveTo(12, y); ctx.lineTo(18, y);
+        ctx.moveTo(cw - 12, y); ctx.lineTo(cw - 18, y);
+        ctx.stroke();
+      }
+      ctx.restore();
+    },
+
+    /**
+     * L2 山峦：三层由远及近的青蓝**等高线**（wireframe，不填充）。
+     * 每层 n 条轮廓共用同一山脊函数，按 n 递减振幅并逐条下移——越靠下越平，读出「海拔递减」的
+     * 等高线质感；最上一条再补一道亮线作为地形主特征。静态烘焙，成本可忽略。
+     */
     drawRidges(ctx) {
       const { cw, ch } = this;
       const layers = [
-        { base: 0.56, amp: 0.05, k1: 2.0, k2: 5.3, top: '#3C628C', bot: '#22384F', a: 0.5, crest: 'rgba(150,195,235,0.18)' },
-        { base: 0.71, amp: 0.07, k1: 2.8, k2: 6.6, top: '#2C4C74', bot: '#16283D', a: 0.75, crest: 'rgba(150,195,235,0.14)' },
-        { base: 0.88, amp: 0.09, k1: 3.5, k2: 8.1, top: '#1B3050', bot: '#0C1725', a: 1, crest: 'rgba(150,195,235,0.10)' }
+        { base: 0.56, amp: 0.05, k1: 2.0, k2: 5.3, a: 0.34, lines: 4, gap: 9 },
+        { base: 0.71, amp: 0.07, k1: 2.8, k2: 6.6, a: 0.46, lines: 5, gap: 10 },
+        { base: 0.88, amp: 0.09, k1: 3.5, k2: 8.1, a: 0.6, lines: 6, gap: 11 }
       ];
-      const ridgeY = (L, x) => {
-        const nx = x / cw;
-        return L.base * ch - L.amp * ch *
-          (Math.sin(nx * Math.PI * L.k1 + L.k2) * 0.6 + Math.sin(nx * Math.PI * L.k2 * 1.7) * 0.4);
-      };
+      ctx.save();
       layers.forEach((L) => {
-        const grad = ctx.createLinearGradient(0, (L.base - L.amp) * ch, 0, ch);
-        grad.addColorStop(0, L.top);
-        grad.addColorStop(1, L.bot);
-        ctx.globalAlpha = L.a;
-        // 山脊高光线
-        ctx.beginPath();
-        ctx.moveTo(0, ridgeY(L, 0));
-        for (let x = 6; x <= cw; x += 6) ctx.lineTo(x, ridgeY(L, x));
-        ctx.strokeStyle = L.crest;
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        // 山体填充
-        ctx.beginPath();
-        ctx.moveTo(0, ch);
-        ctx.lineTo(0, ridgeY(L, 0));
-        for (let x = 6; x <= cw; x += 6) ctx.lineTo(x, ridgeY(L, x));
-        ctx.lineTo(cw, ch);
-        ctx.closePath();
-        ctx.fillStyle = grad;
-        ctx.fill();
-        ctx.globalAlpha = 1;
+        const baseY = L.base * ch;
+        const contourY = (n, x) => {
+          const nx = x / cw;
+          const wave = L.amp * ch *
+            (Math.sin(nx * Math.PI * L.k1 + L.k2) * 0.6 + Math.sin(nx * Math.PI * L.k2 * 1.7) * 0.4);
+          return baseY - wave * (1 - n * 0.15) + n * L.gap;
+        };
+        const trace = (n) => {
+          ctx.beginPath();
+          ctx.moveTo(0, contourY(n, 0));
+          for (let x = 8; x <= cw; x += 8) ctx.lineTo(x, contourY(n, x));
+          ctx.stroke();
+        };
+        ctx.lineWidth = 1;
+        for (let n = 0; n < L.lines; n++) {
+          ctx.strokeStyle = 'rgba(' + CYAN + ',' + (L.a * (1 - n / (L.lines + 1))).toFixed(3) + ')';
+          trace(n);
+        }
+        ctx.lineWidth = 1.4;
+        ctx.strokeStyle = 'rgba(' + CYAN + ',' + (L.a + 0.18).toFixed(3) + ')';
+        trace(0);
       });
+      ctx.restore();
     },
 
-    /** 金色装饰边框（双线 + 四角描金） */
+    /** L3 切角 HUD 边框（静态）：双层切角面板 + 四角「卡扣」角标 */
     drawFrame(ctx) {
       const { cw, ch } = this;
       const m = 12;
+      const cut = 22;
       ctx.save();
-      ctx.strokeStyle = 'rgba(212,160,23,0.30)';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(m, m, cw - m * 2, ch - m * 2);
-      ctx.strokeStyle = 'rgba(212,160,23,0.12)';
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.32)';
+      ctx.lineWidth = 1.5;
+      routeCanvas.drawHudPanel(ctx, m, m, cw - m * 2, ch - m * 2, cut);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.12)';
       ctx.lineWidth = 1;
-      ctx.strokeRect(m + 5, m + 5, cw - (m + 5) * 2, ch - (m + 5) * 2);
-      ctx.strokeStyle = 'rgba(232,199,106,0.65)';
-      ctx.lineWidth = 2;
-      const c = 16;
-      const corners = [[m, m, 1, 1], [cw - m, m, -1, 1], [m, ch - m, 1, -1], [cw - m, ch - m, -1, -1]];
-      corners.forEach((q) => {
+      routeCanvas.drawHudPanel(ctx, m + 6, m + 6, cw - (m + 6) * 2, ch - (m + 6) * 2, cut - 8);
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.8)';
+      ctx.lineWidth = 2.5;
+      const arm = 18;
+      [[m, m, 1, 1], [cw - m, m, -1, 1], [m, ch - m, 1, -1], [cw - m, ch - m, -1, -1]].forEach((q) => {
+        const x = q[0];
+        const y = q[1];
+        const sx = q[2];
+        const sy = q[3];
         ctx.beginPath();
-        ctx.moveTo(q[0] + q[2] * c, q[1]);
-        ctx.lineTo(q[0], q[1]);
-        ctx.lineTo(q[0], q[1] + q[3] * c);
+        ctx.moveTo(x + sx * cut, y);
+        ctx.lineTo(x + sx * (cut + arm), y);
+        ctx.moveTo(x + sx * cut, y);
+        ctx.lineTo(x, y + sy * cut);
+        ctx.moveTo(x, y + sy * cut);
+        ctx.lineTo(x, y + sy * (cut + arm));
         ctx.stroke();
       });
       ctx.restore();
     },
 
-    /** 罗盘玫瑰（右上角装饰） */
-    drawCompass(ctx, cx, cy, r) {
+    /**
+     * L4 旋转雷达扇形（动态）：以画布中心为圆心的青蓝渐变扇区匀速旋转 + 前缘扫描亮线。
+     * 渐变以 (0,0) 为心建一次缓存，绘制时 translate + rotate，渐变随坐标系一起转故始终对齐。
+     */
+    drawRadar(t) {
+      const ctx = this.ctx;
+      const { cw, ch } = this;
+      const R = Math.min(cw, ch) * RADAR_R;
+      if (!this._sweepGrad) {
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, R);
+        g.addColorStop(0, 'rgba(' + CYAN + ',0.22)');
+        g.addColorStop(0.6, 'rgba(' + CYAN + ',0.08)');
+        g.addColorStop(1, 'rgba(' + CYAN + ',0)');
+        this._sweepGrad = g;
+      }
       ctx.save();
-      ctx.translate(cx, cy);
-      ctx.strokeStyle = 'rgba(232,199,106,0.45)';
-      ctx.lineWidth = 1.5;
-      ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.stroke();
-      ctx.strokeStyle = 'rgba(232,199,106,0.22)';
-      ctx.beginPath(); ctx.arc(0, 0, r * 0.62, 0, Math.PI * 2); ctx.stroke();
-      const needle = (ang, color, len) => {
-        ctx.beginPath();
-        ctx.moveTo(0, 0);
-        ctx.lineTo(Math.cos(ang) * len, Math.sin(ang) * len);
-        ctx.lineTo(Math.cos(ang + 0.42) * len * 0.3, Math.sin(ang + 0.42) * len * 0.3);
-        ctx.closePath();
-        ctx.fillStyle = color;
-        ctx.fill();
-      };
-      needle(-Math.PI / 2, '#E8C76A', r * 0.92);
-      needle(Math.PI / 2, 'rgba(190,210,235,0.55)', r * 0.92);
-      needle(0, 'rgba(190,210,235,0.32)', r * 0.7);
-      needle(Math.PI, 'rgba(190,210,235,0.32)', r * 0.7);
-      ctx.fillStyle = '#FFE9A8';
-      ctx.font = 'bold 9px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('N', 0, -r - 4);
+      ctx.translate(cw * 0.5, ch * 0.5);
+      ctx.rotate(((t % SWEEP_S) / SWEEP_S) * Math.PI * 2);
+      routeCanvas.drawScanSector(ctx, R, SWEEP_ARC);
+      ctx.fillStyle = this._sweepGrad;
+      ctx.fill();
+      // 前缘亮线（扫描面的「刀口」）
+      const ea = SWEEP_ARC / 2;
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(ea) * R, Math.sin(ea) * R);
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.32)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
       ctx.restore();
     },
 
-    /** 飘移薄雾（动态，每帧绘制）：柔光椭圆雾带，营造高山云雾氛围 */
+    /**
+     * L4 水平扫描带（动态）：一条自上而下循环的青蓝渐变光带 + 前沿亮线。
+     * 渐变按带高建一次缓存，逐帧只 translate，避免每帧 createLinearGradient。
+     */
+    drawScanBand(t) {
+      const ctx = this.ctx;
+      const { cw, ch } = this;
+      const bandH = Math.round(ch * 0.16);
+      if (!this._scanGrad) {
+        const g = ctx.createLinearGradient(0, 0, 0, bandH);
+        g.addColorStop(0, 'rgba(' + CYAN + ',0)');
+        g.addColorStop(0.55, 'rgba(' + CYAN + ',0.06)');
+        g.addColorStop(0.94, 'rgba(' + CYAN + ',0.16)');
+        g.addColorStop(1, 'rgba(' + CYAN + ',0)');
+        this._scanGrad = g;
+      }
+      const y = ((t % SCAN_S) / SCAN_S) * (ch + bandH) - bandH;
+      ctx.save();
+      ctx.translate(0, y);
+      ctx.fillStyle = this._scanGrad;
+      ctx.fillRect(0, 0, cw, bandH);
+      ctx.fillStyle = 'rgba(' + CYAN + ',0.28)';
+      ctx.fillRect(0, bandH - 1, cw, 1);
+      ctx.restore();
+    },
+
+    /** 飘移薄雾（动态，每帧绘制）：青蓝柔光雾带，营造深空星云氛围；精灵可用时零渐变创建 */
     drawClouds(t) {
       const ctx = this.ctx;
       const { cw, ch } = this;
@@ -515,10 +672,17 @@ function createHudMap(opts) {
         const cy = c.y * ch;
         const rx = 50 * c.s;
         const ry = 20 * c.s;
+        if (this.glowCyan) {
+          ctx.globalAlpha = 0.85;
+          ctx.drawImage(this.glowCyan, cx - rx, cy - ry, rx * 2, ry * 2);
+          ctx.globalAlpha = 1;
+          return;
+        }
+        // 精灵不可用（低版本基础库）时降级为每帧径向渐变
         const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, rx);
-        g.addColorStop(0, 'rgba(160,200,235,0.13)');
-        g.addColorStop(0.6, 'rgba(160,200,235,0.06)');
-        g.addColorStop(1, 'rgba(160,200,235,0)');
+        g.addColorStop(0, 'rgba(' + CYAN + ',0.13)');
+        g.addColorStop(0.6, 'rgba(' + CYAN + ',0.06)');
+        g.addColorStop(1, 'rgba(' + CYAN + ',0)');
         ctx.fillStyle = g;
         ctx.beginPath();
         ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
@@ -603,7 +767,10 @@ function createHudMap(opts) {
       ctx.globalAlpha = 1;
     },
 
-    /** 路线：发光金色已完成段（外发光 + 内核亮线，渐变按 endIdx 缓存）+ 流光彗尾 */
+    /**
+     * L5 路线能量管道（已完成段）：青蓝外发光管道 → 金色能量内核 → 白热流动虚线，
+     * 三次描边（含流光）全部复用 tracePath；入场描画与增量推进共用 endIdx 口径。
+     */
     drawRoute(t) {
       const ctx = this.ctx;
       const path = this.path;
@@ -626,26 +793,33 @@ function createHudMap(opts) {
           this._goldGrad = g;
           this._goldGradIdx = endIdx;
         }
-        // 外发光层（一次 shadowBlur 描边）
+        // L5-1 青蓝管道外发光（仪器色包裹叙事轨迹，一次 shadowBlur 描边）
         ctx.save();
-        ctx.shadowColor = 'rgba(255,196,74,0.85)';
-        ctx.shadowBlur = 14;
-        ctx.beginPath();
-        ctx.moveTo(path[0].x, path[0].y);
-        for (let i = 1; i <= endIdx; i++) ctx.lineTo(path[i].x, path[i].y);
-        ctx.strokeStyle = this._goldGrad;
-        ctx.lineWidth = 5;
+        ctx.shadowColor = 'rgba(' + CYAN + ',0.55)';
+        ctx.shadowBlur = 18;
+        ctx.strokeStyle = 'rgba(' + CYAN + ',0.16)';
+        ctx.lineWidth = 10;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
+        routeCanvas.tracePath(ctx, path, endIdx);
         ctx.stroke();
         ctx.restore();
-        // 内核亮线（提升“能量路径”质感）
-        ctx.beginPath();
-        ctx.moveTo(path[0].x, path[0].y);
-        for (let i = 1; i <= endIdx; i++) ctx.lineTo(path[i].x, path[i].y);
-        ctx.strokeStyle = 'rgba(255,250,230,0.9)';
-        ctx.lineWidth = 1.8;
+        // L5-2 金色能量内核（叙事主色 + 暖光）
+        ctx.save();
+        ctx.shadowColor = 'rgba(255,196,74,0.8)';
+        ctx.shadowBlur = 10;
+        ctx.strokeStyle = this._goldGrad;
+        ctx.lineWidth = 4.5;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+        routeCanvas.tracePath(ctx, path, endIdx);
         ctx.stroke();
+        ctx.restore();
+        // L5-3 流动虚线（能量流）：dash 固定，offset 逐帧前移
+        ctx.strokeStyle = 'rgba(255,248,220,0.8)';
+        ctx.lineWidth = 1.8;
+        ctx.lineCap = 'round';
+        routeCanvas.drawDashFlow(ctx, path, endIdx, 10, 26, -t * 46);
       }
 
       // 流光彗尾（沿已完成路线循环，入场完成后启动）
@@ -691,7 +865,11 @@ function createHudMap(opts) {
       }
     },
 
-    /** 节点三态星形（§13.2）：已点亮=发光金星呼吸 / 当前=红色呼吸星+脉冲环 / 未解锁=暗色星点 */
+    /**
+     * L6 节点三态六边环（§13.2 + S3 HUD 化）：已点亮=旋转金环+发光金星呼吸 /
+     * 当前=旋转红环+双脉冲扩散环+红星呼吸 / 未解锁=暗青静态环+暗星点。
+     * 六边环是仪器造型，但描边**取状态叙事色**（金/红），只有未点亮态用青——遵守配色铁律。
+     */
     drawNodes(t) {
       const ctx = this.ctx;
       const route = this.route;
@@ -700,20 +878,26 @@ function createHudMap(opts) {
       route.nodes.forEach((node, i) => {
         const p = nodePts[i];
         if (node.status === 'completed') {
-          // 发光星星：金色光晕呼吸（复用光晕精灵）+ 双层五角星
+          // 已点亮：金色光晕呼吸（复用精灵）+ 双六边环缓慢旋转 + 双层五角星
           const pulse = 0.5 + 0.5 * Math.sin(t * 2 + i);
           const s = 32 + pulse * 13;
           if (this.glowGold) ctx.drawImage(this.glowGold, p.x - s / 2, p.y - s / 2, s, s);
-          routeCanvas.drawStar(ctx, p.x, p.y, 5, 9.5, 4, t * 0.35);
+          ctx.globalAlpha = 0.55 + pulse * 0.35;
+          routeCanvas.drawHexRing(ctx, p.x, p.y, 13.5, t * 0.22 + i, 0.74);
+          ctx.strokeStyle = '#F0C65A';
+          ctx.lineWidth = 1.4;
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+          routeCanvas.drawStar(ctx, p.x, p.y, 5, 8.4, 3.5, t * 0.35);
           ctx.fillStyle = '#E8B84B';
           ctx.fill();
-          routeCanvas.drawStar(ctx, p.x, p.y, 5, 4.6, 2, t * 0.35);
+          routeCanvas.drawStar(ctx, p.x, p.y, 5, 4.1, 1.8, t * 0.35);
           ctx.fillStyle = '#FFF7DC';
           ctx.fill();
         } else if (node.status === 'current') {
-          // 呼吸星星（§13.2 当前=呼吸动画）：柔和外发光 + 扩散脉冲环 + 红色星形呼吸缩放
+          // 当前：柔和外发光 + 扩散脉冲环 + 反向旋转红六边环 + 红色星形呼吸缩放（§13.2）
+          const soft = 0.5 + 0.5 * Math.sin(t * 1.3);
           if (this.glowRed) {
-            const soft = 0.5 + 0.5 * Math.sin(t * 1.3);
             const s = 64 + soft * 18;
             ctx.globalAlpha = 0.28 + soft * 0.17;
             ctx.drawImage(this.glowRed, p.x - s / 2, p.y - s / 2, s, s);
@@ -734,6 +918,10 @@ function createHudMap(opts) {
             const s = 36 * breathe;
             ctx.drawImage(this.glowRed, p.x - s / 2, p.y - s / 2, s, s);
           }
+          routeCanvas.drawHexRing(ctx, p.x, p.y, 14.5 * breathe, -t * 0.5, 0.72);
+          ctx.strokeStyle = '#FF3D57';
+          ctx.lineWidth = 1.8;
+          ctx.stroke();
           routeCanvas.drawStar(ctx, p.x, p.y, 5, 8.6 * breathe, 3.7 * breathe, 0);
           ctx.fillStyle = '#FF3D57';
           ctx.fill();
@@ -741,7 +929,11 @@ function createHudMap(opts) {
           ctx.fillStyle = '#FFD9DE';
           ctx.fill();
         } else {
-          // 未解锁：暗色星点（§13.2）
+          // 未解锁：暗青静态六边环 + 暗色星点（§13.2）
+          routeCanvas.drawHexRing(ctx, p.x, p.y, 10.5, 0, 0.7);
+          ctx.strokeStyle = 'rgba(' + CYAN + ',0.30)';
+          ctx.lineWidth = 1;
+          ctx.stroke();
           routeCanvas.drawStar(ctx, p.x, p.y, 5, 5.4, 2.3, 0);
           ctx.fillStyle = 'rgba(120,145,175,0.5)';
           ctx.fill();
@@ -751,19 +943,22 @@ function createHudMap(opts) {
       });
     },
 
-    /** 节点名标签：深色圆角底衬 + 状态色文字（暗背景下保证可读） */
+    /** 节点名标签：深底圆角面板 + 青蓝发丝描边 + 状态色文字（暗背景下保证可读） */
     drawNodeLabel(ctx, node, p) {
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
       const labelX = Math.min(Math.max(p.x, 30), this.cw - 30);
-      const labelY = p.y + 22;
+      const labelY = p.y + 26;
       if (!this._labelW) this._labelW = {};
       const w = this._labelW[node.name] || (this._labelW[node.name] = ctx.measureText(node.name).width);
-      // 底衬
-      ctx.fillStyle = 'rgba(6,13,24,0.6)';
-      routeCanvas.drawRoundRect(ctx, labelX - w / 2 - 6, labelY - 10, w + 12, 15, 7.5);
+      // 面板底衬（圆角收到 3px，与 HUD 切角语言一致）
+      routeCanvas.drawRoundRect(ctx, labelX - w / 2 - 6, labelY - 10, w + 12, 15, 3);
+      ctx.fillStyle = 'rgba(5,11,22,0.72)';
       ctx.fill();
-      // 文字
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.22)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      // 文字（状态色：金/红/暗蓝灰）
       if (node.status === 'completed') {
         ctx.fillStyle = '#FFE9A8';
       } else if (node.status === 'current') {
@@ -772,6 +967,33 @@ function createHudMap(opts) {
         ctx.fillStyle = '#93A6BC';
       }
       ctx.fillText(node.name, labelX, labelY);
+    },
+
+    /**
+     * 星空模式操作提示（S3）：<canvas> 原生层会盖住 DOM 浮层，故提示文字直接画进画布；
+     * 在观景变换之外绘制，视口固定不随拖动/缩放移动。文字宽度只测量一次。
+     */
+    drawHudHint() {
+      const ctx = this.ctx;
+      if (!ctx) return;
+      const { cw, ch } = this;
+      ctx.save();
+      ctx.font = '10px sans-serif';
+      ctx.textAlign = 'center';
+      if (!this._hintW) this._hintW = ctx.measureText(HINT_TEXT).width;
+      const bw = this._hintW + 24;
+      const bh = 21;
+      const x = (cw - bw) / 2;
+      const y = ch - bh - 12;
+      routeCanvas.drawHudPanel(ctx, x, y, bw, bh, 6);
+      ctx.fillStyle = 'rgba(5,11,22,0.66)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.28)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(' + CYAN + ',0.78)';
+      ctx.fillText(HINT_TEXT, cw / 2, y + 14.5);
+      ctx.restore();
     },
 
     /** 当前进度旗帜：呼吸光点 + 轻微粒子（需求 §3.3）+ 基座光晕 + 摆动旗面 */
