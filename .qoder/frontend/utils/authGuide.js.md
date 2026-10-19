@@ -77,7 +77,7 @@ CommonJS 模块，**无状态、无内部依赖**：不 require 任何本仓模�
 | `frontend/pages/ticket/ticket.js` | `:10` | `:183`（`scope.writePhotosAlbum`，保存纪念票） |
 | `frontend/pages/ceremony/ceremony.js` | `:14` | `:471`（`scope.writePhotosAlbum`，保存完成仪式画面） |
 
-`frontend/pages/march/march.js:179` 的注释也指向本模块（march 页的就地同步复用 `sport.syncToday`，故不直接 require，见 `.qoder/frontend/pages/march/march.js.md` §4.2）。
+`frontend/pages/march/march.js:242` 的注释也指向本模块（march 页的就地同步复用 `sport.syncToday`，故不直接 require，见 `.qoder/frontend/pages/march/march.js.md` §4.2）。
 
 **与后端的关系**：无。本模块只解决客户端权限，`scope.werun` 拿到授权后的取数与上送（`wx.login` code + `wx.getWeRunData` 加密数据 → `POST /api/sport/sync`）全在 `services/sport.js`（`.qoder/frontend/services/sport.js.md` §4.6）。
 

@@ -1,6 +1,6 @@
 # march.js（长征路线页 · 页面级合一）
 
-> 按 `.qoder/README.md` §1「页面级合一」规则，本文档覆盖 `frontend/pages/march/` 四件套：`march.js`（654 行）、`march.wxml`（140 行）、`march.wxss`（548 行）、`march.json`（5 行）。WXML / WXSS / JSON 专章见 §4-1–§4-3。**星空长征的绘制状态与绘制逻辑不在本页**，全部在 `utils/hudMap.js` 渲染内核（`.qoder/frontend/utils/hudMap.js.md`），本页只留模式切换、数据拉取、rAF 循环、手势事件转发与命中跳转。
+> 按 `.qoder/README.md` §1「页面级合一」规则，本文档覆盖 `frontend/pages/march/` 四件套：`march.js`（721 行）、`march.wxml`（140 行）、`march.wxss`（548 行）、`march.json`（6 行）。WXML / WXSS / JSON 专章见 §4-1–§4-3。**星空长征的绘制状态与绘制逻辑不在本页**，全部在 `utils/hudMap.js` 渲染内核（`.qoder/frontend/utils/hudMap.js.md`），本页只留模式切换、数据拉取、rAF 循环、手势事件转发与命中跳转；S4 起另加 WS 订阅与 L7 叠加层取数（数据合并后注入内核，绘制仍全在内核）。
 
 ## 1. 文件路径
 
@@ -8,110 +8,123 @@
 
 ## 2. 文件职责
 
-长征 Tab 主页面：展示路线总览（累计步数、点亮进度、当前章节卡），提供**双模式地图**——默认实景 `<map>`（后端下发经纬度 + markers/polyline）与 Canvas 2D「星空长征」插画地图（绘制内核为 `utils/hudMap.js`，实例挂 `this.hud`）；承载开场动画（首次完整开场/非首次纱幕）、抵达事件卡队列播放、完成仪式跳转触发与就地同步行军步数（B6）；下方为可点击的节点列表。数据全部来自 `services/march.js`（后端 `/march/route`、`/march/light-up`）与 `services/sport.js`（`/sport/sync`），页面不直接发请求、不直接读写 Storage（`frontend/AGENTS.md` §3.1）。
+长征 Tab 主页面：展示路线总览（累计步数、点亮进度、当前章节卡），提供**双模式地图**——默认实景 `<map>`（后端下发经纬度 + markers/polyline）与 Canvas 2D「星空长征」插画地图（绘制内核为 `utils/hudMap.js`，实例挂 `this.hud`）；承载开场动画（首次完整开场/非首次纱幕）、抵达事件卡队列播放、完成仪式跳转触发与就地同步行军步数（B6）；下方为可点击的节点列表。S4 起本页另承担星空模式的**实时数据供给**：订阅 WS（`services/ws.js`）把 `activity` 事件转成内核飞线、`data_changed` 节流后重拉全员统计，并把 `/march/route-stats` 与 `/broadcast/today` 两个聚合响应合并成归一化入参交给 `hud.setStats`。数据全部来自 `services/march.js`（后端 `/march/route`、`/march/light-up`、`/march/route-stats`）、`services/sport.js`（`/sport/sync`）与 `services/broadcast.js`（`/broadcast/today`），页面不直接发请求、不直接读写 Storage（`frontend/AGENTS.md` §3.1）。
 
 ## 3. 业务需求
 
-文件头 docstring（`march.js:1-9`）自引：星空绘制收在渲染内核的边界声明（`:5-6`）、星空全景 §13.4 拖动/捏合/双击复位（`:7`）、「任意节点含未解锁可看历史」（`:8`，不变量 8 的落点 `:637-638`、`:647-648` 注释）。绘制侧需求（§13.2 节点三态星形、§13.3 点亮动画、§12 区域氛围、§3.5 轨迹推进）的落点已随 S2 搬迁到 `.qoder/frontend/utils/hudMap.js.md` §3；本页保留的需求为：开场动画 §5（`:72-76` 注释）、章节卡 §4.4（`:266` 注释）、抵达事件卡 §4.5（`:239-243` 注释）、完成仪式 §20（`:207-211` 注释，§20.4 仅第一次）、就地同步 B6（`:177-181` 注释）。双模式地图与 Canvas 清理约定是 `frontend/AGENTS.md` §4 不变量 6 的落点（内核侧见 hudMap 文档 §8）。
+文件头 docstring（`march.js:1-11`）自引：星空绘制收在渲染内核的边界声明（`:5-6`）、星空全景 §13.4 拖动/捏合/双击复位（`:7`）、「任意节点含未解锁可看历史」（`:8`，不变量 8 的落点 `:703-706`、`:713-715` 注释）、S4 实时叠加的页面侧职责与「内核不认接口形状」（`:9-10`）。绘制侧需求（§13.2 节点三态星形、§13.3 点亮动画、§12 区域氛围、§3.5 轨迹推进）的落点已随 S2 搬迁到 `.qoder/frontend/utils/hudMap.js.md` §3；本页保留的需求为：开场动画 §5（`:79-83` 注释）、章节卡 §4.4（`:330` 注释）、抵达事件卡 §4.5（`:302-307` 注释）、完成仪式 §20（`:271-275` 注释，§20.4 仅第一次）、就地同步 B6（`:241-245` 注释）、L7/L8 实时叠加（科技感地图方案 S4，`:154-158` 与 `:170-174` 注释）。双模式地图与 Canvas 清理约定是 `frontend/AGENTS.md` §4 不变量 6 的落点（内核侧见 hudMap 文档 §8）。
 
 ## 4. 核心功能
 
 ### 4.1 页面入口与生命周期
 
 - **入口**：tabBar 第 2 个 tab「长征」（`frontend/app.json`，`pagePath: pages/march/march`），无其它页面 `navigateTo` 进入本页（tab 页只能 switchTab）。
-- **无 `onLoad`/`onReady`**：全部初始化在 `onShow` 完成（`:61-70`）——① 登录守卫：`!app.globalData.loggedIn` 时 `wx.reLaunch('/pages/launch/launch')`（`:62-65`；tab 页同样自守卫，配合 `frontend/AGENTS.md` §4 不变量 5）；② `maybePlayIntro()`（`:66`）；③ 星空动画恢复：`this.hud && this.routeData` 时 `startAnim()`（`:68`，注释说明 onHide 停掉了动画，先用已有路线恢复、刷新失败画面也不冻结）；④ `refresh()`（`:69`，满足不变量 1「onShow + refresh」）。
-- **`onHide`（`:119-126`）**：递增 `_refreshRequestId` 作废在途刷新（`:120`）→ 清 4 个定时器（`:121-124`）→ `stopAnim()`（`:125`）。
-- **`onUnload`（`:128-136`）**：同 onHide，另清 `_veilTimer`（`:133`）→ `stopAnim()`（`:135`）。
+- **无 `onLoad`/`onReady`**：全部初始化在 `onShow` 完成（`:67-77`）——① 登录守卫：`!app.globalData.loggedIn` 时 `wx.reLaunch('/pages/launch/launch')`（`:68-71`；tab 页同样自守卫，配合 `frontend/AGENTS.md` §4 不变量 5）；② `maybePlayIntro()`（`:72`）；③ 星空动画恢复：`this.hud && this.routeData` 时 `startAnim()`（`:74`，注释说明 onHide 停掉了动画，先用已有路线恢复、刷新失败画面也不冻结）；④ **WS 订阅（S4，`:75`）**：仅在 `_wsUnsub` 未持有时 `ws.subscribe((msg) => this.handleWsMessage(msg))`，重复 onShow 不会重复订阅；⑤ `refresh()`（`:76`，满足不变量 1「onShow + refresh」）。
+- **`onHide`（`:126-134`）**：递增 `_refreshRequestId` 作废在途刷新（`:127`）→ `unsubscribeWs()`（`:128`）→ 清 4 个定时器（`:129-132`）→ `stopAnim()`（`:133`）。
+- **`onUnload`（`:136-145`）**：同 onHide，另清 `_veilTimer`（`:142`）→ `stopAnim()`（`:144`）。
+- **`unsubscribeWs()`（`:148-152`）**：onHide/onUnload 共用的退订入口，退订后置 `_wsUnsub = null`，使下次 onShow 能重新订阅；`services/ws` 在无订阅者时内部延迟关闭连接（`.qoder/frontend/services/ws.js.md`）。
 
 **定时器 / 动画 / 监听器全量盘点（逐一实读）**：
 
 | # | 句柄 | 创建点 | onHide 清理 | onUnload 清理 | 其它清理点 | 说明 |
 |---|---|---|---|---|---|---|
-| 1 | `_introTimer` | `:81`（切走后重计时）、`:92`（首次，3350ms） | ✅ `:123`（清后置 null） | ✅ `:132` | `dismissIntro` `:103` | 开场动画自动结束 |
-| 2 | `_veilTimer` | `:88`（560ms 纱幕） | ❌ **未清**（见 §9 第 1 条） | ✅ `:133` | 无 | 唯一未双清的定时器 |
-| 3 | `_viewTimer` | `:458`（700ms 镜头俯冲第二段） | ✅ `:121` | ✅ `:130` | `playViewAnim` 入口先清 `:451` | 实景镜头动画 |
-| 4 | `popupTimer` | arrivePopup 模块递归 setTimeout 回写（`.qoder/frontend/utils/arrivePopup.js.md` §4.3） | ✅ `:122` | ✅ `:131` | 模块内每卡播放前先清（同文档 §8.2 契约） | 抵达卡队列 |
-| 5 | `_ceremonyTimer` | `:223`（延时 = `_popupMs`） | ✅ `:124`（清后置 null） | ✅ `:134`（清后置 null） | 回调内自清 `:224` | 仪式跳转 |
-| 6 | `animId`（rAF 链） | `startAnim` `:536`（`canvas.requestAnimationFrame`）或 `:538`（降级 `setTimeout(loop,16)`） | ✅ `stopAnim()` `:125` | ✅ `stopAnim()` `:135` | `switchMode` `:323`、`startAnim` 自防双链 `:530` | `stopAnim` `:544-551` 双清 + `running=false` 兜底 `:533` |
+| 1 | `_introTimer` | `:88`（切走后重计时）、`:99`（首次，3350ms） | ✅ `:131`（清后置 null） | ✅ `:141` | `dismissIntro` `:110` | 开场动画自动结束 |
+| 2 | `_veilTimer` | `:95`（560ms 纱幕） | ❌ **未清**（见 §9 第 1 条） | ✅ `:142` | 无 | 唯一未双清的定时器 |
+| 3 | `_viewTimer` | `:523`（700ms 镜头俯冲第二段） | ✅ `:129` | ✅ `:139` | `playViewAnim` 入口先清 `:516` | 实景镜头动画 |
+| 4 | `popupTimer` | arrivePopup 模块递归 setTimeout 回写（`.qoder/frontend/utils/arrivePopup.js.md` §4.3） | ✅ `:130` | ✅ `:140` | 模块内每卡播放前先清（同文档 §8.2 契约） | 抵达卡队列 |
+| 5 | `_ceremonyTimer` | `:287`（延时 = `_popupMs`） | ✅ `:132`（清后置 null） | ✅ `:143`（清后置 null） | 回调内自清 `:288` | 仪式跳转 |
+| 6 | `animId`（rAF 链） | `startAnim` `:603`（`canvas.requestAnimationFrame`）或 `:605`（降级 `setTimeout(loop,16)`） | ✅ `stopAnim()` `:133` | ✅ `stopAnim()` `:144` | `switchMode` `:387`、`startAnim` 自防双链 `:597` | `stopAnim` `:611-618` 双清 + `running=false` 兜底 `:600` |
+| 7 | `_wsUnsub`（WS 订阅，S4） | `onShow` `:75`（`ws.subscribe`） | ✅ `:128` | ✅ `:138` | `unsubscribeWs` `:148-152` 退订后置 null | 唯一的非定时器句柄，双清口径与定时器一致 |
 
-`arriveFx` / `progressAnim` 两个帧驱动动画态**已不在本页**，随 S2 迁入渲染内核（`.qoder/frontend/utils/hudMap.js.md` §4.2、§4.7）；本页经 `hud.playArrive(ids)` 触发（`:253`）。
+`arriveFx` / `progressAnim` 两个帧驱动动画态**已不在本页**，随 S2 迁入渲染内核（`.qoder/frontend/utils/hudMap.js.md` §4.2、§4.7）；本页经 `hud.playArrive(ids)` 触发（`:317`）。S4 的 L8 飞线态 `flyLine` 同样只在内核，本页经 `hud.playFlyLine(nodeId)` 触发（`:167`）。
 
-事件监听器全部为 WXML 声明式绑定（tap/touch/marker 事件，§4-1），随页面销毁自动释放；**无 `wx.onXxx` 全局事件订阅、无 WebSocket 订阅**（`:10-15` require 清单即全部模块依赖，无 `services/ws.js`）。
+事件监听器除 WXML 声明式绑定（tap/touch/marker 事件，§4-1，随页面销毁自动释放）外，S4 起新增**一个 WS 订阅**（`_wsUnsub`，见盘点表 #7）；**无 `wx.onXxx` 全局事件订阅**（`:13-19` require 清单即全部模块依赖）。
 
-### 4.2 数据刷新链 `refresh()`（`:140-170`）
+### 4.2 数据刷新链 `refresh()`（`:201-234`）
 
-并发竞态守卫：每次调用生成自增 `requestId` 写入 `this._refreshRequestId`（`:141-142`），两个 `.then` 各校验一次，不匹配即丢弃（`:150`、`:160`；`e70b59f` 引入，见 `.qoder/frontend/services/request.js.md` §4.9 末段「页面级并发竞态守卫在各页面自行实现」）。链路：
+并发竞态守卫：每次调用生成自增 `requestId` 写入 `this._refreshRequestId`（`:202-203`），两个 `.then` 各校验一次，不匹配即丢弃（`:214`、`:224`；`e70b59f` 引入，见 `.qoder/frontend/services/request.js.md` §4.9 末段「页面级并发竞态守卫在各页面自行实现」）。链路：
 
-1. `march.lightUpNodes()`（`:147` → `POST /api/march/light-up`，`.qoder/frontend/services/march.js.md` §4.3）——幂等点亮达标节点，失败兜底为空数组（`:148`）；结果暂存 `this._pendingLit` / `this._pendingChapters`（`:151-152`）；有新点亮/新完成章节时置 `app.globalData.homeDirty = true` 让首页强制刷新（`:154-156`）。
-2. `march.getRoute()`（`:157` → `GET /api/march/route`）；响应带 `_fromCache` 时 toast 提示「网络异常，当前为最近缓存数据」（`:162`，last-good 缓存兜底口径）。
-3. `renderRoute(route)` → `playArriveIfNeeded()` → `maybeStartCeremony(route)`（`:163-165`）。
-4. 整链 `.catch` 静默：网络失败保留上一次渲染（`:167-169` 注释）；light-up 单独失败也兜底为空点亮结果继续拉路线（`:148`），即「点亮失败不阻塞路线展示」。
+0. **先非阻塞触发 L7 叠加层取数**（S4，`:206`）：`this.loadOverlay()` 不 `return`、不参与下面的链式流程与竞态守卫（全员数据与自己的路线互不依赖，失败也不影响路线），详见 §4.9。
+1. `march.lightUpNodes()`（`:211` → `POST /api/march/light-up`，`.qoder/frontend/services/march.js.md` §4.3）——幂等点亮达标节点，失败兜底为空数组（`:212`）；结果暂存 `this._pendingLit` / `this._pendingChapters`（`:215-216`）；有新点亮/新完成章节时置 `app.globalData.homeDirty = true` 让首页强制刷新（`:217-220`）。
+2. `march.getRoute()`（`:221` → `GET /api/march/route`）；响应带 `_fromCache` 时 toast 提示「网络异常，当前为最近缓存数据」（`:226`，last-good 缓存兜底口径）。
+3. `renderRoute(route)` → `playArriveIfNeeded()` → `maybeStartCeremony(route)`（`:227-229`）。
+4. 整链 `.catch` 静默：网络失败保留上一次渲染（`:231-233` 注释）；light-up 单独失败也兜底为空点亮结果继续拉路线（`:212`），即「点亮失败不阻塞路线展示」。
 
-`refresh()` **返回 Promise**（`:146`），供下拉刷新 `onPullDownRefresh`（`:173-175`，完成后 `wx.stopPullDownRefresh`）与 `handleSyncSteps` 复用。
+`refresh()` **返回 Promise**（`:210`），供下拉刷新 `onPullDownRefresh`（`:237-239`，完成后 `wx.stopPullDownRefresh`）与 `handleSyncSteps` 复用。
 
-**就地同步行军步数（B6）`handleSyncSteps()`（`:182-205`）**：`data.syncing` 锁防重复触发（`:183-184`、`:203`）；`sport.syncToday()` 内部处理微信运动授权（拒绝走 authGuide 引导，`.qoder/frontend/services/sport.js.md`）；成功后置 `homeDirty` 并按 `synced/historyDetailsAvailable/failedDates` 三档 toast（`:189-196`），再 `refresh()` 走完整点亮+重绘链（`:197`）；失败 toast 错误信息（`:200`）。入口为头部「同步行程」按钮（`march.wxml`，§4-1）。
+**就地同步行军步数（B6）`handleSyncSteps()`（`:246-269`）**：`data.syncing` 锁防重复触发（`:247-248`、`:267`）；`sport.syncToday()` 内部处理微信运动授权（拒绝走 authGuide 引导，`.qoder/frontend/services/sport.js.md`）；成功后置 `homeDirty` 并按 `synced/historyDetailsAvailable/failedDates` 三档 toast（`:252-260`），再 `refresh()` 走完整点亮+重绘链（`:261`）；失败 toast 错误信息（`:264`）。入口为头部「同步行程」按钮（`march.wxml`，§4-1）。
 
-### 4.3 开场动画（§5，`:77-117`）
+### 4.3 开场动画（§5，`:84-124`）
 
-- `maybePlayIntro()`（`:77-93`）：模块实例标记 `_introChecked` 保证只判定一次；已判定过且开场仍在播（onHide 清掉定时器后回来）时重新计时 3350ms 自动结束（`:80-82`）。首次判定走 `march.hasPlayedIntro()`（`:86`，Storage 键 `lm_march_intro_played` 收归服务层，`.qoder/frontend/services/march.js.md` §4.6）：已播过 → `showVeil` 纱幕 + `_veilTimer` 560ms 后关闭（`:87-88`）；未播过 → `showIntro` + `_introTimer` 3350ms（`:91-92`）。
-- `skipIntro()`（`:96-98`）→ `dismissIntro()`（`:101-117`）：清 `_introTimer`、`setData({showIntro:false})`、`march.markIntroPlayed()` 写标记（`:105`）；补播被开场压后的实景镜头动画 `playViewAnim`（`:106-109`）、抵达卡队列 `playArriveIfNeeded`（`:110`）、顺延的完成仪式 `_ceremonyRoute`（`:112-116`）。
+- `maybePlayIntro()`（`:84-100`）：模块实例标记 `_introChecked` 保证只判定一次；已判定过且开场仍在播（onHide 清掉定时器后回来）时重新计时 3350ms 自动结束（`:87-89`）。首次判定走 `march.hasPlayedIntro()`（`:93`，Storage 键 `lm_march_intro_played` 收归服务层，`.qoder/frontend/services/march.js.md` §4.6）：已播过 → `showVeil` 纱幕 + `_veilTimer` 560ms 后关闭（`:94-95`）；未播过 → `showIntro` + `_introTimer` 3350ms（`:98-99`）。
+- `skipIntro()`（`:103-105`）→ `dismissIntro()`（`:108-124`）：清 `_introTimer`、`setData({showIntro:false})`、`march.markIntroPlayed()` 写标记（`:112`）；补播被开场压后的实景镜头动画 `playViewAnim`（`:113-116`）、抵达卡队列 `playArriveIfNeeded`（`:117`）、顺延的完成仪式 `_ceremonyRoute`（`:119-123`）。
 - 3350ms 与 wxss `introFadeOut 0.45s ease 2.85s`（`march.wxss:453`）配合：2.85s 起淡出、3.3s 结束，留 50ms 余量。
 
-### 4.4 路线渲染 `renderRoute(route)`（`:263-312`）
+### 4.4 路线渲染 `renderRoute(route)`（`:327-376`）
 
-网络刷新与本地渲染共用同一入口（`:258-262` 注释），按 `data.mode` 分流：
+网络刷新与本地渲染共用同一入口（`:322-326` 注释），按 `data.mode` 分流：
 
-- **公共段（`:264-281`）**：`this.routeData = route`（`:264`，实景分支与命中/列表消费它；星空绘制读的是内核 `hud.route`）→ 章节卡（§4.4 需求）：按 `route.currentChapterId` 匹配当前章，`finished` 且有章节时展示末章（`:267-270`）；`progressPct = Math.round(progress*100)` 预计算供 WXML 进度条（`:279`，遵守 `frontend/AGENTS.md` §5.2「WXML 不做原生调用」）→ `setData` 负载：`nodes` 经 `toViewNode` 裁剪为 6 字段（`:18-27`，注释「减小 setData 体积」）+ 5 个进度标量 + `currentChapter`（`:271-281`）。
-- **real 分支（`:283-305`）**：`buildMapData` 产出 markers/polylines（§4.5）；`selectedNode` 默认选中 current 节点，无 current 取首个非 completed，再兜底第一个（`:285-289`）；配 `nodeThemes` 生成信息卡主题样式与环境描述（`:290`、`:295-296`）；首次进入且不在开场中时播 `playViewAnim` 镜头俯冲（`_viewPlayed` 防重播，`:300-303`）。
-- **canvas 分支（`:307-311`）**：`setData(patch)` 后若 `this.hud` 已存在（即已切过星空模式）则 `this.hud.setRoute(route)` + `startAnim()`——**入场描画 vs 增量推进的判定在内核 `setRoute` 内部**（按是否已有采样路径区分，`.qoder/frontend/utils/hudMap.js.md` §4.2），本页不再持有 `prevProgress`/`nodeIndex`/`progressAnim`。
+- **公共段（`:328-345`）**：`this.routeData = route`（`:328`，实景分支与命中/列表消费它；星空绘制读的是内核 `hud.route`）→ 章节卡（§4.4 需求）：按 `route.currentChapterId` 匹配当前章，`finished` 且有章节时展示末章（`:331-334`）；`progressPct = Math.round(progress*100)` 预计算供 WXML 进度条（`:343`，遵守 `frontend/AGENTS.md` §5.2「WXML 不做原生调用」）→ `setData` 负载：`nodes` 经 `toViewNode` 裁剪为 6 字段（`:24-33`，注释「减小 setData 体积」）+ 5 个进度标量 + `currentChapter`（`:335-345`）。
+- **real 分支（`:347-369`）**：`buildMapData` 产出 markers/polylines（§4.5）；`selectedNode` 默认选中 current 节点，无 current 取首个非 completed，再兜底第一个（`:349-353`）；配 `nodeThemes` 生成信息卡主题样式与环境描述（`:354`、`:359-360`）；首次进入且不在开场中时播 `playViewAnim` 镜头俯冲（`_viewPlayed` 防重播，`:364-367`）。
+- **canvas 分支（`:371-375`）**：`setData(patch)` 后若 `this.hud` 已存在（即已切过星空模式）则 `this.hud.setRoute(route)` + `startAnim()`——**入场描画 vs 增量推进的判定在内核 `setRoute` 内部**（按是否已有采样路径区分，`.qoder/frontend/utils/hudMap.js.md` §4.2），本页不再持有 `prevProgress`/`nodeIndex`/`progressAnim`。L7 叠加数据不在此处刷新（走 `loadOverlay`，§4.9）。
 - **进度换算已迁出**：`calcRouteProgress`/`currentRatio` 现为内核方法（`hud.calcRouteProgress`/`hud.currentRatio`），automator 经 `page.hud` 断言（`frontend/test/automator/p0-march.cjs` P0M-02~04）。
 
-### 4.5 实景地图模式（`:344-499`）
+### 4.5 实景地图模式（`:409-564`）
 
-`buildMapData(route)`（`:344-445`）产出 `<map>` 组件数据，坐标取后端下发的 `node.latitude/longitude`（`:346-349`，**无前端硬编码坐标表**，见 §8.7）：
+`buildMapData(route)`（`:409-510`）产出 `<map>` 组件数据，坐标取后端下发的 `node.latitude/longitude`（`:411-414`，**无前端硬编码坐标表**，见 §8.8）：
 
-- **已完成轨迹 `donePts`**（`:353-371`）：逐节点累计（`cur >= targets[i]` 即收入），当前目标段内按步数比例线性插值出旗帜位置。
-- **节点 markers**（`:379-397`）：每节点 16×16 默认图标 + `callout` 点击气泡（`display:'BYCLICK'`，completed ★金 / current ◎红 / unlocked ○灰三套配色 `:374-378`）；注释说明用点击气泡替代常驻 label，避免密集点位名称错位/重叠（`:373`）。
-- **进度旗帜 marker**（`:400-419`）：未完成且有已行进段时追加 `id: 999` 的「🚩 我在这里」label marker。
-- **polylines**（`:422-442`）：两条——灰色全程底 `#B9B2A4CC` width 5 + 金色已完成段 `#D4A017` width 7 带描边与箭头（`arrowLine: true`）。
+- **已完成轨迹 `donePts`**（`:418-436`）：逐节点累计（`cur >= targets[i]` 即收入），当前目标段内按步数比例线性插值出旗帜位置。
+- **节点 markers**（`:444-462`）：每节点 16×16 默认图标 + `callout` 点击气泡（`display:'BYCLICK'`，completed ★金 / current ◎红 / unlocked ○灰三套配色 `:439-443`）；注释说明用点击气泡替代常驻 label，避免密集点位名称错位/重叠（`:438`）。
+- **进度旗帜 marker**（`:465-484`）：未完成且有已行进段时追加 `id: 999` 的「🚩 我在这里」label marker。
+- **polylines**（`:487-507`）：两条——灰色全程底 `#B9B2A4CC` width 5 + 金色已完成段 `#D4A017` width 7 带描边与箭头（`arrowLine: true`）。
 
 其余函数：
 
-- `playViewAnim()`（`:450-464`）：镜头俯冲两段式——先重置全国视野（lat 34.5 / lng 108.5 / scale 4，`:452-457`），`_viewTimer` 700ms 后 `setData includePoints` 收缩到全部节点包络（`:458-463`）。
-- `handleMarkerTap`（`:470-481`）：点 marker 只选中节点并刷信息卡主题（不跳转，`:466-469` 注释），`nodeThemes.getNodeTheme/themeSoftStyle` 生成柔和主题样式与环境描述（`:475-480`）。
-- `handleCalloutTap`（`:486-490`）：点气泡直达 `node-detail?id=`。
-- `goSelectedDetail`（`:495-499`）：信息卡「查看详情」按钮。
-- 三个事件对 id=999 旗帜均忽略（`:472`、`:488`），且**不校验节点状态**——未解锁节点同样可选中/进详情（不变量 8）。
+- `playViewAnim()`（`:515-529`）：镜头俯冲两段式——先重置全国视野（lat 34.5 / lng 108.5 / scale 4，`:517-522`），`_viewTimer` 700ms 后 `setData includePoints` 收缩到全部节点包络（`:523-528`）。
+- `handleMarkerTap`（`:535-546`）：点 marker 只选中节点并刷信息卡主题（不跳转，`:531-534` 注释），`nodeThemes.getNodeTheme/themeSoftStyle` 生成柔和主题样式与环境描述（`:540-545`）。
+- `handleCalloutTap`（`:551-555`）：点气泡直达 `node-detail?id=`。
+- `goSelectedDetail`（`:560-564`）：信息卡「查看详情」按钮。
+- 三个事件对 id=999 旗帜均忽略（`:537`、`:553`），且**不校验节点状态**——未解锁节点同样可选中/进详情（不变量 8）。
 
 ### 4.6 Canvas 星空模式：页面侧只剩建内核与 rAF
 
-- **Canvas 类型（实测）**：WXML `<canvas type="2d" id="routeMap">`（`march.wxml:83-91`）；`initCanvas()`（`:503-524`）用 `wx.createSelectorQuery().select('#routeMap').fields({node:true,size:true})` 取节点后 `node.getContext('2d')`（`:504-516`），即 **Canvas 2D 新接口**，非旧版 `wx.createCanvasContext`（与 `.qoder/frontend/utils/routeCanvas.js.md` §4 的核实结论一致）。dpr 取 `wx.getSystemInfoSync().pixelRatio || 2`（`:511`），画布物理尺寸 = CSS 尺寸 × dpr 并 `ctx.scale(dpr,dpr)`（`:513-517`）。
-- **建内核**：`this.canvas = node` 后 `this.hud = hudMap.createHudMap({ ctx, cw: width, ch: height, dpr })`（`:519-520`），已有路线则 `hud.setRoute(this.routeData)`（`:521`，首次建内核 ⇒ 内核内 `path` 为空 ⇒ 全量重建+入场描画），再 `startAnim()`（`:522`）。
-- **`initCanvas` 的唯一调用点是 `switchMode`**（`:326`）：默认 real 模式不进 Canvas。`switchMode`（`:319-339`）先 `stopAnim()`（`:323`）；切到 canvas 走 `initCanvas`；切回 real 时在 setData 回调里 `hud.dispose()` + `hud = null` + `canvas = null`（`:331-335`）——**释放画布上下文、离屏静态层与光晕精灵**（`<canvas>` 节点已被 `wx:else` 移除），随后用最新路线 `renderRoute` 重建实景 markers（`:336`）并播镜头动画（`:337`）。
-- **rAF 循环留在页面**：`startAnim()`（`:529-542`）先 `stopAnim()` 防双链；循环体每帧 `this.hud.draw(Date.now()/1000)`（`:534`），续帧优先 `canvas.requestAnimationFrame`（Canvas 2D 节点级 rAF，`:535-536`），不可用时降级 `setTimeout(loop,16)`（`:538`）。`stopAnim()`（`:544-551`）置 `running=false`、`cancelAnimationFrame` + `clearTimeout` 双清、句柄置 undefined。**只在星空模式且页面前台时运转**：onHide/onUnload/switchMode/startAnim 四处都调 stopAnim（`:125`、`:135`、`:323`、`:530`）。
-- **绘制管线全在内核**：静态 scenery 离屏烘焙、星空三层、区域粒子、金轨+彗尾、三态节点、进度旗、点亮动画、观景钳制与命中逆变换——逐函数见 `.qoder/frontend/utils/hudMap.js.md` §4.5–§4.8。重绘时机：星空模式+页面前台由 rAF 持续逐帧；数据变化不直接触发重绘（`renderRoute` 只写 `routeData`/调 `hud.setRoute`，由下一帧 `draw` 自然读取）；real 模式无 Canvas 绘制。画布尺寸固定 750×860rpx（`march.wxss:126-130`），无 resize/scroll 监听。
+- **Canvas 类型（实测）**：WXML `<canvas type="2d" id="routeMap">`（`march.wxml:83-91`）；`initCanvas()`（`:568-591`）用 `wx.createSelectorQuery().select('#routeMap').fields({node:true,size:true})` 取节点后 `node.getContext('2d')`（`:569-581`），即 **Canvas 2D 新接口**，非旧版 `wx.createCanvasContext`（与 `.qoder/frontend/utils/routeCanvas.js.md` §4 的核实结论一致）。dpr 取 `wx.getSystemInfoSync().pixelRatio || 2`（`:576`），画布物理尺寸 = CSS 尺寸 × dpr 并 `ctx.scale(dpr,dpr)`（`:578-582`）。
+- **建内核**：`this.canvas = node` 后 `this.hud = hudMap.createHudMap({ ctx, cw: width, ch: height, dpr })`（`:584-585`），已有路线则 `hud.setRoute(this.routeData)`（`:586`，首次建内核 ⇒ 内核内 `path` 为空 ⇒ 全量重建+入场描画），**S4 另把 last-good 的 `_overlayStats` 立即回灌** `hud.setStats`（`:588`，切回星空模式先出上次数值再由 `loadOverlay` 刷新），再 `startAnim()`（`:589`）。
+- **`initCanvas` 的唯一调用点是 `switchMode`**（`:390`）：默认 real 模式不进 Canvas。`switchMode`（`:383-404`）先 `stopAnim()`（`:387`）；切到 canvas 走 `initCanvas` + `loadOverlay()`（`:390-391`）；切回 real 时在 setData 回调里 `hud.dispose()` + `hud = null` + `canvas = null`（`:394-400`）——**释放画布上下文、离屏静态层与光晕精灵**（`<canvas>` 节点已被 `wx:else` 移除），随后用最新路线 `renderRoute` 重建实景 markers（`:401`）并播镜头动画（`:402`）。
+- **rAF 循环留在页面**：`startAnim()`（`:596-609`）先 `stopAnim()` 防双链；循环体每帧 `this.hud.draw(Date.now()/1000)`（`:601`），续帧优先 `canvas.requestAnimationFrame`（Canvas 2D 节点级 rAF，`:602-603`），不可用时降级 `setTimeout(loop,16)`（`:605`）。`stopAnim()`（`:611-618`）置 `running=false`、`cancelAnimationFrame` + `clearTimeout` 双清、句柄置 undefined。**只在星空模式且页面前台时运转**：onHide/onUnload/switchMode/startAnim 四处都调 stopAnim（`:133`、`:144`、`:387`、`:597`）。
+- **绘制管线全在内核**：静态 scenery 离屏烘焙、星空三层、区域粒子、金轨+彗尾、三态节点、进度旗、点亮动画、L7 数据叠加层、L8 飞线、观景钳制与命中逆变换——逐函数见 `.qoder/frontend/utils/hudMap.js.md` §4.5–§4.9。重绘时机：星空模式+页面前台由 rAF 持续逐帧；数据变化不直接触发重绘（`renderRoute` 只写 `routeData`/调 `hud.setRoute`，`loadOverlay` 只调 `hud.setStats`，均由下一帧 `draw` 自然读取）；real 模式无 Canvas 绘制。画布尺寸固定 750×860rpx（`march.wxss:126-130`），无 resize/scroll 监听。
 
-### 4.7 星空全景手势（§13.4，`:558-644`）
+### 4.7 星空全景手势（§13.4，`:625-711`）
 
-pan/pinch 手势数学属事件层、留在本页；**观景变换 `view` 由内核持有**，改写后必须调 `hud.clampView()`（`:553-556` 区块注释）：
+pan/pinch 手势数学属事件层、留在本页；**观景变换 `view` 由内核持有**，改写后必须调 `hud.clampView()`（`:620-623` 区块注释）：
 
-- `onMapTouchStart`（`:558-577`）：单指建 pan 手势（记起点/当前偏移/时间，偏移初值读 `hud.view.ox/oy`），双指建 pinch（记初始指距/`hud.view.scale`/中心锚点）；`!this.hud` 直接返回。
-- `onMapTouchMove`（`:579-615`）：pan 位移超 6px 判 moved 后写 `v.ox/v.oy` + `hud.clampView()`（`:588-593`）；pinch 以双指中心为锚点缩放（保持锚点场景坐标不动，`:605-612`）+ `hud.clampView()`（`:613`）；单指转双指时重新锚定基准避免跳变（`:596-604`）。
-- `onMapTouchEnd`（`:617-634`）：干净单指轻点（未移动且 <350ms）→ 300ms 内二连击 `hud.resetView()`（`:626-629`），否则 `hitNode`（`:632`）。
-- `hitNode`（`:640-644`）：委托 `hud.hitTest(sx, sy)`（屏幕→场景逆变换与命中半径 22/scale 在内核），命中即 `navigateTo node-detail?id=`——含未解锁节点（`:636-639` 注释，不变量 8）。
+- `onMapTouchStart`（`:625-644`）：单指建 pan 手势（记起点/当前偏移/时间，偏移初值读 `hud.view.ox/oy`），双指建 pinch（记初始指距/`hud.view.scale`/中心锚点）；`!this.hud` 直接返回。
+- `onMapTouchMove`（`:646-682`）：pan 位移超 6px 判 moved 后写 `v.ox/v.oy` + `hud.clampView()`（`:656-660`）；pinch 以双指中心为锚点缩放（保持锚点场景坐标不动，`:672-679`）+ `hud.clampView()`（`:680`）；单指转双指时重新锚定基准避免跳变（`:663-671`）。
+- `onMapTouchEnd`（`:684-701`）：干净单指轻点（未移动且 <350ms）→ 300ms 内二连击 `hud.resetView()`（`:693-696`），否则 `hitNode`（`:699`）。
+- `hitNode`（`:707-711`）：委托 `hud.hitTest(sx, sy)`（屏幕→场景逆变换与命中半径 22/scale 在内核），命中即 `navigateTo node-detail?id=`——含未解锁节点（`:703-706` 注释，不变量 8）。
 
 ### 4.8 节点点亮动画链与完成仪式
 
-**点亮链（步数同步 → light-up → 弹窗 → 重绘）**：首页或本页 `handleSyncSteps` 同步步数落库（`.qoder/frontend/services/sport.js.md`）→ 本页 onShow/下拉/同步后 `refresh()` 调 `POST /march/light-up`（后端幂等判定与 `newlyLit/newlyCompletedChapters/newMedals` 三段返回见 `.qoder/backend/app/api/routes/march.py.md` §4.3）→ `playArriveIfNeeded()`（`:244-256`）：开场期间暂缓由 `dismissIntro` 补播（`:246`）；消费并清空 `_pendingLit/_pendingChapters`（`:247-250`）；有内核时 `this.hud.playArrive(lit.map(n => n.id))` 触发星空点亮动画（`:253`）；`this._popupMs = arrivePopup.playArriveQueue(this, lit, chapters)`（`:255`，队列播放器写 `data.litPopup` 与 `page.popupTimer`，返回总时长，`.qoder/frontend/utils/arrivePopup.js.md` §4.3）。粒子预生成与四阶段绘制在内核（`.qoder/frontend/utils/hudMap.js.md` §4.7）。
+**点亮链（步数同步 → light-up → 弹窗 → 重绘）**：首页或本页 `handleSyncSteps` 同步步数落库（`.qoder/frontend/services/sport.js.md`）→ 本页 onShow/下拉/同步后 `refresh()` 调 `POST /march/light-up`（后端幂等判定与 `newlyLit/newlyCompletedChapters/newMedals` 三段返回见 `.qoder/backend/app/api/routes/march.py.md` §4.3）→ `playArriveIfNeeded()`（`:308-320`）：开场期间暂缓由 `dismissIntro` 补播（`:310`）；消费并清空 `_pendingLit/_pendingChapters`（`:311-314`）；有内核时 `this.hud.playArrive(lit.map(n => n.id))` 触发星空点亮动画（`:317`）；`this._popupMs = arrivePopup.playArriveQueue(this, lit, chapters)`（`:319`，队列播放器写 `data.litPopup` 与 `page.popupTimer`，返回总时长，`.qoder/frontend/utils/arrivePopup.js.md` §4.3）。粒子预生成与四阶段绘制在内核（`.qoder/frontend/utils/hudMap.js.md` §4.7）。
 
-- **完成仪式（§20）`maybeStartCeremony(route)`（`:212-228`）**，逐步：
-  1. 触发条件：后端 `GET /march/route` 下发 `ceremonyPending=true`（全部点亮且未观看时才有，`.qoder/backend/app/api/routes/march.py.md` §4.4），否则直接 return（`:213`）。
-  2. 开场播放中 → 存入 `_ceremonyRoute` 顺延，由 `dismissIntro` 再触发（`:214-217`、`:112-116`）。
-  3. `_ceremonyStarted` 或 `_ceremonyTimer` 已存在则不重复安排（`:220`）；定时器被 onHide 取消（切 tab）时允许下次 onShow 经 refresh 重新安排（`:218-219` 注释）。
-  4. 延时 = 抵达卡队列总时长 `_popupMs`（消费后置 0，`:221-222`），保证 §20.2「事件卡队列播完再进仪式」。
-  5. 到点置 `_ceremonyStarted=true` 并 `wx.navigateTo('/pages/ceremony/ceremony')`（`:223-227`）——**本页生命周期内只自动触发一次**（`:210` 注释，用户中途返回不循环跳转；tab 页常驻不 unload，故返回后不再自动跳）。
+- **完成仪式（§20）`maybeStartCeremony(route)`（`:276-292`）**，逐步：
+  1. 触发条件：后端 `GET /march/route` 下发 `ceremonyPending=true`（全部点亮且未观看时才有，`.qoder/backend/app/api/routes/march.py.md` §4.4），否则直接 return（`:277`）。
+  2. 开场播放中 → 存入 `_ceremonyRoute` 顺延，由 `dismissIntro` 再触发（`:278-281`、`:119-123`）。
+  3. `_ceremonyStarted` 或 `_ceremonyTimer` 已存在则不重复安排（`:284`）；定时器被 onHide 取消（切 tab）时允许下次 onShow 经 refresh 重新安排（`:282-283` 注释）。
+  4. 延时 = 抵达卡队列总时长 `_popupMs`（消费后置 0，`:285-286`），保证 §20.2「事件卡队列播完再进仪式」。
+  5. 到点置 `_ceremonyStarted=true` 并 `wx.navigateTo('/pages/ceremony/ceremony')`（`:287-291`）——**本页生命周期内只自动触发一次**（`:274` 注释，用户中途返回不循环跳转；tab 页常驻不 unload，故返回后不再自动跳）。
   6. 已观看标记由仪式页调 `markCeremony` 向后端落库（`.qoder/frontend/services/march.js.md` §4.5），本页只消费 `ceremonyPending` 不写入。
-- `goCeremony()`（`:233-236`）：`finished` 时头部横幅（`march.wxml:38`）手动进仪式页复看（§20.4）。
+- `goCeremony()`（`:297-300`）：`finished` 时头部横幅（`march.wxml:38`）手动进仪式页复看（§20.4）。
+
+### 4.9 实时数据叠加层的页面侧（S4，`:148-197`）
+
+L7/L8 的绘制全在内核（`.qoder/frontend/utils/hudMap.js.md` §4.8），本页只负责「取数 + 归一化 + 注入 + WS 生命周期」三件事：
+
+- **`loadOverlay()`（`:175-197`）**：唯一取数入口。① **模式守卫**：`data.mode !== 'canvas'` 直接 `Promise.resolve()`（`:176`）——实景模式没有消费方，不产生任何请求；② 记 `_statsAt = Date.now()` 作节流基准（`:177`，**在请求发出前就写**，故并发/失败也占用一个节流窗口）；③ `Promise.all([march.getRouteStats(), broadcast.getToday()])`（`:178`，两个聚合接口并发）；④ 合并归一化为 `_overlayStats = { todayUsers, todayLit: global.todayLitCount, todaySteps, litMap }`（`:186-191`，`litMap[nodeId] = { nodeId, litCount, completionRate }` 由 `route-stats` 的 `nodes` 数组转 map），再 `hud.setStats(this._overlayStats)`（`:192`，内核在注入时一次性格式化，见 hudMap 文档 §4.8）；⑤ `.catch` 静默（`:194-196`）：失败**不清空**内核已注入的数据（last-good），首次即失败则内核显示 `--`。
+- **三个触发点**：`refresh()` 开头非阻塞触发（`:206`）、`switchMode` 切到 canvas 时（`:391`）、WS `data_changed` 节流后（`:164`）。`initCanvas` 不取数、只回灌 last-good（`:588`）。
+- **`handleWsMessage(msg)`（`:159-168`）**：`data_changed` → 距上次 `_statsAt` 不足 `STATS_THROTTLE`（5000ms，`:21`）直接丢弃，否则 `loadOverlay()`（`:161-166`）——**刻意不重拉 `/march/route`**，他人数据变更不该重绘自己的路线；`activity` 且带 `nodeId` 且有内核 → `hud.playFlyLine(msg.nodeId)`（`:167`），**纯绘制反馈、不发任何请求**；其它消息类型忽略。
+- **订阅生命周期**：`onShow` 订阅（`:75`）、`onHide`/`onUnload` 经 `unsubscribeWs()` 退订（`:128`、`:138`、`:148-152`）。切 tab 再回来会重新订阅，`ws.subscribe` 幂等由 `_wsUnsub` 是否持有保证。
+- **WS 消息契约**：`type` 与 `nodeId`（camelCase）由后端 `app/core/ws.py` 的 `build_event`/`build_activity` 决定（`.qoder/backend/app/core/ws.py.md`、`.qoder/frontend/services/ws.js.md`）；本页只认这两个字段，不解析 payload 其余部分。
 
 ## 4-1. WXML 专章（`march.wxml`，140 行）
 
@@ -152,82 +165,88 @@ pan/pinch 手势数学属事件层、留在本页；**观景变换 `view` 由内
 
 keyframes 归属：本文件自定义 `pulseRed`（`:332-335`）、`litFadeIn`（`:407-410`）、`introFadeOut`（`:528-530`）、`veilOut`（`:545-548`）；引用的 `fadeUp/popIn/spinIn/cardIn/pulseGlow` 定义在全局 `frontend/app.wxss`（实测 `app.wxss:169-242` 存在同名 keyframes）。注意 `pulseRed` 在 `app.wxss:242` 也有定义，页面样式后加载生效（页面内以本文件 `:332-335` 为准）。
 
-## 4-3. JSON 专章（`march.json`，5 行）
+## 4-3. JSON 专章（`march.json`，6 行）
 
-仅 3 项页面配置：`navigationBarTitleText: "长征路线"`、`navigationBarBackgroundColor: "#C8102E"`、`navigationBarTextStyle: "white"`（`march.json:2-4`）。无 `usingComponents`（页面不用自定义组件）、无 `disableScroll`；`enablePullDownRefresh` 由页面 `onPullDownRefresh`（`march.js:173-175`）配合——**注意 json 仅 3 项配置，下拉刷新实际依赖全局或后续配置，实读 json 未见 `enablePullDownRefresh` 键，若下拉不生效先查此处**。页面注册与 tabBar 配置在 `frontend/app.json`，符合 `frontend/AGENTS.md` §5.3「page.json 只声明页面自己的配置」。
+4 项页面配置：`navigationBarTitleText: "长征路线"`、`navigationBarBackgroundColor: "#C8102E"`、`navigationBarTextStyle: "white"`（`march.json:2-4`）、`enablePullDownRefresh: true`（`:5`，`53f2d62` 与页面 `onPullDownRefresh` 同批加入，配合 `march.js:237-239`）。无 `usingComponents`（页面不用自定义组件）、无 `disableScroll`。页面注册与 tabBar 配置在 `frontend/app.json`，符合 `frontend/AGENTS.md` §5.3「page.json 只声明页面自己的配置」。
+
+（本文档曾记「json 仅 3 项配置、未见 `enablePullDownRefresh`」，2026-10-19 实读 `march.json` 更正：该键自 `53f2d62` 起存在，下拉刷新配置完整；原 §9 第 8 条待确认项随之关闭。）
 
 ## 5. 输入与输出
 
-**`data` 状态字段（按关注点分组，`:30-59`）**：
+**`data` 状态字段（按关注点分组，`:36-65`）**：
 
 | 分组 | 字段 | 说明 |
 |---|---|---|
-| 路线/进度 | `nodes`、`currentSteps`、`totalSteps`、`litCount`、`totalCount`、`finished`、`currentChapter` | 由 `renderRoute` 的 patch 一次性 setData（`:271-281`）；`nodes` 为 `toViewNode` 裁剪后的 6 字段视图对象 |
-| 实景地图 | `mode`（'real'/'canvas'）、`mapLat`/`mapLng`/`mapScale`（初始 34.5/108.5/4）、`includePoints`、`markers`、`polylines`、`selectedNode`、`selectedThemeStyle`、`selectedThemeEnv` | 仅 real 模式消费；`selectedTheme*` 为 §12 区域氛围内联样式/文案 |
+| 路线/进度 | `nodes`、`currentSteps`、`totalSteps`、`litCount`、`totalCount`、`finished`、`currentChapter` | 由 `renderRoute` 的 patch 一次性 setData（`:335-345`）；`nodes` 为 `toViewNode` 裁剪后的 6 字段视图对象 |
+| 实景地图 | `mode`（'real'/'canvas'）、`mapLat`/`mapLng`/`mapScale`（初始 34.5/108.5/4）、`includePoints`、`markers`、`polylines`、`selectedNode`、`selectedThemeStyle`、`selectedThemeEnv` | 仅 real 模式消费；`selectedTheme*` 为 §12 区域氛围内联样式/文案；`mode` 同时是 L7 取数的守卫条件（`:176`） |
 | 动画/弹层 | `showIntro`、`showVeil`、`litPopup` | 开场/纱幕/抵达卡；`litPopup` 由 arrivePopup 模块经 `setData` 写入 |
-| 就地同步 | `syncing` | B6 同步锁（`:57-58`、`:183-184`、`:203`） |
+| 就地同步 | `syncing` | B6 同步锁（`:63-64`、`:247-248`、`:267`） |
+
+**S4 的 L7/L8 数据不进 `data`**：全员统计与飞线态都是绘制态，直接注入内核（`hud.setStats`/`hud.playFlyLine`），不 `setData`、不触发 WXML 重渲染。
 
 **实例属性（非 data、不走 setData，均挂 Page 实例）**：
 
 | 分组 | 属性 | 写入点 |
 |---|---|---|
-| 路线快照 | `routeData` | `renderRoute` `:264`（实景分支与列表消费；星空绘制读内核 `hud.route`） |
-| Canvas 基础 | `canvas`、`hud`（渲染内核实例） | `initCanvas` `:519-520`；`switchMode` 切回 real 时 `hud.dispose()` 后置 null `:331-335` |
-| 手势 | `_gesture`、`_lastTap` | `:563/:598`、`:626-631` |
-| 动画态 | `animId`、`running` | §4.1 盘点表 #6（rAF 链在页面；`arriveFx`/`progressAnim` 在内核） |
+| 路线快照 | `routeData` | `renderRoute` `:328`（实景分支与列表消费；星空绘制读内核 `hud.route`） |
+| Canvas 基础 | `canvas`、`hud`（渲染内核实例） | `initCanvas` `:584-585`；`switchMode` 切回 real 时 `hud.dispose()` 后置 null `:394-400` |
+| L7/L8（S4） | `_overlayStats`（last-good 归一化数据）、`_statsAt`（节流基准）、`_wsUnsub`（WS 退订函数） | `loadOverlay` `:177`、`:186-192`；`initCanvas` 回灌 `:588`；`onShow` `:75` / `unsubscribeWs` `:148-152` |
+| 手势 | `_gesture`、`_lastTap` | `:630/:665`、`:693-698` |
+| 动画态 | `animId`、`running` | §4.1 盘点表 #6（rAF 链在页面；`arriveFx`/`progressAnim`/`flyLine` 在内核） |
 | 流程态 | `_refreshRequestId`、`_pendingLit`、`_pendingChapters`、`_popupMs`、`_introChecked`、`_viewPlayed`、`_ceremonyStarted`、`_ceremonyRoute` | §4.2、§4.3、§4.8 |
 
-**绘制状态全部在内核实例上**（`view`/`nodePts`/`path`/`farStars`/`stars`/`trailDust`/`regionMotes`/`staticLayer`/`glowGold`/`glowRed`/`_goldGrad`/`_flagGrad`/`_labelW`/`animStart`/`progressAnim`/`arriveFx`），清单见 `.qoder/frontend/utils/hudMap.js.md` §4.1；automator 白盒断言读 `page.hud.*`。
+**绘制状态全部在内核实例上**（`view`/`nodePts`/`path`/`nodePathIdx`/`farStars`/`stars`/`trailDust`/`regionMotes`/`staticLayer`/`glowGold`/`glowRed`/`glowCyan`/`stats`/`flyLine`/`_goldGrad`/`_flagGrad`/`_sweepGrad`/`_scanGrad`/`_labelW`/`_hintW`/`_ringPct`/`_ringText`/`animStart`/`progressAnim`/`arriveFx`），清单见 `.qoder/frontend/utils/hudMap.js.md` §4.1；automator 白盒断言读 `page.hud.*`。
 
-**页面跳转出口**：`node-detail?id=`（4 处：`:489`、`:498`、`:643`、`:652`）、`ceremony`（`:226`、`:235`）、`launch`（未登录 reLaunch，`:63`）。
+**页面跳转出口**：`node-detail?id=`（4 处：`:554`、`:563`、`:710`、`:719`）、`ceremony`（`:290`、`:299`）、`launch`（未登录 reLaunch，`:69`）。
 
-**事件处理一览（WXML 绑定 → js）**：`skipIntro`、`goCeremony`、`switchMode`、`handleMarkerTap`、`handleCalloutTap`、`goSelectedDetail`、`onMapTouchStart/Move/End`、`handleNodeTap`、`handleSyncSteps`。
+**事件处理一览（WXML 绑定 → js）**：`skipIntro`、`goCeremony`、`switchMode`、`handleMarkerTap`、`handleCalloutTap`、`goSelectedDetail`、`onMapTouchStart/Move/End`、`handleNodeTap`、`handleSyncSteps`；非 WXML 入口另有 `onPullDownRefresh`（`:237`）与 WS 回调 `handleWsMessage`（`:159`，经 `ws.subscribe` 注册）。
 
 ## 6. 依赖关系
 
-- **require（`:11-15`，全部 5 个）**：`services/march.js`（`lightUpNodes/getRoute/hasPlayedIntro/markIntroPlayed` 四个函数被调用：`:86`、`:105`、`:147`、`:157`；该服务 8 个导出中本页用 4 个，`.qoder/frontend/services/march.js.md` §4）、`services/sport.js`（`syncToday`，`:186`，B6 就地同步）、`utils/arrivePopup.js`（`playArriveQueue`，`:255`）、`utils/hudMap.js`（`createHudMap`，`:520`；S2 起替代本页原先对 `utils/routeCanvas.js` 的直接依赖——**本页已不再 require routeCanvas**，共享画布纯函数改由内核消费）、`data/node-themes.js`（`getNodeTheme/themeSoftStyle`，`:290-296`、`:475-480`）。
-- **wx API**：`createSelectorQuery`、`getSystemInfoSync`（`:511`）、`reLaunch/navigateTo/setData/setTimeout/showToast`（`:162`、`:191-200`）。
-- **后端路径（经服务层）**：`GET /api/march/route`、`POST /api/march/light-up`（`.qoder/backend/app/api/routes/march.py.md` §4.1）、`POST /api/sport/sync`（经 `sport.syncToday`）。
-- **不依赖**：`services/ws.js`（**本页无 WebSocket 订阅**，`:11-15` 的 require 清单即全部依赖）。
+- **require（`:13-19`，全部 7 个）**：`services/march.js`（`hasPlayedIntro/markIntroPlayed/lightUpNodes/getRoute/getRouteStats` 五个函数被调用：`:93`、`:112`、`:211`、`:221`、`:178`；该服务 9 个导出中本页用 5 个，`.qoder/frontend/services/march.js.md` §4）、`services/sport.js`（`syncToday`，`:250`，B6 就地同步）、`services/broadcast.js`（`getToday`，`:178`，S4 取今日播报全局段）、`services/ws.js`（`subscribe`，`:75`，S4 订阅推送）、`utils/arrivePopup.js`（`playArriveQueue`，`:319`）、`utils/hudMap.js`（`createHudMap`，`:585`；S2 起替代本页原先对 `utils/routeCanvas.js` 的直接依赖——**本页已不再 require routeCanvas**，共享画布纯函数改由内核消费）、`data/node-themes.js`（`getNodeTheme/themeSoftStyle`，`:354-360`、`:540-545`）。
+- **wx API**：`createSelectorQuery`、`getSystemInfoSync`（`:576`）、`reLaunch/navigateTo/setData/setTimeout/showToast`（`:226`、`:255-264`）。
+- **后端路径（经服务层）**：`GET /api/march/route`、`POST /api/march/light-up`、`GET /api/march/route-stats`（`.qoder/backend/app/api/routes/march.py.md` §4.1/§4.6）、`POST /api/sport/sync`（经 `sport.syncToday`）、`GET /api/broadcast/today`（经 `broadcast.getToday`）、WS 推送 `activity`/`data_changed`（`app/core/ws.py`）。
 - **被依赖**：`frontend/app.json` tabBar 注册；无其它页面 require 本页。
 
 ## 7. 业务规则
 
-1. **onShow + refresh**（不变量 1）：每次显隐都重走 light-up → route 链；`_refreshRequestId` 保证旧响应不覆盖新响应（`:141-160`）。下拉刷新与就地同步复用同一 `refresh()`（`:174`、`:197`）。
-2. **登录守卫**：onShow 检查 `app.globalData.loggedIn`，未登录 reLaunch 启动页（`:62-65`）。
+1. **onShow + refresh**（不变量 1）：每次显隐都重走 light-up → route 链；`_refreshRequestId` 保证旧响应不覆盖新响应（`:202-224`）。下拉刷新与就地同步复用同一 `refresh()`（`:238`、`:261`）。
+2. **登录守卫**：onShow 检查 `app.globalData.loggedIn`，未登录 reLaunch 启动页（`:68-71`）。
 3. **任意节点可看历史**（不变量 8）：列表点击、Canvas 命中（内核 `hitTest`）、marker 点选、气泡直达四条入口均不拦截未解锁节点。
-4. **轨迹推进分级**（§3.5）：首次渲染播 1400ms 完整入场描画 + 实景镜头俯冲各一次（`_viewPlayed` 防重播，`:106-109`、`:300-303`）；此后步数刷新只做 800ms 增量推进——**判定在内核 `setRoute`**（`.qoder/frontend/utils/hudMap.js.md` §4.2），本页不得自行重播。
-5. **点亮动画只由 light-up 响应驱动**：已点亮节点点击仅看详情、不重播动画（`:242` 注释）；触发经 `hud.playArrive`（`:253`）。
+4. **轨迹推进分级**（§3.5）：首次渲染播 1400ms 完整入场描画 + 实景镜头俯冲各一次（`_viewPlayed` 防重播，`:113-116`、`:364-367`）；此后步数刷新只做 800ms 增量推进——**判定在内核 `setRoute`**（`.qoder/frontend/utils/hudMap.js.md` §4.2），本页不得自行重播。
+5. **点亮动画只由 light-up 响应驱动**：已点亮节点点击仅看详情、不重播动画（`:306` 注释）；触发经 `hud.playArrive`（`:317`）。L8 飞线则只由 WS `activity` 驱动（`:167`），与自己的点亮动画互不相干。
 6. **两个「仅首次」标记存储位置不同**：开场动画标记在本地 Storage（换设备重播）；完成仪式 `ceremonyPending` 由后端持久化判定（换设备不重播），本页只消费不写入（`.qoder/frontend/services/march.js.md` §7.4）。
-7. **仪式跳转排队规则**（§20.2）：开场动画 > 抵达卡队列 > 仪式跳转，依次顺延（`:214-217`、`:221-222`）；页面生命周期内自动触发仅一次（`:220`、`:225`）。
-8. **跨页脏标记**：light-up 有新点亮/新完成章节、或就地同步成功时置 `app.globalData.homeDirty = true`（`:155`、`:189`），首页 onShow 据此绕过 30s 节流强制刷新。
-9. **性能预算**（§13.4 + 根 `agents.md` §2.4）：星空元素构建期一次性分配、点亮粒子限量、静态层离屏烘焙、渐变与标签宽度缓存均在**内核**（`.qoder/frontend/utils/hudMap.js.md` §7）；本页侧为 setData 负载经 `toViewNode` 裁剪（`:18-27`）。
+7. **仪式跳转排队规则**（§20.2）：开场动画 > 抵达卡队列 > 仪式跳转，依次顺延（`:278-281`、`:285-286`）；页面生命周期内自动触发仅一次（`:284`、`:289`）。
+8. **跨页脏标记**：light-up 有新点亮/新完成章节、或就地同步成功时置 `app.globalData.homeDirty = true`（`:219`、`:253`），首页 onShow 据此绕过 30s 节流强制刷新。
+9. **性能预算**（§13.4 + 根 `agents.md` §2.4）：星空元素构建期一次性分配、点亮粒子限量、静态层离屏烘焙、渐变与标签宽度缓存、L7 数值注入时一次性格式化均在**内核**（`.qoder/frontend/utils/hudMap.js.md` §7）；本页侧为 setData 负载经 `toViewNode` 裁剪（`:24-33`）、L7 数据不进 `data`、WS `data_changed` 5s 节流（`:21`、`:163`）。
 10. **V2.0 积分口径**：点亮不发放积分、抵达卡不含积分字段（`.qoder/frontend/services/march.js.md` §7.2）。
+11. **L7 取数只在星空模式**（S4）：`loadOverlay` 首行即模式守卫（`:176`），实景模式下 WS `data_changed` 与 `refresh` 都不会产生聚合请求；他人数据变更**不重拉 `/march/route`**（`:154-158` 注释），自己的进度只由 refresh/同步步数驱动。
 
 ## 8. 修改约束
 
-1. **不变量 6 的落点已拆分**（`frontend/AGENTS.md` §4）：绘制侧（每帧读 `hud.route`、静态元素只烘焙一次、`_goldGrad/_flagGrad` 与光晕精灵画布重建时重置、离屏 try/catch 禁删）在 `utils/hudMap.js`（`.qoder/frontend/utils/hudMap.js.md` §8）；**本页侧**约束为：切回实景必须 `hud.dispose()` 并置 null（`:331-335`）、改写 `hud.view` 后必须 `hud.clampView()`（`:592`、`:613`）、rAF 循环的 onHide/onUnload 清理不得移除（`:125`、`:135`）。
-2. `popupTimer` / `data.litPopup` 属性名是与 arrivePopup 模块的清理契约（`.qoder/frontend/utils/arrivePopup.js.md` §8.2），onHide/onUnload 按此名 clearTimeout（`:122`、`:131`）。
+1. **不变量 6 的落点已拆分**（`frontend/AGENTS.md` §4）：绘制侧（每帧读 `hud.route`、静态元素只烘焙一次、`_goldGrad/_flagGrad` 与光晕精灵画布重建时重置、离屏 try/catch 禁删）在 `utils/hudMap.js`（`.qoder/frontend/utils/hudMap.js.md` §8）；**本页侧**约束为：切回实景必须 `hud.dispose()` 并置 null（`:394-400`）、改写 `hud.view` 后必须 `hud.clampView()`（`:659`、`:680`）、rAF 循环的 onHide/onUnload 清理不得移除（`:133`、`:144`）。
+2. `popupTimer` / `data.litPopup` 属性名是与 arrivePopup 模块的清理契约（`.qoder/frontend/utils/arrivePopup.js.md` §8.2），onHide/onUnload 按此名 clearTimeout（`:130`、`:140`）。
 3. `routeCanvas` 返回结构 `{path,dist,len,nodePathIndex}` 与 `node-themes` 的 `particleConfig.type` 枚举是跨文件硬契约，消费方现为**内核**（`.qoder/frontend/utils/hudMap.js.md` §8.2/§8.5）；本页不再直接解构，改这些字段不触及本页。
-4. light-up/route 响应字段（`newlyLit/newlyCompletedChapters/routeProgress/chapters/currentChapterId/ceremonyPending/finished/_fromCache`）是后端 camelCase 契约（`.qoder/backend/app/api/routes/march.py.md` §8.2），增删须双端同步。
+4. light-up/route 响应字段（`newlyLit/newlyCompletedChapters/routeProgress/chapters/currentChapterId/ceremonyPending/finished/_fromCache`）是后端 camelCase 契约（`.qoder/backend/app/api/routes/march.py.md` §8.2），增删须双端同步；S4 新增的 `route-stats` 字段（`totalUsers/nodes[].nodeId/litCount/completionRate`）与 `broadcast/today` 的 `global.todayUsers/todayLitCount/todaySteps` 同样是双端契约，改动须同步 `loadOverlay` 的归一化（`:186-191`）与内核 `setStats`（hudMap 文档 §8.8）。
 5. `<map>` 的 `polyline` 属性名、`wx:key="id"`、WXML 禁原生方法调用等遵守 `frontend/AGENTS.md` §5.2。
-6. 新增定时器/动画必须同时挂入 onHide 与 onUnload 清理（本页既有 5 个定时器 + 1 个 rAF 链全部双清，`_veilTimer` 例外见 §9 第 1 条，勿再扩大例外）。
-7. **automator 断言口径**：四个套件（`p0-march`/`p1-starry-march`/`tabbar-starmap`/`s16-review-smoke`）自 S2 起读 `page.hud.*` 且不留兼容别名；给内核加兼容转发或把绘制状态搬回页面会静默破坏断言。
-8. `frontend/AGENTS.md` §4 不变量 6 提到的「真实经纬度 `NODE_COORDS`」静态坐标表**在现行代码中不存在**（全 `frontend/` grep 零命中；坐标由 `/march/route` 下发，`march.js:346-349`）——该不变量措辞滞后，按代码事实理解，勿据此恢复硬编码坐标。
+6. 新增定时器/动画/订阅必须同时挂入 onHide 与 onUnload 清理（本页既有 5 个定时器 + 1 个 rAF 链 + 1 个 WS 订阅全部双清，`_veilTimer` 例外见 §9 第 1 条，勿再扩大例外）。
+7. **automator 断言口径**：五个套件（`p0-march`/`p1-starry-march`/`tabbar-starmap`/`s16-review-smoke`/`hud-overlay`）自 S2 起读 `page.hud.*` 且不留兼容别名；给内核加兼容转发或把绘制状态搬回页面会静默破坏断言。
+8. `frontend/AGENTS.md` §4 不变量 6 提到的「真实经纬度 `NODE_COORDS`」静态坐标表**在现行代码中不存在**（全 `frontend/` grep 零命中；坐标由 `/march/route` 下发，`march.js:411-414`）——该不变量措辞滞后，按代码事实理解，勿据此恢复硬编码坐标。
+9. **WS 订阅与取数不得下沉到内核**（S4）：`services/ws` 只能由本页 require；内核只接受 `setStats(归一化对象)` 与 `playFlyLine(nodeId)`，把 WS 消息对象或接口响应直接丢给内核会击穿「内核不认协议形状」的边界（hudMap 文档 §8.8）。
 
 ## 9. 当前实现状态
 
-- **已实现**：双模式地图、开场动画、章节卡、抵达卡队列、星空点亮动画与全景手势（绘制在内核）、完成仪式触发、增量轨迹推进、并发刷新守卫、下拉刷新与就地同步行军步数（B6）；提交演进见 §10。
+- **已实现**：双模式地图、开场动画、章节卡、抵达卡队列、星空点亮动画与全景手势（绘制在内核）、完成仪式触发、增量轨迹推进、并发刷新守卫、下拉刷新与就地同步行军步数（B6）、**S4 实时数据叠加层的页面侧（WS 订阅 + 双接口合并注入 + last-good 回灌）**；提交演进见 §10。
 - **存在问题 / 已知事项（逐条实读取证）**：
-  1. **`_veilTimer` 未在 `onHide` 清理**：onHide 清了 `_viewTimer/popupTimer/_introTimer/_ceremonyTimer`（`:121-124`）但没有 `_veilTimer`，仅 `onUnload` 清（`:133`）。纱幕 560ms 内切走 tab 时定时器仍会触发一次 `setData({showVeil:false})`（`:88`）——影响极小（单次、幂等），但与本页「定时器双清」惯例不对称，属轻微泄漏点。
-  2. **`stopAnim` 混用两种句柄空间**：`:546-549` 对同一 `animId` 先 `canvas.cancelAnimationFrame` 再 `clearTimeout`——rAF 句柄传给 clearTimeout（或反之）是无效操作但无害；现状能正确停链（`running=false` 兜底 `:533`），非缺陷，记录为事实。
+  1. **`_veilTimer` 未在 `onHide` 清理**：onHide 清了 `_viewTimer/popupTimer/_introTimer/_ceremonyTimer`（`:129-132`）但没有 `_veilTimer`，仅 `onUnload` 清（`:142`）。纱幕 560ms 内切走 tab 时定时器仍会触发一次 `setData({showVeil:false})`（`:95`）——影响极小（单次、幂等），但与本页「定时器双清」惯例不对称，属轻微泄漏点。
+  2. **`stopAnim` 混用两种句柄空间**：`:613-616` 对同一 `animId` 先 `canvas.cancelAnimationFrame` 再 `clearTimeout`——rAF 句柄传给 clearTimeout（或反之）是无效操作但无害；现状能正确停链（`running=false` 兜底 `:600`），非缺陷，记录为事实。
   3. **无 `onLoad`**：全部逻辑挂 onShow，首次进入即触发一次完整 light-up + route 请求；属设计选择（tab 页复用），非缺陷。
-  4. `wx.getSystemInfoSync()`（`:511`）为微信已标记废弃的同步接口——现状可用，未迁移 `wx.getWindowInfo` 等新接口，是否迁移**待确认**。
-  5. **WebSocket**：本页不订阅任何 WS 消息（§6），故生产环境 wss 不可用的阻塞问题（已登记为 `.qoder/PROJECT.md` §8「阻塞级 / 功能不可用」第 1 项与第 2 项）**不影响本页**；路线渲染与完成仪式链路全部走 REST。（S4 计划在本页订阅 WS 做实时叠加，届时本条失效。）
+  4. `wx.getSystemInfoSync()`（`:576`）为微信已标记废弃的同步接口——现状可用，未迁移 `wx.getWindowInfo` 等新接口，是否迁移**待确认**。
+  5. **WebSocket（S4 起本页已订阅）**：本页在星空模式消费 `activity`/`data_changed` 两类推送（§4.9）。生产环境 wss 不可用的阻塞问题（登记于 `.qoder/PROJECT.md` §8「阻塞级 / 功能不可用」第 1、2 项）**会影响 L7/L8 的实时性**（飞线不出现、全员数据只能靠 refresh 触发的一次性拉取），但**不影响路线主链**——`/march/route`、light-up、完成仪式全部走 REST。
   6. 抵达卡弹层无点击关闭绑定（`march.wxml:17-32` 遮罩层无 bindtap），只能等队列自动播完——现状行为，是否符合预期**待确认**。
   7. **`map-hint` 原生层遮挡已于 S3 修复（`835f46f`）**：`<canvas type="2d">` 是开发者工具中的不透明原生层、位于 DOM 之上且 `visibility` 无效；现 `march.wxml:97` 的 DOM 提示条加 `wx:if="{{mode === 'real'}}"` 只留实景模式，星空模式的操作提示由内核 `hud.drawHudHint` 画进画布（视口固定），缺陷关闭。
-  8. **`march.json` 未见 `enablePullDownRefresh`**（§4-3）：`onPullDownRefresh` 已实现（`:173-175`）但页面配置仅 3 项，下拉刷新是否真能触发**待实测确认**。
-- **待开发**：S4 实时数据叠加层 + WS 飞线、S5 帧率自适应降级（方案已排期，尚未实现——勿当作既有功能引用）。S3 深空 HUD 视觉重构（L0~L6，含 `map-hint` 入画布）已于 2026-10-19 `835f46f` 完成，勿再当待办引用。
+  8. **L7/L8 的端到端链路未在真机验证**：S4 只做了页面分支白盒断言（`hud-overlay.cjs` OV-07/OV-08/OV-09）与直接调 `playFlyLine` 的视觉验证；WS `activity` 由第二个客户端点亮触发、以及生产 wss 下的表现，留待 S5 真机验收。
+- **待开发**：S5 帧率自适应降级 + 真机验收（方案已排期，尚未实现——勿当作既有功能引用）。S3 深空 HUD 视觉重构（`835f46f`）与 S4 实时叠加层（`5b26b07`）均已于 2026-10-19 完成，勿再当待办引用。
 
 ## 10. 迭代记录
 
