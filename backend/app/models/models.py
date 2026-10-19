@@ -685,7 +685,8 @@ class AiUsageLog(Base):
 
     feature: chat / route_guide / quiz_explanation / question_gen。
     status: success / error。day_key 为北京时间当日 YYYY-MM-DD（helpers.today_str）。
-    used_tokens 为平台原值，未报告为空；model 暂存 Agent ID（底层模型名需控制台确认）。
+    used_tokens 取 usage.total_tokens（输入+输出，与按量计费口径一致），未报告为空；
+    model 记录实际调用的模型名（settings.LLM_MODEL）。
     """
 
     __tablename__ = "ai_usage_logs"

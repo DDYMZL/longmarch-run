@@ -7,7 +7,7 @@ S25 AI 智能出题 冒烟脚本（TestClient + SQLite 临时库，不依赖 801
   A02 Excel 预览 + 确认导入未受影响（回归）
   A03 生成接口参数校验：空主题 / 题型非单选 / 难度非法 / 分类非法 / 数量越界
   A04 鉴权：未登录 401、无 questions 菜单的管理员 403（生成与保存均拦）
-  A05 Agent 故障映射：超时 / 鉴权失败 / 服务异常 / 回复截断 / 无效 JSON
+  A05 模型故障映射：超时 / 鉴权失败 / 服务异常 / 回复截断 / 无效 JSON
   A06 输出容错：Markdown 代码围栏与前后多余文本仍能解析
   A07 逐题问题识别：答案不在选项 / 选项不足 / 题干为空 / 与库内重复 / 批内重复
   A08 生成结果为草稿，不写入正式题库
@@ -15,15 +15,15 @@ S25 AI 智能出题 冒烟脚本（TestClient + SQLite 临时库，不依赖 801
   A10 批量保存重复题拦截（库内重复 + 批内重复）
   A11 批量保存空列表 400
   A12 保存后题库列表可查到，字段与 Excel 导入题目同构
-  A13 任何响应都不泄露 CLOUDBASE_API_KEY
-  A14 真实调用 Agent：生成 10 道单选题，结构与答案格式合规
-  A15 真实调用 Agent：生成 50 道题，分批处理长响应无批次失败
+  A13 任何响应都不泄露 LLM_API_KEY
+  A14 真实调用模型：生成 10 道单选题，结构与答案格式合规
+  A15 真实调用模型：生成 50 道题，分批处理长响应无批次失败
   A16 小程序答题契约不受影响：下发 camelCase 且不含 answer/analysis
 
 用法：
   cd backend
   # 本机 DNS 不可用时，用 DoH 查到的 IP 建立测试专用映射（不影响生产代码）
-  set LM_TEST_DNS_MAP=longmarch-run-d5gp70nsd0d2ca307.api.tcloudbasegateway.com=81.69.138.235
+  set LM_TEST_DNS_MAP=dashscope.aliyuncs.com=<ip>
   python test/s25_ai_question_generate.py
   # 跳过耗时的 50 题真实生成：set LM_AI_SKIP_LARGE=1
 """
@@ -65,14 +65,14 @@ from app.models.models import (  # noqa: E402
     User,
 )
 from app.schemas.schemas import QuestionOut  # noqa: E402
-from app.services import cloudbase_service  # noqa: E402
+from app.services import llm_service  # noqa: E402
 
 GENERATE_URL = "/api/admin/ai/generate-questions"
 BATCH_SAVE_URL = "/api/admin/ai/questions/batch-save"
 QUESTIONS_URL = "/api/admin/questions"
 
 RESULTS = []
-API_KEY = settings.CLOUDBASE_API_KEY.strip()
+API_KEY = settings.LLM_API_KEY.strip()
 # 密钥指纹：取首尾片段用于断言响应未泄露，断言输出本身不构成完整密钥
 KEY_HEAD, KEY_TAIL = API_KEY[:16], API_KEY[-16:]
 
@@ -108,7 +108,7 @@ IMPORT_HEADERS = ["题型", "题目内容", "选项A", "选项B", "选项C", "�
 
 
 def fake_item(question, labels=("A", "B", "C", "D"), answer="B", analysis="解析"):
-    """构造一条 Agent 风格的题目元素（type 由 _normalize_item 强制为 single）。"""
+    """构造一条 模型风格的题目元素（type 由 _normalize_item 强制为 single）。"""
     return {
         "type": "single",
         "question": question,
@@ -119,18 +119,18 @@ def fake_item(question, labels=("A", "B", "C", "D"), answer="B", analysis="解�
 
 
 def patch_prompt(monkey, reply=None, exc=None):
-    """把 cloudbase_service.prompt 替换为固定回复或固定异常。"""
+    """把 llm_service.prompt 替换为固定回复或固定异常。"""
     def _fake(text, timeout=None):
         if exc is not None:
             raise exc
         return reply if isinstance(reply, str) else json.dumps(reply, ensure_ascii=False)
-    monkey.append(cloudbase_service.prompt)
-    cloudbase_service.prompt = _fake
+    monkey.append(llm_service.prompt)
+    llm_service.prompt = _fake
 
 
 def restore_prompt(monkey):
     while monkey:
-        cloudbase_service.prompt = monkey.pop()
+        llm_service.prompt = monkey.pop()
 
 
 def no_key_leak(*responses):
@@ -148,12 +148,18 @@ def draft_payload(items):
 
 def main():
     print(f"DNS 映射条目：{_DNS_ENTRIES}（0 表示走系统 DNS）")
-    print(f"CloudBase 配置：env_id={'已配置' if settings.CLOUDBASE_ENV_ID else '缺失'} "
-          f"agent_id={'已配置' if settings.CLOUDBASE_AGENT_ID else '缺失'} "
+    print(f"大模型配置：base_url={'已配置' if settings.LLM_BASE_URL else '缺失'} "
+          f"model={settings.LLM_MODEL or '缺失'} "
           f"api_key={'已配置' if API_KEY else '缺失'}")
     Base.metadata.create_all(engine)
     client = TestClient(app)
     admin_h = {"Authorization": "Bearer " + create_admin_token("s25-smoke")}
+
+    # 打桩用例的 stub 对每一批都返回同一份固定列表，批数一变条数就翻倍、顺序断言随之失效。
+    # 故打桩阶段固定单批，使离线断言与 AI_QUESTION_BATCH_SIZE 这个调优旋钮解耦；
+    # A14/A15 真实调用前恢复，以便真正验证分批行为。
+    real_batch_size = settings.AI_QUESTION_BATCH_SIZE
+    settings.AI_QUESTION_BATCH_SIZE = 1000
 
     # 无 questions 菜单的管理员（仅 dashboard），用于 403 断言
     def _seed_restricted_admin(db):
@@ -232,12 +238,12 @@ def main():
            and r_low.status_code == 403 and r_low_save.status_code == 403,
            f"anon={r_anon.status_code}/{r_anon_save.status_code} restricted={r_low.status_code}/{r_low_save.status_code}")
 
-    # ---------------- A05 Agent 故障映射 ----------------
+    # ---------------- A05 模型故障映射 ----------------
     faults = [
-        ("超时", cloudbase_service.CloudBaseError("AI 生成超时，请减少数量或稍后重试"), 502, "超时"),
-        ("鉴权失败", cloudbase_service.CloudBaseError("AI 服务鉴权失败，请检查 CLOUDBASE_API_KEY 是否有效"), 502, "鉴权"),
-        ("服务不可用", cloudbase_service.CloudBaseError("AI 服务暂时不可用，请稍后重试"), 502, "不可用"),
-        ("回复截断", cloudbase_service.CloudBaseError("AI 回复未正常结束（max_tokens），请减少单次生成数量后重试"), 502, "未正常结束"),
+        ("超时", llm_service.LlmError("AI 生成超时，请减少数量或稍后重试"), 502, "超时"),
+        ("鉴权失败", llm_service.LlmError("AI 服务鉴权失败，请检查 LLM_API_KEY 是否有效"), 502, "鉴权"),
+        ("服务不可用", llm_service.LlmError("AI 服务暂时不可用，请稍后重试"), 502, "不可用"),
+        ("回复截断", llm_service.LlmError("AI 回复未正常结束（max_tokens），请减少单次生成数量后重试"), 502, "未正常结束"),
         ("无效输出", ValueError("AI 返回的 JSON 无法解析，请重试"), 400, "JSON"),
     ]
     fault_detail, fault_ok = [], True
@@ -254,7 +260,7 @@ def main():
             fault_detail[-1] += f"(detail={detail_text[:40]})"
         if not no_key_leak(resp):
             fault_ok = False
-    record("A05", "Agent 故障映射为明确中文提示（超时/鉴权/服务异常/截断/无效 JSON）", fault_ok,
+    record("A05", "模型故障映射为明确中文提示（超时/鉴权/服务异常/截断/无效 JSON）", fault_ok,
            " ".join(fault_detail))
 
     # ---------------- A06 输出容错 ----------------
@@ -289,7 +295,7 @@ def main():
     def errs_at(i):
         return items[i]["errors"] if i < len(items) else ["<草稿缺失>"]
 
-    # 草稿顺序与 Agent 输出顺序一致（单批生成），按序号断言，避免同题干在字典里互相覆盖
+    # 草稿顺序与 模型输出顺序一致（单批生成），按序号断言，避免同题干在字典里互相覆盖
     struct_ok = (len(items) > 6 and items[6]["data"]["question"] == ""
                  and len(items[6]["errors"]) > 0)
     checks = {
@@ -377,7 +383,7 @@ def main():
     r_leak_save = client.post(BATCH_SAVE_URL, headers=admin_h,
                               json={"questions": [fake_item("密钥泄露检查题")]})
     r_leak_list = client.get(QUESTIONS_URL, headers=admin_h)
-    record("A13", "生成/保存/列表响应均不泄露 CLOUDBASE_API_KEY",
+    record("A13", "生成/保存/列表响应均不泄露 LLM_API_KEY",
            no_key_leak(r_leak, r_leak_save, r_leak_list, r_messy, r_save),
            f"key_configured={bool(API_KEY)} checked=5 responses")
 
@@ -390,16 +396,23 @@ def main():
            and all(set(o.keys()) == {"label", "text"} for o in dumped.get("options", [])),
            f"keys={sorted(dumped.keys())}")
 
-    # ---------------- A14 / A15 真实调用 Agent ----------------
+    # ---------------- A14 / A15 真实调用模型 ----------------
+    settings.AI_QUESTION_BATCH_SIZE = real_batch_size  # 恢复 .env 配置，真实验证分批
     if not API_KEY:
-        record("A14", "真实生成 10 道单选题", False, "跳过：CLOUDBASE_API_KEY 未配置")
-        record("A15", "真实生成 50 道题（分批长响应）", False, "跳过：CLOUDBASE_API_KEY 未配置")
+        record("A14", "真实生成 10 道单选题", False, "跳过：LLM_API_KEY 未配置")
+        record("A15", "真实生成 50 道题（分批长响应）", False, "跳过：LLM_API_KEY 未配置")
     else:
         r10 = client.post(GENERATE_URL, headers=admin_h, json={
             "topic": "红军长征中的重要战役", "count": 10, "question_type": "single",
             "difficulty": "medium", "category": "event",
             "extra_requirements": "史实准确，避免重复，附简明解析"})
-        out10 = r10.json() if r10.status_code == 200 else {}
+        try:
+            body10 = r10.json()
+        except ValueError:
+            body10 = {}
+        out10 = body10 if r10.status_code == 200 else {}
+        # 非 200 时保留上游错误详情，否则 502 只剩状态码无法定位（截断/超时/鉴权）
+        err10 = "" if r10.status_code == 200 else str(body10.get("detail") or r10.text)[:200]
         items10 = out10.get("items", [])
         struct_ok = all(
             it["data"]["type"] == "single"
@@ -412,12 +425,13 @@ def main():
             for it in items10)
         uniq10 = len({it["data"]["question"].strip() for it in items10}) == len(items10)
         after10 = q(lambda db: db.query(Question).count())
-        record("A14", "真实调用 Agent 生成 10 道单选题：结构合规、答案唯一且在选项中、不入库",
+        record("A14", "真实调用模型生成 10 道单选题：结构合规、答案唯一且在选项中、不入库",
                r10.status_code == 200 and out10.get("generated") == 10 and struct_ok and uniq10
                and not out10.get("batch_errors") and after10 == after_save + 1,
                f"status={r10.status_code} generated={out10.get('generated')} "
                f"valid={out10.get('valid_count')} invalid={out10.get('invalid_count')} "
-               f"batch_errors={out10.get('batch_errors')} count_after={after10}")
+               f"batch_errors={out10.get('batch_errors')} count_after={after10}"
+               + (f" err={err10}" if err10 else ""))
         if items10:
             print("  样例题目：" + json.dumps(items10[0]["data"], ensure_ascii=False)[:300])
 
@@ -434,7 +448,7 @@ def main():
                 and it["data"]["answer"][0] in {o["label"] for o in it["data"]["options"]}
                 for it in items50)
             uniq50 = len({it["data"]["question"].strip() for it in items50})
-            record("A15", "真实调用 Agent 生成 50 道题：分批处理长响应、结构与去重达标",
+            record("A15", "真实调用模型生成 50 道题：分批处理长响应、结构与去重达标",
                    r50.status_code == 200 and out50.get("generated") == 50 and struct50
                    and not out50.get("batch_errors") and uniq50 >= 45,
                    f"status={r50.status_code} generated={out50.get('generated')} "

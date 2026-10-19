@@ -2,7 +2,7 @@
 
 仅供 admin 前端人工验收使用，不属于生产代码：
 - DATABASE_URL 指向临时 SQLite，启动时 create_all 建表；
-- 通过 dns_shim 解析 CloudBase 网关域名（本机 DNS 解析不可用），AI 出题走真实 Agent。
+- 保留 dns_shim 兜底：仅当外部设置 LM_TEST_DNS_MAP 时生效，正常情况走系统 DNS。
 
 用法：
     cd backend
@@ -20,11 +20,6 @@ if os.path.exists(DB_PATH):
 os.environ["DATABASE_URL"] = f"sqlite:///{DB_PATH}"
 # 验收用临时管理员口令：避免在浏览器里使用 .env 中的真实生产口令
 os.environ["ADMIN_PASSWORD"] = "Accept@2026"
-# 本机 DNS 解析不可用，测试期用固定映射解析 CloudBase 网关（IP 由 DoH 查询得到）
-os.environ["LM_TEST_DNS_MAP"] = (
-    "longmarch-run-d5gp70nsd0d2ca307.api.tcloudbasegateway.com=81.69.138.235"
-)
-
 import dns_shim  # noqa: E402  必须在导入 app 之前生效
 
 dns_shim.install()

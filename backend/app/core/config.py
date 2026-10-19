@@ -2,7 +2,7 @@
 import os
 from functools import lru_cache
 from pathlib import Path
-from typing import List
+from typing import Any, Dict, List
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -65,17 +65,23 @@ class Settings(BaseSettings):
     # 组织架构外部同步接口地址（留空时同步使用内置种子数据，便于开发调试）
     ORG_SYNC_API_URL: str = ""
 
-    # 腾讯云 CloudBase Agent（管理后台 AI 出题）
+    # 大模型服务（OpenAI Chat Completions 兼容协议）：AI 问答、路线讲解、答题解析、后台出题共用。
     # API Key 仅供后端调用，禁止写入前端代码、接口响应或日志。
-    CLOUDBASE_ENV_ID: str = ""
-    CLOUDBASE_AGENT_ID: str = ""
-    CLOUDBASE_API_KEY: str = ""
-    # ACP 调用地址；留空时按「https://{ENV_ID}.api.tcloudbasegateway.com/v1/aibot/bots/{AGENT_ID}/acp」拼接
-    CLOUDBASE_AGENT_URL: str = ""
-    CLOUDBASE_TIMEOUT_SECONDS: int = 180  # 单批调用超时（秒）
+    # 三项与厂商解耦，换供应商只改这里，无需动业务代码。
+    LLM_BASE_URL: str = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    LLM_MODEL: str = "qwen3.8-max"
+    LLM_API_KEY: str = ""
+    LLM_TIMEOUT_SECONDS: int = 300  # 单批调用超时（秒）；出题链路长输出需留足余量
+    # 透传进请求体的供应商专有参数（JSON 对象），使 llm_service 与厂商解耦。
+    # 例：{"enable_thinking": false} 关闭 Qwen 思考模式——实测单次对话
+    # 709 tokens/17.3s 降至 465 tokens/9.0s；思考 token 不受 max_tokens 约束且同样计费。
+    LLM_EXTRA_BODY: Dict[str, Any] = {}
+    # 出题链路覆盖项：合并顺序 LLM_EXTRA_BODY < LLM_QUESTION_EXTRA_BODY。
+    # 出题需严格 JSON 数组，实测关思考后批次解析失败率上升，故此处恢复思考模式。
+    LLM_QUESTION_EXTRA_BODY: Dict[str, Any] = {}
 
     # AI 出题生成策略：总量拆成多批并发调用，规避单次长回复被截断
-    AI_QUESTION_BATCH_SIZE: int = 10  # 每批请求 Agent 生成的题数
+    AI_QUESTION_BATCH_SIZE: int = 10  # 每批请求模型生成的题数
     AI_QUESTION_MAX_CONCURRENCY: int = 3  # 批间并发上限
     AI_QUESTION_MAX_COUNT: int = 100  # 单次生成 / 单次保存的题数上限
 

@@ -1,6 +1,6 @@
 """AI 助手运行时：历史助手对话、路线节点讲解、答题解析。
 
-三条能力共用一套「配置 → 限额 → 检索已发布资料 → 组装提示词 → 调用 CloudBase →
+三条能力共用一套「配置 → 限额 → 检索已发布资料 → 组装提示词 → 调用大模型 →
 落 ai_messages/ai_usage_logs」的编排，差异只在提示词与是否调用模型：
 
 - chat（历史助手）：调用模型；无状态多轮，把最近 N 轮历史拼进单次提示词。
@@ -32,7 +32,7 @@ from app.services import (
     ai_config_service,
     ai_knowledge_service,
     ai_usage_service,
-    cloudbase_service,
+    llm_service,
     setting_service,
 )
 
@@ -232,17 +232,18 @@ def send_message(
     db.flush()
 
     try:
-        result = cloudbase_service.prompt_meta(
+        result = llm_service.prompt_meta(
             prompt_text,
             system=ai_config_service.get_prompt(db, "chat"),
             timeout=cfg.request_timeout,
             max_retries=cfg.max_retries,
+            max_tokens=cfg.max_output_tokens,
         )
-    except cloudbase_service.CloudBaseError as exc:
+    except llm_service.LlmError as exc:
         db.rollback()  # 丢弃本次用户消息与新建会话，避免残留半截对话
         ai_usage_service.record(
-            db, feature=FEATURE_CHAT, user_id=user.id, model=settings.CLOUDBASE_AGENT_ID,
-            status="error", error_code="cloudbase", elapsed_ms=None,
+            db, feature=FEATURE_CHAT, user_id=user.id, model=settings.LLM_MODEL,
+            status="error", error_code="llm", elapsed_ms=None,
         )
         db.commit()
         raise
@@ -259,7 +260,7 @@ def send_message(
     conv.updated_at = now_utc()
     ai_usage_service.record(
         db, feature=FEATURE_CHAT, user_id=user.id, conversation_id=conv.id,
-        model=settings.CLOUDBASE_AGENT_ID, used_tokens=result.used_tokens,
+        model=settings.LLM_MODEL, used_tokens=result.used_tokens,
         elapsed_ms=result.elapsed_ms, status="success",
     )
     db.commit()
@@ -431,24 +432,25 @@ def quiz_explanation(db: Session, user: User, question_id: int) -> Dict[str, Any
         _output_hint(cfg),
     )
     try:
-        result = cloudbase_service.prompt_meta(
+        result = llm_service.prompt_meta(
             prompt_text,
             system=ai_config_service.get_prompt(db, "quiz"),
             timeout=cfg.request_timeout,
             max_retries=cfg.max_retries,
+            max_tokens=cfg.max_output_tokens,
         )
-    except cloudbase_service.CloudBaseError:
+    except llm_service.LlmError:
         db.rollback()
         ai_usage_service.record(
-            db, feature=FEATURE_QUIZ, user_id=user.id, model=settings.CLOUDBASE_AGENT_ID,
-            status="error", error_code="cloudbase",
+            db, feature=FEATURE_QUIZ, user_id=user.id, model=settings.LLM_MODEL,
+            status="error", error_code="llm",
         )
         db.commit()
         raise
 
     sources = ai_knowledge_service.format_sources(rows)
     ai_usage_service.record(
-        db, feature=FEATURE_QUIZ, user_id=user.id, model=settings.CLOUDBASE_AGENT_ID,
+        db, feature=FEATURE_QUIZ, user_id=user.id, model=settings.LLM_MODEL,
         used_tokens=result.used_tokens, elapsed_ms=result.elapsed_ms, status="success",
     )
     db.commit()

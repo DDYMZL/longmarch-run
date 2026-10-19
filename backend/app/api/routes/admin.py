@@ -100,7 +100,7 @@ from app.services import (
     admin_service,
     ai_question_service,
     audit_service,
-    cloudbase_service,
+    llm_service,
     dashboard_service,
     identity_service,
     import_service,
@@ -582,8 +582,8 @@ def ai_generate_questions(payload: AdminAiGenerateRequest, db: Session = Depends
             payload.category,
             payload.extra_requirements,
         )
-    except cloudbase_service.CloudBaseError as exc:
-        # 先于 ValueError 捕获：CloudBaseError 继承 ValueError，但属上游故障应返回 502
+    except llm_service.LlmError as exc:
+        # 先于 ValueError 捕获：LlmError 继承 ValueError，但属上游故障应返回 502
         raise HTTPException(status_code=502, detail=str(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))

@@ -10,8 +10,8 @@ S26 AI 智能中心 冒烟脚本（TestClient + SQLite 临时库，不依赖 801
   R 组 路线讲解：优先已发布知识、无知识回退节点字段、草稿不泄露、节点不存在、关闭时仍可用、不调模型
   Q 组 答题解析：题库已有解析直接返回(不调模型)、无解析才调模型、未作答拦截、AI 关闭、以库内答案为准
   W 组 题目工坊：任务+草稿持久化、任务列表/详情、草稿编辑/审核、幂等导入题库、鉴权、知识接地、失败落库
-  G 组 回归与安全：旧出题链路不受影响、任何响应不泄露 CLOUDBASE_API_KEY
-  L 组 真实调用 Agent（可选，配置了 API Key 且未设置 LM_AI_SKIP_LIVE=1 时执行）
+  G 组 回归与安全：旧出题链路不受影响、任何响应不泄露 LLM_API_KEY
+  L 组 真实调用模型（可选，配置了 API Key 且未设置 LM_AI_SKIP_LIVE=1 时执行）
 
 用法：
   cd backend
@@ -69,10 +69,10 @@ from app.models.models import (  # noqa: E402
     RouteNode,
     User,
 )
-from app.services import cloudbase_service  # noqa: E402
+from app.services import llm_service  # noqa: E402
 
 RESULTS = []
-API_KEY = settings.CLOUDBASE_API_KEY.strip()
+API_KEY = settings.LLM_API_KEY.strip()
 KEY_HEAD, KEY_TAIL = API_KEY[:16], API_KEY[-16:]
 
 CHAT_URL = "/api/ai/chat"
@@ -109,31 +109,33 @@ def no_key_leak(*responses):
     return True
 
 
-# ---------------- CloudBase 打桩 ----------------
+# ---------------- 大模型打桩 ----------------
 def patch_meta(reply_text="这是模拟的长征历史回答", exc=None, used=123):
     """替换 prompt_meta（历史助手/答题解析用），捕获最终提示词与 system。"""
-    orig = cloudbase_service.prompt_meta
+    orig = llm_service.prompt_meta
     captured = []
 
-    def _fake(text, *, system=None, timeout=None, max_retries=None):
-        captured.append({"text": text, "system": system, "timeout": timeout})
+    def _fake(text, *, system=None, timeout=None, max_retries=None, max_tokens=None):
+        captured.append(
+            {"text": text, "system": system, "timeout": timeout, "max_tokens": max_tokens}
+        )
         if exc is not None:
             raise exc
-        return cloudbase_service.CallResult(
-            text=reply_text, used_tokens=used, stop_reason="end_turn", elapsed_ms=7
+        return llm_service.CallResult(
+            text=reply_text, used_tokens=used, stop_reason="stop", elapsed_ms=7
         )
 
-    cloudbase_service.prompt_meta = _fake
+    llm_service.prompt_meta = _fake
     return orig, captured
 
 
 def restore_meta(orig):
-    cloudbase_service.prompt_meta = orig
+    llm_service.prompt_meta = orig
 
 
 def patch_prompt(reply=None, exc=None):
     """替换 prompt（题目工坊/旧出题链路用），捕获提示词。"""
-    orig = cloudbase_service.prompt
+    orig = llm_service.prompt
     captured = []
 
     def _fake(text, timeout=None):
@@ -142,12 +144,12 @@ def patch_prompt(reply=None, exc=None):
             raise exc
         return reply if isinstance(reply, str) else json.dumps(reply, ensure_ascii=False)
 
-    cloudbase_service.prompt = _fake
+    llm_service.prompt = _fake
     return orig, captured
 
 
 def restore_prompt(orig):
-    cloudbase_service.prompt = orig
+    llm_service.prompt = orig
 
 
 def fake_item(question, labels=("A", "B", "C", "D"), answer="B", analysis="解析"):
@@ -232,8 +234,8 @@ def seed_restricted_admin():
 
 def main():
     print(f"DNS 映射条目：{_DNS_ENTRIES}（0 表示走系统 DNS）")
-    print(f"CloudBase：env_id={'有' if settings.CLOUDBASE_ENV_ID else '无'} "
-          f"agent_id={'有' if settings.CLOUDBASE_AGENT_ID else '无'} api_key={'有' if API_KEY else '无'}")
+    print(f"大模型：base_url={'有' if settings.LLM_BASE_URL else '无'} "
+          f"model={settings.LLM_MODEL or '无'} api_key={'有' if API_KEY else '无'}")
     Base.metadata.create_all(engine)
     ids = seed_all()
     restricted_id = seed_restricted_admin()
@@ -283,7 +285,7 @@ def main():
            r_anon.status_code == 401 and r_low.status_code == 403 and r_low_p.status_code == 403,
            f"anon={r_anon.status_code} restricted_get={r_low.status_code} restricted_patch={r_low_p.status_code}")
 
-    record("C05", "配置响应不泄露 CLOUDBASE_API_KEY", no_key_leak(r, r2, r_bad_int),
+    record("C05", "配置响应不泄露 LLM_API_KEY", no_key_leak(r, r2, r_bad_int),
            f"key_configured={bool(API_KEY)}")
 
     # ============ K 组：知识库 ============
@@ -404,7 +406,7 @@ def main():
     # H11 上游故障 502 且不残留用户消息/新会话
     before_conv = q(lambda db: db.query(AiConversation).filter(AiConversation.user_id == ids["ua"]).count())
     before_msg = q(lambda db: db.query(AiMessage).count())
-    orig_meta, _ = patch_meta(exc=cloudbase_service.CloudBaseError("AI 服务暂时不可用，请稍后重试", retryable=True))
+    orig_meta, _ = patch_meta(exc=llm_service.LlmError("AI 服务暂时不可用，请稍后重试", retryable=True))
     r_err = client.post(CHAT_URL, headers=ua_h, json={"message": "会触发故障的问题"})
     restore_meta(orig_meta)
     after_conv = q(lambda db: db.query(AiConversation).filter(AiConversation.user_id == ids["ua"]).count())
@@ -631,7 +633,7 @@ def main():
         record("W10", "知识接地出题", False, "无已发布知识可供接地")
 
     # W11 生成失败：任务落 failed 且返回 502
-    orig_p, _ = patch_prompt(exc=cloudbase_service.CloudBaseError("AI 服务暂时不可用，请稍后重试", retryable=True))
+    orig_p, _ = patch_prompt(exc=llm_service.LlmError("AI 服务暂时不可用，请稍后重试", retryable=True))
     r_w11 = client.post(JOBS_URL, headers=admin_h, json={"topic": "失败任务", "count": 1})
     restore_prompt(orig_p)
     failed_jobs = q(lambda db: db.query(AiGenerationJob).filter(AiGenerationJob.status == "failed").count())
@@ -651,14 +653,14 @@ def main():
     record("G02", "工坊/导入/旧链路响应不泄露密钥",
            no_key_leak(r_w1, r_w6, r_g1, r_q2, r_r1), "")
 
-    # ============ L 组：真实调用 Agent（可选）============
+    # ============ L 组：真实调用模型（可选）============
     if not API_KEY or os.getenv("LM_AI_SKIP_LIVE") == "1":
-        record("L01", "真实调用 Agent 完成一次历史助手对话", True,
+        record("L01", "真实调用模型完成一次历史助手对话", True,
                "跳过：未配置 API Key 或 LM_AI_SKIP_LIVE=1")
     else:
         r_live = client.post(CHAT_URL, headers=ua_h, json={"message": "请用一句话介绍遵义会议的意义。"})
         live = r_live.json() if r_live.status_code == 200 else {}
-        record("L01", "真实调用 Agent 完成一次历史助手对话（回答非空、捕获平台用量）",
+        record("L01", "真实调用模型完成一次历史助手对话（回答非空、捕获平台用量）",
                r_live.status_code == 200 and len(live.get("reply", "")) >= 8
                and live.get("usedTokens") is not None,
                f"status={r_live.status_code} reply_len={len(live.get('reply',''))} usedTokens={live.get('usedTokens')}")

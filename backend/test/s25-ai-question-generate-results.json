@@ -30,7 +30,7 @@
     },
     {
       "id": "A05",
-      "name": "Agent 故障映射为明确中文提示（超时/鉴权/服务异常/截断/无效 JSON）",
+      "name": "模型故障映射为明确中文提示（超时/鉴权/服务异常/截断/无效 JSON）",
       "ok": true,
       "detail": "超时=502 鉴权失败=502 服务不可用=502 回复截断=502 无效输出=400"
     },
@@ -78,7 +78,7 @@
     },
     {
       "id": "A13",
-      "name": "生成/保存/列表响应均不泄露 CLOUDBASE_API_KEY",
+      "name": "生成/保存/列表响应均不泄露 LLM_API_KEY",
       "ok": true,
       "detail": "key_configured=True checked=5 responses"
     },
@@ -90,13 +90,13 @@
     },
     {
       "id": "A14",
-      "name": "真实调用 Agent 生成 10 道单选题：结构合规、答案唯一且在选项中、不入库",
+      "name": "真实调用模型生成 10 道单选题：结构合规、答案唯一且在选项中、不入库",
       "ok": true,
       "detail": "status=200 generated=10 valid=10 invalid=0 batch_errors=[] count_after=8"
     },
     {
       "id": "A15",
-      "name": "真实调用 Agent 生成 50 道题：分批处理长响应、结构与去重达标",
+      "name": "真实调用模型生成 50 道题：分批处理长响应、结构与去重达标",
       "ok": true,
       "detail": "status=200 generated=50 valid=50 invalid=0 unique_questions=50 batch_errors=[]"
     }

@@ -30,7 +30,7 @@
     },
     {
       "id": "C05",
-      "name": "配置响应不泄露 CLOUDBASE_API_KEY",
+      "name": "配置响应不泄露 LLM_API_KEY",
       "ok": true,
       "detail": "key_configured=True"
     },
@@ -282,9 +282,9 @@
     },
     {
       "id": "L01",
-      "name": "真实调用 Agent 完成一次历史助手对话（回答非空、捕获平台用量）",
+      "name": "真实调用模型完成一次历史助手对话（回答非空、捕获平台用量）",
       "ok": true,
-      "detail": "status=200 reply_len=163 usedTokens=19989"
+      "detail": "status=200 reply_len=152 usedTokens=383"
     }
   ]
 }

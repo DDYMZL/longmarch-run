@@ -2,7 +2,7 @@
 
 安全与稳定性：
 - 会话归属一律由 JWT 用户确定，读写他人会话按「不存在」处理（404），不接受客户端指定 user_id；
-- 统一异常映射：AiDisabledError→403、AiLimitError→429、CloudBaseError→502、ValueError→400；
+- 统一异常映射：AiDisabledError→403、AiLimitError→429、LlmError→502、ValueError→400；
 - 节点讲解为已审核固定内容、答题解析优先取题库已有解析，二者不调模型、不消耗额度，
   AI 总开关关闭时仍可用；仅历史助手对话与「无解析时的答题解析」会真正调用模型。
 """
@@ -28,7 +28,7 @@ from app.services import (
     ai_chat_service,
     ai_config_service,
     ai_usage_service,
-    cloudbase_service,
+    llm_service,
 )
 
 router = APIRouter(prefix="/ai", tags=["ai"])
@@ -37,7 +37,7 @@ router = APIRouter(prefix="/ai", tags=["ai"])
 AI_ERRORS = (
     ai_config_service.AiDisabledError,
     ai_usage_service.AiLimitError,
-    cloudbase_service.CloudBaseError,
+    llm_service.LlmError,
     ValueError,
 )
 
@@ -48,7 +48,7 @@ def ai_http_error(exc: Exception) -> HTTPException:
         return HTTPException(status_code=403, detail=str(exc))
     if isinstance(exc, ai_usage_service.AiLimitError):
         return HTTPException(status_code=429, detail=str(exc))
-    if isinstance(exc, cloudbase_service.CloudBaseError):
+    if isinstance(exc, llm_service.LlmError):
         return HTTPException(status_code=502, detail=str(exc))
     return HTTPException(status_code=400, detail=str(exc))
 

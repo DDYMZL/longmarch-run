@@ -2,9 +2,9 @@
 
 契约面向 admin 前端（Vue3 + TS），字段 snake_case。安全约定：
 - 每个接口都用 require_menu 在后端校验管理员菜单权限，不依赖前端隐藏按钮；
-- 配置接口只读写 AI 运行参数与提示词，绝不返回任何明文密钥（CloudBase API Key 等）；
+- 配置接口只读写 AI 运行参数与提示词，绝不返回任何明文密钥（LLM API Key 等）；
 - 敏感/不可逆操作（知识增删改与发布、配置变更、题目导入）写 audit_logs，与业务同事务提交。
-异常映射复用小程序 AI 路由的 ai_http_error（AiDisabled→403 / Limit→429 / CloudBase→502 / Value→400）。
+异常映射复用小程序 AI 路由的 ai_http_error（AiDisabled→403 / Limit→429 / Llm→502 / Value→400）。
 """
 from typing import Any, Dict, Optional
 

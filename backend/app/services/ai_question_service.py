@@ -1,4 +1,4 @@
-"""AI 出题：调用 CloudBase Agent 生成题目草稿，经管理员确认后批量入库。
+"""AI 出题：调用大模型生成题目草稿，经管理员确认后批量入库。
 
 设计约束：
 - 仅生成单选题（type=single），与小程序答题逻辑「单答案提交」保持一致；
@@ -6,7 +6,7 @@
 - 生成结果一律是草稿，不直接写库；管理员确认后由 batch_save_questions 落库；
 - 入库前复用 admin_service._validate_question（与 Excel 导入同等校验强度），
   并重新做库内/批内查重，不信任前端回传内容；
-- 大批量拆成多批并发调用 Agent，规避单次长回复被截断。
+- 大批量拆成多批并发调用模型，规避单次长回复被截断。
 """
 import json
 import logging
@@ -19,7 +19,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.helpers import now_utc
 from app.models.models import AiGeneratedQuestion, AiGenerationJob, AiKnowledge, Question
-from app.services import admin_service, ai_knowledge_service, cloudbase_service
+from app.services import admin_service, ai_knowledge_service, llm_service
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +60,7 @@ def _split_batches(count: int, batch_size: int) -> List[int]:
 def _build_prompt(
     topic: str, count: int, difficulty: str, category: str, extra: str, references: str = ""
 ) -> str:
-    """构建提示词：约束 Agent 只输出可直接 json.loads 的题目数组。
+    """构建提示词：约束模型只输出可直接 json.loads 的题目数组。
 
     references 非空时作为「参考资料」前置注入，要求出题以其为准（题目工坊按已发布知识出题）。
     """
@@ -101,7 +101,7 @@ def _build_prompt(
 
 
 def _extract_json_array(reply: str) -> List[Any]:
-    """从 Agent 回复中提取 JSON 数组，容忍代码围栏与前后多余文本。"""
+    """从模型回复中提取 JSON 数组，容忍代码围栏与前后多余文本。"""
     text = reply.strip()
     if text.startswith("```"):
         text = text.split("\n", 1)[1] if "\n" in text else text
@@ -119,7 +119,7 @@ def _extract_json_array(reply: str) -> List[Any]:
 
 
 def _normalize_options(raw_options: Any) -> List[Dict[str, str]]:
-    """把 Agent 输出的选项规整为 [{"label": "A", "text": "..."}]。
+    """把模型输出的选项规整为 [{"label": "A", "text": "..."}]。
 
     兼容三种写法：{"label","text"}、{"label","content"}、纯字符串数组；
     label 缺失时按顺序补 A/B/C/D。
@@ -138,7 +138,7 @@ def _normalize_options(raw_options: Any) -> List[Dict[str, str]]:
 
 
 def _normalize_answer(raw_answer: Any) -> List[str]:
-    """把 Agent 输出的答案统一为大写 label 数组，兼容 "B" / ["B"] / ["b"] 三种写法。"""
+    """把模型输出的答案统一为大写 label 数组，兼容 "B" / ["B"] / ["b"] 三种写法。"""
     if isinstance(raw_answer, str):
         raw_answer = [raw_answer]
     if not isinstance(raw_answer, list):
@@ -162,7 +162,7 @@ def _blank_question(category: str) -> Dict:
 
 
 def _normalize_item(raw: Any, category: str) -> Dict:
-    """把 Agent 输出的单个元素规整为 questions 表结构，结构非法抛 ValueError。"""
+    """把模型输出的单个元素规整为 questions 表结构，结构非法抛 ValueError。"""
     if not isinstance(raw, dict):
         raise ValueError("题目必须是 JSON 对象")
     raw_options = raw.get("options")
@@ -200,8 +200,8 @@ def _duplicate_reasons(text: str, existing: Set[str], seen: Set[str]) -> List[st
 def _generate_batch(
     topic: str, count: int, difficulty: str, category: str, extra: str, references: str = ""
 ) -> List[Any]:
-    """调用 Agent 生成一批题目，返回解析后的原始元素列表。"""
-    reply = cloudbase_service.prompt(
+    """调用模型生成一批题目，返回解析后的原始元素列表。"""
+    reply = llm_service.prompt(
         _build_prompt(topic, count, difficulty, category, extra, references)
     )
     return _extract_json_array(reply)
@@ -321,7 +321,7 @@ def generate_questions(
         topic, batches, difficulty, category, extra
     )
     if not elements:
-        # 全部批次失败：抛出原始异常，保留 CloudBaseError 类型以便路由映射为 502
+        # 全部批次失败：抛出原始异常，保留 LlmError 类型以便路由映射为 502
         if first_error is not None:
             raise first_error
         raise ValueError("AI 未返回任何题目，请重试")

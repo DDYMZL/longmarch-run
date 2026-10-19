@@ -2,7 +2,7 @@
 
 - 生效值 = system_settings（管理端可改）覆盖 > Settings（.env 初始默认）；
 - 提示词模板集中在此，带版本号，便于灰度与回溯；管理端可覆盖文本；
-- 安全：本模块只处理 AI 运行参数与提示词，绝不读取或下发 CloudBase API Key、
+- 安全：本模块只处理 AI 运行参数与提示词，绝不读取或下发 LLM API Key、
   JWT 等任何密钥；get_config_view() 供管理端「配置中心」展示，返回内容不含明文密钥。
 """
 from dataclasses import dataclass
