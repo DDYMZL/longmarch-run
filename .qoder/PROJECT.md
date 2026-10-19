@@ -338,18 +338,49 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 
 | 批次 | 范围 | 文档数 | 状态 |
 | --- | --- | --- | --- |
-| 一 | 后端：`app/services` 30、`app/api/routes` 18、`app/core` 7、`app/api/deps.py`、`app/main.py`、`app/data/seed.py`、`app/models/models.py`、`app/schemas/schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt` | **64** | ✅ **已交付 64/64**（2026-10-17） |
-| 二 | 小程序：25 个页面（页面级合一）+ 19 service + 3 util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 根 `project.config.json` 1 | **53** | ✅ **已交付 53/53**（2026-10-17） |
-| 三 | 管理后台：`admin/src/**` 28（实测无纯 re-export 桶文件）+ `scripts/zip-dist.mjs` 1 + `package.json`/`vite.config.ts`/`tsconfig.json`/`tsconfig.app.json`/`tsconfig.node.json`/`index.html` 6 + `.env.development`/`.env.prod` 2 | **37** | ✅ **已交付 37/37**（2026-10-17） |
-| 四 | 数据库与脚本：`docker/init/*.sql` 22（其中 `021`、`022` **尚未入库**）+ `init-db.sh` + `compose.yml` 2 + 根 `*.bat` 4 个（`start`/`build-backend`/`build-prod`/`build-sql`） | **28** | ✅ **已交付 28/28**（2026-10-17） |
+| 一 | 后端：`app/services` 30、`app/api/routes` 18、`app/core` 7、`app/api/deps.py`、`app/main.py`、`app/data/seed.py`、`app/models/models.py`、`app/schemas/schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt` | **64** | ✅ 64/64（2026-10-17）；此后新增 3 个 `app/services` 文件**待补档**（见「增量与缺口」节） |
+| 二 | 小程序：25 个页面（页面级合一）+ 19 service + **5** util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 根 `project.config.json` 1 | **55** | ✅ 53/53（2026-10-17）→ **55/55**（2026-10-19 增量 `utils/hudMap.js`、补建 `utils/authGuide.js`，见「增量与缺口」节） |
+| 三 | 管理后台：`admin/src/**` 28（实测无纯 re-export 桶文件）+ `scripts/zip-dist.mjs` 1 + `package.json`/`vite.config.ts`/`tsconfig.json`/`tsconfig.app.json`/`tsconfig.node.json`/`index.html` 6 + `.env.development`/`.env.prod` 2 | **37** | ✅ 37/37（2026-10-17）；此后新增 5 个 `views/*.vue`**待补档**（见「增量与缺口」节） |
+| 四 | 数据库与脚本：`docker/init/*.sql` 22（其中 `021`、`022` **尚未入库**）+ `init-db.sh` + `compose.yml` 2 + 根 `*.bat` 4 个（`start`/`build-backend`/`build-prod`/`build-sql`） | **28** | ✅ 28/28（2026-10-17）；`021`~`025` 现已入库（`a8a74ae`），其中 **`023`~`025` 待补档**（见「增量与缺口」节） |
 
-**建档分母说明**：git 跟踪文件共 676 个（不含尚未入库的 `.qoder/` 与 `docker/init/021`、`022`），其中约 400 个属第 4 节排除规则覆盖的测试脚本、测试报告、截图、构建产物与依赖，不建档。四批合计需建档 **182 个**（64 + 53 + 37 + 28，各批数字均由 `find`/`ls` 实测得出、非估算），已完成 **182 个**（一 64 + 二 53 + 三 37 + 四 28），总进度 **100%**。`.qoder` 下 `.md` 实测 **192 个** = 文件级 182 + 总览层 10，与上两表逐项对得上。
+**建档分母说明（2026-10-17 四批交付时的快照，最新口径见下节「增量与缺口」）**：git 跟踪文件共 676 个（不含尚未入库的 `.qoder/` 与 `docker/init/021`、`022`），其中约 400 个属第 4 节排除规则覆盖的测试脚本、测试报告、截图、构建产物与依赖，不建档。四批合计需建档 **182 个**（64 + 53 + 37 + 28，各批数字均由 `find`/`ls` 实测得出、非估算），已完成 **182 个**（一 64 + 二 53 + 三 37 + 四 28），总进度 **100%**。`.qoder` 下 `.md` 实测 **192 个** = 文件级 182 + 总览层 10，与上两表逐项对得上。
 
-> 第二批交付后已做 **1:1 双向核对**：`frontend/` 侧实测 25 页面目录 / 19 `services/*.js` / 3 `utils/*.js` / 1 `data/*.js`，`.qoder/frontend/` 侧对应 25 / 19 / 3 / 1 份文档，加 4 份工程级（`app.js`/`app.json`/`app.wxss`/`sitemap.json`）与 1 份仓库根 `project.config.json`，合计 53——**无遗漏、无多余**（每个源文件恰有一份文档，每份文档恰对应一个真实存在的源文件或四件套）。25 份页面文档均按 `.qoder/README.md` §1 的「页面级合一」规则设 `## 4-1`/`## 4-2`/`## 4-3` 三个专章，10 个规范章节的编号与标题经脚本逐份校验通过。
+> 上段的三个前提在 2026-10-19 已发生变化：① `.qoder/` 与 `docker/init/021`~`025` **均已入库**（`git ls-files` 实测 192 份 `.qoder` 文档被跟踪）；② git 跟踪文件增至 **908 个**；③ 四批之后新增的源文件有 13 个（frontend 2 + backend 3 + admin 5 + docker 3），其中 frontend 2 个已补档、其余 **11 个仍缺档**。因此「182/182、100%」只对 2026-10-17 那一批成立，全仓当前口径为 **已建 184 / 应建 195**（详见下节）。676 → 908 的差额未逐文件重新套用第 4 节排除规则，**分母的完整重算与 11 份补档合并为一个独立任务**，本次只做已实测部分的更正。
+
+> 第二批交付后已做 **1:1 双向核对**：`frontend/` 侧实测 25 页面目录 / 19 `services/*.js` / 3 `utils/*.js` / 1 `data/*.js`，`.qoder/frontend/` 侧对应 25 / 19 / 3 / 1 份文档，加 4 份工程级（`app.js`/`app.json`/`app.wxss`/`sitemap.json`）与 1 份仓库根 `project.config.json`，合计 53——**无遗漏、无多余**（每个源文件恰有一份文档，每份文档恰对应一个真实存在的源文件或四件套）。25 份页面文档均按 `.qoder/README.md` §1 的「页面级合一」规则设 `## 4-1`/`## 4-2`/`## 4-3` 三个专章，10 个规范章节的编号与标题经脚本逐份校验通过。**该核对为 2026-10-17 时点**：`utils/*.js` 现为 5 个（新增 `hudMap.js`、补建 `authGuide.js`），frontend 侧合计 55，2026-10-19 已按同一脚本口径重新 1:1 核对通过（见「增量与缺口」节）。
 
 > 第一批的实际分母比原估的 ~68 少 4：原估把 `backend/app/**` 下 8 个 `__init__.py` 计入了各子目录（api 21 / core 8 / data 2 / models 2 / schemas 2 / services 31），而这些按第 4 节排除规则不建档。72 个候选路径 − 8 个 `__init__.py` = **64**，已用 `find` 实测核对。
 
 > 第三、四批交付后同样做了 **1:1 双向核对**：`admin/src/` 实测 28 个源文件（12 `views`/`pages` 视图 + 2 `components` + `api` 2 + `router` 2 + `utils` 3 + `layout`/`plugins`/`store`/`App.vue`/`main.ts`/`env.d.ts`/`style.css` 各 1），`.qoder/admin/src/` 侧恰 28 份文档，**无遗漏无多余**；加 `scripts/zip-dist.mjs` 1 份、工程配置 6 份、`.env.*` 2 份 = 37。第四批侧 `docker/init/` 实测 22 个 `*.sql` + `init-db.sh`，`.qoder/docker/init/` 恰 23 份，加 `compose.yml` 1 份 = 24，再加仓库根 4 个 `*.bat` 各 1 份 = 28。两处按第 4 节规则**刻意不建档**的例外：`docker/init/SQL_CONSTRAINTS.md`（其本身即约束文档，逐条引用见 `.qoder/ARCHITECTURE.md` §12.4，复制一份会造成双重维护）、`admin/tsconfig.*.tsbuildinfo`（构建产物，登记于 §9）。
+
+### 增量与缺口（2026-10-19 复核）
+
+四批交付后又有新源文件入库，`.qoder/README.md` §3.3「新增源文件时同步创建对应文档」在这几次任务中**未被完全执行**。本节按 `find`/`git ls-files` 逐目录 1:1 实测（脚本口径：`frontend/{pages,services,utils,data}` + 4 份工程级 + 根 `project.config.json`；`backend/app/**`（排除 `__init__.py`）+ `run.py` + `.env*` + `requirements.txt`；`admin/src/**` + `admin/scripts/**`（排除 `*.tsbuildinfo`）；`docker/**`（排除 `SQL_CONSTRAINTS.md`）+ 根 `*.bat`）。
+
+**已补档（2 份，frontend 侧现已 55/55 无缺口）**
+
+| 文档 | 源文件来源 | 说明 |
+| --- | --- | --- |
+| `.qoder/frontend/utils/hudMap.js.md` | `2862453`（2026-10-19，科技感 HUD 地图 S2） | 星空长征渲染内核，从 `pages/march/march.js` 抽离；同批已重写 `.qoder/frontend/pages/march/march.js.md` |
+| `.qoder/frontend/utils/authGuide.js.md` | `53f2d62`（2026-10-18，十项增强点 3） | **补建**：新增时漏建档，`ensureScope` 统一授权引导 |
+
+**仍缺档（11 份，待补）**
+
+| # | 源文件 | 引入提交 | 批次归属 |
+| --- | --- | --- | --- |
+| 1 | `backend/app/services/llm_service.py` | `c660727`（2026-10-19，AI 供应商迁百炼） | 一 |
+| 2 | `backend/app/services/operation_config_service.py` | `b0ed585`（2026-10-18） | 一 |
+| 3 | `backend/app/services/upload_service.py` | `b0ed585`（2026-10-18） | 一 |
+| 4 | `admin/src/views/AnalyticsView.vue` | `2448137`（2026-10-18） | 三 |
+| 5 | `admin/src/views/ChaptersView.vue` | `2448137`（2026-10-18） | 三 |
+| 6 | `admin/src/views/MedalsView.vue` | `2448137`（2026-10-18） | 三 |
+| 7 | `admin/src/views/OperationConfigView.vue` | `2448137`（2026-10-18） | 三 |
+| 8 | `admin/src/views/PersonsView.vue` | `2448137`（2026-10-18） | 三 |
+| 9 | `docker/init/023_chapters.sql` | `a8a74ae`（2026-10-18） | 四 |
+| 10 | `docker/init/024_analytics_menus.sql` | `a8a74ae`（2026-10-18） | 四 |
+| 11 | `docker/init/025_sync_failures.sql` | `a8a74ae`（2026-10-18） | 四 |
+
+**当前口径**：文件级文档已建 **184** 份（182 + 上述 2），应建 **195** 份（184 + 缺档 11），进度 **94.4%**；`.qoder` 下 `.md` 实测 **194** 个 = 文件级 184 + 总览层 10。补档与分母完整重算合并为一个独立任务，勿在业务任务里顺手夹带（避免单次提交跨四个批次）。
 
 ### 待确认问题清单（汇总）
 

@@ -170,6 +170,7 @@ mine 页昵称旁「✎ 修改昵称」入口（仅 `user.nicknameChangedAt` 为
 
 ```
 home/march 触发 → sport.syncToday()（授权 scope.werun → wx.login 取 code → wx.getWeRunData 取加密数据，POST /api/sport/sync {code, encryptedData, iv} 后端解密落库并维护连续行军；授权/取数失败即报错不发请求）
+  ※ 授权统一走 utils/authGuide.js 的 ensureScope：已授权直接放行；从未请求过则由 sport.js 自行 wx.authorize 弹首次授权窗后再复检；已被用户拒绝时弹「权限未开启」引导 wx.openSetting，并以设置页返回结果复检（首页「去授权」、纪念票/仪式画面保存相册同样复用）
   → march.lightUpNodes()（POST /api/march/light-up，后端点亮并判定勋章，返回 newlyLit + newlyCompletedChapters + newMedals，一次请求完成，不再单独调 /medal/check；V2.0 起点亮不再发积分）
   → 有新点亮/新完成章节时按队列播放「节点抵达事件卡 → 章节完成仪式卡」（utils/arrivePopup.js 共用播放器；march 页另有 Canvas 金光扩散动画）
   → 页面 onShow 时 refresh() 拉最新数据展示；后端同步向管理端广播 data_changed / activity
