@@ -1,14 +1,14 @@
 """管理端驾驶舱 / 数据大屏服务。
 
-dashboard：核心指标 + 路线总览（每节点达成人数，口径与小程序一致——累计步数
-达标即视为点亮）；trend：近 N 日总步数/参与人数/新增用户/新增点亮；
+dashboard：核心指标 + 路线总览（每节点达成人数走 march_service.compute_route_stats，
+与小程序 /march/route-stats 共用实现——累计步数达标即视为抵达）；
+trend：近 N 日总步数/参与人数/新增用户/新增点亮；
 activities：user_event 实时动态（关联昵称，文案与小程序足迹同源）；
 screen：大屏单接口聚合（指标 + 路线总览 + 7 日趋势 + 动态，组织维度按需求取消）。
 
 库内 created_at / lit_at / event_time 为 UTC 存储，按本地日期分桶时统一经
 helpers.to_local / local_to_utc 换算。
 """
-from bisect import bisect_left
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 import time
@@ -23,36 +23,27 @@ from app.models.models import (
     LitNode,
     Organization,
     QuizRecord,
-    RouteNode,
     User,
     UserEvent,
     UserMedal,
 )
-from app.services import event_service, org_service, points_service
-
-
-def _user_total_steps(db: Session) -> Dict[int, int]:
-    """每用户累计步数。"""
-    rows = (
-        db.query(DailySport.user_id, func.sum(DailySport.steps))
-        .group_by(DailySport.user_id)
-        .all()
-    )
-    return {uid: int(total or 0) for uid, total in rows}
-
-
-def _enabled_nodes(db: Session) -> List[RouteNode]:
-    return (
-        db.query(RouteNode)
-        .filter(RouteNode.is_enabled.is_(True))
-        .order_by(RouteNode.sort_order.asc(), RouteNode.id.asc())
-        .all()
-    )
+from app.services import event_service, march_service, org_service, points_service
 
 
 def get_dashboard(db: Session) -> Dict:
-    """驾驶舱聚合：metrics + route_overview。"""
-    total_users = db.query(User.id).count()
+    """驾驶舱聚合：metrics + route_overview。
+
+    路线总览与全员步数汇总走 march_service.compute_route_stats（未缓存，保持驾驶舱
+    实时口径），与小程序 /march/route-stats 共用同一实现，避免两端「抵达人数」口径漂移。
+    """
+    stats = march_service.compute_route_stats(db)
+    total_users = stats["total_users"]
+    total_steps = stats["total_steps"]
+    avg_steps = round(total_steps / total_users) if total_users else 0
+    completion_rate = (
+        round(stats["finished"] / total_users * 100) if total_users else 0
+    )
+
     today_users = (
         db.query(DailySport.user_id)
         # #2：steps>0 排除失败占位行，today_users 只统计今日真正有步数的用户。
@@ -60,36 +51,8 @@ def get_dashboard(db: Session) -> Dict:
         .distinct()
         .count()
     )
-    totals = _user_total_steps(db)
-    total_steps = sum(totals.values())
-    avg_steps = round(total_steps / total_users) if total_users else 0
-
-    nodes = _enabled_nodes(db)
-    final_target = nodes[-1].target_steps if nodes else 0
-    finished = (
-        sum(1 for value in totals.values() if value >= final_target) if final_target else 0
-    )
-    completion_rate = round(finished / total_users * 100) if total_users else 0
-
     quiz_users = db.query(QuizRecord.user_id).distinct().count()
     medals_granted = db.query(UserMedal.id).count()
-
-    # 累计步数升序后二分计数：每节点 O(log U)，替代逐节点 O(U) 全量扫描（用户量大时关键路径）
-    sorted_totals = sorted(totals.values())
-    route_overview = []
-    for n in nodes:
-        lit_count = len(sorted_totals) - bisect_left(sorted_totals, n.target_steps)
-        route_overview.append(
-            {
-                "node_id": n.id,
-                "name": n.name,
-                "target_steps": n.target_steps,
-                "lit_count": lit_count,
-                "completion_rate": (
-                    round(lit_count / total_users * 100) if total_users else 0
-                ),
-            }
-        )
 
     return {
         "metrics": {
@@ -101,7 +64,7 @@ def get_dashboard(db: Session) -> Dict:
             "quiz_users": quiz_users,
             "medals_granted": medals_granted,
         },
-        "route_overview": route_overview,
+        "route_overview": stats["nodes"],
     }
 
 

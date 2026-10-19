@@ -156,6 +156,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET | `/api/broadcast/today` | 是 | 今日长征播报：期号、全局运动汇总、今日长征彩蛋（历史事件卡）、个人当日状态 |
 | GET | `/api/broadcast/activities?limit=` | 是 | 实时行军动态（小程序）：`user_event` 关联昵称倒序；隐私边界只下发昵称/文案/类型/时间（不含 user_id 与事件参数），`ACTIVITY_MASK_NICKNAME=true` 时昵称脱敏（如「王*明」）；实时增量经 WS `activity` 消息下发 |
 | GET | `/api/march/route` | 是 | 路线进度 `{nodes, currentSteps, totalSteps, litCount, totalCount, nextNode, finished, currentNodeId, currentProgress, routeProgress, ceremonyPending}`；仅统计启用节点；轨迹进度字段见下；`ceremonyPending` 仅 finished 时查一次 users 表（route_ceremony_at 为空 → true） |
+| GET | `/api/march/route-stats` | 是 | 全员路线抵达统计（星空长征 HUD 数据叠加层）：`{totalUsers, nodes[{nodeId, litCount, completionRate}]}`；仅含启用节点、按 sort_order 升序；口径为「累计步数达标即抵达」（不依赖 lit_nodes，覆盖未主动点亮者）；实现走 `march_service.compute_route_stats`，与 `/api/admin/dashboard` 的 route_overview 共用；进程内 60s TTL 缓存（`_ROUTE_STATS_TTL`），管理端改节点后由 `invalidate_route_stats_cache()` 立即失效 |
 | GET | `/api/march/global` | 是 | 全员共同长征目标（需求 §11）：`{totalSteps, targetSteps, progressPct, milestones[{name,steps,reached}], nextMilestone{name,steps,remain}|null}`；全员累计=全部用户 daily_sport 之和，目标/里程碑配置于 `march_service.GLOBAL_GOAL_STEPS/GLOBAL_MILESTONES` |
 | GET | `/api/march/footprints` | 是 | 我的长征足迹（需求 §7）：`{nodes[{id,name,icon,litAt,litDate,daySteps,cumSteps}]}`，按路线顺序的已点亮节点；litDate 为本地日期（与 DailySport.date 同口径），cumSteps 为点亮时刻累计快照（历史回填为 0 前端判空） |
 | GET | `/api/march/route-nodes` | 是 | 启用节点配置列表（含经纬度） |
@@ -205,7 +206,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | POST | `/api/admin/users/{user_id}/roles` | 管理员(access) | 全量覆盖用户角色 `{role_ids}`（返回最新启用角色，逐项审计） |
 | PATCH | `/api/admin/users/{user_id}/roles/{role_id}/enabled` | 管理员(access) | 启用/禁用单个角色授权（即时生效，不改授权关系） |
 | GET | `/api/admin/audit-logs` | 管理员(audit) | 审计日志分页（日期/动作/操作人筛选，倒序） |
-| GET | `/api/admin/dashboard` | 管理员(dashboard) | 驾驶舱聚合：核心指标（参与人数/今日运动/总步数/人均/完赛率/答题人数/勋章发放）+ 路线总览 |
+| GET | `/api/admin/dashboard` | 管理员(dashboard) | 驾驶舱聚合：核心指标（参与人数/今日运动/总步数/人均/完赛率/答题人数/勋章发放）+ 路线总览；路线总览与总步数/完赛人数走 `march_service.compute_route_stats`（未缓存，保持实时口径），与小程序 `/api/march/route-stats` 共用同一实现避免口径漂移 |
 | GET | `/api/admin/dashboard/trend?days=` | 管理员(dashboard) | 运动趋势：近 N 日每日总步数/运动人数/新增用户/新点亮节点数 |
 | GET | `/api/admin/activities?limit=` | 管理员(dashboard) | 实时动态：`user_event` 关联昵称倒序 |
 | GET | `/api/admin/screen` | 管理员(screen) | 数据大屏单接口聚合：指标 + 路线总览 + 7 日趋势 + 实时动态（整体口径，无组织维度） |

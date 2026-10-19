@@ -120,6 +120,7 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET | `/api/profile/timeline` | 我的长征足迹（user_event 时间轴） |
 | GET | `/api/broadcast/today` | 今日长征播报（期号/全局汇总/今日长征彩蛋/个人状态） |
 | GET | `/api/march/route` | 长征路线进度（含各节点状态，仅统计启用节点） |
+| GET | `/api/march/route-stats` | 全员路线抵达统计（各节点抵达人数/完成率 + 全员总数，60s 缓存；与驾驶舱 route_overview 共用 `march_service.compute_route_stats`） |
 | GET | `/api/march/route-nodes` | 启用节点配置列表（含经纬度） |
 | GET | `/api/march/node/{node_id}` | 节点详情（任意状态可查看，含路线经纬度） |
 | POST | `/api/march/light-up` | 点亮达标节点、发放积分并判定勋章（返回 newMedals） |

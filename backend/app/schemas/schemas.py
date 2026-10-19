@@ -278,6 +278,21 @@ class RouteOut(CamelModel):
     ceremony_pending: bool = False
 
 
+class RouteNodeStatOut(CamelModel):
+    """全员维度单节点抵达统计（星空长征 HUD 数据叠加层）。"""
+
+    node_id: int
+    lit_count: int = 0
+    completion_rate: int = 0
+
+
+class RouteStatsOut(CamelModel):
+    """全员路线抵达统计：各节点抵达人数 + 全员总数（进程内 60s 缓存）。"""
+
+    total_users: int = 0
+    nodes: List[RouteNodeStatOut] = []
+
+
 class PersonRefOut(CamelModel):
     """人物引用（节点详情页相关人物入口）。"""
 

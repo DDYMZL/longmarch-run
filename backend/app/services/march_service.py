@@ -9,6 +9,7 @@
 CHAPTERS 配置（管理端可视化编辑为后续增强）；章节状态由后端统一下发，
 章节最后节点点亮写 CHAPTER_COMPLETE 事件（不改变原有节点点亮逻辑）。
 """
+from bisect import bisect_left
 from datetime import datetime
 from typing import Dict, List, Optional, Set, Tuple
 import time
@@ -320,6 +321,88 @@ def get_global_goal(db: Session) -> Dict:
             else None
         ),
     }
+
+
+def _sorted_user_total_steps(db: Session) -> List[int]:
+    """全部用户累计步数（升序）：供各节点抵达人数二分计数与全员步数汇总共用。"""
+    rows = (
+        db.query(func.coalesce(func.sum(DailySport.steps), 0))
+        .group_by(DailySport.user_id)
+        .all()
+    )
+    return sorted(int(r[0] or 0) for r in rows)
+
+
+def compute_route_stats(db: Session) -> Dict:
+    """全员路线统计（未缓存实现）：每节点抵达人数/完成率 + 全员汇总。
+
+    口径与个人路线一致——累计步数达到 target_steps 即视为抵达，不依赖 lit_nodes，
+    因此覆盖尚未主动点亮的用户。累计步数升序后二分计数，每节点 O(log U)，
+    替代逐节点 O(U) 全量扫描（用户量大时的关键路径）。
+
+    管理端驾驶舱（dashboard_service.get_dashboard）与小程序星空长征 HUD
+    （get_route_stats）共用本函数，保证两端「抵达人数」口径不漂移。
+    """
+    sorted_totals = _sorted_user_total_steps(db)
+    total_users = db.query(User.id).count()
+    nodes = _ordered_nodes(db)
+
+    items = []
+    for n in nodes:
+        lit_count = len(sorted_totals) - bisect_left(sorted_totals, n.target_steps)
+        items.append(
+            {
+                "node_id": n.id,
+                "name": n.name,
+                "target_steps": n.target_steps,
+                "lit_count": lit_count,
+                "completion_rate": (
+                    round(lit_count / total_users * 100) if total_users else 0
+                ),
+            }
+        )
+
+    # 走完全程人数 = 末节点（目标步数最大）抵达人数
+    final_target = nodes[-1].target_steps if nodes else 0
+    finished = (
+        len(sorted_totals) - bisect_left(sorted_totals, final_target)
+        if final_target
+        else 0
+    )
+    return {
+        "total_users": total_users,
+        "total_steps": sum(sorted_totals),
+        "finished": finished,
+        "nodes": items,
+    }
+
+
+def get_route_stats(db: Session) -> Dict:
+    """小程序端全员路线统计（星空长征 HUD 数据叠加层）：各节点抵达人数 + 全员总数。
+
+    性能：底层是全量用户步数聚合，而 march 为 tab 页、onShow 即刷新，故加进程内短
+    TTL 缓存（_ROUTE_STATS_TTL 秒）；展示型 HUD 可接受 60s 的数据延迟。
+    管理端驾驶舱不走本函数（直接调 compute_route_stats），保持其实时口径不变。
+    """
+    now = time.monotonic()
+    cached = _ROUTE_STATS_CACHE["val"]
+    if cached is not None and now - _ROUTE_STATS_CACHE["at"] < _ROUTE_STATS_TTL:
+        return cached
+    result = compute_route_stats(db)
+    _ROUTE_STATS_CACHE["at"] = now
+    _ROUTE_STATS_CACHE["val"] = result
+    return result
+
+
+# 全员路线统计进程内短 TTL 缓存：全量步数聚合成本高，march tab 页高频刷新。
+_ROUTE_STATS_TTL = 60.0
+_ROUTE_STATS_CACHE: Dict[str, object] = {"at": 0.0, "val": None}
+
+
+def invalidate_route_stats_cache() -> None:
+    """失效全员路线统计缓存（管理端调整节点目标步数/启停后调用）。"""
+    _ROUTE_STATS_CACHE["at"] = 0.0
+    _ROUTE_STATS_CACHE["val"] = None
 
 
 def get_footprints(db: Session, user_id: int) -> Dict:

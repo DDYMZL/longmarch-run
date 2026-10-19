@@ -57,6 +57,7 @@ def create_route_node(db: Session, data: Dict) -> RouteNode:
         db.rollback()
         raise
     db.refresh(node)
+    march_service.invalidate_route_stats_cache()  # 节点变更，失效全员抵达统计缓存
     return node
 
 
@@ -78,6 +79,7 @@ def update_route_node(
         db.rollback()
         raise
     db.refresh(node)
+    march_service.invalidate_route_stats_cache()  # 节点变更，失效全员抵达统计缓存
     return node
 
 
@@ -97,6 +99,7 @@ def set_route_node_enabled(
         db.rollback()
         raise
     db.refresh(node)
+    march_service.invalidate_route_stats_cache()  # 节点启停，失效全员抵达统计缓存
     return node
 
 

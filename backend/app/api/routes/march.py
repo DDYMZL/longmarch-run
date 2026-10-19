@@ -13,6 +13,7 @@ from app.schemas.schemas import (
     NodeDetailOut,
     RouteNodeConfigListOut,
     RouteOut,
+    RouteStatsOut,
 )
 from app.services import march_service, medal_service
 
@@ -33,6 +34,14 @@ def route_nodes(
 @router.get("/route", response_model=RouteOut, summary="长征路线进度")
 def route(current: User = Depends(require_activity_view), db: Session = Depends(get_db)):
     return march_service.get_route(db, current.id)
+
+
+@router.get("/route-stats", response_model=RouteStatsOut, summary="全员路线抵达统计")
+def route_stats(
+    current: User = Depends(require_activity_view), db: Session = Depends(get_db)
+):
+    """星空长征 HUD 数据叠加层：各节点全员抵达人数/完成率 + 全员总数（60s 缓存）。"""
+    return march_service.get_route_stats(db)
 
 
 @router.get("/global", response_model=GlobalGoalOut, summary="全员共同长征目标")

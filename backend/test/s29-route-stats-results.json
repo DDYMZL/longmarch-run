@@ -1,0 +1,60 @@
+{
+  "total": 9,
+  "passed": 9,
+  "results": [
+    {
+      "id": "R01",
+      "name": "未带 token 返回 401",
+      "ok": true,
+      "detail": "status=401"
+    },
+    {
+      "id": "R02",
+      "name": "响应为 camelCase 且无 snake_case 泄漏",
+      "ok": true,
+      "detail": "body_keys=['nodes', 'totalUsers'] item_keys=['completionRate', 'litCount', 'nodeId']"
+    },
+    {
+      "id": "R03",
+      "name": "抵达人数二分计数与完成率正确",
+      "ok": true,
+      "detail": "lit=[3, 2, 1] rate=[60, 40, 20] totalUsers=5"
+    },
+    {
+      "id": "R04",
+      "name": "仅含 3 个启用节点且抵达人数按 sort_order 递减",
+      "ok": true,
+      "detail": "nodes=3 lit=[3, 2, 1] admin_nodes=['甲站', '乙站', '丙站', '停用站']"
+    },
+    {
+      "id": "R05",
+      "name": "与 admin/dashboard route_overview 逐项一致，metrics 口径不变",
+      "ok": true,
+      "detail": "metrics={\"total_users\": 5, \"today_users\": 4, \"total_steps\": 33000, \"avg_steps\": 6600, \"completion_rate\": 20, \"quiz_users\": 0, \"medals_granted\": 0} overview_last={'node_id': 3, 'name': '丙站', 'target_steps': 20000, 'lit_count': 1, 'completion_rate': 20}"
+    },
+    {
+      "id": "R06",
+      "name": "TTL 缓存命中：3 次请求只聚合 1 次",
+      "ok": true,
+      "detail": "aggregations=1"
+    },
+    {
+      "id": "R07",
+      "name": "invalidate 后重新聚合，数值随数据更新",
+      "ok": true,
+      "detail": "stale=[3, 2, 1] fresh=[4, 3, 2] aggregations=2"
+    },
+    {
+      "id": "R08",
+      "name": "admin dashboard 立即反映新数据，march 侧仍返回缓存值",
+      "ok": true,
+      "detail": "cached=[4, 3, 2] admin=[5, 4, 3] admin_total=83000 march_again=[4, 3, 2]"
+    },
+    {
+      "id": "R09",
+      "name": "管理端 PUT route-nodes 后小程序统计缓存自动失效",
+      "ok": true,
+      "detail": "put=200 before=[5, 4, 3] after=[5, 4, 0]"
+    }
+  ]
+}
