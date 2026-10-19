@@ -79,6 +79,15 @@ function getFootprints() {
 }
 
 /**
+ * 全员路线抵达统计（深空 HUD 叠加层 L7/L8 数据源，后端 S1 新增）。
+ * 底层为全量用户步数聚合，后端有 60s TTL 缓存；调用方应自行做 last-good 兜底。
+ * @returns {Promise<{totalUsers:number, nodes:Array<{nodeId:number, litCount:number, completionRate:number}>}>}
+ */
+function getRouteStats() {
+  return requestService.request({ url: '/march/route-stats' });
+}
+
+/**
  * 标记长征完成仪式已观看（需求 §20.4：仅第一次完成路线触发完整动画）。
  * @returns {Promise<{ok:boolean}>}
  */
@@ -107,6 +116,7 @@ function markIntroPlayed() {
 
 module.exports = {
   getRoute,
+  getRouteStats,
   getNodeDetail,
   lightUpNodes,
   getGlobalGoal,

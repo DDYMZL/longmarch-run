@@ -211,6 +211,17 @@ function drawHudPanel(ctx, x, y, w, h, cut) {
   ctx.closePath();
 }
 
+/**
+ * 进度环「值弧」路径（HUD 仪表）：自 12 点方向起顺时针画 ratio 圈。只建路径不落笔，
+ * 调用方自行设置线宽/线帽/颜色后 stroke（底环由调用方另画整圆）。
+ * @param {number} ratio 0~1，自动钳制
+ */
+function drawArcGauge(ctx, cx, cy, r, ratio) {
+  const clamped = Math.min(1, Math.max(0, ratio || 0));
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, -Math.PI / 2, -Math.PI / 2 + clamped * Math.PI * 2);
+}
+
 module.exports = {
   easeOutCubic,
   drawStar,
@@ -223,5 +234,6 @@ module.exports = {
   drawDashFlow,
   drawHexRing,
   drawScanSector,
-  drawHudPanel
+  drawHudPanel,
+  drawArcGauge
 };

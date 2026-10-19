@@ -5,18 +5,24 @@
  * 全部绘制状态（几何采样、星点/粒子、离屏静态层、光晕精灵、观景变换、动画时钟）
  * 与全部绘制逻辑。rAF 循环留在页面（生命周期由 onHide/onUnload 掌控），每帧调 draw(t)。
  *
- * 视觉规则（需求 §13.2/§13.3 + S3「深空 HUD 霓虹流光」重构）：
- *   分七层绘制——L0 深空底与暗角 / L1 带刻度经纬网格 / L2 青蓝等高线山峦（wireframe）
+ * 视觉规则（需求 §13.2/§13.3 + S3「深空 HUD 霓虹流光」重构 + S4 实时叠加层）：
+ *   分九层绘制——L0 深空底与暗角 / L1 带刻度经纬网格 / L2 青蓝等高线山峦（wireframe）
  *   / L3 切角 HUD 边框 + 雷达坐标环 / L4 旋转雷达扇形 + 水平扫描带 / L5 路线能量管道
- *   （青蓝外发光 + 金色内核 + 流动虚线）/ L6 节点三态六边环（内含星形）。
- *   L0~L3 静态烘焙进离屏层，L4~L6 每帧绘制。
+ *   （青蓝外发光 + 金色内核 + 流动虚线）/ L6 节点三态六边环（内含星形）
+ *   / L7 实时数据叠加层（全员数据面板 + 我的进度仪表环 + 三态图例）
+ *   / L8 WS 飞线（他人点亮事件的数据包沿路线飞向目标节点）。
+ *   L0~L3 静态烘焙进离屏层，L4~L6 在观景变换内每帧绘制，L7 与操作提示画在变换之外
+ *   （视口固定，不随拖动/缩放移动），L8 在变换内（贴合路线场景坐标）。
  *   **配色铁律**：路线与节点保留金（#F0C65A）/ 红（#FF3D57）叙事色，青蓝（#3FD8FF）
- *   只用于仪器层（网格、边框、坐标环、扫描、管道外发光、面板描边）——两者不得混用。
+ *   只用于仪器层（网格、边框、坐标环、扫描、管道外发光、面板描边、L7/L8 数据元素）
+ *   ——两者不得混用。
  *   节点三态：已点亮=金色六边环+发光金星呼吸 / 当前=红色六边环+脉冲环+红星呼吸 /
  *   未解锁=暗青六边环+暗星点。点亮动画：亮起 → 扩大 → 粒子扩散 → 稳定发光。
  * 性能约束（§13.4）：静态背景离屏烘焙一次；星点/粒子构建期一次性分配，帧内零分配；
  *   金色渐变按 endIdx 缓存，雷达/扫描渐变建一次复用；光晕与雾带用预渲染精灵 drawImage，
- *   不每帧建径向渐变；每帧路径描边 ≤4 次、drawImage ≤30 次、fillText ≤22 次。
+ *   不每帧建径向渐变；L7 数值在 setStats 时一次性格式化，进度环百分比按整数变化缓存；
+ *   每帧长折线描边 ≤4 次（L5 能量管道三次）、drawImage ≤30 次、
+ *   fillText ≤22 次（节点标签 10 + 操作提示 1 + L7 面板 6 + 仪表环 2 + 图例 3）。
  *
  * 观景变换 view 由页面手势层直接改写（pan/pinch 数学属于事件层），改完须调 clampView()；
  * 命中测试 hitTest() 内部做屏幕→场景逆变换。
@@ -38,6 +44,7 @@ const STAR_TINTS = ['#EAF2FF', '#EAF2FF', '#EAF2FF', '#FFF1D6', '#CFE0FF'];
  * CYAN 以「r,g,b」形式存放，便于按不同透明度拼 rgba()；金红叙事色沿用各绘制处的字面值。
  */
 const CYAN = '63,216,255'; // #3FD8FF，仪器层唯一主色
+const CYAN_HEX = '#3FD8FF'; // 同上，需整色（非 rgba 拼接）时使用，避免帧内字符串分配
 const DEEP_SKY = ['#050B16', '#08111F', '#0A1826', '#0E1B2E']; // L0 深空底色带（上→下）
 const GRID = 42; // L1 网格间距（px），每 4 格一条亮主线
 const RADAR_R = 0.4; // L3 雷达坐标环半径（相对 min(cw,ch)）
@@ -45,6 +52,31 @@ const SWEEP_S = 7; // L4 雷达扇形旋转一周秒数
 const SWEEP_ARC = 1.05; // L4 扇形张角（弧度）
 const SCAN_S = 9; // L4 水平扫描带自上而下一趟的秒数
 const HINT_TEXT = '拖动平移 · 双指缩放 · 双击复位 · 点节点看历史';
+const FLY_MS = 1400; // L8 WS 飞线单趟时长
+const BADGE_ZOOM = 1.5; // L7 节点人数徽标仅在缩放 ≥ 该值时并入标签
+
+/* ---- L7 实时数据叠加层（S4）：面板行标签与三态图例（模块常量，帧内零分配）---- */
+const OVERLAY_ROWS = ['今日参与', '今日点亮', '全员步数'];
+const OVERLAY_W = 126; // 左上面板宽
+const OVERLAY_H = 58; // 左上面板高（3 行 × 16 + 边距）
+const RING_R = 18; // 右上进度仪表环半径
+const LEGEND = [
+  { text: '已点亮', color: '#F0C65A' },
+  { text: '当前', color: '#FF3D57' },
+  { text: '未解锁', color: 'rgba(' + CYAN + ',0.45)' }
+];
+const LEGEND_STEP = 54; // 图例项水平间距
+
+/**
+ * 大数缩写（L7 面板与人数徽标共用）：≥1 亿 / ≥1 万 保留一位小数，其余千分位。
+ * 只在 setStats 时调用，不在绘制帧内拼接字符串。
+ */
+function fmtNum(n) {
+  const v = Number(n) || 0;
+  if (v >= 1e8) return (v / 1e8).toFixed(1) + '亿';
+  if (v >= 1e4) return (v / 1e4).toFixed(1) + '万';
+  return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
 
 const INTRO_MS = 1400; // 首次渲染入场描画时长
 const PROGRESS_MS = 800; // 步数刷新增量推进时长
@@ -76,6 +108,7 @@ function createHudMap(opts) {
     path: null,
     pathDist: null,
     pathLen: 0,
+    nodePathIdx: null, // 各节点在采样路径上的下标（L8 飞线终点定位）
 
     // 构建期一次性分配的绘制元素（帧内零分配）
     farStars: null,
@@ -94,6 +127,11 @@ function createHudMap(opts) {
     progressAnim: null,
     arriveFx: null,
 
+    // L7 实时数据叠加层（页面 setStats 注入；null = 未加载/加载失败，数字显示 --）
+    stats: null,
+    // L8 WS 飞线（页面 playFlyLine 注入）：{ idx, start }
+    flyLine: null,
+
     // 渐变缓存（画布/静态层重建时重置）
     _goldGrad: null,
     _goldGradIdx: -1,
@@ -102,6 +140,9 @@ function createHudMap(opts) {
     _scanGrad: null,
     _labelW: null,
     _hintW: 0,
+    // L7 仪表环百分比文案：整数变化时才重建字符串
+    _ringPct: -1,
+    _ringText: '',
 
     /* ---------------- 数据与几何 ---------------- */
 
@@ -176,6 +217,7 @@ function createHudMap(opts) {
       this.path = sampled.path;
       this.pathDist = sampled.dist;
       this.pathLen = sampled.len;
+      this.nodePathIdx = sampled.nodePathIndex;
 
       // 星河轨迹沿线星尘（§13.2「路线=星河轨迹」）：固定 22 颗采样点，
       // 仅已完成段内闪烁（相位各异，数量固定不随帧分配）
@@ -333,6 +375,9 @@ function createHudMap(opts) {
       this.nodePts = null;
       this.path = null;
       this.pathDist = null;
+      this.nodePathIdx = null;
+      this.stats = null;
+      this.flyLine = null;
       this.farStars = null;
       this.stars = null;
       this.trailDust = null;
@@ -343,6 +388,8 @@ function createHudMap(opts) {
       this._scanGrad = null;
       this._labelW = null;
       this._hintW = 0;
+      this._ringPct = -1;
+      this._ringText = '';
     },
 
     /* ---------------- 单帧绘制 ---------------- */
@@ -375,10 +422,12 @@ function createHudMap(opts) {
       this.drawNodes(t);
       this.drawArriveFx();
       this.drawProgressFlag(t);
+      this.drawFlyLine();
 
       ctx.restore();
-      // 操作提示画在观景变换之外：视口固定，不随拖动/缩放移动
+      // 操作提示与 L7 实时叠加层画在观景变换之外：视口固定，不随拖动/缩放移动
       this.drawHudHint();
+      this.drawOverlay();
     },
 
     /**
@@ -943,14 +992,24 @@ function createHudMap(opts) {
       });
     },
 
-    /** 节点名标签：深底圆角面板 + 青蓝发丝描边 + 状态色文字（暗背景下保证可读） */
+    /**
+     * 节点名标签：深底圆角面板 + 青蓝发丝描边 + 状态色文字（暗背景下保证可读）。
+     * L7 人数徽标（S4）：缩放 ≥ BADGE_ZOOM 时把「全员抵达人数」并入标签尾部，
+     * 与名称同一次 fillText，不额外占用文字预算；宽度按含徽标文本单独缓存。
+     */
     drawNodeLabel(ctx, node, p) {
       ctx.font = '10px sans-serif';
       ctx.textAlign = 'center';
       const labelX = Math.min(Math.max(p.x, 30), this.cw - 30);
       const labelY = p.y + 26;
+      const st = this.stats;
+      const badge =
+        st && this.view.scale >= BADGE_ZOOM && (node.status === 'completed' || node.status === 'current')
+          ? st.badges[node.id]
+          : '';
+      const text = badge ? node.name + ' ' + badge : node.name;
       if (!this._labelW) this._labelW = {};
-      const w = this._labelW[node.name] || (this._labelW[node.name] = ctx.measureText(node.name).width);
+      const w = this._labelW[text] || (this._labelW[text] = ctx.measureText(text).width);
       // 面板底衬（圆角收到 3px，与 HUD 切角语言一致）
       routeCanvas.drawRoundRect(ctx, labelX - w / 2 - 6, labelY - 10, w + 12, 15, 3);
       ctx.fillStyle = 'rgba(5,11,22,0.72)';
@@ -966,7 +1025,7 @@ function createHudMap(opts) {
       } else {
         ctx.fillStyle = '#93A6BC';
       }
-      ctx.fillText(node.name, labelX, labelY);
+      ctx.fillText(text, labelX, labelY);
     },
 
     /**
@@ -1177,6 +1236,188 @@ function createHudMap(opts) {
         ctx.fill();
       }
       ctx.globalAlpha = 1;
+    },
+
+    /* ---------------- 实时数据叠加层 L7 / WS 飞线 L8（S4） ----------------
+     * L7/L8 属「全员实时数据」层：由页面拉取 /broadcast/today + /march/route-stats 后经
+     * setStats 注入、收到 WS activity 后经 playFlyLine 触发；内核不认接口形状，只认下面的
+     * 归一化入参。数据元素一律用仪器青蓝，叙事金红只留给路线与节点（配色铁律）。
+     */
+
+    /**
+     * 注入 L7 实时数据。数值在此一次性格式化为显示串（含节点人数徽标），绘制帧内零分配。
+     * @param {Object|null} stats 传 null 表示未加载/加载失败，面板数值显示 --
+     * @param {number} stats.todayUsers 今日参与人数
+     * @param {number} stats.todayLit   今日全员点亮节点次数
+     * @param {number} stats.todaySteps 今日全员步数合计
+     * @param {Object<string, {litCount: number}>} stats.litMap 节点 id → 抵达统计
+     */
+    setStats(stats) {
+      if (!stats) {
+        this.stats = null;
+        return;
+      }
+      const litMap = stats.litMap || {};
+      const badges = {};
+      Object.keys(litMap).forEach((id) => {
+        badges[id] = fmtNum(litMap[id].litCount);
+      });
+      this.stats = {
+        lines: [fmtNum(stats.todayUsers), fmtNum(stats.todayLit), fmtNum(stats.todaySteps)],
+        badges: badges
+      };
+    },
+
+    /**
+     * 播放一条 WS 飞线（L8）：他人点亮/推进事件到达时由页面调用，动画自播自清。
+     * @param {number} nodeId 目标节点 id；非本路线节点或几何未就绪时静默忽略
+     */
+    playFlyLine(nodeId) {
+      if (!nodeId || !this.nodeIndex || !this.nodePathIdx) return;
+      const idx = this.nodeIndex[nodeId];
+      if (idx === undefined) return;
+      this.flyLine = { idx: idx, start: Date.now() };
+    },
+
+    /**
+     * L7 实时数据叠加层（视口固定，画在观景变换之外）：
+     * 左上「全员实时数据」切角面板三行 → 右上「我的进度」仪表环 → 左下节点三态图例
+     * （与底部操作提示错开一行，避免重叠）。
+     */
+    drawOverlay() {
+      const ctx = this.ctx;
+      if (!ctx || !this.route) return;
+      const { cw, ch } = this;
+      const st = this.stats;
+      ctx.save();
+
+      // 左上数据面板：标签（暗青）左对齐 + 数值（亮白青）右对齐，左侧一条青色数据标识
+      routeCanvas.drawHudPanel(ctx, 10, 10, OVERLAY_W, OVERLAY_H, 7);
+      ctx.fillStyle = 'rgba(5,11,22,0.62)';
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.30)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = 'rgba(' + CYAN + ',0.7)';
+      ctx.fillRect(13, 18, 2, OVERLAY_H - 16);
+      for (let i = 0; i < OVERLAY_ROWS.length; i++) {
+        const y = 27 + i * 16;
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(' + CYAN + ',0.62)';
+        ctx.fillText(OVERLAY_ROWS[i], 21, y);
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'right';
+        ctx.fillStyle = 'rgba(234,246,255,0.92)';
+        ctx.fillText(st ? st.lines[i] : '--', 10 + OVERLAY_W - 10, y);
+      }
+
+      // 右上进度仪表环：底环整圆 + 值弧（routeCanvas.drawArcGauge）+ 百分比 + 图注
+      const rcx = cw - 32;
+      const rcy = 34;
+      const ratio = this.currentRatio();
+      const pct = Math.round(ratio * 100);
+      if (pct !== this._ringPct) {
+        this._ringPct = pct;
+        this._ringText = pct + '%';
+      }
+      ctx.lineCap = 'round';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(rcx, rcy, RING_R, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.20)';
+      ctx.stroke();
+      routeCanvas.drawArcGauge(ctx, rcx, rcy, RING_R, ratio);
+      ctx.strokeStyle = 'rgba(' + CYAN + ',0.9)';
+      ctx.stroke();
+      ctx.textAlign = 'center';
+      ctx.font = '10px sans-serif';
+      ctx.fillStyle = 'rgba(234,246,255,0.95)';
+      ctx.fillText(this._ringText, rcx, rcy + 3.5);
+      ctx.font = '8px sans-serif';
+      ctx.fillStyle = 'rgba(' + CYAN + ',0.6)';
+      ctx.fillText('我的进度', rcx, rcy + RING_R + 12);
+
+      // 左下三态图例：六边环缩样取各状态叙事色，文字统一冷白（不占节点标签预算）
+      const ly = ch - 46;
+      ctx.font = '9px sans-serif';
+      ctx.textAlign = 'left';
+      for (let i = 0; i < LEGEND.length; i++) {
+        const lx = 12 + i * LEGEND_STEP;
+        routeCanvas.drawHexRing(ctx, lx + 5, ly - 3, 5, 0, 0.75);
+        ctx.strokeStyle = LEGEND[i].color;
+        ctx.lineWidth = 1.2;
+        ctx.stroke();
+        ctx.fillStyle = 'rgba(234,246,255,0.7)';
+        ctx.fillText(LEGEND[i].text, lx + 13, ly);
+      }
+      ctx.restore();
+    },
+
+    /**
+     * L8 WS 飞线：一枚青蓝数据包沿采样路线从「我的当前进度位置」飞向目标节点，
+     * 尾迹 8 点渐隐、抵达前 25% 在目标节点扩散一圈信号环，播完自动清除（FLY_MS 一趟）。
+     * 起点晚于终点（他人节点在我身后）时反向飞行，插值口径一致。
+     */
+    drawFlyLine() {
+      const fx = this.flyLine;
+      if (!fx || !this.path || !this.nodePathIdx || !this.nodePts) return;
+      const target = this.nodePts[fx.idx];
+      if (!target) return;
+      const k = (Date.now() - fx.start) / FLY_MS;
+      if (k >= 1) {
+        this.flyLine = null;
+        return;
+      }
+      const ctx = this.ctx;
+      const path = this.path;
+      const last = path.length - 1;
+      const to = Math.min(this.nodePathIdx[fx.idx], last);
+      const from = Math.min(this.dist2Index(this.pathLen * this.currentRatio()), last);
+      const head = Math.round(from + (to - from) * routeCanvas.easeOutCubic(k));
+      const dir = to >= from ? 1 : -1;
+
+      // 尾迹（索引回溯，帧内零分配；透明度用 globalAlpha 而非 rgba 拼接）
+      ctx.fillStyle = CYAN_HEX;
+      for (let m = 1; m <= 8; m++) {
+        const ti = Math.min(last, Math.max(0, head - dir * m * 3));
+        ctx.globalAlpha = (1 - m / 9) * 0.85;
+        ctx.beginPath();
+        ctx.arc(path[ti].x, path[ti].y, Math.max(0.8, 3.2 - m * 0.3), 0, Math.PI * 2);
+        ctx.fill();
+      }
+
+      // 数据包头部：雾带精灵叠两层提亮成青蓝光晕 + 信号环 + 白热核心
+      const hp = path[head];
+      if (this.glowCyan) {
+        const s = 44;
+        ctx.globalAlpha = 1;
+        ctx.drawImage(this.glowCyan, hp.x - s / 2, hp.y - s / 2, s, s);
+        ctx.drawImage(this.glowCyan, hp.x - s / 2, hp.y - s / 2, s, s);
+      }
+      ctx.globalAlpha = 0.9;
+      ctx.strokeStyle = CYAN_HEX;
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      ctx.arc(hp.x, hp.y, 6, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = '#EAF9FF';
+      ctx.beginPath();
+      ctx.arc(hp.x, hp.y, 2.8, 0, Math.PI * 2);
+      ctx.fill();
+
+      // 抵达信号环（最后 25%）
+      if (k > 0.75) {
+        const pr = (k - 0.75) / 0.25;
+        ctx.globalAlpha = (1 - pr) * 0.8;
+        ctx.strokeStyle = CYAN_HEX;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(target.x, target.y, 12 + pr * 26, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+      }
     },
 
     /* ---------------- 观景变换与命中 ---------------- */

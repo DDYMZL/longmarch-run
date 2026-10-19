@@ -6,13 +6,19 @@
  * 模式切换、数据拉取、rAF 循环、手势事件转发（pan/pinch 数学）与命中后跳转。
  * 星空全景（§13.4）：单指拖动平移、双指捏合缩放、双击复位。
  * 任意节点（含未解锁）均可点击查看历史详情。
+ * 实时数据叠加（S4）：本页订阅 WS，activity 事件转成内核飞线、data_changed 节流重拉
+ * 全员统计；两个聚合接口的数据合并后交给 hud.setStats，渲染内核不认接口形状。
  */
 const app = getApp();
 const march = require('../../services/march');
 const sport = require('../../services/sport');
+const broadcast = require('../../services/broadcast');
+const ws = require('../../services/ws');
 const arrivePopup = require('../../utils/arrivePopup');
 const hudMap = require('../../utils/hudMap');
 const nodeThemes = require('../../data/node-themes');
+
+const STATS_THROTTLE = 5000; // WS data_changed 触发全员统计重拉的最小间隔
 
 /** 列表/信息卡视图节点：仅保留模板用到的字段，减小 setData 体积 */
 function toViewNode(node) {
@@ -66,6 +72,7 @@ Page({
     this.maybePlayIntro();
     // onHide 停掉了星空动画：先用已有路线恢复，刷新失败时画面也不冻结
     if (this.hud && this.routeData) this.startAnim();
+    if (!this._wsUnsub) this._wsUnsub = ws.subscribe((msg) => this.handleWsMessage(msg));
     this.refresh();
   },
 
@@ -118,6 +125,7 @@ Page({
 
   onHide() {
     this._refreshRequestId = (this._refreshRequestId || 0) + 1;
+    this.unsubscribeWs();
     if (this._viewTimer) clearTimeout(this._viewTimer);
     if (this.popupTimer) clearTimeout(this.popupTimer);
     if (this._introTimer) { clearTimeout(this._introTimer); this._introTimer = null; }
@@ -127,6 +135,7 @@ Page({
 
   onUnload() {
     this._refreshRequestId = (this._refreshRequestId || 0) + 1;
+    this.unsubscribeWs();
     if (this._viewTimer) clearTimeout(this._viewTimer);
     if (this.popupTimer) clearTimeout(this.popupTimer);
     if (this._introTimer) clearTimeout(this._introTimer);
@@ -135,11 +144,66 @@ Page({
     this.stopAnim();
   },
 
+  /** 退订 WS 推送（onHide/onUnload 共用；无订阅者时 services/ws 内部延迟关闭连接） */
+  unsubscribeWs() {
+    if (!this._wsUnsub) return;
+    this._wsUnsub();
+    this._wsUnsub = null;
+  },
+
+  /**
+   * WS 推送（S4）：activity 只在星空模式画一条飞线（不发请求）；
+   * data_changed 表示他人数据变更，节流后重拉全员统计，不动 /march/route（自己的进度
+   * 由 refresh 与同步步数驱动，避免他人动作把自己的路线重绘一遍）。
+   */
+  handleWsMessage(msg) {
+    if (!msg) return;
+    if (msg.type === 'data_changed') {
+      const now = Date.now();
+      if (now - (this._statsAt || 0) < STATS_THROTTLE) return;
+      this.loadOverlay();
+      return;
+    }
+    if (msg.type === 'activity' && msg.nodeId && this.hud) this.hud.playFlyLine(msg.nodeId);
+  },
+
+  /**
+   * 拉取 L7 叠加层数据：全员路线抵达统计 + 今日播报全局段，合并成渲染内核认的归一化入参。
+   * 非阻塞（不参与 refresh 的链路）；仅星空模式发起（实景模式没有消费方，不产生请求）；
+   * 任一接口失败时不覆盖已注入数据，保持 last-good，首次即失败则内核显示 --。
+   */
+  loadOverlay() {
+    if (this.data.mode !== 'canvas') return Promise.resolve();
+    this._statsAt = Date.now();
+    return Promise.all([march.getRouteStats(), broadcast.getToday()])
+      .then((res) => {
+        const stats = res[0] || {};
+        const global = (res[1] && res[1].global) || {};
+        const litMap = {};
+        (stats.nodes || []).forEach((n) => {
+          litMap[n.nodeId] = n;
+        });
+        this._overlayStats = {
+          todayUsers: global.todayUsers,
+          todayLit: global.todayLitCount,
+          todaySteps: global.todaySteps,
+          litMap: litMap
+        };
+        if (this.hud) this.hud.setStats(this._overlayStats);
+      })
+      .catch(() => {
+        // 网络失败：沿用上次注入的数据（内核 stats 不被清空）
+      });
+  },
+
   /* ---------------- 数据 ---------------- */
 
   refresh() {
     const requestId = (this._refreshRequestId || 0) + 1;
     this._refreshRequestId = requestId;
+
+    // L7 全员数据与自己的路线互不依赖：并发拉取，不进入下面的链式流程（失败不影响路线）
+    this.loadOverlay();
 
     // 先尝试点亮达标节点（幂等，仅返回本次新点亮与新完成章节），再拉取路线；
     // 有新点亮时播放到达动画序列（轨迹推进 → 节点发光扩散 → 抵达事件卡 → 章节仪式）。
@@ -324,6 +388,7 @@ Page({
     this.setData({ mode }, () => {
       if (mode === 'canvas') {
         this.initCanvas();
+        this.loadOverlay();
         return;
       }
       // <canvas> 已被 wx:else 移除：释放渲染内核（画布上下文、离屏静态层与光晕精灵），
@@ -519,6 +584,8 @@ Page({
         this.canvas = node;
         this.hud = hudMap.createHudMap({ ctx: ctx, cw: width, ch: height, dpr: dpr });
         if (this.routeData) this.hud.setRoute(this.routeData);
+        // 切回星空模式先用 last-good 数据即时上屏，随后 loadOverlay 再刷新
+        if (this._overlayStats) this.hud.setStats(this._overlayStats);
         this.startAnim();
       });
   },
