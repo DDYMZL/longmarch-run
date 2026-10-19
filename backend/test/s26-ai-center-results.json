@@ -284,7 +284,7 @@
       "id": "L01",
       "name": "真实调用模型完成一次历史助手对话（回答非空、捕获平台用量）",
       "ok": true,
-      "detail": "status=200 reply_len=152 usedTokens=383"
+      "detail": "status=200 reply_len=154 usedTokens=384"
     }
   ]
 }

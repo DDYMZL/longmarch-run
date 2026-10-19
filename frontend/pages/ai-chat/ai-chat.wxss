@@ -297,6 +297,25 @@
 .ai-send-disabled {
   background: #CCCCCC;
 }
+/* 生成中：发送按钮变为停止，尺寸沿用 .ai-send 避免输入区抖动 */
+.ai-stop {
+  background: #6B6B6B;
+}
+
+/* 逐字输出时跟在正文末尾的光标 */
+.ai-cursor {
+  display: inline-block;
+  width: 4rpx;
+  height: 28rpx;
+  margin-left: 4rpx;
+  vertical-align: -3rpx;
+  background: #C8102E;
+  animation: aiCursorBlink 0.9s infinite step-end;
+}
+@keyframes aiCursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
 
 /* 会话抽屉 */
 .ai-mask {

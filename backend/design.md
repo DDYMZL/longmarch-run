@@ -80,6 +80,9 @@
 | `access_service` | —（管理端） | RBAC：`build_principal` 聚合用户启用角色与菜单（超管=全部菜单）、`get_enabled_roles`、`get_menu_items`、菜单/角色 CRUD 与授权校验 |
 | `audit_service` | —（管理端） | 审计日志：`record` 写 `audit_logs`（区分 super/user 操作人），分页/日期/动作/操作人筛选 |
 | `wechat_service` | — | 微信服务端对接：`get_wxacode_png`（小程序码）、code2Session 开放平台 code 换取（未配置凭证时 mock） |
+| `llm_service` | —（上游大模型，OpenAI 兼容协议） | 大模型调用封装：`chat`（一次性）与 `LlmStream`（SSE 逐块迭代器，按 token 成块产出增量）；统一超时/最大输出 token/重试与 `LlmError` 归一，密钥与基址走 settings，不向调用方暴露上游协议细节 |
+| `ai_chat_service` | `ai.js` | 历史助手连续对话：`prepare_message`（开关/限额/输入/会话归属校验 + 组装 system/历史 prompt + 已发布知识来源）→ `finalize_message`（落库权威全文与用量）/ `discard_message`（失败回滚）；会话与消息 CRUD、按 JWT 判定归属（越权 404） |
+| `ai_usage_service` | — | AI 用量与审计：`record(feature, user_id, model, status, error_code)` 记一次调用的成功/失败与额度扣减，供限额判定与排障 |
 
 ## 3. 核心数据模型（SQLAlchemy ORM）
 
@@ -221,6 +224,8 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | GET/POST/PUT/DELETE | `/api/admin/orgs[/{id}]` | 管理员(orgs) | 组织架构树 CRUD；GET 树每节点含 `direct_user_count`（直属人数）与 `total_user_count`（含下级累计，后序累加）；`POST /api/admin/orgs/sync` 从外部系统同步 |
 | GET | `/api/admin/orgs/{id}/users?scope=&page=&page_size=` | 管理员(orgs) | 组织人员明细（分页）：`scope=direct` 仅直属成员（与 direct_user_count 同口径）、`scope=all` 含全部层级下级（与 total_user_count 同口径）；组织不存在 404 |
 
+| POST | `/api/ai/chat/stream` | 登录用户（活动可见） | 历史助手提问（SSE 逐字返回，见 §4.3）：事件序列 `start`→`delta`*→`done`，流内失败发 `error`；前置校验（开关/限额/输入/会话归属）失败回普通 JSON + 403/429/400/502，前端无需为它们解析 SSE |
+
 ### 4.2 关键请求/响应示例
 
 **登录**（`POST /api/auth/login`）：
@@ -300,6 +305,25 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 - 判定与超时都以 `status='answering'` 为条件更新：并发重复提交、提交与超时竞态只有一方生效；超时题不得分、之后提交一律 400。
 - 截止后 `QUIZ_ANSWER_GRACE_SECONDS`（2 秒）内到达的提交视为网络延迟仍受理；被动查询（`/daily`）按截止 + 宽限判超时；主动开下一题视为放弃当前题，截止即判超时。
 - 每次判定在同一事务内按本会话答对数重算当日答题积分（`biz_key=quiz:日期`），中途退出已得积分保留；核对重算以 `quiz_answers` 为源（无逐题数据的历史日回退 `quiz_records`）。
+
+### 4.3 AI 流式对话（SSE）契约与部署约束
+
+`POST /api/ai/chat/stream` 以 `text/event-stream` 逐块推送，帧格式为标准 SSE（`data: {json}\n\n`）。事件序列与载荷：
+
+| 事件 | 载荷 | 说明 |
+| --- | --- | --- |
+| `start` | `{type, conversationId, title}` | 首帧，让前端立刻更新会话标题与归属 |
+| `delta` | `{type, text}` | 一段增量正文；模型按 token 成块推送，前端再做逐字平滑 |
+| `done` | `{type, usedTokens, reply, sources}` | 收尾帧；`reply` 为已落库的权威全文，供前端校正本地拼接结果 |
+| `error` | `{type, message}` | 流内失败（上游异常）。此时 200 与响应头已发出，**状态码无法再改**，故错误只能走事件 |
+
+约束与语义：
+
+1. **前置校验不进 SSE**：开关/限额/输入/会话归属校验与 `LlmStream` 构造都在返回 `StreamingResponse` 之前完成，这类失败是普通 JSON + 403/429/400/502，前端按普通请求错误处理，无需解析 SSE。
+2. **中断（abort）落库语义**：客户端断开使生成器提前退出时走 `_settle_aborted`——已产出增量非空则按拼接全文 `finalize_message` 落库（半截保留），否则 `discard_message` 回滚；收尾失败不得掩盖触发它的原始异常。
+3. **用量记录**：成功与流内失败都经 `ai_usage_service.record` 记一次调用（`status=error` + `error_code=llm`），限额据此扣减。
+4. **部署必须关闭代理缓冲**：响应带 `X-Accel-Buffering: no`（见 `_STREAM_HEADERS`）。若前置 nginx 仍开启 `proxy_buffering`，增量会被攒到连接结束才下发，逐字效果失效——生产 nginx 需对该路径 `proxy_buffering off; proxy_cache off;`，否则本接口退化为一次性返回。
+5. **前端降级**：基础库不支持 `enableChunked`/`onChunkReceived` 时 `request.requestStream` 回 `unsupported` 错误，页面降级为一次性 `chat`，功能不中断。
 
 ## 5. 核心业务规则（与前端 Mock 完全一致）
 

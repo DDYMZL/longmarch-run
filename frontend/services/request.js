@@ -181,6 +181,214 @@ function request(options) {
   });
 }
 
+// ---------------- 流式请求（SSE） ----------------
+// 流式回答逐片到达可达数十秒，固定的 10s/60s 超时会误杀正常生成，这里给一个宽松的整体上限
+const STREAM_TIMEOUT_MS = 120000;
+// UTF-8 各码元长度对应的首字节有效位掩码（1/2/3/4 字节 → 7/5/4/3 位）
+const UTF8_MASKS = [0x7f, 0x1f, 0x0f, 0x07];
+
+/**
+ * 增量 UTF-8 解码器：小程序运行时没有 TextDecoder，而多字节汉字常被切在分片边界上，
+ * 逐片直接转字符串会出乱码。按首字节判定码元长度，尾部不完整的字节留到下一片再解；
+ * 游离续字节与非法起始字节直接跳过（丢一个字符好过整条流崩掉）。
+ */
+function createUtf8Decoder() {
+  let rest = new Uint8Array(0);
+
+  function concat(a, b) {
+    const out = new Uint8Array(a.length + b.length);
+    out.set(a, 0);
+    out.set(b, a.length);
+    return out;
+  }
+
+  return {
+    /**
+     * @param {ArrayBuffer} chunk 本次收到的字节
+     * @returns {string} 本片能完整解出的文本
+     */
+    decode(chunk) {
+      const bytes = concat(rest, new Uint8Array(chunk || new ArrayBuffer(0)));
+      let text = '';
+      let i = 0;
+      while (i < bytes.length) {
+        const b = bytes[i];
+        if ((b >= 0x80 && b < 0xc0) || b >= 0xf8) {
+          i += 1;
+          continue;
+        }
+        let len = 1;
+        if (b >= 0xf0) len = 4;
+        else if (b >= 0xe0) len = 3;
+        else if (b >= 0xc0) len = 2;
+        if (i + len > bytes.length) break; // 尾部不完整，等下一片
+        let cp = b & UTF8_MASKS[len - 1];
+        for (let k = 1; k < len; k += 1) cp = (cp << 6) | (bytes[i + k] & 0x3f);
+        // 超出 BMP 的码点（emoji 等）需手工组代理对，避免依赖 String.fromCodePoint
+        text += cp > 0xffff
+          ? String.fromCharCode(0xd800 + ((cp - 0x10000) >> 10), 0xdc00 + ((cp - 0x10000) & 0x3ff))
+          : String.fromCharCode(cp);
+        i += len;
+      }
+      rest = bytes.slice(i);
+      return text;
+    }
+  };
+}
+
+/**
+ * SSE 分帧：按空行切事件块，块内取 data: 行的 JSON。
+ * 容忍 \r\n 换行；单个坏块只跳过（少几个字），中断整条流会让已显示的半截回答失去下文。
+ * @param {function(object):void} onEvent
+ */
+function createSseParser(onEvent) {
+  let buffer = '';
+
+  function emit(block) {
+    block.split('\n').forEach((line) => {
+      if (line.indexOf('data:') !== 0) return;
+      const payload = line.slice(5).trim();
+      if (!payload || payload === '[DONE]') return;
+      let evt = null;
+      try {
+        evt = JSON.parse(payload);
+      } catch (e) {
+        return; // 坏块跳过；业务回调抛错不在此吞掉
+      }
+      onEvent(evt);
+    });
+  }
+
+  return {
+    feed(text) {
+      buffer += text.replace(/\r\n/g, '\n');
+      let idx = buffer.indexOf('\n\n');
+      while (idx >= 0) {
+        emit(buffer.slice(0, idx));
+        buffer = buffer.slice(idx + 2);
+        idx = buffer.indexOf('\n\n');
+      }
+    },
+    /** 响应结束时把最后不足一个空行的残留块也吐出去 */
+    flush() {
+      if (buffer.trim()) emit(buffer);
+      buffer = '';
+    }
+  };
+}
+
+/** 当前基础库是否支持分块传输（enableChunked 需 2.20.2 及以上）。 */
+function supportsChunked() {
+  try {
+    return !!wx.canIUse('request.object.enableChunked');
+  } catch (e) {
+    return false;
+  }
+}
+
+/**
+ * 流式请求：只负责传输与分帧（字节流 → UTF-8 增量解码 → SSE 事件对象），不含业务语义。
+ * 非 2xx 时把响应体当 FastAPI JSON 错误解析，错误语义与 request() 一致（statusCode + message）；
+ * 401 不在此处静默重登——增量可能已推给用户，重放会导致正文重复，由调用方决定是否退化。
+ * abort() 之后不再触发任何回调，收尾由调用方自行处理。
+ * @param {{url:string, method?:string, data?:object, header?:object, timeout?:number}} opts
+ * @param {function(object):void} onEvent 每收到一个 SSE 事件对象
+ * @param {function(Error|null):void} onEnd 终止回调，null 表示 HTTP 层正常结束
+ * @returns {{abort:function():void}}
+ */
+function requestStream(opts, onEvent, onEnd) {
+  const token = getToken();
+  const header = Object.assign(
+    { 'Content-Type': 'application/json', Accept: 'text/event-stream' },
+    opts.header || {}
+  );
+  if (token) header.Authorization = 'Bearer ' + token;
+
+  const decoder = createUtf8Decoder();
+  // 只在收到第一个 SSE 事件前累积原文：非 2xx 的 JSON 错误体需要它，成功流则不必留住整段正文
+  let rawText = '';
+  let sawEvent = false;
+  let ended = false;
+  const parser = createSseParser((evt) => {
+    sawEvent = true;
+    onEvent(evt);
+  });
+
+  function finish(err) {
+    if (ended) return;
+    ended = true;
+    onEnd(err || null);
+  }
+
+  const task = wx.request({
+    url: API_BASE_URL + opts.url,
+    method: (opts.method || 'POST').toUpperCase(),
+    data: opts.data,
+    header: header,
+    enableChunked: true,
+    timeout: opts.timeout === undefined ? STREAM_TIMEOUT_MS : opts.timeout,
+    success: (res) => {
+      parser.flush();
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        finish(null);
+        return;
+      }
+      const fallback = res.statusCode === 401 ? '登录已过期，请重新登录' : '请求失败';
+      let data = res.data;
+      if (typeof data !== 'object' || data === null) {
+        try {
+          data = JSON.parse(rawText);
+        } catch (e) {
+          data = null;
+        }
+      }
+      finish(buildError(errorMessage(data, fallback), { statusCode: res.statusCode }));
+    },
+    fail: (err) => {
+      const raw = (err && err.errMsg) || '';
+      const hint = /url not in domain list/i.test(raw)
+        ? '请求域名未通过校验：请在公众平台把接口域名加入 request 合法域名'
+        : '网络连接失败：请检查手机网络，或确认后端服务可访问';
+      finish(buildError(raw ? hint + '｜' + raw : hint, { network: true, rawErrMsg: raw }));
+    }
+  });
+
+  if (!task || typeof task.onChunkReceived !== 'function') {
+    // canIUse 与实际能力不一致时（个别机型/模拟器）中止请求，由调用方退化为一次性返回。
+    // 先置 ended 屏蔽 abort 引发的 fail 回调，否则 onEnd 会把「不支持」误报成「网络失败」
+    ended = true;
+    if (task && typeof task.abort === 'function') {
+      try {
+        task.abort();
+      } catch (e) {
+        // 中止失败也继续走退化
+      }
+    }
+    onEnd(buildError('当前微信版本不支持流式返回', { unsupported: true }));
+    return {
+      abort() {}
+    };
+  }
+
+  task.onChunkReceived((res) => {
+    const text = decoder.decode(res && res.data);
+    if (!text) return;
+    if (!sawEvent) rawText += text;
+    parser.feed(text);
+  });
+
+  return {
+    abort() {
+      ended = true;
+      try {
+        task.abort();
+      } catch (e) {
+        // 已结束的任务重复 abort 无需处理
+      }
+    }
+  };
+}
+
 /**
  * 文件上传（wx.uploadFile）：不设 Content-Type（由微信自动拼 multipart boundary），
  * 复用 Authorization 头与错误分类。
@@ -292,6 +500,8 @@ module.exports = {
   getToken,
   setReauthHandler,
   request,
+  requestStream,
+  supportsChunked,
   uploadFile,
   isCachePath,
   writeCache,

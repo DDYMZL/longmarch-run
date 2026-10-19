@@ -1,0 +1,84 @@
+{
+  "total": 13,
+  "passed": 13,
+  "results": [
+    {
+      "id": "S01",
+      "name": "SSE 事件序列：start 一个 → delta 与模型分片逐一对应 → done 一个，顺序不乱",
+      "ok": true,
+      "detail": "status=200 types=['start', 'delta', 'delta', 'delta', 'delta', 'done']"
+    },
+    {
+      "id": "S02",
+      "name": "增量拼接 == done.reply == 落库助手正文；用户+助手各一条；used_tokens 落库",
+      "ok": true,
+      "detail": "reply_len=20 roles=['user', 'assistant'] stored_tokens=321"
+    },
+    {
+      "id": "S03",
+      "name": "响应头 text/event-stream + X-Accel-Buffering:no（生产 nginx 不缓冲的前提）",
+      "ok": true,
+      "detail": "ctype=text/event-stream; charset=utf-8 xab=no cc=no-cache"
+    },
+    {
+      "id": "S04",
+      "name": "start 先于任何 delta 给出 conversationId/title，done 带核验过的已发布 sources",
+      "ok": true,
+      "detail": "conv=1 in_db=True title=遵义会议有什么意义？ sources=['遵义会议']"
+    },
+    {
+      "id": "S05",
+      "name": "前置校验失败仍是普通 JSON + 正确状态码（400/401/403/429），与非流式同码不退化成 SSE",
+      "ok": true,
+      "detail": "空输入=400 匿名=401 他人会话=400/400(流式/非流式) 关闭=403 限额=200/429 模型只被成功那次调用=1"
+    },
+    {
+      "id": "S06",
+      "name": "流中途故障：半截回答已推出后发 error 事件，提问与新建会话被清除，记 error 日志",
+      "ok": true,
+      "detail": "status=200 deltas=2 err=AI 服务暂时不可用，请稍后重试 conv 2->2 msg 4->4 errlog 0->1"
+    },
+    {
+      "id": "S07",
+      "name": "连续对话：复用同一会话、历史与 system 注入、被丢弃的提问不进上下文",
+      "ok": true,
+      "detail": "status=200 hist=True sys=True max_tokens=800 conv_count=1 roles=['user', 'assistant', 'user', 'assistant']"
+    },
+    {
+      "id": "S08",
+      "name": "客户端提前断开读取：提问必有对应回答落库，不留「只有问没有答」的脏数据",
+      "ok": true,
+      "detail": "status=200 conv=3 msgs=2 客户端只收到=2个事件 落库正文='第一段。第二段。第三段。第四段。'"
+    },
+    {
+      "id": "S09",
+      "name": "中断收尾两条分支：有增量则半截回答落库（用量记空），无增量则提问与空会话一并删除",
+      "ok": true,
+      "detail": "半截落库=True(正文='只推出去的一半' tokens=None) 无增量清理=True(会话数 4->4)"
+    },
+    {
+      "id": "S10",
+      "name": "与非流式 /ai/chat 落库同构：正文/used_tokens/sources 形态一致，不产生两种数据",
+      "ok": true,
+      "detail": "非流式=200 流式=200 tokens=55/55 sources=[]"
+    },
+    {
+      "id": "S11",
+      "name": "SSE 响应体与错误响应均不泄露 LLM_API_KEY",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": "L01",
+      "name": "真实流式调用：上游逐片到达、首片延迟远小于总耗时、用量与结束原因齐全",
+      "ok": true,
+      "detail": "分片数=36 首片=1.15s 总耗时=3.53s 字数=165 usedTokens=147 stop_reason=stop"
+    },
+    {
+      "id": "L02",
+      "name": "真实模型下 SSE 端点逐片转发：分片多次到达、增量拼接 == done.reply == 落库正文",
+      "ok": true,
+      "detail": "status=200 分片数=50 字数=219 usedTokens=426 落库一致=True"
+    }
+  ]
+}

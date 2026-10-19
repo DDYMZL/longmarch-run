@@ -4,6 +4,9 @@
 落 ai_messages/ai_usage_logs」的编排，差异只在提示词与是否调用模型：
 
 - chat（历史助手）：调用模型；无状态多轮，把最近 N 轮历史拼进单次提示词。
+  编排拆成 prepare_message（校验+建会话+检索+写用户消息并提交）与 finalize_message
+  （落回答+记用量）两段，中间夹着模型调用，因此同一套逻辑既能一次返回完整回答
+  （send_message），也能边生成边推增量（路由层的 SSE 流式端点）。
 - route_guide（节点讲解）：只返回「已审核固定内容」，优先取该节点已发布知识资料，
   否则用节点自身字段拼装；不调用模型、不消耗额度、可缓存，AI 关闭时仍可用。
 - quiz_explanation（答题解析）：题库已有解析则直接返回（不调模型）；仅在无解析时
@@ -14,6 +17,7 @@
 """
 import json
 import logging
+from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
@@ -179,17 +183,38 @@ def _join_blocks(*blocks: str) -> str:
 
 
 # ---------------- 历史助手对话 ----------------
-def send_message(
+@dataclass
+class ChatTurn:
+    """一次提问的前置结果：提示词 + 收尾落库所需的一切，**不含 ORM 实例**。
+
+    流式路径的两条硬约束决定了它只装纯数据：① 响应头一旦发出，依赖注入的会话
+    随时可能被关闭，故用户消息必须在开流之前 commit 落定；② 收尾可能发生在另一个
+    会话里，携带 ORM 实例会在访问属性时抛 DetachedInstanceError——知识来源因此
+    在构造时就转成 dict。
+    """
+
+    user_id: int
+    conversation_id: int
+    title: str
+    prompt_text: str
+    system_prompt: str
+    sources: List[Dict[str, Any]]
+    user_message_id: int
+    created_conversation: bool
+    cfg: ai_config_service.AiConfig
+
+
+def prepare_message(
     db: Session,
     user: User,
     text: str,
     conversation_id: Optional[int] = None,
     node_id: Optional[int] = None,
-) -> Dict[str, Any]:
-    """处理一次提问：校验开关/限额 → 检索资料 → 调模型 → 落库并返回回答与来源。
+) -> ChatTurn:
+    """前置阶段：校验开关/限额 → 建或取会话 → 检索资料 → 组装提示词 → 写入用户消息并提交。
 
     conversation_id 为空则新建会话；非空必须是本人会话，否则报「会话不存在」。
-    仅统计成功调用；模型失败回滚本次用户消息，另记 error 日志后抛出（路由映射 502）。
+    校验失败一律在开流之前抛出，使错误仍是普通 JSON + 正确状态码（403/429/400/404）。
     """
     cfg = ai_config_service.ensure_enabled(db)
     question = (text or "").strip()
@@ -199,14 +224,15 @@ def send_message(
         raise ValueError(f"单次提问不能超过 {cfg.max_input_chars} 字")
     ai_usage_service.check_limits(db, cfg, user.id)
 
-    if conversation_id is not None:
-        conv = _owned_conversation(db, user.id, conversation_id)
-        if conv is None:
-            raise ValueError(_NOT_FOUND)
-    else:
+    created = conversation_id is None
+    if created:
         conv = AiConversation(user_id=user.id, title=question[:_TITLE_LEN])
         db.add(conv)
         db.flush()
+    else:
+        conv = _owned_conversation(db, user.id, conversation_id)
+        if conv is None:
+            raise ValueError(_NOT_FOUND)
 
     node_ctx, node_knowledge = _node_block(db, node_id)
     rows = node_knowledge or ai_knowledge_service.search_published(
@@ -228,49 +254,107 @@ def send_message(
         f"[当前问题]\n{question}\n{_output_hint(cfg)}",
     )
 
-    db.add(AiMessage(conversation_id=conv.id, role="user", content=question))
+    user_message = AiMessage(conversation_id=conv.id, role="user", content=question)
+    db.add(user_message)
     db.flush()
-
-    try:
-        result = llm_service.prompt_meta(
-            prompt_text,
-            system=ai_config_service.get_prompt(db, "chat"),
-            timeout=cfg.request_timeout,
-            max_retries=cfg.max_retries,
-            max_tokens=cfg.max_output_tokens,
-        )
-    except llm_service.LlmError as exc:
-        db.rollback()  # 丢弃本次用户消息与新建会话，避免残留半截对话
-        ai_usage_service.record(
-            db, feature=FEATURE_CHAT, user_id=user.id, model=settings.LLM_MODEL,
-            status="error", error_code="llm", elapsed_ms=None,
-        )
-        db.commit()
-        raise
-
-    sources = ai_knowledge_service.format_sources(rows)
-    assistant = AiMessage(
+    turn = ChatTurn(
+        user_id=user.id,
         conversation_id=conv.id,
-        role="assistant",
-        content=result.text,
-        sources=sources,
-        used_tokens=result.used_tokens,
+        title=conv.title or "新的对话",
+        prompt_text=prompt_text,
+        system_prompt=ai_config_service.get_prompt(db, "chat"),
+        sources=ai_knowledge_service.format_sources(rows),
+        user_message_id=user_message.id,
+        created_conversation=created,
+        cfg=cfg,
     )
-    db.add(assistant)
-    conv.updated_at = now_utc()
+    db.commit()
+    return turn
+
+
+def finalize_message(
+    db: Session, turn: ChatTurn, result: llm_service.CallResult
+) -> Dict[str, Any]:
+    """收尾阶段：落 assistant 消息、刷新会话活跃时间、记成功用量，返回小程序契约。
+
+    db 由调用方给：非流式复用请求级会话，流式须自建（原会话可能已被框架关闭）。
+    """
+    db.add(
+        AiMessage(
+            conversation_id=turn.conversation_id,
+            role="assistant",
+            content=result.text,
+            sources=turn.sources,
+            used_tokens=result.used_tokens,
+        )
+    )
+    conv = db.get(AiConversation, turn.conversation_id)
+    if conv is not None:
+        conv.updated_at = now_utc()
     ai_usage_service.record(
-        db, feature=FEATURE_CHAT, user_id=user.id, conversation_id=conv.id,
+        db, feature=FEATURE_CHAT, user_id=turn.user_id, conversation_id=turn.conversation_id,
         model=settings.LLM_MODEL, used_tokens=result.used_tokens,
         elapsed_ms=result.elapsed_ms, status="success",
     )
     db.commit()
     return {
-        "conversation_id": conv.id,
-        "title": conv.title or "新的对话",
+        "conversation_id": turn.conversation_id,
+        "title": turn.title,
         "reply": result.text,
-        "sources": sources,
+        "sources": turn.sources,
         "used_tokens": result.used_tokens,
     }
+
+
+def discard_message(db: Session, turn: ChatTurn) -> None:
+    """失败收尾：删掉本次写入的用户消息；本次新建的会话若已空则一并删除。
+
+    等价于改造前的 db.rollback()——前置阶段已 commit（流式必需），故改为显式删除，
+    避免留下「只有提问没有回答」的半截对话，既污染会话列表预览也会被下一轮当上下文。
+    """
+    db.query(AiMessage).filter(AiMessage.id == turn.user_message_id).delete()
+    if turn.created_conversation:
+        remains = (
+            db.query(AiMessage.id)
+            .filter(AiMessage.conversation_id == turn.conversation_id)
+            .first()
+        )
+        if remains is None:
+            db.query(AiConversation).filter(
+                AiConversation.id == turn.conversation_id
+            ).delete()
+    db.commit()
+
+
+def send_message(
+    db: Session,
+    user: User,
+    text: str,
+    conversation_id: Optional[int] = None,
+    node_id: Optional[int] = None,
+) -> Dict[str, Any]:
+    """非流式一问一答：prepare_message → 调模型 → finalize_message。
+
+    仅统计成功调用；模型失败时丢弃本次提问并另记 error 日志后抛出（路由映射 502）。
+    """
+    turn = prepare_message(db, user, text, conversation_id, node_id)
+    try:
+        result = llm_service.prompt_meta(
+            turn.prompt_text,
+            system=turn.system_prompt,
+            timeout=turn.cfg.request_timeout,
+            max_retries=turn.cfg.max_retries,
+            max_tokens=turn.cfg.max_output_tokens,
+        )
+    except llm_service.LlmError:
+        discard_message(db, turn)
+        ai_usage_service.record(
+            db, feature=FEATURE_CHAT, user_id=turn.user_id, model=settings.LLM_MODEL,
+            status="error", error_code="llm", elapsed_ms=None,
+        )
+        db.commit()
+        raise
+    return finalize_message(db, turn, result)
 
 
 # ---------------- 路线节点讲解（固定内容，不调模型） ----------------

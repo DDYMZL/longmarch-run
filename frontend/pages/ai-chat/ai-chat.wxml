@@ -30,7 +30,7 @@
     </view>
 
     <block wx:for="{{messages}}" wx:key="_k">
-      <view id="msg-{{item._k}}" class="ai-row {{item.role === 'user' ? 'ai-row-user' : 'ai-row-ai'}}">
+      <view class="ai-row {{item.role === 'user' ? 'ai-row-user' : 'ai-row-ai'}}">
         <view class="ai-avatar">{{item.role === 'user' ? '我' : 'AI'}}</view>
         <view class="ai-bubble-wrap">
           <view class="ai-bubble {{item.role === 'user' ? 'ai-bubble-user' : 'ai-bubble-ai'}}">
@@ -39,26 +39,27 @@
               <text class="dot"></text><text class="dot"></text><text class="dot"></text>
             </view>
             <text wx:elif="{{item.role === 'user' || !item.blocks}}" class="ai-text" user-select>{{item.content}}</text>
-            <!-- AI 回答：轻量 markdown 渲染（加粗/标题/列表/段落），结构与 util.parseMarkdownLite 对应 -->
+            <!-- AI 回答：轻量 markdown 渲染（加粗/标题/列表/段落），结构与 util.parseMarkdownLite 对应；
+                 streaming 时在最后一个块（blk.last）末尾接闪烁光标，呈现「正在打字」 -->
             <view wx:else class="ai-text ai-md">
               <block wx:for="{{item.blocks}}" wx:for-item="blk" wx:key="_bk">
                 <view wx:if="{{blk.type === 'h'}}" class="ai-md-h ai-md-h{{blk.level}}">
-                  <text wx:for="{{blk.segs}}" wx:for-item="seg" wx:key="_sk" user-select class="{{seg.b ? 'ai-md-b' : ''}}">{{seg.t}}</text>
+                  <text wx:for="{{blk.segs}}" wx:for-item="seg" wx:key="_sk" user-select class="{{seg.b ? 'ai-md-b' : ''}}">{{seg.t}}</text><text wx:if="{{blk.last && item.streaming}}" class="ai-cursor"></text>
                 </view>
                 <view wx:elif="{{blk.type === 'li'}}" class="ai-md-li">
                   <text class="ai-md-mark">{{blk.mark}}</text>
-                  <text class="ai-md-li-text"><text wx:for="{{blk.segs}}" wx:for-item="seg" wx:key="_sk" user-select class="{{seg.b ? 'ai-md-b' : ''}}">{{seg.t}}</text></text>
+                  <text class="ai-md-li-text"><text wx:for="{{blk.segs}}" wx:for-item="seg" wx:key="_sk" user-select class="{{seg.b ? 'ai-md-b' : ''}}">{{seg.t}}</text><text wx:if="{{blk.last && item.streaming}}" class="ai-cursor"></text></text>
                 </view>
                 <view wx:else class="ai-md-p">
-                  <text wx:for="{{blk.segs}}" wx:for-item="seg" wx:key="_sk" user-select class="{{seg.b ? 'ai-md-b' : ''}}">{{seg.t}}</text>
+                  <text wx:for="{{blk.segs}}" wx:for-item="seg" wx:key="_sk" user-select class="{{seg.b ? 'ai-md-b' : ''}}">{{seg.t}}</text><text wx:if="{{blk.last && item.streaming}}" class="ai-cursor"></text>
                 </view>
               </block>
             </view>
           </view>
 
-          <!-- 失败重试 -->
+          <!-- 失败重试：挂在用户气泡上是「没发出去」，挂在 AI 气泡上是「回答中断」 -->
           <view wx:if="{{item.failed}}" class="ai-failed" data-k="{{item._k}}" bindtap="tapRetry">
-            发送失败，点击重试 ↻
+            {{item.role === 'user' ? '发送失败，点击重试 ↻' : '回答中断，点击重试 ↻'}}
           </view>
 
           <!-- 知识来源 -->
@@ -72,17 +73,16 @@
         </view>
       </view>
     </block>
-    <view class="ai-scroll-pad"></view>
+    <view id="ai-bottom" class="ai-scroll-pad"></view>
   </scroll-view>
 
-  <!-- 输入区 -->
+  <!-- 输入区：生成中输入框仍可用（便于想好下一问），发送按钮换成「停止」 -->
   <view class="ai-inputbar">
     <textarea class="ai-input" value="{{inputText}}" bindinput="onInput" placeholder="请输入长征历史相关问题…"
-              maxlength="500" auto-height confirm-type="send" bindconfirm="tapSend" disabled="{{sending}}"
+              maxlength="500" auto-height confirm-type="send" bindconfirm="tapSend"
               cursor-spacing="20" show-confirm-bar="{{false}}" />
-    <view class="ai-send {{(sending || !inputText) ? 'ai-send-disabled' : ''}}" bindtap="tapSend">
-      {{sending ? '…' : '发送'}}
-    </view>
+    <view wx:if="{{sending}}" class="ai-send ai-stop" bindtap="tapStop">停止</view>
+    <view wx:else class="ai-send {{!inputText ? 'ai-send-disabled' : ''}}" bindtap="tapSend">发送</view>
   </view>
 
   <!-- 会话抽屉 -->

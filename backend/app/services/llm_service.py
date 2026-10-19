@@ -1,8 +1,13 @@
 """大模型调用封装（OpenAI Chat Completions 兼容协议）。
 
-职责单一：发一次提示词、收完整文本回复。非流式 POST 到 {LLM_BASE_URL}/chat/completions，
+职责单一：发一次提示词、收文本回复。POST 到 {LLM_BASE_URL}/chat/completions，
 系统提示走标准 system role（不再前缀拼进用户输入），并取回 usage.total_tokens 与
 finish_reason 供上层落 ai_usage_logs。
+
+两种调用模式，按场景选择：
+- `prompt_meta` / `prompt`：非流式，一次拿完整正文（出题需要完整 JSON 才能解析）；
+- `LlmStream`：流式，边生成边推增量正文（小程序 AI 问答用它把首字延迟从整段耗时
+  压到 1~2 秒），迭代结束后同样给出用量与结束原因。
 
 多轮对话不依赖服务端会话续接，由上层把最近历史拼进单次提示词（无状态）。
 
@@ -12,10 +17,11 @@ LLM_QUESTION_EXTRA_BODY 透传（换厂商时需一并清理，如 Qwen 的 enab
 
 安全约定：API Key 仅在本模块内组装到请求头，不写日志、不进异常消息、不下发前端。
 """
+import json
 import logging
 import time
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterator, List, Optional
 
 import httpx
 
@@ -27,6 +33,9 @@ _CHAT_PATH = "/chat/completions"
 # 正常结束原因；其余取值（如 length）意味着回复被截断——出题链路的 JSON 必然不完整，
 # 对话链路则会给出半截回答，两者都不应作为成功结果返回
 _NORMAL_STOP_REASONS = ("stop",)
+# SSE 分片格式：正文行以 data: 开头，流结束标记为 data: [DONE]
+_SSE_DATA_PREFIX = "data:"
+_SSE_DONE = "[DONE]"
 
 
 class LlmError(ValueError):
@@ -128,18 +137,18 @@ def _parse_reply(payload: Any, elapsed_ms: int) -> CallResult:
     )
 
 
-def _request_once(
+def _build_body(
     text: str,
     system: Optional[str],
-    timeout: float,
     max_tokens: Optional[int],
-    extra_body: Optional[Dict[str, Any]] = None,
-) -> CallResult:
-    """发一次 Chat Completions 调用；失败抛 LlmError（不含密钥）。"""
+    extra_body: Optional[Dict[str, Any]],
+    stream: bool,
+) -> Dict[str, Any]:
+    """组装请求体：非流式与流式共用，差异只在 stream 相关字段。"""
     body: Dict[str, Any] = {
         "model": _resolve_model(),
         "messages": _build_messages(text, system),
-        "stream": False,
+        "stream": stream,
     }
     # 未显式指定时不传，交由供应商默认值；出题链路依赖长输出，不能被对话的 800 上限截断
     if max_tokens:
@@ -148,14 +157,44 @@ def _request_once(
     body.update(settings.LLM_EXTRA_BODY)
     if extra_body:
         body.update(extra_body)
-    headers = {
+    if stream:
+        # 上游默认不在流式响应里报用量，须显式索取，否则 ai_usage_logs 的 used_tokens 恒为空
+        body["stream_options"] = {"include_usage": True}
+    return body
+
+
+def _auth_headers() -> Dict[str, str]:
+    """组装鉴权头。API Key 只在此处出现，不写日志、不进异常消息。"""
+    return {
         # 显式声明 charset，避免中文提示词被上游按其他编码解释
         "Content-Type": "application/json; charset=utf-8",
         "Authorization": f"Bearer {settings.LLM_API_KEY.strip()}",
     }
+
+
+def _read_json(response: "httpx.Response") -> Any:
+    """读取流式响应的错误体：httpx 要求先 read() 才能 json()，失败按无错误体处理。"""
+    try:
+        response.read()
+        return response.json()
+    except (ValueError, httpx.HTTPError):
+        return None
+
+
+def _request_once(
+    text: str,
+    system: Optional[str],
+    timeout: float,
+    max_tokens: Optional[int],
+    extra_body: Optional[Dict[str, Any]] = None,
+) -> CallResult:
+    """发一次 Chat Completions 调用；失败抛 LlmError（不含密钥）。"""
+    body = _build_body(text, system, max_tokens, extra_body, stream=False)
     started = time.monotonic()
     try:
-        response = httpx.post(_resolve_url(), json=body, headers=headers, timeout=timeout)
+        response = httpx.post(
+            _resolve_url(), json=body, headers=_auth_headers(), timeout=timeout
+        )
     except httpx.TimeoutException:
         raise LlmError("AI 生成超时，请稍后重试", retryable=True)
     except httpx.HTTPError as exc:
@@ -171,13 +210,18 @@ def _request_once(
     if response.status_code != 200:
         raise _http_error(response.status_code, _error_code(payload))
     result = _parse_reply(payload, elapsed_ms)
+    _check_complete(result)
+    return result
+
+
+def _check_complete(result: CallResult) -> None:
+    """校验回复完整性：截断与空回复都不作为成功结果返回。"""
     if result.stop_reason and result.stop_reason not in _NORMAL_STOP_REASONS:
         raise LlmError(
             f"AI 回复未正常结束（{result.stop_reason}），请缩短输入或减少单次生成数量后重试"
         )
     if not result.text:
         raise LlmError("AI 服务返回空内容，请重试", retryable=True)
-    return result
 
 
 def prompt_meta(
@@ -211,6 +255,96 @@ def prompt_meta(
             time.sleep(0.5 * (attempt + 1))
     # 理论不可达：循环内要么 return 要么 raise
     raise last_error or LlmError("AI 服务请求失败，请重试")
+
+
+class LlmStream:
+    """一次流式 Chat Completions 调用：迭代取增量正文，迭代结束后 `result` 给出用量与结束原因。
+
+    构造即校验配置（base_url / model / api_key），使「未配置」这类错误在响应头发出之前
+    就以普通 JSON + 502 返回，而不是退化成流中途的 error 事件（此时状态码已无法更改）。
+
+    与非流式 `prompt_meta` 的关键差异：**不做自动重试**。重试意味着重新生成整段回答，
+    而增量可能已经推给了用户，重发会导致正文重复；瞬时故障改由前端「停止 / 重试」兜底。
+
+    消费方提前退出（客户端断开）时 `result` 保持 None，调用方须自行判定，不得据此落库。
+    """
+
+    def __init__(
+        self,
+        text: str,
+        *,
+        system: Optional[str] = None,
+        timeout: Optional[float] = None,
+        max_tokens: Optional[int] = None,
+        extra_body: Optional[Dict[str, Any]] = None,
+    ):
+        if not settings.LLM_API_KEY.strip():
+            raise LlmError("AI 服务未配置，请在后端环境变量中设置 LLM_API_KEY")
+        self._body = _build_body(text, system, max_tokens, extra_body, stream=True)
+        self._timeout = timeout or settings.LLM_TIMEOUT_SECONDS
+        self.result: Optional[CallResult] = None
+
+    def __iter__(self) -> Iterator[str]:
+        started = time.monotonic()
+        parts: List[str] = []
+        used_tokens: Optional[int] = None
+        stop_reason = ""
+        try:
+            with httpx.stream(
+                "POST",
+                _resolve_url(),
+                json=self._body,
+                headers=_auth_headers(),
+                timeout=self._timeout,
+            ) as response:
+                if response.status_code != 200:
+                    raise _http_error(
+                        response.status_code, _error_code(_read_json(response))
+                    )
+                for line in response.iter_lines():
+                    if not line.startswith(_SSE_DATA_PREFIX):
+                        continue
+                    payload = line[len(_SSE_DATA_PREFIX) :].strip()
+                    if payload == _SSE_DONE:
+                        break
+                    try:
+                        chunk = json.loads(payload)
+                    except ValueError:
+                        # 丢一片只少几个字，中断整条流会让已显示的半截回答失去下文
+                        logger.warning("llm stream: skip unparsable chunk")
+                        continue
+                    if not isinstance(chunk, dict):
+                        continue
+                    usage = chunk.get("usage")
+                    if isinstance(usage, dict):
+                        total = usage.get("total_tokens")
+                        if isinstance(total, int):
+                            used_tokens = total
+                    choices = chunk.get("choices")
+                    # 只带 usage 的收尾分片没有 choices，跳过即可
+                    if not isinstance(choices, list) or not choices:
+                        continue
+                    first = choices[0] if isinstance(choices[0], dict) else {}
+                    if first.get("finish_reason"):
+                        stop_reason = str(first["finish_reason"])
+                    # 只取正文增量：reasoning_content 是思考过程，既不展示给用户也不入库
+                    piece = (first.get("delta") or {}).get("content")
+                    if piece:
+                        parts.append(piece)
+                        yield piece
+        except httpx.TimeoutException:
+            raise LlmError("AI 生成超时，请稍后重试", retryable=True)
+        except httpx.HTTPError as exc:
+            logger.warning("llm stream failed: %s", exc.__class__.__name__)
+            raise LlmError("AI 服务请求失败，请检查服务器网络后重试", retryable=True)
+
+        self.result = CallResult(
+            text="".join(parts).strip(),
+            used_tokens=used_tokens,
+            stop_reason=stop_reason,
+            elapsed_ms=int((time.monotonic() - started) * 1000),
+        )
+        _check_complete(self.result)
 
 
 def prompt(text: str, timeout: Optional[float] = None) -> str:

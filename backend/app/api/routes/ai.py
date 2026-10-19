@@ -6,13 +6,17 @@
 - 节点讲解为已审核固定内容、答题解析优先取题库已有解析，二者不调模型、不消耗额度，
   AI 总开关关闭时仍可用；仅历史助手对话与「无解析时的答题解析」会真正调用模型。
 """
-from typing import Optional
+import json
+import logging
+from typing import Any, Dict, Iterator, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_activity_view
-from app.core.database import get_db
+from app.core.config import settings
+from app.core.database import SessionLocal, get_db
 from app.models.models import User
 from app.schemas.schemas import (
     AiChatOut,
@@ -30,6 +34,8 @@ from app.services import (
     ai_usage_service,
     llm_service,
 )
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ai", tags=["ai"])
 
@@ -66,6 +72,116 @@ def chat(
         )
     except AI_ERRORS as exc:
         raise ai_http_error(exc)
+
+
+# 生产 nginx 默认 proxy_buffering on，会把整条流缓冲完再一次性吐给小程序，逐字效果尽失。
+# 该响应头让 nginx 只对本次响应关闭缓冲，无需改动不在仓库内的服务器配置。
+_STREAM_HEADERS = {"X-Accel-Buffering": "no", "Cache-Control": "no-cache"}
+
+
+def _sse(event: Dict[str, Any]) -> str:
+    """把一个事件对象编码成 SSE data 行（中文不转义，省一半带宽）。"""
+    return f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+
+
+def _settle_aborted(
+    db: Session,
+    turn: ai_chat_service.ChatTurn,
+    stream: llm_service.LlmStream,
+    parts: List[str],
+) -> None:
+    """客户端中途断开（停止按钮 / 切页 / 断网）的收尾。
+
+    已收到增量就把半截回答落库——会话历史要与用户屏幕上看到的一致，否则刷新后半截
+    回答凭空消失；一个增量都没收到则删掉本次提问，不留「只有问没有答」的脏数据。
+    """
+    try:
+        if parts:
+            result = stream.result or llm_service.CallResult(
+                text="".join(parts).strip(), used_tokens=None, stop_reason="", elapsed_ms=0
+            )
+            ai_chat_service.finalize_message(db, turn, result)
+        else:
+            ai_chat_service.discard_message(db, turn)
+    except Exception as exc:  # 收尾失败不得掩盖触发它的原始异常
+        logger.warning("ai chat stream settle failed: %s", exc.__class__.__name__)
+        db.rollback()
+
+
+@router.post("/chat/stream", summary="历史助手提问（SSE 逐字返回）")
+def chat_stream(
+    payload: AiChatRequest,
+    current: User = Depends(require_activity_view),
+    db: Session = Depends(get_db),
+):
+    """流式连续对话：事件序列 `start` → `delta`* → `done`，中途失败发 `error`。
+
+    - `start`：conversationId + title，让前端立刻更新会话标题；
+    - `delta`：一段增量正文（模型按 token 成块推送，前端再做逐字平滑）；
+    - `done`：usedTokens + reply（reply 是已落库的权威全文，供前端校正本地拼接结果）；
+    - `error`：message。此时 200 与响应头已发出，**状态码无法再改**，故错误只能走事件。
+
+    前置校验（开关/限额/输入/会话归属）与 LlmStream 构造都在返回 StreamingResponse
+    之前完成，这类失败仍是普通 JSON + 403/429/400/502，前端无需为它们解析 SSE。
+    """
+    try:
+        turn = ai_chat_service.prepare_message(
+            db, current, payload.message, payload.conversation_id, payload.node_id
+        )
+        stream = llm_service.LlmStream(
+            turn.prompt_text,
+            system=turn.system_prompt,
+            timeout=turn.cfg.request_timeout,
+            max_tokens=turn.cfg.max_output_tokens,
+        )
+    except AI_ERRORS as exc:
+        raise ai_http_error(exc)
+
+    def event_stream() -> Iterator[str]:
+        # 生成器在依赖注入的会话关闭之后才执行，必须自建会话做收尾落库
+        stream_db = SessionLocal()
+        parts: List[str] = []
+        settled = False
+        try:
+            yield _sse(
+                {
+                    "type": "start",
+                    "conversationId": turn.conversation_id,
+                    "title": turn.title,
+                }
+            )
+            try:
+                for piece in stream:
+                    parts.append(piece)
+                    yield _sse({"type": "delta", "text": piece})
+            except llm_service.LlmError as exc:
+                ai_chat_service.discard_message(stream_db, turn)
+                ai_usage_service.record(
+                    stream_db, feature=ai_chat_service.FEATURE_CHAT, user_id=turn.user_id,
+                    model=settings.LLM_MODEL, status="error", error_code="llm",
+                )
+                stream_db.commit()
+                settled = True
+                yield _sse({"type": "error", "message": str(exc)})
+                return
+            ai_chat_service.finalize_message(stream_db, turn, stream.result)
+            settled = True
+            yield _sse(
+                {
+                    "type": "done",
+                    "usedTokens": stream.result.used_tokens,
+                    "reply": stream.result.text,
+                    "sources": turn.sources,
+                }
+            )
+        finally:
+            if not settled:
+                _settle_aborted(stream_db, turn, stream, parts)
+            stream_db.close()
+
+    return StreamingResponse(
+        event_stream(), media_type="text/event-stream", headers=_STREAM_HEADERS
+    )
 
 
 @router.get("/conversations", response_model=AiConversationListOut, summary="我的会话列表")
