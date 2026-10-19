@@ -1,6 +1,6 @@
 # march.js（长征路线页 · 页面级合一）
 
-> 按 `.qoder/README.md` §1「页面级合一」规则，本文档覆盖 `frontend/pages/march/` 四件套：`march.js`（654 行）、`march.wxml`（135 行）、`march.wxss`（529 行）、`march.json`（5 行）。WXML / WXSS / JSON 专章见 §4-1–§4-3。**星空长征的绘制状态与绘制逻辑不在本页**，全部在 `utils/hudMap.js` 渲染内核（`.qoder/frontend/utils/hudMap.js.md`），本页只留模式切换、数据拉取、rAF 循环、手势事件转发与命中跳转。
+> 按 `.qoder/README.md` §1「页面级合一」规则，本文档覆盖 `frontend/pages/march/` 四件套：`march.js`（654 行）、`march.wxml`（140 行）、`march.wxss`（548 行）、`march.json`（5 行）。WXML / WXSS / JSON 专章见 §4-1–§4-3。**星空长征的绘制状态与绘制逻辑不在本页**，全部在 `utils/hudMap.js` 渲染内核（`.qoder/frontend/utils/hudMap.js.md`），本页只留模式切换、数据拉取、rAF 循环、手势事件转发与命中跳转。
 
 ## 1. 文件路径
 
@@ -113,7 +113,7 @@ pan/pinch 手势数学属事件层、留在本页；**观景变换 `view` 由内
   6. 已观看标记由仪式页调 `markCeremony` 向后端落库（`.qoder/frontend/services/march.js.md` §4.5），本页只消费 `ceremonyPending` 不写入。
 - `goCeremony()`（`:233-236`）：`finished` 时头部横幅（`march.wxml:38`）手动进仪式页复看（§20.4）。
 
-## 4-1. WXML 专章（`march.wxml`，135 行）
+## 4-1. WXML 专章（`march.wxml`，140 行）
 
 | 区块 | 行号 | 内容与绑定 |
 |---|---|---|
@@ -123,34 +123,34 @@ pan/pinch 手势数学属事件层、留在本页；**观景变换 `view` 由内
 | 路线总览头部 | `:35-39` | 标题 +「累计 x/y 步 · 已点亮 n/m」；`finished` 时完成横幅 `bindtap="goCeremony"`（`:38`） |
 | 当前章节卡 | `:42-50` | `wx:if="{{currentChapter}}"`；title、litCount/totalCount、进度条 `style="width: {{currentChapter.progressPct}}%"`（`:48`，js 侧预计算） |
 | 模式切换 | `:53-64` | 双按钮 `data-mode="real"/"canvas"` + `bindtap="switchMode"`，active 类按 `mode` 三元切换 |
-| 地图区 | `:67-108` | 见下述要点 |
-| 节点列表 | `:111-134` | `wx:for="{{nodes}}"` + `wx:key="id"`；每项 `data-id` + `bindtap="handleNodeTap"`；图标/名称/徽章按 `item.status` 三态；current 项额外显示「当前进度 x/y 步 · 还需 n 步」（`:129-131`） |
+| 地图区 | `:70-113` | 见下述要点 |
+| 节点列表 | `:116-139` | `wx:for="{{nodes}}"`（`:118`）+ `wx:key="id"`；每项 `data-id` + `bindtap="handleNodeTap"`；图标/名称/徽章按 `item.status` 三态；current 项额外显示「当前进度 x/y 步 · 还需 n 步」 |
 
 地图区要点：
 
-1. `<map>` 折线属性写作 **`polyline="{{polylines}}"`**（`:77`，`frontend/AGENTS.md` §5.2 特别提示的属性名）；`include-points`/`markers` 绑定同名字段（`:75-76`）；`bindmarkertap`/`bindcallouttap`（`:80-81`）；`enable-scroll`/`enable-zoom` 开启（`:78-79`）。
-2. `<canvas type="2d" id="routeMap">` 与 `<map>` 用 `wx:if="{{mode === 'real'}}"` / `wx:else` 互斥（`:69`、`:84`）——切回实景时 canvas 节点被移除，这正是 `switchMode` 必须 `hud.dispose()` 释放画布资源的原因（`march.js:329-335` 注释）；三个 touch 事件绑定全景手势（`:88-90`）。
-3. `map-hint` 提示条按模式切换文案（`:92`，实景「点击地图节点查看信息…」/星空「拖动/双指缩放…双击复位」）。**注意**：`<canvas type="2d">` 在开发者工具中是不透明原生层、位于所有 DOM 之上且 `visibility` 无效，星空模式下该提示条实际被画布盖住（S3 计划把提示文案画进画布内）。
-4. 选中节点信息卡仅 real 模式且有选中时渲染（`:95-107`）：`style="{{selectedThemeStyle}}"` 区域氛围主题（§12）、图标/徽章三态、current 态显示步数进度、`selectedThemeEnv` 环境描述、「查看详情」按钮 `bindtap="goSelectedDetail"`（`:106`）。
-5. 列表项交错入场 `style="animation-delay: {{index * 70}}ms"`（`:116`，乘法表达式合法）；状态文案全部用三元表达式内联（`:96`、`:100`、`:121`、`:126`），**全文件无原生方法调用**，符合 §5.2。
+1. `<map>` 折线属性写作 **`polyline="{{polylines}}"`**（`:80`，`frontend/AGENTS.md` §5.2 特别提示的属性名）；`include-points`/`markers` 绑定同名字段（`:78-79`）；`bindmarkertap`/`bindcallouttap`（`:83-84`）；`enable-scroll`/`enable-zoom` 开启（`:81-82`）。
+2. `<canvas type="2d" id="routeMap">` 与 `<map>` 用 `wx:if="{{mode === 'real'}}"` / `wx:else` 互斥（`:72`、`:87`）——切回实景时 canvas 节点被移除，这正是 `switchMode` 必须 `hud.dispose()` 释放画布资源的原因（`march.js:329-335` 注释）；三个 touch 事件绑定全景手势（`:91-93`）。
+3. `map-hint` 提示条**仅实景模式渲染**（`:97`，`wx:if="{{mode === 'real'}}"`，文案「点击地图节点查看信息…」）。**S3（`835f46f`）修正了原生层遮挡缺陷**：`<canvas type="2d">` 在开发者工具中是不透明原生层、位于所有 DOM 之上且 `visibility` 无效，星空模式下 DOM 提示条本就不可见；现星空模式的操作提示由内核 `hud.drawHudHint` 直接画进画布（视口固定切角面板，`.qoder/frontend/utils/hudMap.js.md` §4.6），DOM 浮层只留实景模式。
+4. 选中节点信息卡仅 real 模式且有选中时渲染（`:100-112`）：`style="{{selectedThemeStyle}}"` 区域氛围主题（§12）、图标/徽章三态、current 态显示步数进度、`selectedThemeEnv` 环境描述、「查看详情」按钮 `bindtap="goSelectedDetail"`（`:111`）。
+5. 列表项交错入场 `style="animation-delay: {{index * 70}}ms"`（`:121`，乘法表达式合法）；状态文案全部用三元表达式内联（节点卡与列表多处），**全文件无原生方法调用**，符合 §5.2。
 
-## 4-2. WXSS 专章（`march.wxss`，529 行）
+## 4-2. WXSS 专章（`march.wxss`，548 行）
 
 全部 rpx 单位；头部渐变 `#A00D26 → #C8102E`（`:6-10`）与导航栏主色一致（`frontend/AGENTS.md` §2 约定色）。区块一览：
 
 | 区块 | 行号 | 要点 |
 |---|---|---|
 | 页面容器 | `:1-3` | 底部留白 60rpx |
-| 头部总览 | `:5-34` | 标题/副标题 fadeUp 交错入场（`:16`、`:23`）；`finish-banner` 完成横幅半透明白底 popIn（`:26-34`） |
-| 章节卡 | `:36-86` | 负 margin 叠在头部下缘（`:38`）；进度条金色渐变 + `transition: width 0.6s`（`:72-77`）；章节仪式卡 intro 文案样式（`:79-86`） |
-| 模式切换 | `:88-114` | 胶囊双按钮（左圆角 `:101`、相邻右圆角 `:106-108`）；active 态长征红渐变+红投影（`:110-114`） |
-| 地图容器 | `:116-157` | `map-wrap` 圆角裁切 + cardIn 入场（`:117-124`），`position:relative` 供内部绝对定位（`:155-157`）；`route-map`/`route-map-real` 均固定 **750×860rpx**（`:126-137`）；`map-hint` 底部居中悬浮提示条，`pointer-events:none` 不挡手势（`:139-153`） |
-| 选中节点信息卡 | `:159-255` | 绝对定位浮于地图下部（`bottom: 92rpx` 避开提示条，`:160-171`）；圆形图标与徽章按 completed（金渐变）/current（红描边）/默认灰三态（`:173-230`）；区域氛围说明行（§12，`:238-244`）；描边按钮（`:246-255`） |
-| 节点列表 | `:257-371` | 卡片项 `:active` 缩放 0.97 反馈（`:273-275`）；`anim-card` 交错入场（`:277-281`，延迟由 WXML 内联）；图标 current 态 pulseRed 脉冲 / completed 态 pulseGlow 呼吸（`:300-311`）；名称/徽章/目标/还需步数按状态配色（`:329-371`） |
-| 抵达卡弹层 | `:373-438` | fixed 全屏遮罩 z-index 999 + litFadeIn（`:374-391`）；卡片米金渐变、popIn 弹性曲线 `cubic-bezier(0.34,1.56,0.64,1)`（`:393-402`）；大星 spinIn（`:404-410`） |
-| 开场动画 | `:440-529` | 覆盖层红渐变、z-index 999、整层 2.85s 起 0.45s 淡出（`:441-454`）；四行文案依次 0.15s/0.85s/1.55s/2.25s 延迟入场（`:462-498`，年份 128rpx 金字 `:469-475`）；跳过按钮右下角半透明（`:500-507`）；纱幕 z-index 998 + `pointer-events:none` 不拦截操作（`:513-524`） |
+| 头部总览 | `:5-52` | 标题/副标题 fadeUp 交错入场；`finish-banner` 完成横幅半透明白底 popIn（`:43-52`）；就地同步按钮（B6，`:26-42`） |
+| 章节卡 | `:53-104` | 负 margin 叠在头部下缘；进度条金色渐变 + `transition: width 0.6s`（`:82-88`）；章节仪式卡 intro 文案样式（`:97-104`） |
+| 模式切换 | `:105-132` | 胶囊双按钮（左圆角、相邻右圆角 `:123-126`）；active 态长征红渐变+红投影（`:127-132`） |
+| 地图容器 | `:133-176` | `map-wrap` 圆角裁切 + cardIn 入场（`:134-141`）与 `position:relative` 供内部绝对定位（`:174-176`）；`route-map`/`route-map-real` 均固定 **750×860rpx**（`:144-149`、`:152-156`）；**S3 给 `.route-map` 加 `background:#050B16`**（`:148`，与内核 L0 深空底一致、避免首帧前白闪）；`map-hint` 底部居中悬浮提示条，`pointer-events:none` 不挡手势（`:158-172`，仅实景模式渲染，见 §4-1 要点 3） |
+| 选中节点信息卡 | `:178-275` | 绝对定位浮于地图下部（避开提示条，`:179-190`）；圆形图标与徽章按 completed（金渐变）/current（红描边）/默认灰三态；区域氛围说明行（§12，`:257-275`）；描边按钮 |
+| 节点列表 | `:276-391` | 卡片项 `:active` 缩放 0.97 反馈；`anim-card` 交错入场（`:297` 起，延迟由 WXML 内联）；图标 current 态 pulseRed 脉冲 / completed 态 pulseGlow 呼吸；名称/徽章/目标/还需步数按状态配色 |
+| 抵达卡弹层 | `:392-458` | fixed 全屏遮罩 z-index 999 + litFadeIn（`:393-410`）；卡片米金渐变、popIn 弹性曲线 `cubic-bezier(0.34,1.56,0.64,1)`；大星 spinIn |
+| 开场动画 | `:459-548` | 覆盖层红渐变、z-index 999、整层 2.85s 起 0.45s 淡出；四行文案依次 0.15s/0.85s/1.55s/2.25s 延迟入场（年份 128rpx 金字 `:488`）；跳过按钮右下角半透明（`:519`）；纱幕 z-index 998 + `pointer-events:none` 不拦截操作（`:533` 起） |
 
-keyframes 归属：本文件自定义 `pulseRed`（`:313-316`）、`litFadeIn`（`:388-391`）、`introFadeOut`（`:509-511`）、`veilOut`（`:526-529`）；引用的 `fadeUp/popIn/spinIn/cardIn/pulseGlow` 定义在全局 `frontend/app.wxss`（实测 `app.wxss:169-242` 存在同名 keyframes）。注意 `pulseRed` 在 `app.wxss:242` 也有定义，页面样式后加载生效（页面内以本文件 `:313-316` 为准）。
+keyframes 归属：本文件自定义 `pulseRed`（`:332-335`）、`litFadeIn`（`:407-410`）、`introFadeOut`（`:528-530`）、`veilOut`（`:545-548`）；引用的 `fadeUp/popIn/spinIn/cardIn/pulseGlow` 定义在全局 `frontend/app.wxss`（实测 `app.wxss:169-242` 存在同名 keyframes）。注意 `pulseRed` 在 `app.wxss:242` 也有定义，页面样式后加载生效（页面内以本文件 `:332-335` 为准）。
 
 ## 4-3. JSON 专章（`march.json`，5 行）
 
@@ -225,13 +225,18 @@ keyframes 归属：本文件自定义 `pulseRed`（`:313-316`）、`litFadeIn`�
   4. `wx.getSystemInfoSync()`（`:511`）为微信已标记废弃的同步接口——现状可用，未迁移 `wx.getWindowInfo` 等新接口，是否迁移**待确认**。
   5. **WebSocket**：本页不订阅任何 WS 消息（§6），故生产环境 wss 不可用的阻塞问题（已登记为 `.qoder/PROJECT.md` §8「阻塞级 / 功能不可用」第 1 项与第 2 项）**不影响本页**；路线渲染与完成仪式链路全部走 REST。（S4 计划在本页订阅 WS 做实时叠加，届时本条失效。）
   6. 抵达卡弹层无点击关闭绑定（`march.wxml:17-32` 遮罩层无 bindtap），只能等队列自动播完——现状行为，是否符合预期**待确认**。
-  7. **`map-hint` 在星空模式被画布盖住**：`<canvas type="2d">` 是开发者工具中的不透明原生层、位于 DOM 之上且 `visibility` 无效，`march.wxml:92` 的提示条星空模式下不可见——S3 计划把提示文案画进画布内解决。
+  7. **`map-hint` 原生层遮挡已于 S3 修复（`835f46f`）**：`<canvas type="2d">` 是开发者工具中的不透明原生层、位于 DOM 之上且 `visibility` 无效；现 `march.wxml:97` 的 DOM 提示条加 `wx:if="{{mode === 'real'}}"` 只留实景模式，星空模式的操作提示由内核 `hud.drawHudHint` 画进画布（视口固定），缺陷关闭。
   8. **`march.json` 未见 `enablePullDownRefresh`**（§4-3）：`onPullDownRefresh` 已实现（`:173-175`）但页面配置仅 3 项，下拉刷新是否真能触发**待实测确认**。
-- **待开发**：S3 深空 HUD 视觉重构（L0~L6，含 `map-hint` 入画布）、S4 实时数据叠加层 + WS 飞线、S5 帧率自适应降级（方案已排期，尚未实现——勿当作既有功能引用）。
+- **待开发**：S4 实时数据叠加层 + WS 飞线、S5 帧率自适应降级（方案已排期，尚未实现——勿当作既有功能引用）。S3 深空 HUD 视觉重构（L0~L6，含 `map-hint` 入画布）已于 2026-10-19 `835f46f` 完成，勿再当待办引用。
 
 ## 10. 迭代记录
 
 数据来源：`git log --follow --oneline -- frontend/pages/march/march.js` + `git log --oneline -- frontend/pages/march/`；提交号在 `docs/迭代记录.md` 均有对应条目。按时间倒序、按主题归并；未逐行核对 diff 的条目以提交信息为据并注明。
+
+### 2026-10-19（`835f46f`）
+- 需求：深空 HUD 科技感地图五阶段方案的 S3——星空模式视觉重做为深空 HUD（L0~L6），几何/行为不变。
+- 修改内容（涉本四件套，仅 wxml/wxss，`march.js` 零改动）：`march.wxml` 的 `.map-hint` 加 `wx:if="{{mode === 'real'}}"`（`:97`，星空提示改由内核画进画布，修复原生层遮挡缺陷）；`march.wxss` 的 `.route-map` 加 `background:#050B16`（`:148`，与内核 L0 深空底一致、避免首帧白闪）。绘制重做全部在 `utils/hudMap.js` 与 `utils/routeCanvas.js`（见两文档 §10 的同提交条目）。
+- 测试结果：automator 四套件 `tabbar-starmap` 8/8、`p0-march` 6/6、`p1-starry-march` 4/4、`s16-review-smoke` 16/18（R7/R12 预存 mock 登录 502）；与 S2 基线逐项一致；改造前后截图逐图比对几何一致。报告 `frontend/test/docs/s31-deep-space-hud-report.md`；`docs/迭代记录.md` 的 `835f46f` 条目。
 
 ### 2026-10-19（`2862453`）
 - 需求：深空 HUD 科技感地图五阶段方案的 S2——抽离渲染内核，为 S3 视觉重做固化「行为不变」基线。
