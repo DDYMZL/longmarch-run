@@ -2,7 +2,7 @@
  * 长征路线页（地图版）
  * 双模式：实景地图（原生 <map>）/ 星空长征（Canvas 2D，需求 §13 独立体验模式）。
  *
- * 星空长征的绘制状态与绘制逻辑全部收在 utils/hudMap.js 渲染内核（this.hud）；本页只负责
+ * 星空长征的绘制状态与绘制逻辑全部收在 utils/starMap.js 渲染内核（this.hud，史诗风重构版）；本页只负责
  * 模式切换、数据拉取、rAF 循环、手势事件转发（pan/pinch 数学）与命中后跳转。
  * 星空全景（§13.4）：单指拖动平移、双指捏合缩放、双击复位。
  * 任意节点（含未解锁）均可点击查看历史详情。
@@ -15,7 +15,7 @@ const sport = require('../../services/sport');
 const broadcast = require('../../services/broadcast');
 const ws = require('../../services/ws');
 const arrivePopup = require('../../utils/arrivePopup');
-const hudMap = require('../../utils/hudMap');
+const starMap = require('../../utils/starMap');
 const nodeThemes = require('../../data/node-themes');
 
 const STATS_THROTTLE = 5000; // WS data_changed 触发全员统计重拉的最小间隔
@@ -582,7 +582,7 @@ Page({
         ctx.scale(dpr, dpr);
 
         this.canvas = node;
-        this.hud = hudMap.createHudMap({ ctx: ctx, cw: width, ch: height, dpr: dpr });
+        this.hud = starMap.createStarMap({ ctx: ctx, cw: width, ch: height, dpr: dpr });
         if (this.routeData) this.hud.setRoute(this.routeData);
         // 切回星空模式先用 last-good 数据即时上屏，随后 loadOverlay 再刷新
         if (this._overlayStats) this.hud.setStats(this._overlayStats);
