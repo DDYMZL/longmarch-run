@@ -282,8 +282,14 @@ Page({
     // 已跳转过（本页生命周期内）或已有待触发的定时器时不重复安排；
     // 定时器被 onHide 取消（切 tab）时允许下次 onShow 重新安排
     if (this._ceremonyStarted || this._ceremonyTimer) return;
-    const delay = this._popupMs || 0;
+    let delay = this._popupMs || 0;
     this._popupMs = 0;
+    // 星空模式：先播页内终点仪式（焦点转向延安→全程逐段重亮→金粒子汇聚→终点光环展开），
+    // 仪式落幕后再跳 ceremony 页（需求：页内轻仪式 + 保留 ceremony 完整仪式页）
+    if (this.data.mode === 'canvas' && this.hud) {
+      const finaleMs = this.hud.playFinale();
+      if (finaleMs > 0) delay += finaleMs + 400;
+    }
     this._ceremonyTimer = setTimeout(() => {
       this._ceremonyTimer = null;
       this._ceremonyStarted = true;

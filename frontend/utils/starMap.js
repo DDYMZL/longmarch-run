@@ -39,7 +39,6 @@ const BRIGHT_STAR_COUNT = 7; // 近景中的亮星（十字光芒 + 明显缩放
 const STAR_TINTS = ['#EAF2FF', '#EAF2FF', '#FFF1D6', '#FFE9C8', '#CFE0FF'];
 
 /* ---- 动画参数 ---- */
-const INTRO_MS = 1600; // 首次渲染入场描画时长（路线自起点绘出）
 const PROGRESS_MS = 800; // 步数刷新增量推进时长
 const ARRIVE_FX_MS = 2600; // 节点点亮动画时长
 const PARTICLE_CAP = 64; // 点亮粒子总量上限
@@ -48,6 +47,21 @@ const FLOW_SPEED = 26; // 路线流光速度（px/s，沿路径前进方向）
 
 /* 关键历史节点（外环刻度装饰，标识丰碑身份）：遵义会议 / 飞夺泸定桥 / 延安（会师） */
 const KEY_NODES = { 2: true, 6: true, 10: true };
+
+/* 完整进入动画每次小程序生命周期只播一次（切模式重建内核后只播快速淡入，
+ * 避免「每次刷新都重复冗长完整演出」；页面级 CSS 开场动画的首次标记在 march.js 另行管理） */
+let INTRO_PLAYED = false;
+
+/* 进入动画时间线（完整版）：星幕淡入 0~600ms → 星云星群随静态层同现 →
+ * 路线自起点绘制 600~2600ms（已完成节点随描画依次亮起）→ 当前节点焦点 2400ms 起 →
+ * 视口 UI（胶囊/进度环/图例/提示）2600~3200ms 淡入。轻量版压缩为 0~900ms。 */
+const INTRO_FULL = { sky: 600, routeStart: 600, routeEnd: 2600, uiStart: 2600, uiEnd: 3200 };
+const INTRO_LITE = { sky: 300, routeStart: 100, routeEnd: 700, uiStart: 600, uiEnd: 900 };
+
+/* 延安终点页内仪式时间线：0~1s 焦点转向终点 → 0.2~1.4s 全程路线金色逐段重亮 →
+ * 1~2.6s 金粒子向终点汇聚 → 2.2~3.6s 终点光环展开。播完后终点常亮胜利光环（静态完成态）。 */
+const FINALE_MS = 3600;
+const FINALE_PARTICLES = 30;
 
 /* ---- 帧率自适应降级 ---- */
 const PERF_WINDOW = 30; // 采样窗口帧数
@@ -117,9 +131,12 @@ function createStarMap(opts) {
 
     // 动画状态
     introStart: 0, // 入场描画起点（ms，0=未开始）
+    introFull: false, // 本次入场是否为完整版（模块级 INTRO_PLAYED 判定）
     progressAnim: null, // {from, to, start} 增量推进
     arriveFx: null, // [{nodeId, start, particles}] 点亮动画
     flyLine: null, // {nodeId, start} WS 飞线
+    finale: null, // {start} 延安终点页内仪式（playFinale 触发）
+    finaleParticles: null, // 终点仪式金粒子（汇聚向延安）
 
     // L7 实时数据注入（setStats 一次性格式化，帧内不拼字符串）
     stats: null,
@@ -162,10 +179,27 @@ function createStarMap(opts) {
       const next = this.calcRouteProgress(route);
       if (!prev) {
         this.introStart = Date.now();
+        this.introFull = !INTRO_PLAYED;
+        INTRO_PLAYED = true;
         this.progressAnim = null;
       } else if (Math.abs(next - prevProgress) > 1e-4) {
         this.progressAnim = { from: prevProgress, to: next, start: Date.now() };
       }
+    },
+
+    /**
+     * 进入动画阶段：null=已结束；否则返回 {el, tl} 供各层计算淡入/描画进度。
+     * 纯时间推导无定时器，onHide 停 rAF 即中断、onShow 恢复自动续播（可中断可重入）。
+     */
+    introPhase() {
+      if (!this.introStart) return null;
+      const el = Date.now() - this.introStart;
+      const tl = this.introFull ? INTRO_FULL : INTRO_LITE;
+      if (el >= tl.uiEnd) {
+        this.introStart = 0;
+        return null;
+      }
+      return { el: el, tl: tl };
     },
 
     /** 全程行军进度（0~1）：优先取后端 routeProgress，旧接口降级为步数比例 */
@@ -614,6 +648,8 @@ function createStarMap(opts) {
       this._zoneSprites = null;
       this.arriveFx = null;
       this.progressAnim = null;
+      this.finale = null;
+      this.finaleParticles = null;
       this.route = null;
       this.nodeIndex = null;
       this.nodePts = null;
@@ -677,32 +713,42 @@ function createStarMap(opts) {
       this.samplePerf(t);
       const { cw, ch } = this;
       const v = this.view;
+      const intro = this.introPhase();
 
-      // 静态层（星幕/星云/区段雾带/暗角），不可用时降级直绘
+      // 静态层（星幕/星云/区段雾带/暗角），不可用时降级直绘；进入动画第 1 步：星幕淡入
+      const skyAlpha = intro ? Math.min(1, intro.el / intro.tl.sky) : 1;
+      ctx.globalAlpha = skyAlpha;
       if (this.staticLayer) {
         ctx.drawImage(this.staticLayer, 0, 0, cw, ch);
       } else {
         this.paintSky(ctx);
       }
+      ctx.globalAlpha = 1;
 
       ctx.save();
       ctx.translate(v.ox, v.oy);
       ctx.scale(v.scale, v.scale);
 
-      this.drawNearStars(t);
+      if (skyAlpha > 0.6) this.drawNearStars(t);
       this.drawEnvMotes(t);
-      this.drawRoute(t);
-      this.drawNodes(t);
+      this.drawRoute(t, intro);
+      this.drawNodes(t, intro);
       this.drawArriveFx(t);
       this.drawFlyLine(t);
+      this.drawFinale(t);
 
       ctx.restore();
 
-      // 视口固定 UI（不随拖动缩放）
-      this.drawStatsCapsule(ctx);
-      this.drawProgressRing(ctx);
-      this.drawLegend(ctx);
-      this.drawHint(ctx);
+      // 视口固定 UI（不随拖动缩放）；进入动画第 6 步：最后淡入
+      const uiAlpha = intro ? Math.min(1, Math.max(0, (intro.el - intro.tl.uiStart) / (intro.tl.uiEnd - intro.tl.uiStart))) : 1;
+      if (uiAlpha > 0) {
+        ctx.globalAlpha = uiAlpha;
+        this.drawStatsCapsule(ctx);
+        this.drawProgressRing(ctx);
+        this.drawLegend(ctx);
+        this.drawHint(ctx);
+        ctx.globalAlpha = 1;
+      }
     },
 
     /** 近景星：闪烁（sin 相位）+ 极缓漂移（出屏回绕）；亮星带十字光芒。降级时只画静态位置 */
@@ -767,20 +813,17 @@ function createStarMap(opts) {
      * 红色征途路线：
      * 未解锁段暗红基底（全程）→ 已完成段金红主径（外发光 + 红主径 + 金内核）
      * → 当前段沿路径方向的红色流光（虚线 offset 逐帧前移）→ 行进旗帜。
+     * 进入动画第 3 步：路线在 intro 时间线窗口内自起点向前绘制。
      */
-    drawRoute(t) {
+    drawRoute(t, intro) {
       const ctx = this.ctx;
       if (!this.path || this.path.length < 2) return;
       const ratio = this.currentRatio();
-      // 入场描画：首次渲染时路线自起点绘出
+      // 入场描画：路线在 [tl.routeStart, tl.routeEnd] 窗口内自起点绘出
       let drawRatio = ratio;
-      if (this.introStart) {
-        const p = (Date.now() - this.introStart) / INTRO_MS;
-        if (p >= 1) {
-          this.introStart = 0;
-        } else {
-          drawRatio = ratio * routeCanvas.easeOutCubic(Math.max(0, p));
-        }
+      if (intro) {
+        const p = (intro.el - intro.tl.routeStart) / (intro.tl.routeEnd - intro.tl.routeStart);
+        drawRatio = ratio * routeCanvas.easeOutCubic(Math.min(1, Math.max(0, p)));
       }
       const endIdx = Math.max(1, Math.floor(drawRatio * (this.path.length - 1)));
       const lastIdx = this.path.length - 1;
@@ -851,19 +894,53 @@ function createStarMap(opts) {
 
     /* ---------------- 节点（四态 + 差异化历史图标） ---------------- */
 
-    drawNodes(t) {
+    drawNodes(t, intro) {
       const nodes = (this.route && this.route.nodes) || [];
       const ctx = this.ctx;
+      const finished = !!(this.route && this.route.finished);
       nodes.forEach((node, i) => {
         const p = this.nodePts[i];
         if (!p) return;
+        // 进入动画第 4 步：节点随路线描画依次亮起（未描到保持 35% 暗态可辨识）
+        let appear = 1;
+        if (intro && this.pathLen > 0) {
+          const nodeRatio = this.pathDist[this.nodePathIdx[i]] / this.pathLen;
+          const drawP =
+            (intro.el - intro.tl.routeStart) / (intro.tl.routeEnd - intro.tl.routeStart) *
+            this.currentRatio();
+          appear = Math.min(1, Math.max(0.35, 0.35 + (drawP - nodeRatio) / 0.05));
+        }
+        ctx.globalAlpha = appear;
         if (node.status === 'completed') this.drawNodeCompleted(ctx, node, p, t);
         else if (node.status === 'current') this.drawNodeCurrent(ctx, node, p, t);
         else this.drawNodeLocked(ctx, node, p, t);
+        // 延安终点：全程完成后常亮胜利光环（静态完成态，重进页面不播仪式也有仪式感）
+        if (finished && i === nodes.length - 1) this.drawVictoryHalo(ctx, p, t);
         // 关键历史节点（遵义/泸定桥/延安）：外环四方位刻度，标识其丰碑身份
         if (KEY_NODES[node.id] && node.status !== 'unlocked') this.drawKeyNodeTicks(ctx, node, p);
+        ctx.globalAlpha = 1;
         this.drawNodeLabel(ctx, node, p);
       });
+    },
+
+    /** 延安胜利光环（静态完成态）：常亮大金晕 + 双层缓呼吸光环 */
+    drawVictoryHalo(ctx, p, t) {
+      if (this.glowGold) {
+        const s = 72 + 8 * Math.sin(t * 1.2);
+        ctx.globalAlpha = 0.65;
+        ctx.drawImage(this.glowGold, p.x - s / 2, p.y - s / 2, s, s);
+        ctx.globalAlpha = 1;
+      }
+      for (let k = 0; k < 2; k++) {
+        const rr = 14 + k * 7 + 1.5 * Math.sin(t * 1.2 + k);
+        ctx.strokeStyle = P.gold;
+        ctx.globalAlpha = 0.55 - k * 0.2;
+        ctx.lineWidth = 1.4 - k * 0.4;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, rr, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
     },
 
     /** 已点亮：明亮金色核心 + 金色双环 + 稳定呼吸 + 金色图标 */
@@ -1063,16 +1140,27 @@ function createStarMap(opts) {
         if (i == null || !this.nodePts[i]) return;
         const p = this.nodePts[i];
         const k = (now - fx.start) / ARRIVE_FX_MS;
-        // 光环扩散
-        const rr = 10 + k * 34;
-        ctx.strokeStyle = P.gold;
-        ctx.globalAlpha = Math.max(0, 0.8 * (1 - k));
-        ctx.lineWidth = 2 * (1 - k) + 0.5;
-        ctx.beginPath();
-        ctx.arc(p.x, p.y, rr, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-        // 粒子扩散（降级时跳过，纯氛围无信息量）
+        // 阶段一（0~0.25）：蓄能——核心收缩聚光
+        if (k < 0.25 && this.glowGold) {
+          const c = 1 - k / 0.25;
+          const s = 26 * c + 8;
+          ctx.globalAlpha = 0.5 + 0.4 * (1 - c);
+          ctx.drawImage(this.glowGold, p.x - s / 2, p.y - s / 2, s, s);
+          ctx.globalAlpha = 1;
+        }
+        // 阶段二（0.15 起）：光环扩散 + 外环增强
+        const k2 = Math.max(0, (k - 0.15) / 0.85);
+        if (k2 > 0) {
+          const rr = 10 + k2 * 34;
+          ctx.strokeStyle = P.gold;
+          ctx.globalAlpha = Math.max(0, 0.8 * (1 - k2));
+          ctx.lineWidth = 2 * (1 - k2) + 0.5;
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, rr, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+        // 阶段三：粒子扩散（降级时跳过，纯氛围无信息量）
         if (!this.lowPerf) {
           ctx.fillStyle = P.gold;
           fx.particles.forEach((pt) => {
@@ -1084,6 +1172,19 @@ function createStarMap(opts) {
             ctx.fill();
           });
           ctx.globalAlpha = 1;
+        }
+        // 阶段四（0.3 起）：节点名称显现（金色，淡入）
+        if (k > 0.3) {
+          const node = (this.route && this.route.nodes || [])[i];
+          if (node) {
+            const ka = Math.min(1, (k - 0.3) / 0.25);
+            ctx.font = 'bold 11px sans-serif';
+            const w = ctx.measureText(node.name).width;
+            ctx.globalAlpha = ka * Math.max(0, 1 - Math.max(0, k - 0.8) / 0.2);
+            ctx.fillStyle = P.gold;
+            ctx.fillText(node.name, p.x - w / 2, p.y - 18);
+            ctx.globalAlpha = 1;
+          }
         }
       });
     },
@@ -1128,6 +1229,106 @@ function createStarMap(opts) {
       }
       ctx.restore();
       ctx.globalAlpha = 1;
+    },
+
+    /* ---------------- 延安终点页内仪式（需求：全部点亮后页内轻仪式，落幕跳 ceremony 页） ---------------- */
+
+    /**
+     * 播放延安终点仪式。返回仪式总时长 ms（页面层据此延迟跳转 ceremony 页）；
+     * 已在播或数据未就绪时返回 0（不重复触发）。动画失败不影响任何业务状态。
+     */
+    playFinale() {
+      if (this.finale || !this.nodePts || !this.nodePts.length) return 0;
+      const lastPt = this.nodePts[this.nodePts.length - 1];
+      this.finale = {
+        start: Date.now(),
+        x: lastPt.x,
+        y: lastPt.y,
+        vs: this.view.scale,
+        vox: this.view.ox,
+        voy: this.view.oy
+      };
+      // 金粒子：从场景各处向终点汇聚（构建期一次性分配）
+      this.finaleParticles = [];
+      for (let i = 0; i < FINALE_PARTICLES; i++) {
+        this.finaleParticles.push({
+          x: Math.random() * this.cw,
+          y: Math.random() * this.ch * 0.8,
+          delay: 1000 + Math.random() * 500,
+          dur: 1100 + Math.random() * 400
+        });
+      }
+      return FINALE_MS;
+    },
+
+    /**
+     * 终点仪式帧绘制（时间线）：0~1s 焦点转向终点（内核临时接管 view）
+     * → 0.2~1.4s 全程路线金色逐段重亮 → 1~2.6s 金粒子汇聚 → 2.2s 起终点光环双圈展开。
+     */
+    drawFinale(t) {
+      if (!this.finale) return;
+      const ctx = this.ctx;
+      const f = this.finale;
+      const el = Date.now() - f.start;
+      if (el >= FINALE_MS + 500) {
+        this.finale = null;
+        this.finaleParticles = null;
+        return;
+      }
+
+      // 焦点转向延安（view 动画只影响后续帧；播完 view 停在终点附近，用户可自由拖动）
+      if (el <= 1000) {
+        const k = routeCanvas.easeOutCubic(el / 1000);
+        const ts = 1.6;
+        this.view.scale = f.vs + (ts - f.vs) * k;
+        this.view.ox = f.vox + (this.cw / 2 - f.x * ts - f.vox) * k;
+        this.view.oy = f.voy + (this.ch / 2 - f.y * ts - f.voy) * k;
+        this.clampView();
+      }
+
+      // 全程金色逐段重亮
+      const relight = Math.min(1, Math.max(0, (el - 200) / 1200));
+      if (relight > 0 && this.path && this.path.length > 1) {
+        const idx = Math.max(1, Math.floor(relight * (this.path.length - 1)));
+        ctx.save();
+        ctx.strokeStyle = P.gold;
+        ctx.lineWidth = 4.5;
+        ctx.lineCap = 'round';
+        ctx.globalAlpha = 0.75 * (1 - relight * 0.4);
+        routeCanvas.tracePath(ctx, this.path, idx);
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // 金粒子向终点汇聚（平方加速）
+      ctx.fillStyle = P.gold;
+      (this.finaleParticles || []).forEach((pt) => {
+        const k = (el - pt.delay) / pt.dur;
+        if (k <= 0) return;
+        const kk = Math.min(1, k);
+        const e = kk * kk;
+        ctx.globalAlpha = 0.9 * (1 - kk * 0.55);
+        ctx.beginPath();
+        ctx.arc(pt.x + (f.x - pt.x) * e, pt.y + (f.y - pt.y) * e, 1.6, 0, Math.PI * 2);
+        ctx.fill();
+      });
+      ctx.globalAlpha = 1;
+
+      // 终点光环双圈展开
+      if (el > 2200) {
+        const k = (el - 2200) / 1400;
+        for (let ring = 0; ring < 2; ring++) {
+          const rk = Math.min(1, Math.max(0, k - ring * 0.25));
+          if (rk <= 0) continue;
+          ctx.strokeStyle = P.gold;
+          ctx.globalAlpha = Math.max(0, 0.85 * (1 - rk));
+          ctx.lineWidth = 2.5 * (1 - rk) + 0.5;
+          ctx.beginPath();
+          ctx.arc(f.x, f.y, 12 + rk * 60, 0, Math.PI * 2);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+      }
     },
 
     /* ---------------- 视口固定 UI（克制呈现） ---------------- */
