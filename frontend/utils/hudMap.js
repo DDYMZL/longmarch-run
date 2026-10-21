@@ -23,6 +23,10 @@
  *   不每帧建径向渐变；L7 数值在 setStats 时一次性格式化，进度环百分比按整数变化缓存；
  *   每帧长折线描边 ≤4 次（L5 能量管道三次）、drawImage ≤30 次、
  *   fillText ≤22 次（节点标签 10 + 操作提示 1 + L7 面板 6 + 仪表环 2 + 图例 3）。
+ * 帧率自适应降级（S5）：draw(t) 内滚动采样 PERF_WINDOW 帧间隔，均值 > PERF_BUDGET_MS
+ *   （即 <30fps）置 lowPerf，关掉 L4 水平扫描带与点亮粒子扩散——两者纯氛围、无信息量；
+ *   雷达扇形、L5 流光与全部叙事/数据层保留。**降级不自动恢复**，避免在阈值附近反复
+ *   开关造成视觉抖动；暂停/切后台造成的时间跳变样本丢弃，不污染均值。
  *
  * 观景变换 view 由页面手势层直接改写（pan/pinch 数学属于事件层），改完须调 clampView()；
  * 命中测试 hitTest() 内部做屏幕→场景逆变换。
@@ -82,6 +86,11 @@ const INTRO_MS = 1400; // 首次渲染入场描画时长
 const PROGRESS_MS = 800; // 步数刷新增量推进时长
 const ARRIVE_FX_MS = 2400; // 点亮动画时长（§13.3）
 const PARTICLE_CAP = 64; // 点亮粒子总量上限（§13.4 性能约束）
+
+// 帧率自适应降级（S5）：滚动窗口帧间隔均值超预算即降级，且不自动恢复
+const PERF_WINDOW = 30; // 采样窗口帧数
+const PERF_BUDGET_MS = 33; // 帧间隔预算（>33ms 即 <30fps）
+const PERF_GAP_MS = 1000; // 超过此间隔视为暂停/切后台的时间跳变，丢弃该样本
 
 /**
  * 创建渲染内核实例。
@@ -143,6 +152,15 @@ function createHudMap(opts) {
     // L7 仪表环百分比文案：整数变化时才重建字符串
     _ringPct: -1,
     _ringText: '',
+
+    // 帧率自适应降级（S5）：lowPerf 一旦置真不再复位（实例级，dispose 后新实例重新测量）
+    lowPerf: false,
+    _perfBuf: new Array(PERF_WINDOW).fill(0), // 帧间隔环形缓冲（创建期一次性分配）
+    _perfI: 0, // 下一个写入槽位
+    _perfN: 0, // 已填充样本数（未满窗时不参与判定）
+    _perfSum: 0, // 窗口内间隔累加（增量维护，避免每帧重新求和）
+    _perfLast: 0, // 上一帧时间戳（秒），0 表示尚无样本
+    _perfAvg: 0, // 最近一次满窗均值（ms），供测试与诊断读取
 
     /* ---------------- 数据与几何 ---------------- */
 
@@ -390,13 +408,50 @@ function createHudMap(opts) {
       this._hintW = 0;
       this._ringPct = -1;
       this._ringText = '';
+      this.lowPerf = false;
+      this._perfBuf = null;
+      this._perfI = 0;
+      this._perfN = 0;
+      this._perfSum = 0;
+      this._perfLast = 0;
+      this._perfAvg = 0;
     },
 
     /* ---------------- 单帧绘制 ---------------- */
 
+    /**
+     * 帧率采样与降级判定（S5）：滚动 PERF_WINDOW 帧的间隔均值 > PERF_BUDGET_MS 即置 lowPerf。
+     * 增量维护和值（覆盖槽位时先减旧值），每帧 O(1)、零分配。
+     * 降级后直接 return 不再采样——不自动恢复，避免在阈值附近反复开关造成视觉抖动。
+     * 首帧无间隔可测；> PERF_GAP_MS 的间隔是暂停/切后台造成的时间跳变，丢弃不入库。
+     * @param {number} t 页面 rAF 传入的时间戳（秒）
+     */
+    samplePerf(t) {
+      if (this.lowPerf) return;
+      const last = this._perfLast;
+      this._perfLast = t;
+      if (!last) return;
+      const dt = (t - last) * 1000;
+      if (dt <= 0 || dt > PERF_GAP_MS) return;
+      const i = this._perfI;
+      if (this._perfN < PERF_WINDOW) {
+        this._perfBuf[i] = dt;
+        this._perfSum += dt;
+        this._perfN++;
+      } else {
+        this._perfSum += dt - this._perfBuf[i];
+        this._perfBuf[i] = dt;
+      }
+      this._perfI = (i + 1) % PERF_WINDOW;
+      if (this._perfN < PERF_WINDOW) return;
+      this._perfAvg = this._perfSum / PERF_WINDOW;
+      if (this._perfAvg > PERF_BUDGET_MS) this.lowPerf = true;
+    },
+
     draw(t) {
       const ctx = this.ctx;
       if (!ctx || !this.route) return;
+      this.samplePerf(t);
       const { cw, ch } = this;
 
       // 星空全景观景变换（§13.4）：拖动/缩放作用于整个场景，命中测试做逆变换
@@ -414,7 +469,8 @@ function createHudMap(opts) {
         this.paintScenery(ctx);
       }
       this.drawRadar(t);
-      this.drawScanBand(t);
+      // 降级首刀（S5）：L4 水平扫描带是全宽渐变填充，纯氛围、无信息量
+      if (!this.lowPerf) this.drawScanBand(t);
       this.drawClouds(t);
       this.drawStars(t);
       this.drawRegionMotes(t);
@@ -1221,19 +1277,23 @@ function createHudMap(opts) {
         ctx.globalAlpha = 1;
       });
 
-      // 粒子扩散（§13.3）：delay 后抛物扩散、生命 0.9s 渐隐
-      const parts = fx.particles || [];
-      for (const pt of parts) {
-        const dt = tSec - pt.delay;
-        if (dt <= 0) continue;
-        const life = 0.9;
-        if (dt >= life) continue;
-        const k = dt / life;
-        ctx.globalAlpha = (1 - k) * 0.85;
-        ctx.fillStyle = '#FFE9A8';
-        ctx.beginPath();
-        ctx.arc(pt.x + pt.vx * dt, pt.y + pt.vy * dt + 20 * dt * dt, pt.r * (1 - k * 0.5), 0, Math.PI * 2);
-        ctx.fill();
+      // 粒子扩散（§13.3）：delay 后抛物扩散、生命 0.9s 渐隐。
+      // 降级第二刀（S5）：粒子是每帧 N 次 arc+fill，且降级可能在动画中途才判定出来，
+      // 故守卫放在绘制侧（而非 playArrive 生成侧）——两处都要挡的话反而漏掉中途降级。
+      if (!this.lowPerf) {
+        const parts = fx.particles || [];
+        for (const pt of parts) {
+          const dt = tSec - pt.delay;
+          if (dt <= 0) continue;
+          const life = 0.9;
+          if (dt >= life) continue;
+          const k = dt / life;
+          ctx.globalAlpha = (1 - k) * 0.85;
+          ctx.fillStyle = '#FFE9A8';
+          ctx.beginPath();
+          ctx.arc(pt.x + pt.vx * dt, pt.y + pt.vy * dt + 20 * dt * dt, pt.r * (1 - k * 0.5), 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.globalAlpha = 1;
     },
