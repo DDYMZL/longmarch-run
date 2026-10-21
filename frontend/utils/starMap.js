@@ -288,7 +288,19 @@ function createStarMap(opts) {
         const cx = (p0.x + p1.x) / 2;
         const cy = (p0.y + p1.y) / 2;
         const r = Math.max(56, Math.hypot(p1.x - p0.x, p1.y - p0.y) * 0.62 + 34);
-        this.chapterZones.push({ theme: theme, cx: cx, cy: cy, r: r, x0: p0.x, y0: p0.y, x1: p1.x, y1: p1.y });
+        this.chapterZones.push({
+          theme: theme,
+          cx: cx,
+          cy: cy,
+          r: r,
+          x0: p0.x,
+          y0: p0.y,
+          x1: p1.x,
+          y1: p1.y,
+          // 区段路径下标区间（静态层能量带描边用）
+          pathIdx0: this.nodePathIdx[i0],
+          pathIdx1: this.nodePathIdx[i1]
+        });
       });
 
       // 章节环境粒子（帧内）：锚定各区段，类型/颜色/数量取自主题配置，构建期一次性分配
@@ -415,12 +427,144 @@ function createStarMap(opts) {
         c.globalAlpha = 1;
       }
 
+      // 章节区段地景与专属装饰（剪影/铁索/天光/能量轨迹）
+      this.paintChapterScenery(c);
+
       // 暗角（收拢视线到路线）
       const vg = c.createRadialGradient(cw / 2, ch * 0.42, Math.min(cw, ch) * 0.36, cw / 2, ch * 0.5, Math.max(cw, ch) * 0.78);
       vg.addColorStop(0, 'rgba(2,4,10,0)');
       vg.addColorStop(1, 'rgba(2,4,10,0.42)');
       c.fillStyle = vg;
       c.fillRect(0, 0, cw, ch);
+    },
+
+    /**
+     * 章节区段地景与专属装饰（静态烘焙进星幕层，跟随区段锚点）：
+     * - silhouette 'ridge' 峡谷折岭（突围章：左右对峙山岭夹出 V 形峡谷）
+     * - silhouette 'peaks' 雪山尖峰（翻越章：连绵三角峰 + 雪顶）
+     * - extra 'chains' 铁索横线（泸定区段：两条垂弧链线 + 链环节点）
+     * - extra 'dawn' 地平线天光（会师章：区段下方暖金水平光带 + 大团金雾）
+     * - turning 章（赤水）区段路径下垫红色能量宽带，强化「战略转折」的能量轨迹意象
+     * 全部为低透明氛围层，不遮挡节点与标签。
+     */
+    paintChapterScenery(c) {
+      const zones = this.chapterZones || [];
+      zones.forEach((z) => {
+        const r = z.r;
+        const base = z.cy + r * 0.62; // 地景基线（区段锚点下方）
+
+        // 赤水转折：区段路径下垫红色能量带
+        if (z.theme.key === 'turning' && this.path && z.pathIdx1 > z.pathIdx0) {
+          c.strokeStyle = 'rgba(232,60,60,0.13)';
+          c.lineWidth = 13;
+          c.lineCap = 'round';
+          c.lineJoin = 'round';
+          c.beginPath();
+          c.moveTo(this.path[z.pathIdx0].x, this.path[z.pathIdx0].y);
+          for (let i = z.pathIdx0 + 1; i <= z.pathIdx1; i++) c.lineTo(this.path[i].x, this.path[i].y);
+          c.stroke();
+        }
+
+        // 峡谷折岭剪影（突围章）
+        if (z.theme.silhouette === 'ridge') {
+          c.fillStyle = 'rgba(12,14,24,0.66)';
+          // 左岭
+          c.beginPath();
+          c.moveTo(z.cx - r * 1.15, base);
+          c.lineTo(z.cx - r * 0.72, base - r * 0.42);
+          c.lineTo(z.cx - r * 0.46, base - r * 0.3);
+          c.lineTo(z.cx - r * 0.18, base - r * 0.56);
+          c.lineTo(z.cx - r * 0.04, base - r * 0.1);
+          c.lineTo(z.cx - r * 0.02, base);
+          c.closePath();
+          c.fill();
+          // 右岭
+          c.beginPath();
+          c.moveTo(z.cx + r * 1.15, base);
+          c.lineTo(z.cx + r * 0.7, base - r * 0.38);
+          c.lineTo(z.cx + r * 0.44, base - r * 0.52);
+          c.lineTo(z.cx + r * 0.16, base - r * 0.3);
+          c.lineTo(z.cx + r * 0.04, base - r * 0.08);
+          c.lineTo(z.cx + r * 0.02, base);
+          c.closePath();
+          c.fill();
+        }
+
+        // 雪山尖峰剪影（翻越章）
+        if (z.theme.silhouette === 'peaks') {
+          c.fillStyle = 'rgba(14,20,34,0.7)';
+          const w = r * 2.3;
+          const x0 = z.cx - w / 2;
+          c.beginPath();
+          c.moveTo(x0, base);
+          const peaks = 4;
+          for (let i = 0; i < peaks; i++) {
+            const px = x0 + (w / peaks) * (i + 0.5);
+            const ph = r * (0.34 + (i % 2) * 0.16); // 峰高错落
+            c.lineTo(px - w / peaks / 2, base);
+            c.lineTo(px, base - ph);
+            c.lineTo(px + w / peaks / 2, base);
+          }
+          c.lineTo(x0 + w, base);
+          c.closePath();
+          c.fill();
+          // 雪顶（峰尖小三角，冷色微光）
+          c.fillStyle = 'rgba(205,225,250,0.16)';
+          for (let i = 0; i < peaks; i++) {
+            const px = x0 + (w / peaks) * (i + 0.5);
+            const ph = r * (0.34 + (i % 2) * 0.16);
+            c.beginPath();
+            c.moveTo(px - w / peaks * 0.14, base - ph * 0.72);
+            c.lineTo(px, base - ph);
+            c.lineTo(px + w / peaks * 0.14, base - ph * 0.72);
+            c.closePath();
+            c.fill();
+          }
+        }
+
+        // 铁索横线（泸定区段）：两条垂弧链线 + 链环节点
+        if (z.theme.extra === 'chains') {
+          const x0 = z.cx - r * 0.95;
+          const x1 = z.cx + r * 0.95;
+          const yA = z.cy - r * 0.3;
+          const sag = r * 0.2;
+          c.strokeStyle = 'rgba(150,140,150,0.34)';
+          c.lineWidth = 1.2;
+          for (let k = 0; k < 2; k++) {
+            const y = yA + k * r * 0.16;
+            c.beginPath();
+            c.moveTo(x0, y);
+            c.quadraticCurveTo(z.cx, y + sag, x1, y);
+            c.stroke();
+            // 链环节点
+            c.fillStyle = 'rgba(170,160,170,0.4)';
+            const links = 9;
+            for (let i = 0; i <= links; i++) {
+              const t2 = i / links;
+              const lx = x0 + (x1 - x0) * t2;
+              const ly = (1 - t2) * (1 - t2) * y + 2 * (1 - t2) * t2 * (y + sag) + t2 * t2 * y;
+              c.beginPath();
+              c.arc(lx, ly, 1.4, 0, Math.PI * 2);
+              c.fill();
+            }
+          }
+        }
+
+        // 地平线天光（会师章）：区段下方暖金光带 + 大团金雾
+        if (z.theme.extra === 'dawn') {
+          const bandH = r * 0.5;
+          const g = c.createLinearGradient(0, base - bandH, 0, base);
+          g.addColorStop(0, 'rgba(240,198,90,0)');
+          g.addColorStop(1, 'rgba(240,198,90,0.22)');
+          c.fillStyle = g;
+          c.fillRect(z.cx - r * 1.3, base - bandH, r * 2.6, bandH);
+          if (this.glowGold) {
+            c.globalAlpha = 0.35;
+            c.drawImage(this.glowGold, z.cx - r * 0.9, base - r * 0.75, r * 1.8, r * 0.9);
+            c.globalAlpha = 1;
+          }
+        }
+      });
     },
 
     /** 构建光晕精灵（金/红/暖白）：预渲染到离屏小画布，帧内 drawImage 缩放复用 */
