@@ -46,6 +46,9 @@ const PARTICLE_CAP = 64; // 点亮粒子总量上限
 const FLY_MS = 1400; // WS 飞线单趟时长
 const FLOW_SPEED = 26; // 路线流光速度（px/s，沿路径前进方向）
 
+/* 关键历史节点（外环刻度装饰，标识丰碑身份）：遵义会议 / 飞夺泸定桥 / 延安（会师） */
+const KEY_NODES = { 2: true, 6: true, 10: true };
+
 /* ---- 帧率自适应降级 ---- */
 const PERF_WINDOW = 30; // 采样窗口帧数
 const PERF_BUDGET_MS = 33; // 帧间隔预算（>33ms 即 <30fps）
@@ -528,8 +531,8 @@ function createStarMap(opts) {
           const x1 = z.cx + r * 0.95;
           const yA = z.cy - r * 0.3;
           const sag = r * 0.2;
-          c.strokeStyle = 'rgba(150,140,150,0.34)';
-          c.lineWidth = 1.2;
+          c.strokeStyle = 'rgba(190,178,190,0.55)';
+          c.lineWidth = 1.6;
           for (let k = 0; k < 2; k++) {
             const y = yA + k * r * 0.16;
             c.beginPath();
@@ -537,14 +540,14 @@ function createStarMap(opts) {
             c.quadraticCurveTo(z.cx, y + sag, x1, y);
             c.stroke();
             // 链环节点
-            c.fillStyle = 'rgba(170,160,170,0.4)';
+            c.fillStyle = 'rgba(210,198,210,0.6)';
             const links = 9;
             for (let i = 0; i <= links; i++) {
               const t2 = i / links;
               const lx = x0 + (x1 - x0) * t2;
               const ly = (1 - t2) * (1 - t2) * y + 2 * (1 - t2) * t2 * (y + sag) + t2 * t2 * y;
               c.beginPath();
-              c.arc(lx, ly, 1.4, 0, Math.PI * 2);
+              c.arc(lx, ly, 1.8, 0, Math.PI * 2);
               c.fill();
             }
           }
@@ -846,7 +849,7 @@ function createStarMap(opts) {
       ctx.fill();
     },
 
-    /* ---------------- 节点（E2 基础三态；差异化图标在 E4 接入） ---------------- */
+    /* ---------------- 节点（四态 + 差异化历史图标） ---------------- */
 
     drawNodes(t) {
       const nodes = (this.route && this.route.nodes) || [];
@@ -857,11 +860,13 @@ function createStarMap(opts) {
         if (node.status === 'completed') this.drawNodeCompleted(ctx, node, p, t);
         else if (node.status === 'current') this.drawNodeCurrent(ctx, node, p, t);
         else this.drawNodeLocked(ctx, node, p, t);
+        // 关键历史节点（遵义/泸定桥/延安）：外环四方位刻度，标识其丰碑身份
+        if (KEY_NODES[node.id] && node.status !== 'unlocked') this.drawKeyNodeTicks(ctx, node, p);
         this.drawNodeLabel(ctx, node, p);
       });
     },
 
-    /** 已点亮：明亮金色核心 + 金色光环 + 稳定呼吸 */
+    /** 已点亮：明亮金色核心 + 金色双环 + 稳定呼吸 + 金色图标 */
     drawNodeCompleted(ctx, node, p, t) {
       const breathe = 0.85 + 0.15 * Math.sin(t * 1.6 + p.x);
       if (this.glowGold) {
@@ -875,14 +880,21 @@ function createStarMap(opts) {
       ctx.beginPath();
       ctx.arc(p.x, p.y, 8.5, 0, Math.PI * 2);
       ctx.stroke();
+      // 内环（丰碑双环）
+      ctx.globalAlpha = 0.5;
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 6.6, 0, Math.PI * 2);
+      ctx.stroke();
       ctx.globalAlpha = 1;
       ctx.fillStyle = P.gold;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 4.2, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, 4.4, 0, Math.PI * 2);
       ctx.fill();
+      this.drawNodeIcon(ctx, node, p, '#5C4210');
     },
 
-    /** 当前节点：红色核心 + 脉冲扩散环 + 强辉光 */
+    /** 当前节点：红色核心 + 脉冲扩散环 + 强辉光 + 环绕流动粒子 + 红色图标 */
     drawNodeCurrent(ctx, node, p, t) {
       if (this.glowRed) {
         ctx.globalAlpha = 0.75;
@@ -907,11 +919,26 @@ function createStarMap(opts) {
       ctx.stroke();
       ctx.fillStyle = P.nodeCurrent;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 4.6, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, 4.8, 0, Math.PI * 2);
       ctx.fill();
+      this.drawNodeIcon(ctx, node, p, '#FFE9E4');
+      // 环绕流动粒子（降级时关闭，纯氛围）
+      if (!this.lowPerf) {
+        for (let k = 0; k < 3; k++) {
+          const a = t * 1.5 + (k * Math.PI * 2) / 3;
+          const px = p.x + Math.cos(a) * 13.5;
+          const py = p.y + Math.sin(a) * 13.5 * 0.72;
+          ctx.globalAlpha = 0.75;
+          ctx.fillStyle = P.routeFlow;
+          ctx.beginPath();
+          ctx.arc(px, py, 1.2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+      }
     },
 
-    /** 未解锁：暗色核心 + 微弱外环 + 极轻呼吸（提示可点击查看历史） */
+    /** 未解锁：暗色核心 + 微弱外环 + 极轻呼吸（提示可点击查看历史）+ 暗色图标 */
     drawNodeLocked(ctx, node, p, t) {
       const breathe = 0.7 + 0.3 * Math.sin(t * 1.1 + p.y);
       ctx.strokeStyle = P.nodeLockedRing;
@@ -923,20 +950,75 @@ function createStarMap(opts) {
       ctx.globalAlpha = 1;
       ctx.fillStyle = P.nodeLockedCore;
       ctx.beginPath();
-      ctx.arc(p.x, p.y, 3.6, 0, Math.PI * 2);
+      ctx.arc(p.x, p.y, 3.8, 0, Math.PI * 2);
       ctx.fill();
+      this.drawNodeIcon(ctx, node, p, 'rgba(214,160,145,0.5)');
     },
 
-    /** 节点名称标签（宽度缓存，按状态着色） */
+    /**
+     * 节点差异化历史图标：消费 data/star-themes.js 的归一化折线集，
+     * 缩放描边进节点核心；无配置时回退五角星（保底不空）。
+     */
+    drawNodeIcon(ctx, node, p, color) {
+      const icon = starThemes.getNodeIcon(node.id);
+      ctx.save();
+      ctx.translate(p.x, p.y);
+      const s = 3.4; // 图标半径（场景 px）：收于核心圆内
+      if (!icon) {
+        ctx.fillStyle = color;
+        routeCanvas.drawStar(ctx, 0, 0, 5, 3, 1.3, 0);
+        ctx.fill();
+        ctx.restore();
+        return;
+      }
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 0.9;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      for (let i = 0; i < icon.length; i++) {
+        const stroke = icon[i];
+        ctx.beginPath();
+        for (let j = 0; j < stroke.length; j++) {
+          const x = stroke[j][0] * s;
+          const y = stroke[j][1] * s;
+          if (j === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    },
+
+    /** 关键历史节点外环刻度（四方位短刻线；已点亮金色 / 当前红色） */
+    drawKeyNodeTicks(ctx, node, p) {
+      ctx.strokeStyle = node.status === 'completed' ? P.gold : P.nodeCurrent;
+      ctx.globalAlpha = 0.75;
+      ctx.lineWidth = 1.1;
+      for (let k = 0; k < 4; k++) {
+        const a = (k * Math.PI) / 2 + Math.PI / 4;
+        ctx.beginPath();
+        ctx.moveTo(p.x + Math.cos(a) * 10.6, p.y + Math.sin(a) * 10.6);
+        ctx.lineTo(p.x + Math.cos(a) * 12.6, p.y + Math.sin(a) * 12.6);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    },
+
+    /** 节点名称标签（宽度缓存，按状态着色；字号随缩放反向调整，保持屏幕恒定字号防重叠） */
     drawNodeLabel(ctx, node, p) {
       const text = node.name || '';
       if (!text) return;
-      ctx.font = '10px sans-serif';
-      if (this._labelW[node.id] == null) this._labelW[node.id] = ctx.measureText(text).width;
-      const w = this._labelW[node.id];
+      const inv = 1 / this.view.scale;
+      ctx.font = 10 * inv + 'px sans-serif';
+      if (this._labelW[node.id] == null) {
+        ctx.font = '10px sans-serif';
+        this._labelW[node.id] = ctx.measureText(text).width;
+        ctx.font = 10 * inv + 'px sans-serif';
+      }
+      const w = this._labelW[node.id] * inv;
       ctx.fillStyle =
         node.status === 'completed' ? P.labelDone : node.status === 'current' ? P.labelCurrent : P.labelLocked;
-      ctx.fillText(text, p.x - w / 2, p.y + 20);
+      ctx.fillText(text, p.x - w / 2, p.y + 20 * inv);
     },
 
     /* ---------------- 抵达特效与飞线 ---------------- */

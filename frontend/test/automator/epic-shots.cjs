@@ -145,7 +145,43 @@ async function prepare(mini) {
   console.log('OK epic-02-zoom.png（1.8x 缩放视图）');
 
   await mini2.disconnect();
-  console.log('E2 截图验证完成');
+
+  // 第三段：突围章特写（峡谷剪影 + 铁索 + 泸定桥节点图标），视角对准节点 6
+  const mini3 = await connect();
+  await prepare(mini3);
+  await sleep(2000);
+  await mini3.evaluate(() => {
+    const p = getCurrentPages().pop();
+    const h = p.hud;
+    const pt = h.nodePts[h.nodeIndex[6]];
+    h.view.scale = 2.5;
+    h.view.ox = h.cw / 2 - pt.x * 2.5;
+    h.view.oy = h.ch / 2 - pt.y * 2.5;
+    h.clampView();
+  });
+  await sleep(500);
+  await mini3.screenshot({ path: path.join(IMG, 'epic-03-breakthrough.png') });
+  console.log('OK epic-03-breakthrough.png（突围章特写：峡谷剪影/铁索/泸定桥图标）');
+  await mini3.disconnect();
+
+  // 第四段：会师章特写（地平线天光 + 延安关键节点刻度 + 图标），视角对准节点 10
+  const mini4 = await connect();
+  await prepare(mini4);
+  await sleep(2000);
+  await mini4.evaluate(() => {
+    const p = getCurrentPages().pop();
+    const h = p.hud;
+    const pt = h.nodePts[h.nodeIndex[10]];
+    h.view.scale = 2.5;
+    h.view.ox = h.cw / 2 - pt.x * 2.5;
+    h.view.oy = h.ch / 2 - pt.y * 2.5;
+    h.clampView();
+  });
+  await sleep(500);
+  await mini4.screenshot({ path: path.join(IMG, 'epic-04-victory.png') });
+  console.log('OK epic-04-victory.png（会师章特写：天光/延安节点图标与刻度）');
+  await mini4.disconnect();
+  console.log('E2~E4 截图验证完成');
 })().catch((e) => {
   console.error('FAIL:', e && e.message);
   process.exit(1);
