@@ -1,5 +1,7 @@
 # march.js（长征路线页 · 页面级合一）
 
+> **⚠ 勘误（2026-10-21，史诗风重构 E1~E7）**：绘制内核已由 `utils/hudMap.js`（HUD 仪器风）**重写为 `utils/starMap.js`（史诗风）**并随 E7 删除旧内核；本文档中全部「hudMap」「L0~L8」「六边环节点」「雷达/扫描」等表述指向已删除的 HUD 内核，仅具历史参考价值；行号锚点（721 行口径）也已随 E1~E6 漂移。**以源码为准**。新内核现状见 `frontend/design.md` §4.6（2026-10-21 口径）与 `docs/迭代记录.md` 2026-10-21 段；`starMap.js` 的 .qoder 建档与本文档的全量重锚在文档 backlog。E6 起「命中跳转 node-detail」改为「打开页内玻璃详情面板（画布快照顶替原生层）+ 面板内『查看完整详情』跳转」。
+
 > 按 `.qoder/README.md` §1「页面级合一」规则，本文档覆盖 `frontend/pages/march/` 四件套：`march.js`（721 行）、`march.wxml`（140 行）、`march.wxss`（548 行）、`march.json`（6 行）。WXML / WXSS / JSON 专章见 §4-1–§4-3。**星空长征的绘制状态与绘制逻辑不在本页**，全部在 `utils/hudMap.js` 渲染内核（`.qoder/frontend/utils/hudMap.js.md`），本页只留模式切换、数据拉取、rAF 循环、手势事件转发与命中跳转；S4 起另加 WS 订阅与 L7 叠加层取数（数据合并后注入内核，绘制仍全在内核）。
 
 ## 1. 文件路径

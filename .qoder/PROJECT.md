@@ -361,10 +361,10 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 
 | 文档 | 源文件来源 | 说明 |
 | --- | --- | --- |
-| `.qoder/frontend/utils/hudMap.js.md` | `2862453`（2026-10-19，科技感 HUD 地图 S2） | 星空长征渲染内核，从 `pages/march/march.js` 抽离；同批已重写 `.qoder/frontend/pages/march/march.js.md` |
+| ~~`.qoder/frontend/utils/hudMap.js.md`~~ | `2862453`（2026-10-19，科技感 HUD 地图 S2） | 星空长征渲染内核，从 `pages/march/march.js` 抽离；**已于 2026-10-21 史诗风重构 E7 随源文件一并删除**（内核重写为 `utils/starMap.js`，其建档见下表缺口 #12） |
 | `.qoder/frontend/utils/authGuide.js.md` | `53f2d62`（2026-10-18，十项增强点 3） | **补建**：新增时漏建档，`ensureScope` 统一授权引导 |
 
-**仍缺档（11 份，待补）**
+**仍缺档（13 份，待补）**
 
 | # | 源文件 | 引入提交 | 批次归属 |
 | --- | --- | --- | --- |
@@ -379,8 +379,10 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | 9 | `docker/init/023_chapters.sql` | `a8a74ae`（2026-10-18） | 四 |
 | 10 | `docker/init/024_analytics_menus.sql` | `a8a74ae`（2026-10-18） | 四 |
 | 11 | `docker/init/025_sync_failures.sql` | `a8a74ae`（2026-10-18） | 四 |
+| 12 | `frontend/utils/starMap.js` | `618050f`（2026-10-21，史诗风重构 E2） | 二 |
+| 13 | `frontend/data/star-themes.js` | `2ca1800`（2026-10-21，史诗风重构 E1） | 二 |
 
-**当前口径**：文件级文档已建 **184** 份（182 + 上述 2），应建 **195** 份（184 + 缺档 11），进度 **94.4%**；`.qoder` 下 `.md` 实测 **194** 个 = 文件级 184 + 总览层 10。补档与分母完整重算合并为一个独立任务，勿在业务任务里顺手夹带（避免单次提交跨四个批次）。
+**当前口径**：文件级文档已建 **183** 份（184 − 随 `hudMap.js` 删除的 1 份），应建 **196** 份（183 + 缺档 13），进度 **93.4%**；`.qoder` 下 `.md` 实测 **193** 个 = 文件级 183 + 总览层 10。补档与分母完整重算合并为一个独立任务，勿在业务任务里顺手夹带（避免单次提交跨四个批次）。另注：`.qoder/frontend/pages/march/march.js.md`（HUD 内核口径）与 `.qoder/frontend/services/march.js.md`（`hudMap` 行号引用）因 E1~E7 史诗风重构大面积漂移，重锚与 #12/#13 建档同属该独立任务；现状口径已在 march.js.md 头部勘误段与 `frontend/design.md` §4.6（2026-10-21）登记。
 
 ### 待确认问题清单（汇总）
 

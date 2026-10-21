@@ -623,7 +623,7 @@ Page({
 
   /* ---------------- 动画循环 ---------------- */
 
-  /** rAF 循环：每帧调渲染内核 draw(t)；绘制状态与绘制逻辑全在 utils/hudMap.js */
+  /** rAF 循环：每帧调渲染内核 draw(t)；绘制状态与绘制逻辑全在 utils/starMap.js */
   startAnim() {
     this.stopAnim();
     this.running = true;
