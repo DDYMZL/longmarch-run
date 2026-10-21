@@ -43,6 +43,7 @@ const PROGRESS_MS = 800; // 步数刷新增量推进时长
 const ARRIVE_FX_MS = 2600; // 节点点亮动画时长
 const PARTICLE_CAP = 64; // 点亮粒子总量上限
 const FLY_MS = 1400; // WS 飞线单趟时长
+const FOCUS_MS = 420; // 详情面板打开前的节点聚焦补间时长
 const FLOW_SPEED = 26; // 路线流光速度（px/s，沿路径前进方向）
 
 /* 关键历史节点（外环刻度装饰，标识丰碑身份）：遵义会议 / 飞夺泸定桥 / 延安（会师） */
@@ -137,6 +138,7 @@ function createStarMap(opts) {
     flyLine: null, // {nodeId, start} WS 飞线
     finale: null, // {start} 延安终点页内仪式（playFinale 触发）
     finaleParticles: null, // 终点仪式金粒子（汇聚向延安）
+    _focus: null, // {start, fs/fox/foy, ts/tox/toy} 详情面板打开前的节点聚焦补间
 
     // L7 实时数据注入（setStats 一次性格式化，帧内不拼字符串）
     stats: null,
@@ -714,6 +716,7 @@ function createStarMap(opts) {
       const { cw, ch } = this;
       const v = this.view;
       const intro = this.introPhase();
+      this.applyFocus();
 
       // 静态层（星幕/星云/区段雾带/暗角），不可用时降级直绘；进入动画第 1 步：星幕淡入
       const skyAlpha = intro ? Math.min(1, intro.el / intro.tl.sky) : 1;
@@ -1442,6 +1445,42 @@ function createStarMap(opts) {
       this.view.scale = 1;
       this.view.ox = 0;
       this.view.oy = 0;
+    },
+
+    /** 跳过上屏进入动画（详情面板关闭后恢复画布时调用，避免路线重描一遍） */
+    dismissIntro() {
+      this.introStart = 0;
+    },
+
+    /**
+     * 平滑聚焦到指定节点（详情面板打开前调用）：view 补间把节点移到屏幕
+     * 水平居中、纵向 38% 处（下半屏留给玻璃面板），缩放至少提到 1.8 倍。
+     * 补间由 draw 帧内消费（纯时间推导），返回动画时长 ms。
+     */
+    focusNode(id) {
+      const idx = this.nodeIndex && this.nodeIndex[id];
+      const pt = idx != null && this.nodePts ? this.nodePts[idx] : null;
+      if (!pt) return 0;
+      const ts = Math.min(2.5, Math.max(this.view.scale, 1.8));
+      this._focus = {
+        start: Date.now(),
+        fs: this.view.scale, fox: this.view.ox, foy: this.view.oy,
+        ts: ts, tox: this.cw / 2 - pt.x * ts, toy: this.ch * 0.38 - pt.y * ts
+      };
+      return FOCUS_MS;
+    },
+
+    /** 聚焦补间帧推进（draw 内调用；结束自动清除） */
+    applyFocus() {
+      const f = this._focus;
+      if (!f) return;
+      const k = Math.min(1, (Date.now() - f.start) / FOCUS_MS);
+      const e = routeCanvas.easeOutCubic(k);
+      this.view.scale = f.fs + (f.ts - f.fs) * e;
+      this.view.ox = f.fox + (f.tox - f.fox) * e;
+      this.view.oy = f.foy + (f.toy - f.foy) * e;
+      this.clampView();
+      if (k >= 1) this._focus = null;
     },
 
     /**

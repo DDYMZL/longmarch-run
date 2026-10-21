@@ -546,3 +546,259 @@
   from { opacity: 1; }
   to { opacity: 0; }
 }
+
+/* ---------------- E6 星空模式节点玻璃详情面板 ---------------- */
+
+/* 快照失败降级底（无快照图时保持深空底色，不闪白） */
+.route-map-shotless {
+  background: #050B16;
+}
+
+/* 遮罩：压暗画布快照，点击关闭面板 */
+.node-panel-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
+  background: rgba(4, 6, 16, 0.42);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+
+/* 玻璃质感面板：深空半透明 + 金色描边 + 背部模糊（不支持 blur 的平台退化为纯色半透明） */
+.node-panel {
+  position: relative;
+  max-height: 76%;
+  background: rgba(12, 16, 34, 0.88);
+  backdrop-filter: blur(16rpx);
+  -webkit-backdrop-filter: blur(16rpx);
+  border-top: 1rpx solid rgba(240, 198, 90, 0.38);
+  border-radius: 28rpx 28rpx 0 0;
+  padding: 14rpx 32rpx 28rpx;
+  box-sizing: border-box;
+  color: #EDE6D8;
+  box-shadow: 0 -12rpx 48rpx rgba(2, 4, 12, 0.6);
+  animation: panelUp 0.32s ease both;
+}
+
+@keyframes panelUp {
+  from { transform: translateY(46%); opacity: 0.3; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.node-panel-grip {
+  width: 72rpx;
+  height: 8rpx;
+  border-radius: 4rpx;
+  background: rgba(240, 198, 90, 0.35);
+  margin: 0 auto 14rpx;
+}
+
+.node-panel-close {
+  position: absolute;
+  top: 20rpx;
+  right: 24rpx;
+  width: 52rpx;
+  height: 52rpx;
+  line-height: 52rpx;
+  text-align: center;
+  font-size: 26rpx;
+  color: rgba(237, 230, 216, 0.75);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+}
+
+.node-panel-head {
+  display: flex;
+  align-items: center;
+  margin-bottom: 14rpx;
+  padding-right: 60rpx;
+}
+
+.node-panel-icon {
+  width: 76rpx;
+  height: 76rpx;
+  line-height: 76rpx;
+  text-align: center;
+  font-size: 40rpx;
+  border-radius: 50%;
+  margin-right: 20rpx;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1rpx solid rgba(240, 198, 90, 0.25);
+  color: rgba(237, 230, 216, 0.6);
+}
+
+.node-panel-icon.current {
+  color: #FFE9E4;
+  background: rgba(200, 16, 46, 0.4);
+  border-color: rgba(255, 90, 78, 0.6);
+}
+
+.node-panel-icon.completed {
+  color: #5C4210;
+  background: linear-gradient(135deg, #F0C65A, #D4A017);
+  border-color: rgba(240, 198, 90, 0.8);
+}
+
+.node-panel-headmeta {
+  flex: 1;
+  min-width: 0;
+}
+
+.node-panel-namerow {
+  display: flex;
+  align-items: center;
+}
+
+.node-panel-name {
+  font-size: 36rpx;
+  font-weight: 700;
+  color: #F5EDDD;
+  letter-spacing: 2rpx;
+  margin-right: 14rpx;
+}
+
+.node-panel-badge {
+  font-size: 20rpx;
+  padding: 4rpx 14rpx;
+  border-radius: 20rpx;
+  color: rgba(237, 230, 216, 0.55);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1rpx solid rgba(255, 255, 255, 0.12);
+}
+
+.node-panel-badge.current {
+  color: #FF8A80;
+  background: rgba(200, 16, 46, 0.3);
+  border-color: rgba(255, 90, 78, 0.5);
+}
+
+.node-panel-badge.completed {
+  color: #F0C65A;
+  background: rgba(240, 198, 90, 0.14);
+  border-color: rgba(240, 198, 90, 0.45);
+}
+
+.node-panel-chapter {
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: rgba(240, 198, 90, 0.75);
+  letter-spacing: 1rpx;
+}
+
+.node-panel-body {
+  max-height: 560rpx;
+}
+
+.node-panel-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24rpx;
+  font-size: 24rpx;
+  color: rgba(237, 230, 216, 0.8);
+  margin-bottom: 10rpx;
+}
+
+.node-panel-progress {
+  font-size: 24rpx;
+  color: #F5D9A0;
+  background: rgba(240, 198, 90, 0.1);
+  border: 1rpx solid rgba(240, 198, 90, 0.25);
+  border-radius: 12rpx;
+  padding: 10rpx 18rpx;
+  margin-bottom: 14rpx;
+}
+
+.node-panel-img {
+  width: 100%;
+  height: 240rpx;
+  border-radius: 14rpx;
+  margin-bottom: 14rpx;
+  border: 1rpx solid rgba(240, 198, 90, 0.2);
+}
+
+.node-panel-sec {
+  margin-bottom: 14rpx;
+}
+
+.node-panel-sectitle {
+  font-size: 24rpx;
+  font-weight: 600;
+  color: rgba(240, 198, 90, 0.9);
+  letter-spacing: 2rpx;
+  margin-bottom: 6rpx;
+}
+
+.node-panel-brief,
+.node-panel-desc {
+  font-size: 25rpx;
+  line-height: 1.65;
+  color: rgba(237, 230, 216, 0.88);
+}
+
+/* 背景介绍面板内截断（完整内容在 node-detail 页） */
+.node-panel-desc {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.node-panel-keywords {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 6rpx;
+}
+
+.node-panel-kw {
+  font-size: 21rpx;
+  color: rgba(255, 220, 190, 0.85);
+  background: rgba(200, 16, 46, 0.22);
+  border: 1rpx solid rgba(216, 69, 79, 0.4);
+  border-radius: 18rpx;
+  padding: 4rpx 16rpx;
+}
+
+.node-panel-loading,
+.node-panel-loadfail {
+  font-size: 23rpx;
+  color: rgba(237, 230, 216, 0.5);
+  text-align: center;
+  padding: 18rpx 0;
+}
+
+.node-panel-loadfail {
+  color: rgba(255, 138, 128, 0.8);
+}
+
+.node-panel-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 16rpx;
+}
+
+.node-panel-btn {
+  flex: 1;
+  text-align: center;
+  font-size: 27rpx;
+  padding: 16rpx 0;
+  border-radius: 36rpx;
+  letter-spacing: 1rpx;
+}
+
+.node-panel-btn.ghost {
+  color: rgba(240, 198, 90, 0.9);
+  background: rgba(240, 198, 90, 0.1);
+  border: 1rpx solid rgba(240, 198, 90, 0.4);
+}
+
+.node-panel-btn.primary {
+  color: #3A2408;
+  font-weight: 600;
+  background: linear-gradient(135deg, #F0C65A, #D4A017);
+  box-shadow: 0 4rpx 16rpx rgba(212, 160, 23, 0.35);
+}

@@ -60,6 +60,11 @@ Page({
     showVeil: false,
     // 抵达事件卡弹层（light-up 返回新点亮节点/新完成章节后按队列播放）
     litPopup: null,
+    // 星空模式页内玻璃详情面板（E6）：nodePanel 非空即打开；
+    // coverCanvas=true 时画布被快照图顶替（canvas 原生层在开发者工具盖住 DOM 浮层）
+    nodePanel: null,
+    sceneShot: '',
+    coverCanvas: false,
     // 就地同步行军步数（B6）：syncing 锁防止重复触发
     syncing: false
   },
@@ -70,8 +75,9 @@ Page({
       return;
     }
     this.maybePlayIntro();
-    // onHide 停掉了星空动画：先用已有路线恢复，刷新失败时画面也不冻结
-    if (this.hud && this.routeData) this.startAnim();
+    // onHide 停掉了星空动画：先用已有路线恢复，刷新失败时画面也不冻结；
+    // 详情面板打开期间画布被快照顶替（canvas 引用已失效），由关面板时重建并启动动画
+    if (this.hud && this.routeData && !this.data.coverCanvas) this.startAnim();
     if (!this._wsUnsub) this._wsUnsub = ws.subscribe((msg) => this.handleWsMessage(msg));
     this.refresh();
   },
@@ -130,6 +136,7 @@ Page({
     if (this.popupTimer) clearTimeout(this.popupTimer);
     if (this._introTimer) { clearTimeout(this._introTimer); this._introTimer = null; }
     if (this._ceremonyTimer) { clearTimeout(this._ceremonyTimer); this._ceremonyTimer = null; }
+    if (this._panelTimer) { clearTimeout(this._panelTimer); this._panelTimer = null; }
     this.stopAnim();
   },
 
@@ -141,6 +148,7 @@ Page({
     if (this._introTimer) clearTimeout(this._introTimer);
     if (this._veilTimer) clearTimeout(this._veilTimer);
     if (this._ceremonyTimer) { clearTimeout(this._ceremonyTimer); this._ceremonyTimer = null; }
+    if (this._panelTimer) { clearTimeout(this._panelTimer); this._panelTimer = null; }
     this.stopAnim();
   },
 
@@ -375,9 +383,15 @@ Page({
     }
 
     this.setData(patch);
+    // 详情面板打开期间业务态刷新（同步步数/WS 驱动）：只更新面板的进度字段，不动史料
+    if (this.data.nodePanel && this.data.nodePanel.node) {
+      const latest = route.nodes.find((n) => n.id === this.data.nodePanel.node.id);
+      if (latest) this.mergePanelNode({ status: latest.status, remain: latest.remain, targetSteps: latest.targetSteps });
+    }
     if (this.hud) {
       this.hud.setRoute(route);
-      this.startAnim();
+      // 面板打开期间画布被快照顶替（canvas 引用失效），只更新内核数据、不启动绘制
+      if (!this.data.coverCanvas) this.startAnim();
     }
   },
 
@@ -390,8 +404,10 @@ Page({
     const mode = e.currentTarget.dataset.mode;
     if (mode === this.data.mode) return;
 
+    if (this._panelTimer) { clearTimeout(this._panelTimer); this._panelTimer = null; }
+    this._panelReq = (this._panelReq || 0) + 1;
     this.stopAnim();
-    this.setData({ mode }, () => {
+    this.setData({ mode, nodePanel: null, coverCanvas: false, sceneShot: '' }, () => {
       if (mode === 'canvas') {
         this.initCanvas();
         this.loadOverlay();
@@ -592,6 +608,15 @@ Page({
         if (this.routeData) this.hud.setRoute(this.routeData);
         // 切回星空模式先用 last-good 数据即时上屏，随后 loadOverlay 再刷新
         if (this._overlayStats) this.hud.setStats(this._overlayStats);
+        // 详情面板关闭后的画布重建：恢复面板打开前的观景变换，并跳过入场描画（不重播动画）
+        if (this._restoreView) {
+          this.hud.dismissIntro();
+          this.hud.view.scale = this._restoreView.scale;
+          this.hud.view.ox = this._restoreView.ox;
+          this.hud.view.oy = this._restoreView.oy;
+          this.hud.clampView();
+          this._restoreView = null;
+        }
         this.startAnim();
       });
   },
@@ -707,14 +732,116 @@ Page({
   },
 
   /**
-   * 节点命中 → 进详情（命中判定与屏幕→场景逆变换在渲染内核 hitTest；
+   * 节点命中 → 打开页内玻璃详情面板（E6；命中判定与屏幕→场景逆变换在渲染内核 hitTest；
    * 含未解锁节点，可查看历史）
    */
   hitNode(sx, sy) {
     if (!this.hud) return;
     const id = this.hud.hitTest(sx, sy);
-    if (id) wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + id });
+    if (id) this.openNodePanel(id);
   },
+
+  /**
+   * 打开节点详情面板：先平滑聚焦该节点（内核 view 补间 420ms），聚焦完成后把画布
+   * 快照为静态图并移除画布（canvas 原生层在开发者工具盖住 DOM 浮层，与 ceremony 同口径），
+   * 面板随即滑入；详情拉取与聚焦并行，面板先展示 routeData 骨架、史料回来再补全。
+   */
+  openNodePanel(id) {
+    if (!this.hud || !this.canvas || this.data.nodePanel) return;
+    const nodes = (this.routeData && this.routeData.nodes) || [];
+    const base = nodes.find((n) => n.id === id);
+    if (!base) return;
+    const chapters = (this.routeData && this.routeData.chapters) || [];
+    const chapter = chapters.find((c) => (c.nodeIds || []).indexOf(id) >= 0);
+    this._panelNode = Object.assign({}, base, { chapterTitle: chapter ? chapter.title : '' });
+    this._panelReq = (this._panelReq || 0) + 1;
+    const req = this._panelReq;
+
+    // 并行拉完整详情（历史时间/事件/背景/图片等，失败时保留骨架并标记可重试入口）
+    march
+      .getNodeDetail(id)
+      .then((detail) => {
+        if (this._panelReq !== req || !detail) return;
+        // keywords 为逗号分隔字符串（与 node-detail 同口径转数组供 chips 渲染）
+        if (typeof detail.keywords === 'string') {
+          detail.keywordList = detail.keywords.split(',').filter((k) => k);
+        }
+        this.mergePanelNode(detail, { detailReady: true, loadFail: false });
+      })
+      .catch(() => {
+        if (this._panelReq !== req) return;
+        this.mergePanelNode(null, { detailReady: true, loadFail: true });
+      });
+
+    const focusMs = this.hud.focusNode(id);
+    if (this._panelTimer) clearTimeout(this._panelTimer);
+    this._panelTimer = setTimeout(() => {
+      this._panelTimer = null;
+      this.snapshotAndShowPanel(req);
+    }, focusMs + 30);
+  },
+
+  /**
+   * 合并面板节点数据（骨架阶段与详情补全共用）；面板尚未打开时只更新缓存，
+   * 打开中则 setData 刷新视图。patch 为面板级状态（detailReady/loadFail）。
+   */
+  mergePanelNode(detail, patch) {
+    if (detail) this._panelNode = Object.assign({}, this._panelNode, detail);
+    const panel = Object.assign(
+      { node: this._panelNode, detailReady: false, loadFail: false },
+      this.data.nodePanel || {},
+      patch || {}
+    );
+    panel.node = this._panelNode;
+    if (this.data.nodePanel) this.setData({ nodePanel: panel });
+    else this._panelPending = panel;
+  },
+
+  /** 聚焦补间结束：快照画布 → 移除画布 → 面板滑入（快照失败降级为纯色深空底） */
+  snapshotAndShowPanel(req) {
+    if (this._panelReq !== req || !this.canvas) return;
+    wx.canvasToTempFilePath({
+      canvas: this.canvas,
+      success: (r) => this.showPanel(r.tempFilePath),
+      fail: () => this.showPanel('')
+    });
+  },
+
+  showPanel(shot) {
+    if (!this.hud) return;
+    this.stopAnim();
+    // 保存打开前的观景变换，关面板重建画布后原样恢复（不重置地图状态）
+    this._prePanelView = { scale: this.hud.view.scale, ox: this.hud.view.ox, oy: this.hud.view.oy };
+    const panel = this._panelPending || { node: this._panelNode, detailReady: false, loadFail: false };
+    this._panelPending = null;
+    this.setData({ sceneShot: shot, coverCanvas: true, nodePanel: panel });
+  },
+
+  /** 关闭面板：恢复画布（重建后恢复原观景变换、跳过入场动画），进行中的详情回包作废 */
+  closeNodePanel() {
+    if (this._panelTimer) { clearTimeout(this._panelTimer); this._panelTimer = null; }
+    this._panelReq = (this._panelReq || 0) + 1;
+    this._restoreView = this._prePanelView || null;
+    this._prePanelView = null;
+    this.setData({ nodePanel: null, coverCanvas: false, sceneShot: '' }, () => {
+      if (this.data.mode === 'canvas') this.initCanvas();
+    });
+  },
+
+  /** 面板「查看完整详情」→ 节点历史详情页 */
+  goPanelDetail() {
+    const panel = this.data.nodePanel;
+    if (!panel || !panel.node) return;
+    wx.navigateTo({ url: '/pages/node-detail/node-detail?id=' + panel.node.id });
+  },
+
+  /** 面板「知识学习」→ 答题中心 */
+  goPanelQuiz() {
+    wx.navigateTo({ url: '/pages/quiz/quiz' });
+  },
+
+  /** 面板内容区拦截冒泡（点面板不触发遮罩关闭） */
+  noop() {},
 
   /**
    * 点击列表节点（含未解锁节点，可查看历史）

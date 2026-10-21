@@ -83,15 +83,21 @@
       bindmarkertap="handleMarkerTap"
       bindcallouttap="handleCalloutTap"
     ></map>
-    <canvas
-      wx:else
-      type="2d"
-      id="routeMap"
-      class="route-map"
-      bindtouchstart="onMapTouchStart"
-      bindtouchmove="onMapTouchMove"
-      bindtouchend="onMapTouchEnd"
-    ></canvas>
+    <block wx:else>
+      <!-- 详情面板打开期间画布被移除（canvas 原生层在开发者工具盖住 DOM 浮层，
+           与 ceremony 页同口径），由打开瞬间的画布快照顶替；快照失败降级为深空纯色底 -->
+      <canvas
+        wx:if="{{!coverCanvas}}"
+        type="2d"
+        id="routeMap"
+        class="route-map"
+        bindtouchstart="onMapTouchStart"
+        bindtouchmove="onMapTouchMove"
+        bindtouchend="onMapTouchEnd"
+      ></canvas>
+      <image wx:elif="{{sceneShot}}" class="route-map" src="{{sceneShot}}" mode="aspectFill" />
+      <view wx:else class="route-map route-map-shotless"></view>
+    </block>
     <!-- 操作提示：仅实景模式用 DOM 浮层；星空模式的 <canvas> 是原生层会盖住 DOM，
          提示文字由渲染内核 hud.drawHudHint 直接画进画布 -->
     <view class="map-hint" wx:if="{{mode === 'real'}}">点击地图节点查看信息，点气泡或「查看详情」看历史</view>
@@ -109,6 +115,67 @@
         <view class="node-card-theme" wx:if="{{selectedThemeEnv}}">区域氛围 · {{selectedThemeEnv}}</view>
       </view>
       <view class="node-card-btn" bindtap="goSelectedDetail">查看详情 ›</view>
+    </view>
+
+    <!-- 星空模式节点玻璃详情面板（E6）：点节点平滑聚焦后滑入，遮罩点击关闭 -->
+    <view wx:if="{{mode === 'canvas' && nodePanel}}" class="node-panel-mask" bindtap="closeNodePanel">
+      <view class="node-panel" catchtap="noop">
+        <view class="node-panel-grip"></view>
+        <view class="node-panel-close" bindtap="closeNodePanel">✕</view>
+
+        <view class="node-panel-head">
+          <view class="node-panel-icon {{nodePanel.node.status}}">{{nodePanel.node.status === 'completed' ? '★' : nodePanel.node.icon}}</view>
+          <view class="node-panel-headmeta">
+            <view class="node-panel-namerow">
+              <text class="node-panel-name">{{nodePanel.node.name}}</text>
+              <text class="node-panel-badge {{nodePanel.node.status}}">{{nodePanel.node.status === 'completed' ? '已点亮' : (nodePanel.node.status === 'current' ? '进行中' : '未解锁')}}</text>
+            </view>
+            <view class="node-panel-chapter" wx:if="{{nodePanel.node.chapterTitle}}">{{nodePanel.node.chapterTitle}}</view>
+          </view>
+        </view>
+
+        <scroll-view scroll-y class="node-panel-body">
+          <view class="node-panel-meta" wx:if="{{nodePanel.node.historicalTime || nodePanel.node.location}}">
+            <text wx:if="{{nodePanel.node.historicalTime}}">🕐 {{nodePanel.node.historicalTime}}</text>
+            <text wx:if="{{nodePanel.node.location}}">📍 {{nodePanel.node.location}}</text>
+          </view>
+
+          <view class="node-panel-progress" wx:if="{{nodePanel.node.status === 'current'}}">
+            当前 {{currentSteps}} / {{nodePanel.node.targetSteps}} 步 · 还需 {{nodePanel.node.remain}} 步
+          </view>
+          <view class="node-panel-progress" wx:else>目标 {{nodePanel.node.targetSteps}} 步</view>
+
+          <image
+            wx:if="{{nodePanel.node.images && nodePanel.node.images.length > 0}}"
+            class="node-panel-img"
+            src="{{nodePanel.node.images[0]}}"
+            mode="aspectFill"
+            lazy-load
+          />
+
+          <view class="node-panel-sec" wx:if="{{nodePanel.node.brief}}">
+            <view class="node-panel-sectitle">历史事件</view>
+            <view class="node-panel-brief">{{nodePanel.node.brief}}</view>
+          </view>
+
+          <view class="node-panel-sec" wx:if="{{nodePanel.node.description}}">
+            <view class="node-panel-sectitle">背景介绍</view>
+            <view class="node-panel-desc">{{nodePanel.node.description}}</view>
+          </view>
+
+          <view class="node-panel-keywords" wx:if="{{nodePanel.node.keywordList && nodePanel.node.keywordList.length > 0}}">
+            <text wx:for="{{nodePanel.node.keywordList}}" wx:key="*this" class="node-panel-kw">{{item}}</text>
+          </view>
+
+          <view class="node-panel-loading" wx:if="{{!nodePanel.detailReady}}">史料加载中…</view>
+          <view class="node-panel-loadfail" wx:if="{{nodePanel.loadFail}}">详细史料加载失败，可进完整详情重试</view>
+        </scroll-view>
+
+        <view class="node-panel-actions">
+          <view class="node-panel-btn ghost" bindtap="goPanelQuiz">知识学习 ›</view>
+          <view class="node-panel-btn primary" bindtap="goPanelDetail">查看完整详情 ›</view>
+        </view>
+      </view>
     </view>
   </view>
 
