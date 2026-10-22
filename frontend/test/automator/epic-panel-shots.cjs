@@ -1,11 +1,11 @@
 /**
- * 星空长征史诗风重构 E6 页内玻璃详情面板验证截图
+ * 星空长征节点详情弹框验证截图（E6 建面板、F1 改页面级全屏遮罩 + 居中对话框）
  *   cd frontend/test/automator && node epic-panel-shots.cjs
  * 输出：frontend/test/images/epic-05-node-panel.png / epic-06-panel-closed.png
  *
  * 每段独立连接（mini.screenshot 会退化自动化桥），connect 自愈内含重新武装。
  * 渲染数据注入口径同 epic-shots.cjs（后端不可达时的模拟器测试态验证）；
- * 详情接口同样不可达，面板史料字段用 mergePanelNode 直接注入（验证面板渲染与交互，
+ * 详情接口同样不可达，弹框史料字段用 mergePanelNode 直接注入（验证弹框渲染与交互，
  * 接口契约由 node-detail 页既有功能覆盖）。
  */
 const path = require('path');
@@ -63,9 +63,15 @@ async function prepare(mini) {
   await mini.evaluate(() => {
     getApp().globalData.loggedIn = true;
   });
-  await mini.switchTab('/pages/march/march');
-  await sleep(1200);
-  const page = await mini.currentPage();
+  // launch 的异步登录重定向可能把页面顶回 home：进入 march 允许有限重试
+  let page = null;
+  for (let i = 0; i < 3; i++) {
+    await mini.switchTab('/pages/march/march');
+    await sleep(1200);
+    page = await mini.currentPage();
+    if (page.path === 'pages/march/march') break;
+    if (i === 2) throw new Error('未进入 march 页: ' + page.path);
+  }
   await page.callMethod('skipIntro').catch(() => {});
   if ((await page.data('mode')) !== 'canvas') {
     await page.callMethod('switchMode', { currentTarget: { dataset: { mode: 'canvas' } } });
@@ -122,8 +128,40 @@ async function prepare(mini) {
   console.log('面板状态:', JSON.stringify(panelState));
   if (!panelState.open || !panelState.coverCanvas || !panelState.shot) throw new Error('面板未正确打开或画布未快照顶替');
   if (panelState.name !== '飞夺泸定桥' || panelState.chapter !== '第三章 · 突围') throw new Error('面板节点/章节不正确');
+
+  // F1 几何断言：页面级居中对话框（水平/垂直居中于页面），底部按钮完整露出不被裁切。
+  // SelectorQuery 用回调把结果挂到 app 实例——evaluate 返回 Promise 会打死自动化桥。
+  await mini.evaluate(() => {
+    const app = getApp();
+    app._rects = {};
+    wx.createSelectorQuery()
+      .select('.node-panel').boundingClientRect((r) => { app._rects.panel = r; })
+      .select('.node-panel-actions').boundingClientRect((r) => { app._rects.actions = r; })
+      .select('.node-panel-mask').boundingClientRect((r) => { app._rects.mask = r; })
+      .exec();
+  });
+  await sleep(300);
+  const geo = await mini.evaluate(() => {
+    const app = getApp();
+    const sys = wx.getSystemInfoSync();
+    return { rects: app._rects, winW: sys.windowWidth, winH: sys.windowHeight };
+  });
+  console.log('几何断言:', JSON.stringify(geo));
+  const { panel, actions, mask } = geo.rects;
+  if (!panel || !actions || !mask) throw new Error('弹框/按钮/遮罩矩形未取到');
+  if (Math.abs(mask.top) > 1) throw new Error('遮罩未从页面顶开始（不是页面级）: top=' + mask.top);
+  if (mask.height >= geo.winH) throw new Error('遮罩不应盖住原生 tabBar: mask.height=' + mask.height + ' winH=' + geo.winH);
+  const panelCx = panel.left + panel.width / 2;
+  if (Math.abs(panelCx - geo.winW / 2) > 20) throw new Error('弹框未水平居中: cx=' + panelCx + ' winW/2=' + geo.winW / 2);
+  // 垂直居中参照遮罩（页面可视区，不含原生 tabBar），而非含 tabBar 的 windowHeight
+  const maskCy = (mask.top + mask.bottom) / 2;
+  const panelCy = panel.top + panel.height / 2;
+  if (Math.abs(panelCy - maskCy) > 40) throw new Error('弹框未垂直居中: cy=' + panelCy + ' maskCy=' + maskCy);
+  if (actions.bottom > panel.bottom + 1 || actions.bottom > mask.bottom) throw new Error('按钮被裁切: actions.bottom=' + actions.bottom + ' panel.bottom=' + panel.bottom);
+  if (actions.top < panel.top) throw new Error('按钮越出弹框顶部');
+
   await mini.screenshot({ path: path.join(IMG, 'epic-05-node-panel.png') });
-  console.log('OK epic-05-node-panel.png（玻璃详情面板：泸定桥完整态）');
+  console.log('OK epic-05-node-panel.png（页面级居中详情弹框：泸定桥完整态）');
   mini.disconnect();
 
   // 段 2：打开面板 → 关闭 → 断言画布重建、观景变换恢复、入场动画不重播

@@ -12,8 +12,8 @@
  *   路线（未解锁暗红基底 + 已完成金红主径 + 当前段沿路径方向的红色流光）/
  *   节点四态（未解锁暗核微环、已点亮金环金核、当前红核脉冲辉光，差异化历史图标）/
  *   行进旗帜 / 节点抵达特效 / WS 飞线（红金数据流光）；
- *   帧内（视口固定，不随拖动缩放）——全员数据胶囊 / 进度仪表环 / 三态图例 / 操作提示，
- *   克制呈现（暖白文字 + 半透明深底，不再使用 HUD 仪器元素与青蓝色）。
+ *   帧内（视口固定，不随拖动缩放）——仅底部三态图例，
+ *   克制呈现（暖白文字，不再使用 HUD 仪器元素与青蓝色）。
  *   配色铁律：叙事色只用红（#D8454F 系）与金（#F0C65A 系），见 data/star-themes.js PALETTE。
  *
  * 性能约束：静态背景离屏烘焙一次；星点/粒子构建期一次性分配，帧内零分配；
@@ -55,7 +55,7 @@ let INTRO_PLAYED = false;
 
 /* 进入动画时间线（完整版）：星幕淡入 0~600ms → 星云星群随静态层同现 →
  * 路线自起点绘制 600~2600ms（已完成节点随描画依次亮起）→ 当前节点焦点 2400ms 起 →
- * 视口 UI（胶囊/进度环/图例/提示）2600~3200ms 淡入。轻量版压缩为 0~900ms。 */
+ * 视口 UI（图例）2600~3200ms 淡入。轻量版压缩为 0~900ms。 */
 const INTRO_FULL = { sky: 600, routeStart: 600, routeEnd: 2600, uiStart: 2600, uiEnd: 3200 };
 const INTRO_LITE = { sky: 300, routeStart: 100, routeEnd: 700, uiStart: 600, uiEnd: 900 };
 
@@ -70,22 +70,12 @@ const PERF_BUDGET_MS = 33; // 帧间隔预算（>33ms 即 <30fps）
 const PERF_GAP_MS = 1000; // 超过此间隔视为暂停/切后台的时间跳变，丢弃该样本
 
 /* ---- 视口固定 UI ---- */
-const HINT_TEXT = '拖动平移 · 双指缩放 · 双击复位 · 点节点看历史';
 const LEGEND = [
   { text: '已点亮', color: P.gold },
   { text: '当前', color: P.nodeCurrent },
   { text: '未解锁', color: 'rgba(220,190,180,0.4)' }
 ];
 const LEGEND_STEP = 54; // 图例项水平间距
-const RING_R = 18; // 右上进度仪表环半径
-
-/** 大数缩写（全员数据胶囊）：≥1 亿 / ≥1 万 保留一位小数，其余千分位。仅 setStats 时调用 */
-function fmtNum(n) {
-  const v = Number(n) || 0;
-  if (v >= 1e8) return (v / 1e8).toFixed(1) + '亿';
-  if (v >= 1e4) return (v / 1e4).toFixed(1) + '万';
-  return String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-}
 
 /**
  * 创建渲染内核实例。
@@ -140,15 +130,8 @@ function createStarMap(opts) {
     finaleParticles: null, // 终点仪式金粒子（汇聚向延安）
     _focus: null, // {start, fs/fox/foy, ts/tox/toy} 详情面板打开前的节点聚焦补间
 
-    // L7 实时数据注入（setStats 一次性格式化，帧内不拼字符串）
-    stats: null,
-    statsText: null, // {users, lit, steps}
-
     // 缓存
     _labelW: null, // 节点名文字宽度缓存
-    _hintW: 0,
-    _ringPct: -1,
-    _ringText: '',
 
     // 帧率采样（降级判定）
     lowPerf: false,
@@ -223,23 +206,6 @@ function createStarMap(opts) {
         return base;
       }
       return anim.from + (anim.to - anim.from) * routeCanvas.easeOutCubic(p);
-    },
-
-    /**
-     * L7 全员统计注入：数值在此一次性格式化（帧内不拼字符串）。
-     * 任一接口失败时页面层保持 last-good，不会调进空值。
-     */
-    setStats(stats) {
-      this.stats = stats || null;
-      if (!stats) {
-        this.statsText = null;
-        return;
-      }
-      this.statsText = {
-        users: stats.todayUsers == null ? '--' : fmtNum(stats.todayUsers),
-        lit: stats.todayLit == null ? '--' : fmtNum(stats.todayLit),
-        steps: stats.todaySteps == null ? '--' : fmtNum(stats.todaySteps)
-      };
     },
 
     /* ---------------- 构建（一次性分配） ---------------- */
@@ -481,7 +447,6 @@ function createStarMap(opts) {
      * 章节区段地景与专属装饰（静态烘焙进星幕层，跟随区段锚点）：
      * - silhouette 'ridge' 峡谷折岭（突围章：左右对峙山岭夹出 V 形峡谷）
      * - silhouette 'peaks' 雪山尖峰（翻越章：连绵三角峰 + 雪顶）
-     * - extra 'chains' 铁索横线（泸定区段：两条垂弧链线 + 链环节点）
      * - extra 'dawn' 地平线天光（会师章：区段下方暖金水平光带 + 大团金雾）
      * - turning 章（赤水）区段路径下垫红色能量宽带，强化「战略转折」的能量轨迹意象
      * 全部为低透明氛围层，不遮挡节点与标签。
@@ -561,34 +526,6 @@ function createStarMap(opts) {
           }
         }
 
-        // 铁索横线（泸定区段）：两条垂弧链线 + 链环节点
-        if (z.theme.extra === 'chains') {
-          const x0 = z.cx - r * 0.95;
-          const x1 = z.cx + r * 0.95;
-          const yA = z.cy - r * 0.3;
-          const sag = r * 0.2;
-          c.strokeStyle = 'rgba(190,178,190,0.55)';
-          c.lineWidth = 1.6;
-          for (let k = 0; k < 2; k++) {
-            const y = yA + k * r * 0.16;
-            c.beginPath();
-            c.moveTo(x0, y);
-            c.quadraticCurveTo(z.cx, y + sag, x1, y);
-            c.stroke();
-            // 链环节点
-            c.fillStyle = 'rgba(210,198,210,0.6)';
-            const links = 9;
-            for (let i = 0; i <= links; i++) {
-              const t2 = i / links;
-              const lx = x0 + (x1 - x0) * t2;
-              const ly = (1 - t2) * (1 - t2) * y + 2 * (1 - t2) * t2 * (y + sag) + t2 * t2 * y;
-              c.beginPath();
-              c.arc(lx, ly, 1.8, 0, Math.PI * 2);
-              c.fill();
-            }
-          }
-        }
-
         // 地平线天光（会师章）：区段下方暖金光带 + 大团金雾
         if (z.theme.extra === 'dawn') {
           const bandH = r * 0.5;
@@ -658,8 +595,6 @@ function createStarMap(opts) {
       this.path = null;
       this.pathDist = null;
       this.nodePathIdx = null;
-      this.stats = null;
-      this.statsText = null;
       this.flyLine = null;
       this.farStars = null;
       this.midStars = null;
@@ -668,9 +603,6 @@ function createStarMap(opts) {
       this.chapterZones = null;
       this.envMotes = null;
       this._labelW = null;
-      this._hintW = 0;
-      this._ringPct = -1;
-      this._ringText = '';
       this.lowPerf = false;
       this._perfBuf = null;
       this._perfI = 0;
@@ -742,14 +674,11 @@ function createStarMap(opts) {
 
       ctx.restore();
 
-      // 视口固定 UI（不随拖动缩放）；进入动画第 6 步：最后淡入
+      // 视口固定 UI（不随拖动缩放，仅三态图例）；进入动画第 6 步：最后淡入
       const uiAlpha = intro ? Math.min(1, Math.max(0, (intro.el - intro.tl.uiStart) / (intro.tl.uiEnd - intro.tl.uiStart))) : 1;
       if (uiAlpha > 0) {
         ctx.globalAlpha = uiAlpha;
-        this.drawStatsCapsule(ctx);
-        this.drawProgressRing(ctx);
         this.drawLegend(ctx);
-        this.drawHint(ctx);
         ctx.globalAlpha = 1;
       }
     },
@@ -1336,73 +1265,6 @@ function createStarMap(opts) {
 
     /* ---------------- 视口固定 UI（克制呈现） ---------------- */
 
-    /** 左上全员数据胶囊：单行三段（今日参与/点亮/全员步数），深色半透明底 */
-    drawStatsCapsule(ctx) {
-      if (!this.statsText) return;
-      const s = this.statsText;
-      ctx.font = '10px sans-serif';
-      const label = '今日 ';
-      const w1 = ctx.measureText(label).width;
-      const wU = ctx.measureText(s.users).width;
-      const wDot = ctx.measureText(' · ').width;
-      const wL = ctx.measureText(s.lit).width;
-      const wS = ctx.measureText(s.steps).width;
-      const suffix = ' 步';
-      const wSu = ctx.measureText(suffix).width;
-      const totalW = w1 + wU + wDot + wL + wDot + wS + wSu + 20;
-      const x = 12;
-      const y = 12;
-      ctx.fillStyle = 'rgba(10,14,26,0.55)';
-      routeCanvas.drawRoundRect(ctx, x, y, totalW, 20, 10);
-      ctx.fill();
-      ctx.fillStyle = 'rgba(230,220,205,0.75)';
-      let cx = x + 10;
-      ctx.fillText(label, cx, y + 14);
-      cx += w1;
-      ctx.fillStyle = P.gold;
-      ctx.fillText(s.users, cx, y + 14);
-      cx += wU;
-      ctx.fillStyle = 'rgba(230,220,205,0.5)';
-      ctx.fillText(' · ', cx, y + 14);
-      cx += wDot;
-      ctx.fillStyle = P.gold;
-      ctx.fillText(s.lit, cx, y + 14);
-      cx += wL;
-      ctx.fillStyle = 'rgba(230,220,205,0.5)';
-      ctx.fillText(' · ', cx, y + 14);
-      cx += wDot;
-      ctx.fillStyle = P.gold;
-      ctx.fillText(s.steps, cx, y + 14);
-      cx += wS;
-      ctx.fillStyle = 'rgba(230,220,205,0.75)';
-      ctx.fillText(suffix, cx, y + 14);
-    },
-
-    /** 右上进度仪表环：金红弧 + 整数百分比（按整数变化缓存文本） */
-    drawProgressRing(ctx) {
-      const ratio = this.calcRouteProgress(this.route);
-      const pct = Math.round(ratio * 100);
-      const cx = this.cw - RING_R - 14;
-      const cy = RING_R + 12;
-      ctx.strokeStyle = 'rgba(240,198,90,0.2)';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.arc(cx, cy, RING_R, 0, Math.PI * 2);
-      ctx.stroke();
-      ctx.strokeStyle = P.gold;
-      ctx.lineCap = 'round';
-      routeCanvas.drawArcGauge(ctx, cx, cy, RING_R, ratio);
-      ctx.stroke();
-      if (pct !== this._ringPct) {
-        this._ringPct = pct;
-        this._ringText = pct + '%';
-      }
-      ctx.font = '10px sans-serif';
-      ctx.fillStyle = P.labelDone;
-      const w = ctx.measureText(this._ringText).width;
-      ctx.fillText(this._ringText, cx - w / 2, cy + 3.5);
-    },
-
     /** 底部三态图例 */
     drawLegend(ctx) {
       const y = this.ch - 30;
@@ -1418,14 +1280,6 @@ function createStarMap(opts) {
         ctx.fillText(item.text, x + 6, y);
         x += LEGEND_STEP;
       });
-    },
-
-    /** 底部操作提示（宽度缓存） */
-    drawHint(ctx) {
-      ctx.font = '9px sans-serif';
-      if (!this._hintW) this._hintW = ctx.measureText(HINT_TEXT).width;
-      ctx.fillStyle = 'rgba(220,210,195,0.35)';
-      ctx.fillText(HINT_TEXT, (this.cw - this._hintW) / 2, this.ch - 12);
     },
 
     /* ---------------- 观景变换与命中 ---------------- */

@@ -38,7 +38,7 @@ const PALETTE = {
  * nebula: 区段雾带色（烘焙进静态层，环绕该章节路径区段）；
  * particle: 环境粒子（帧内绘制）：type=ember 暖尘星火 | mist 水雾 | snow 雪粒 | spark 金尘；
  * silhouette: 地平线剪影 'ridge' 峡谷折岭 | 'peaks' 雪山尖峰 | null 无；
- * extra: 专属装饰 'chains' 铁索横线（泸定）| 'dawn' 地平线天光（延安）| null。
+ * extra: 专属装饰 'dawn' 地平线天光（延安）| null。
  */
 const THEMES = {
   departure: {
@@ -66,7 +66,7 @@ const THEMES = {
     nebulaCore: 'rgba(170,120,130,0.16)',
     particle: { type: 'mist', count: 7, color: '#C9B6C8', size: 2.0, rise: 3 },
     silhouette: 'ridge',
-    extra: 'chains'
+    extra: null
   },
   snowfield: {
     key: 'snowfield',

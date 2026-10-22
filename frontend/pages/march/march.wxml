@@ -116,65 +116,64 @@
       </view>
       <view class="node-card-btn" bindtap="goSelectedDetail">查看详情 ›</view>
     </view>
+  </view>
 
-    <!-- 星空模式节点玻璃详情面板（E6）：点节点平滑聚焦后滑入，遮罩点击关闭 -->
-    <view wx:if="{{mode === 'canvas' && nodePanel}}" class="node-panel-mask" bindtap="closeNodePanel">
-      <view class="node-panel" catchtap="noop">
-        <view class="node-panel-grip"></view>
-        <view class="node-panel-close" bindtap="closeNodePanel">✕</view>
+  <!-- 星空模式节点详情弹框（E6/F1）：页面级全屏遮罩 + 居中对话框，点节点平滑聚焦后弹出，遮罩点击关闭 -->
+  <view wx:if="{{mode === 'canvas' && nodePanel}}" class="node-panel-mask" bindtap="closeNodePanel" catchtouchmove="noop">
+    <view class="node-panel" catchtap="noop">
+      <view class="node-panel-close" bindtap="closeNodePanel">✕</view>
 
-        <view class="node-panel-head">
-          <view class="node-panel-icon {{nodePanel.node.status}}">{{nodePanel.node.status === 'completed' ? '★' : nodePanel.node.icon}}</view>
-          <view class="node-panel-headmeta">
-            <view class="node-panel-namerow">
-              <text class="node-panel-name">{{nodePanel.node.name}}</text>
-              <text class="node-panel-badge {{nodePanel.node.status}}">{{nodePanel.node.status === 'completed' ? '已点亮' : (nodePanel.node.status === 'current' ? '进行中' : '未解锁')}}</text>
-            </view>
-            <view class="node-panel-chapter" wx:if="{{nodePanel.node.chapterTitle}}">{{nodePanel.node.chapterTitle}}</view>
+      <view class="node-panel-head">
+        <view class="node-panel-icon {{nodePanel.node.status}}">{{nodePanel.node.status === 'completed' ? '★' : nodePanel.node.icon}}</view>
+        <view class="node-panel-headmeta">
+          <view class="node-panel-namerow">
+            <text class="node-panel-name">{{nodePanel.node.name}}</text>
+            <text class="node-panel-badge {{nodePanel.node.status}}">{{nodePanel.node.status === 'completed' ? '已点亮' : (nodePanel.node.status === 'current' ? '进行中' : '未解锁')}}</text>
           </view>
+          <view class="node-panel-chapter" wx:if="{{nodePanel.node.chapterTitle}}">{{nodePanel.node.chapterTitle}}</view>
+        </view>
+      </view>
+
+      <scroll-view scroll-y class="node-panel-body">
+        <view class="node-panel-meta" wx:if="{{nodePanel.node.historicalTime || nodePanel.node.location}}">
+          <text wx:if="{{nodePanel.node.historicalTime}}">🕐 {{nodePanel.node.historicalTime}}</text>
+          <text wx:if="{{nodePanel.node.location}}">📍 {{nodePanel.node.location}}</text>
         </view>
 
-        <scroll-view scroll-y class="node-panel-body">
-          <view class="node-panel-meta" wx:if="{{nodePanel.node.historicalTime || nodePanel.node.location}}">
-            <text wx:if="{{nodePanel.node.historicalTime}}">🕐 {{nodePanel.node.historicalTime}}</text>
-            <text wx:if="{{nodePanel.node.location}}">📍 {{nodePanel.node.location}}</text>
-          </view>
-
-          <view class="node-panel-progress" wx:if="{{nodePanel.node.status === 'current'}}">
-            当前 {{currentSteps}} / {{nodePanel.node.targetSteps}} 步 · 还需 {{nodePanel.node.remain}} 步
-          </view>
-          <view class="node-panel-progress" wx:else>目标 {{nodePanel.node.targetSteps}} 步</view>
-
-          <image
-            wx:if="{{nodePanel.node.images && nodePanel.node.images.length > 0}}"
-            class="node-panel-img"
-            src="{{nodePanel.node.images[0]}}"
-            mode="aspectFill"
-            lazy-load
-          />
-
-          <view class="node-panel-sec" wx:if="{{nodePanel.node.brief}}">
-            <view class="node-panel-sectitle">历史事件</view>
-            <view class="node-panel-brief">{{nodePanel.node.brief}}</view>
-          </view>
-
-          <view class="node-panel-sec" wx:if="{{nodePanel.node.description}}">
-            <view class="node-panel-sectitle">背景介绍</view>
-            <view class="node-panel-desc">{{nodePanel.node.description}}</view>
-          </view>
-
-          <view class="node-panel-keywords" wx:if="{{nodePanel.node.keywordList && nodePanel.node.keywordList.length > 0}}">
-            <text wx:for="{{nodePanel.node.keywordList}}" wx:key="*this" class="node-panel-kw">{{item}}</text>
-          </view>
-
-          <view class="node-panel-loading" wx:if="{{!nodePanel.detailReady}}">史料加载中…</view>
-          <view class="node-panel-loadfail" wx:if="{{nodePanel.loadFail}}">详细史料加载失败，可进完整详情重试</view>
-        </scroll-view>
-
-        <view class="node-panel-actions">
-          <view class="node-panel-btn ghost" bindtap="goPanelQuiz">知识学习 ›</view>
-          <view class="node-panel-btn primary" bindtap="goPanelDetail">查看完整详情 ›</view>
+        <view class="node-panel-progress" wx:if="{{nodePanel.node.status === 'current'}}">
+          当前 {{currentSteps}} / {{nodePanel.node.targetSteps}} 步 · 还需 {{nodePanel.node.remain}} 步
         </view>
+        <view class="node-panel-progress" wx:else>目标 {{nodePanel.node.targetSteps}} 步</view>
+
+        <image
+          wx:if="{{nodePanel.node.images && nodePanel.node.images.length > 0}}"
+          class="node-panel-img"
+          src="{{nodePanel.node.images[0]}}"
+          mode="aspectFill"
+          lazy-load
+        />
+
+        <view class="node-panel-sec" wx:if="{{nodePanel.node.brief}}">
+          <view class="node-panel-sectitle">历史事件</view>
+          <view class="node-panel-brief">{{nodePanel.node.brief}}</view>
+        </view>
+
+        <view class="node-panel-sec" wx:if="{{nodePanel.node.description}}">
+          <view class="node-panel-sectitle">背景介绍</view>
+          <view class="node-panel-desc">{{nodePanel.node.description}}</view>
+        </view>
+
+        <view class="node-panel-keywords" wx:if="{{nodePanel.node.keywordList && nodePanel.node.keywordList.length > 0}}">
+          <text wx:for="{{nodePanel.node.keywordList}}" wx:key="*this" class="node-panel-kw">{{item}}</text>
+        </view>
+
+        <view class="node-panel-loading" wx:if="{{!nodePanel.detailReady}}">史料加载中…</view>
+        <view class="node-panel-loadfail" wx:if="{{nodePanel.loadFail}}">详细史料加载失败，可进完整详情重试</view>
+      </scroll-view>
+
+      <view class="node-panel-actions">
+        <view class="node-panel-btn ghost" bindtap="goPanelQuiz">知识学习 ›</view>
+        <view class="node-panel-btn primary" bindtap="goPanelDetail">查看完整详情 ›</view>
       </view>
     </view>
   </view>

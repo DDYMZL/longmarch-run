@@ -547,54 +547,47 @@
   to { opacity: 0; }
 }
 
-/* ---------------- E6 星空模式节点玻璃详情面板 ---------------- */
+/* ---------------- E6/F1 星空模式节点详情弹框（页面级居中对话框） ---------------- */
 
 /* 快照失败降级底（无快照图时保持深空底色，不闪白） */
 .route-map-shotless {
   background: #050B16;
 }
 
-/* 遮罩：压暗画布快照，点击关闭面板 */
+/* 页面级全屏遮罩：压暗整个页面（tabBar 之上），点击关闭弹框；层级低于抵达卡/开场（999/998） */
 .node-panel-mask {
-  position: absolute;
+  position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 30;
-  background: rgba(4, 6, 16, 0.42);
+  z-index: 90;
+  background: rgba(4, 6, 16, 0.55);
   display: flex;
-  flex-direction: column;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
 }
 
-/* 玻璃质感面板：深空半透明 + 金色描边 + 背部模糊（不支持 blur 的平台退化为纯色半透明） */
+/* 玻璃质感居中对话框：深空半透明 + 金色描边 + 背部模糊（不支持 blur 的平台退化为纯色半透明） */
 .node-panel {
   position: relative;
-  max-height: 76%;
-  background: rgba(12, 16, 34, 0.88);
+  width: 630rpx;
+  max-height: 84vh;
+  background: rgba(12, 16, 34, 0.92);
   backdrop-filter: blur(16rpx);
   -webkit-backdrop-filter: blur(16rpx);
-  border-top: 1rpx solid rgba(240, 198, 90, 0.38);
-  border-radius: 28rpx 28rpx 0 0;
-  padding: 14rpx 32rpx 28rpx;
+  border: 1rpx solid rgba(240, 198, 90, 0.38);
+  border-radius: 28rpx;
+  padding: 30rpx 32rpx 28rpx;
   box-sizing: border-box;
   color: #EDE6D8;
-  box-shadow: 0 -12rpx 48rpx rgba(2, 4, 12, 0.6);
-  animation: panelUp 0.32s ease both;
+  box-shadow: 0 16rpx 64rpx rgba(2, 4, 12, 0.65);
+  animation: panelPop 0.28s ease both;
 }
 
-@keyframes panelUp {
-  from { transform: translateY(46%); opacity: 0.3; }
-  to { transform: translateY(0); opacity: 1; }
-}
-
-.node-panel-grip {
-  width: 72rpx;
-  height: 8rpx;
-  border-radius: 4rpx;
-  background: rgba(240, 198, 90, 0.35);
-  margin: 0 auto 14rpx;
+@keyframes panelPop {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
 }
 
 .node-panel-close {
@@ -609,6 +602,7 @@
   color: rgba(237, 230, 216, 0.75);
   background: rgba(255, 255, 255, 0.08);
   border-radius: 50%;
+  z-index: 1;
 }
 
 .node-panel-head {
@@ -689,8 +683,9 @@
   letter-spacing: 1rpx;
 }
 
+/* 内容滚动区：视口比例限高，矮屏自动收缩，保证底部按钮始终完整露出 */
 .node-panel-body {
-  max-height: 560rpx;
+  max-height: 54vh;
 }
 
 .node-panel-meta {
@@ -778,7 +773,7 @@
 .node-panel-actions {
   display: flex;
   gap: 20rpx;
-  margin-top: 16rpx;
+  margin-top: 20rpx;
 }
 
 .node-panel-btn {

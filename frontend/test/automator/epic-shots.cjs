@@ -66,10 +66,15 @@ async function prepare(mini) {
   await mini.evaluate(() => {
     getApp().globalData.loggedIn = true;
   });
-  await mini.switchTab('/pages/march/march');
-  await sleep(1500);
-  const page = await mini.currentPage();
-  if (page.path !== 'pages/march/march') throw new Error('未进入 march 页: ' + page.path);
+  // launch 的异步登录重定向可能把页面顶回 home：进入 march 允许有限重试
+  let page = null;
+  for (let i = 0; i < 3; i++) {
+    await mini.switchTab('/pages/march/march');
+    await sleep(1500);
+    page = await mini.currentPage();
+    if (page.path === 'pages/march/march') break;
+    if (i === 2) throw new Error('未进入 march 页: ' + page.path);
+  }
 
   await page.callMethod('skipIntro').catch(() => {});
   if ((await page.data('mode')) !== 'canvas') {
@@ -146,7 +151,7 @@ async function prepare(mini) {
 
   await mini2.disconnect();
 
-  // 第三段：突围章特写（峡谷剪影 + 铁索 + 泸定桥节点图标），视角对准节点 6
+  // 第三段：突围章特写（峡谷剪影 + 泸定桥节点图标；F1 起铁索垂弧装饰已移除），视角对准节点 6
   const mini3 = await connect();
   await prepare(mini3);
   await sleep(2000);
@@ -161,7 +166,7 @@ async function prepare(mini) {
   });
   await sleep(500);
   await mini3.screenshot({ path: path.join(IMG, 'epic-03-breakthrough.png') });
-  console.log('OK epic-03-breakthrough.png（突围章特写：峡谷剪影/铁索/泸定桥图标）');
+  console.log('OK epic-03-breakthrough.png（突围章特写：峡谷剪影/泸定桥图标）');
   await mini3.disconnect();
 
   // 第四段：会师章特写（地平线天光 + 延安关键节点刻度 + 图标），视角对准节点 10
