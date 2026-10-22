@@ -10,7 +10,7 @@ S26 AI 智能中心 冒烟脚本（TestClient + SQLite 临时库，不依赖 801
   R 组 路线讲解：优先已发布知识、无知识回退节点字段、草稿不泄露、节点不存在、关闭时仍可用、不调模型
   Q 组 答题解析：题库已有解析直接返回(不调模型)、无解析才调模型、未作答拦截、AI 关闭、以库内答案为准
   W 组 题目工坊：任务+草稿持久化、任务列表/详情、草稿编辑/审核、幂等导入题库、鉴权、知识接地、失败落库
-  G 组 回归与安全：旧出题链路不受影响、任何响应不泄露 LLM_API_KEY
+  G 组 回归与安全：旧出题链路不受影响、任何响应不泄露当前供应商的 API Key
   L 组 真实调用模型（可选，配置了 API Key 且未设置 LM_AI_SKIP_LIVE=1 时执行）
 
 用法：
@@ -72,7 +72,10 @@ from app.models.models import (  # noqa: E402
 from app.services import llm_service  # noqa: E402
 
 RESULTS = []
-API_KEY = settings.LLM_API_KEY.strip()
+# 当前生效供应商的密钥：随 LLM_PROVIDER 取值，用于「能否跑真实调用」判定与响应泄露检查
+PROVIDER = settings.LLM_PROVIDER.strip().lower()
+API_KEY = (settings.CLOUDBASE_API_KEY if PROVIDER == "cloudbase"
+           else settings.LLM_API_KEY).strip()
 KEY_HEAD, KEY_TAIL = API_KEY[:16], API_KEY[-16:]
 
 CHAT_URL = "/api/ai/chat"
@@ -234,8 +237,8 @@ def seed_restricted_admin():
 
 def main():
     print(f"DNS 映射条目：{_DNS_ENTRIES}（0 表示走系统 DNS）")
-    print(f"大模型：base_url={'有' if settings.LLM_BASE_URL else '无'} "
-          f"model={settings.LLM_MODEL or '无'} api_key={'有' if API_KEY else '无'}")
+    print(f"大模型：provider={PROVIDER} model={llm_service.model_label() or '无'} "
+          f"api_key={'有' if API_KEY else '无'}")
     Base.metadata.create_all(engine)
     ids = seed_all()
     restricted_id = seed_restricted_admin()
@@ -285,7 +288,7 @@ def main():
            r_anon.status_code == 401 and r_low.status_code == 403 and r_low_p.status_code == 403,
            f"anon={r_anon.status_code} restricted_get={r_low.status_code} restricted_patch={r_low_p.status_code}")
 
-    record("C05", "配置响应不泄露 LLM_API_KEY", no_key_leak(r, r2, r_bad_int),
+    record("C05", "配置响应不泄露 API Key", no_key_leak(r, r2, r_bad_int),
            f"key_configured={bool(API_KEY)}")
 
     # ============ K 组：知识库 ============

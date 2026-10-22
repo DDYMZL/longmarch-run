@@ -1,227 +1,77 @@
-"""大模型调用封装（OpenAI Chat Completions 兼容协议）。
+"""大模型调用门面：按 `LLM_PROVIDER` 选择上游适配器，对业务层暴露唯一入口。
 
-职责单一：发一次提示词、收文本回复。POST 到 {LLM_BASE_URL}/chat/completions，
-系统提示走标准 system role（不再前缀拼进用户输入），并取回 usage.total_tokens 与
-finish_reason 供上层落 ai_usage_logs。
+AI 问答、路线讲解、答题解析、后台出题四条链路都只 import 本模块，不感知具体供应商。
+换供应商只改 env 的 `LLM_PROVIDER` 一行（两套凭证常驻配置文件，无需改代码）：
 
-两种调用模式，按场景选择：
-- `prompt_meta` / `prompt`：非流式，一次拿完整正文（出题需要完整 JSON 才能解析）；
-- `LlmStream`：流式，边生成边推增量正文（小程序 AI 问答用它把首字延迟从整段耗时
-  压到 1~2 秒），迭代结束后同样给出用量与结束原因。
+| LLM_PROVIDER | 适配器 | 协议 | 生效配置 |
+| --- | --- | --- | --- |
+| `openai`（默认） | `llm_openai` | OpenAI Chat Completions 兼容 | `LLM_BASE_URL` / `LLM_MODEL` / `LLM_API_KEY` / `LLM_EXTRA_BODY` |
+| `cloudbase` | `llm_cloudbase` | 腾讯云 CloudBase Agent ACP | `CLOUDBASE_ENV_ID` / `CLOUDBASE_AGENT_ID` / `CLOUDBASE_API_KEY` |
 
-多轮对话不依赖服务端会话续接，由上层把最近历史拼进单次提示词（无状态）。
+`LLM_TIMEOUT_SECONDS` 两家共用。适配器须实现同一组约定：`is_configured()`、
+`model_label()`、`prompt_meta()`，以及 `stream()`（返回一个「迭代产出增量正文、
+迭代结束后给出 `result`」的对象）；新增供应商只需再加一个适配器模块并在 `_ADAPTERS` 里登记。
 
-协议与厂商解耦：只依赖 OpenAI 兼容契约，换供应商时改 LLM_BASE_URL / LLM_MODEL / LLM_API_KEY
-即可，无需改动本模块与上层业务代码；厂商专有参数一律走 LLM_EXTRA_BODY /
-LLM_QUESTION_EXTRA_BODY 透传（换厂商时需一并清理，如 Qwen 的 enable_thinking）。
+对外符号（业务层与测试脚本均按此引用，勿改名）：
+- `LlmError` / `CallResult`：从 `llm_base` 重新导出，与各适配器抛出/构造的是同一个类对象；
+- `prompt_meta` / `prompt`：非流式，一次拿完整正文；
+- `LlmStream`：流式，迭代取增量正文，迭代结束后 `.result` 给出用量与结束原因；
+- `model_label`：写入 `ai_usage_logs.model` 的模型标识（随供应商取值不同）。
 
-安全约定：API Key 仅在本模块内组装到请求头，不写日志、不进异常消息、不下发前端。
+安全约定：API Key 只在适配器内组装到请求头，不写日志、不进异常消息、不下发前端。
 """
-import json
-import logging
-import time
-from dataclasses import dataclass
-from typing import Any, Dict, Iterator, List, Optional
-
-import httpx
+from typing import Any, Dict, Iterator, Optional
 
 from app.core.config import settings
+from app.services import llm_cloudbase, llm_openai
+from app.services.llm_base import CallResult, LlmError
 
-logger = logging.getLogger(__name__)
+__all__ = [
+    "CallResult",
+    "LlmError",
+    "LlmStream",
+    "is_configured",
+    "model_label",
+    "prompt",
+    "prompt_meta",
+]
 
-_CHAT_PATH = "/chat/completions"
-# 正常结束原因；其余取值（如 length）意味着回复被截断——出题链路的 JSON 必然不完整，
-# 对话链路则会给出半截回答，两者都不应作为成功结果返回
-_NORMAL_STOP_REASONS = ("stop",)
-# SSE 分片格式：正文行以 data: 开头，流结束标记为 data: [DONE]
-_SSE_DATA_PREFIX = "data:"
-_SSE_DONE = "[DONE]"
-
-
-class LlmError(ValueError):
-    """模型调用失败（配置缺失、鉴权失败、超时、服务异常、回复截断）。
-
-    继承 ValueError 以便路由层统一转换，但需先于 ValueError 捕获以映射为 502。
-    retryable=True 表示属瞬时故障（超时 / 5xx / 429 / 网络 / 空回复），可重试；
-    配置缺失、鉴权失败、欠费、回复截断等重试无益，标记为不可重试。
-    """
-
-    def __init__(self, message: str, *, retryable: bool = False):
-        super().__init__(message)
-        self.retryable = retryable
+PROVIDER_OPENAI = "openai"
+PROVIDER_CLOUDBASE = "cloudbase"
+_ADAPTERS = {PROVIDER_OPENAI: llm_openai, PROVIDER_CLOUDBASE: llm_cloudbase}
 
 
-@dataclass
-class CallResult:
-    """一次成功调用的结果。
-
-    used_tokens 取 usage.total_tokens（输入 + 输出，与按量计费口径一致）；上游未报告
-    用量时为 None。elapsed_ms 为本次 HTTP 往返耗时。
-    """
-
-    text: str
-    used_tokens: Optional[int] = None
-    stop_reason: str = ""
-    elapsed_ms: int = 0
+def _current():
+    """当前 LLM_PROVIDER 对应的适配器模块；取值非法时返回 None（不抛异常）。"""
+    return _ADAPTERS.get(settings.LLM_PROVIDER.strip().lower())
 
 
-def _resolve_url() -> str:
-    """返回 Chat Completions 调用地址：base_url 去掉尾部斜杠后拼接固定路径。"""
-    base = settings.LLM_BASE_URL.strip().rstrip("/")
-    if not base:
-        raise LlmError("AI 服务未配置，请在后端环境变量中设置 LLM_BASE_URL")
-    return f"{base}{_CHAT_PATH}"
-
-
-def _resolve_model() -> str:
-    model = settings.LLM_MODEL.strip()
-    if not model:
-        raise LlmError("AI 服务未配置，请在后端环境变量中设置 LLM_MODEL")
-    return model
-
-
-def _http_error(status_code: int, code: str = "") -> LlmError:
-    """把上游 HTTP 状态码翻译成面向用户的中文提示（不暴露密钥与内部细节）。
-
-    code 为供应商错误码，仅写日志辅助排障，不进用户可见文案。
-    """
-    if code:
-        logger.warning("llm upstream error: http=%d code=%s", status_code, code)
-    if status_code in (401, 403):
-        return LlmError("AI 服务鉴权失败，请检查 LLM_API_KEY 是否有效")
-    if status_code == 402:
-        return LlmError("AI 服务账户余额不足，请充值后重试")
-    if status_code == 404:
-        return LlmError("AI 服务地址或模型名称不正确")
-    if status_code == 429:
-        return LlmError("AI 服务请求过于频繁，请稍后重试", retryable=True)
-    if status_code >= 500:
-        return LlmError("AI 服务暂时不可用，请稍后重试", retryable=True)
-    return LlmError(f"AI 服务返回异常状态码 {status_code}")
-
-
-def _error_code(payload: Any) -> str:
-    """从错误响应体中取供应商错误码；结构不符时返回空串（不影响主流程）。"""
-    if not isinstance(payload, dict):
-        return ""
-    error = payload.get("error")
-    if isinstance(error, dict):
-        return str(error.get("code") or error.get("type") or "")
-    return str(payload.get("code") or "")
-
-
-def _build_messages(text: str, system: Optional[str]) -> List[Dict[str, str]]:
-    """组装消息数组：系统提示独立成 system role，用户输入不与提示词混在一条消息里。"""
-    messages: List[Dict[str, str]] = []
-    if system and system.strip():
-        messages.append({"role": "system", "content": system.strip()})
-    messages.append({"role": "user", "content": text})
-    return messages
-
-
-def _parse_reply(payload: Any, elapsed_ms: int) -> CallResult:
-    """从 Chat Completions 响应体中取正文、用量与结束原因；结构异常按空回复处理。"""
-    if not isinstance(payload, dict):
-        raise LlmError("AI 服务返回内容格式异常，请重试", retryable=True)
-    choices = payload.get("choices")
-    first = choices[0] if isinstance(choices, list) and choices else {}
-    if not isinstance(first, dict):
-        first = {}
-    usage = payload.get("usage")
-    used = usage.get("total_tokens") if isinstance(usage, dict) else None
-    return CallResult(
-        text=str((first.get("message") or {}).get("content") or "").strip(),
-        used_tokens=used if isinstance(used, int) else None,
-        stop_reason=str(first.get("finish_reason") or ""),
-        elapsed_ms=elapsed_ms,
-    )
-
-
-def _build_body(
-    text: str,
-    system: Optional[str],
-    max_tokens: Optional[int],
-    extra_body: Optional[Dict[str, Any]],
-    stream: bool,
-) -> Dict[str, Any]:
-    """组装请求体：非流式与流式共用，差异只在 stream 相关字段。"""
-    body: Dict[str, Any] = {
-        "model": _resolve_model(),
-        "messages": _build_messages(text, system),
-        "stream": stream,
-    }
-    # 未显式指定时不传，交由供应商默认值；出题链路依赖长输出，不能被对话的 800 上限截断
-    if max_tokens:
-        body["max_tokens"] = max_tokens
-    # 供应商专有参数（如 Qwen 的 enable_thinking）由配置透传，本模块不感知具体厂商
-    body.update(settings.LLM_EXTRA_BODY)
-    if extra_body:
-        body.update(extra_body)
-    if stream:
-        # 上游默认不在流式响应里报用量，须显式索取，否则 ai_usage_logs 的 used_tokens 恒为空
-        body["stream_options"] = {"include_usage": True}
-    return body
-
-
-def _auth_headers() -> Dict[str, str]:
-    """组装鉴权头。API Key 只在此处出现，不写日志、不进异常消息。"""
-    return {
-        # 显式声明 charset，避免中文提示词被上游按其他编码解释
-        "Content-Type": "application/json; charset=utf-8",
-        "Authorization": f"Bearer {settings.LLM_API_KEY.strip()}",
-    }
-
-
-def _read_json(response: "httpx.Response") -> Any:
-    """读取流式响应的错误体：httpx 要求先 read() 才能 json()，失败按无错误体处理。"""
-    try:
-        response.read()
-        return response.json()
-    except (ValueError, httpx.HTTPError):
-        return None
-
-
-def _request_once(
-    text: str,
-    system: Optional[str],
-    timeout: float,
-    max_tokens: Optional[int],
-    extra_body: Optional[Dict[str, Any]] = None,
-) -> CallResult:
-    """发一次 Chat Completions 调用；失败抛 LlmError（不含密钥）。"""
-    body = _build_body(text, system, max_tokens, extra_body, stream=False)
-    started = time.monotonic()
-    try:
-        response = httpx.post(
-            _resolve_url(), json=body, headers=_auth_headers(), timeout=timeout
-        )
-    except httpx.TimeoutException:
-        raise LlmError("AI 生成超时，请稍后重试", retryable=True)
-    except httpx.HTTPError as exc:
-        # 只记录异常类型，避免把 URL/请求细节写进日志
-        logger.warning("llm request failed: %s", exc.__class__.__name__)
-        raise LlmError("AI 服务请求失败，请检查服务器网络后重试", retryable=True)
-    elapsed_ms = int((time.monotonic() - started) * 1000)
-
-    try:
-        payload = response.json()
-    except ValueError:
-        payload = None
-    if response.status_code != 200:
-        raise _http_error(response.status_code, _error_code(payload))
-    result = _parse_reply(payload, elapsed_ms)
-    _check_complete(result)
-    return result
-
-
-def _check_complete(result: CallResult) -> None:
-    """校验回复完整性：截断与空回复都不作为成功结果返回。"""
-    if result.stop_reason and result.stop_reason not in _NORMAL_STOP_REASONS:
+def _adapter():
+    """当前生效的适配器模块；取值非法时抛 LlmError（路由层映射 502）。"""
+    adapter = _current()
+    if adapter is None:
+        provider = settings.LLM_PROVIDER.strip().lower()
         raise LlmError(
-            f"AI 回复未正常结束（{result.stop_reason}），请缩短输入或减少单次生成数量后重试"
+            f"AI 服务未配置：LLM_PROVIDER 取值非法（{provider}），"
+            f"应为 {' / '.join(sorted(_ADAPTERS))} 之一"
         )
-    if not result.text:
-        raise LlmError("AI 服务返回空内容，请重试", retryable=True)
+    return adapter
+
+
+def is_configured() -> bool:
+    """当前供应商所需配置是否齐备（供冒烟脚本判定能否跑真实调用，不抛异常）。"""
+    adapter = _current()
+    return bool(adapter and adapter.is_configured())
+
+
+def model_label() -> str:
+    """写入 `ai_usage_logs.model` 的模型标识：openai 取真实模型名，cloudbase 取 Agent ID。
+
+    仅供落库与排障展示，故**不抛异常**：供应商取值非法时原样返回该值（此时真正的
+    报错由 prompt_meta / LlmStream 给出），避免在异常收尾路径里再抛一次掩盖原始错误。
+    """
+    adapter = _current()
+    return adapter.model_label() if adapter else (settings.LLM_PROVIDER.strip() or "unknown")
 
 
 def prompt_meta(
@@ -233,35 +83,42 @@ def prompt_meta(
     max_tokens: Optional[int] = None,
     extra_body: Optional[Dict[str, Any]] = None,
 ) -> CallResult:
-    """发送一次提示词并返回含用量的完整结果；对瞬时故障按配置重试。
+    """发送一次提示词并返回含用量的完整结果（出题链路需要完整 JSON 才能解析）。
 
-    system 非空时作为独立 system role 下发（无状态多轮由上层把历史拼进 text）。
-    max_retries 缺省取 settings.AI_MAX_RETRIES；仅对 retryable 错误重试，退避 0.5s×次数。
-    extra_body 在 settings.LLM_EXTRA_BODY 之后合并，供单个场景覆盖供应商参数。
+    system 非空时作为系统提示下发（openai 走 system role，cloudbase 前缀拼接）；
+    max_tokens / extra_body 在 cloudbase 下被忽略（ACP 无对应参数）。
+    失败抛 LlmError；瞬时故障由适配器按 settings.AI_MAX_RETRIES 重试。
     """
-    if not settings.LLM_API_KEY.strip():
-        raise LlmError("AI 服务未配置，请在后端环境变量中设置 LLM_API_KEY")
-    effective_timeout = timeout or settings.LLM_TIMEOUT_SECONDS
-    attempts = 1 + max(0, settings.AI_MAX_RETRIES if max_retries is None else max_retries)
-    last_error: Optional[LlmError] = None
-    for attempt in range(attempts):
-        try:
-            return _request_once(text, system, effective_timeout, max_tokens, extra_body)
-        except LlmError as exc:
-            if not exc.retryable or attempt == attempts - 1:
-                raise
-            last_error = exc
-            logger.info("llm retry %d/%d: transient", attempt + 1, attempts - 1)
-            time.sleep(0.5 * (attempt + 1))
-    # 理论不可达：循环内要么 return 要么 raise
-    raise last_error or LlmError("AI 服务请求失败，请重试")
+    return _adapter().prompt_meta(
+        text,
+        system=system,
+        timeout=timeout,
+        max_retries=max_retries,
+        max_tokens=max_tokens,
+        extra_body=extra_body,
+    )
+
+
+def prompt(text: str, timeout: Optional[float] = None) -> str:
+    """发送一次提示词，返回完整正文（出题链路专用）。
+
+    出题要求严格 JSON 数组：百炼实测关闭思考模式后批次解析失败率明显上升（5 批挂 1 批），
+    故此处叠加 LLM_QUESTION_EXTRA_BODY 恢复思考模式；出题由管理员触发且分批并发，
+    可承受其额外时延与 token 开销。CloudBase 无思考开关，该覆盖项被适配器忽略。
+
+    失败一律抛 LlmError（中文提示，不含密钥）。
+    """
+    return prompt_meta(
+        text, timeout=timeout, extra_body=settings.LLM_QUESTION_EXTRA_BODY
+    ).text
 
 
 class LlmStream:
-    """一次流式 Chat Completions 调用：迭代取增量正文，迭代结束后 `result` 给出用量与结束原因。
+    """一次流式调用：迭代取增量正文，迭代结束后 `result` 给出用量与结束原因。
 
-    构造即校验配置（base_url / model / api_key），使「未配置」这类错误在响应头发出之前
-    就以普通 JSON + 502 返回，而不是退化成流中途的 error 事件（此时状态码已无法更改）。
+    仅做转发——实际协议由当前适配器实现。构造即校验配置，使「未配置 / 供应商取值非法」
+    这类错误在响应头发出之前就以普通 JSON + 502 返回，而不是退化成流中途的 error 事件
+    （此时状态码已无法更改）。
 
     与非流式 `prompt_meta` 的关键差异：**不做自动重试**。重试意味着重新生成整段回答，
     而增量可能已经推给了用户，重发会导致正文重复；瞬时故障改由前端「停止 / 重试」兜底。
@@ -278,84 +135,18 @@ class LlmStream:
         max_tokens: Optional[int] = None,
         extra_body: Optional[Dict[str, Any]] = None,
     ):
-        if not settings.LLM_API_KEY.strip():
-            raise LlmError("AI 服务未配置，请在后端环境变量中设置 LLM_API_KEY")
-        self._body = _build_body(text, system, max_tokens, extra_body, stream=True)
-        self._timeout = timeout or settings.LLM_TIMEOUT_SECONDS
-        self.result: Optional[CallResult] = None
+        self._impl = _adapter().stream(
+            text,
+            system=system,
+            timeout=timeout,
+            max_tokens=max_tokens,
+            extra_body=extra_body,
+        )
 
     def __iter__(self) -> Iterator[str]:
-        started = time.monotonic()
-        parts: List[str] = []
-        used_tokens: Optional[int] = None
-        stop_reason = ""
-        try:
-            with httpx.stream(
-                "POST",
-                _resolve_url(),
-                json=self._body,
-                headers=_auth_headers(),
-                timeout=self._timeout,
-            ) as response:
-                if response.status_code != 200:
-                    raise _http_error(
-                        response.status_code, _error_code(_read_json(response))
-                    )
-                for line in response.iter_lines():
-                    if not line.startswith(_SSE_DATA_PREFIX):
-                        continue
-                    payload = line[len(_SSE_DATA_PREFIX) :].strip()
-                    if payload == _SSE_DONE:
-                        break
-                    try:
-                        chunk = json.loads(payload)
-                    except ValueError:
-                        # 丢一片只少几个字，中断整条流会让已显示的半截回答失去下文
-                        logger.warning("llm stream: skip unparsable chunk")
-                        continue
-                    if not isinstance(chunk, dict):
-                        continue
-                    usage = chunk.get("usage")
-                    if isinstance(usage, dict):
-                        total = usage.get("total_tokens")
-                        if isinstance(total, int):
-                            used_tokens = total
-                    choices = chunk.get("choices")
-                    # 只带 usage 的收尾分片没有 choices，跳过即可
-                    if not isinstance(choices, list) or not choices:
-                        continue
-                    first = choices[0] if isinstance(choices[0], dict) else {}
-                    if first.get("finish_reason"):
-                        stop_reason = str(first["finish_reason"])
-                    # 只取正文增量：reasoning_content 是思考过程，既不展示给用户也不入库
-                    piece = (first.get("delta") or {}).get("content")
-                    if piece:
-                        parts.append(piece)
-                        yield piece
-        except httpx.TimeoutException:
-            raise LlmError("AI 生成超时，请稍后重试", retryable=True)
-        except httpx.HTTPError as exc:
-            logger.warning("llm stream failed: %s", exc.__class__.__name__)
-            raise LlmError("AI 服务请求失败，请检查服务器网络后重试", retryable=True)
+        for piece in self._impl:
+            yield piece
 
-        self.result = CallResult(
-            text="".join(parts).strip(),
-            used_tokens=used_tokens,
-            stop_reason=stop_reason,
-            elapsed_ms=int((time.monotonic() - started) * 1000),
-        )
-        _check_complete(self.result)
-
-
-def prompt(text: str, timeout: Optional[float] = None) -> str:
-    """发送一次提示词，返回完整正文（出题链路专用）。
-
-    出题要求严格 JSON 数组：实测关闭思考模式后批次解析失败率明显上升（5 批挂 1 批），
-    故本入口叠加 LLM_QUESTION_EXTRA_BODY 恢复思考模式。出题由管理员触发且分批并发，
-    可承受其额外时延与 token 开销；对话链路走 prompt_meta，保持思考关闭以压低时延与成本。
-
-    失败一律抛 LlmError（中文提示，不含密钥）。
-    """
-    return prompt_meta(
-        text, timeout=timeout, extra_body=settings.LLM_QUESTION_EXTRA_BODY
-    ).text
+    @property
+    def result(self) -> Optional[CallResult]:
+        return self._impl.result

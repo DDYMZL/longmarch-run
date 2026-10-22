@@ -80,7 +80,10 @@
 | `access_service` | —（管理端） | RBAC：`build_principal` 聚合用户启用角色与菜单（超管=全部菜单）、`get_enabled_roles`、`get_menu_items`、菜单/角色 CRUD 与授权校验 |
 | `audit_service` | —（管理端） | 审计日志：`record` 写 `audit_logs`（区分 super/user 操作人），分页/日期/动作/操作人筛选 |
 | `wechat_service` | — | 微信服务端对接：`get_wxacode_png`（小程序码）、code2Session 开放平台 code 换取（未配置凭证时 mock） |
-| `llm_service` | —（上游大模型，OpenAI 兼容协议） | 大模型调用封装：`chat`（一次性）与 `LlmStream`（SSE 逐块迭代器，按 token 成块产出增量）；统一超时/最大输出 token/重试与 `LlmError` 归一，密钥与基址走 settings，不向调用方暴露上游协议细节 |
+| `llm_service` | —（上游大模型门面） | 大模型调用门面：按 `LLM_PROVIDER` 把 `prompt_meta`（一次性）/ `prompt`（出题，叠加 `LLM_QUESTION_EXTRA_BODY`）/ `LlmStream`（SSE 逐块迭代器）分派到具体适配器，并提供 `model_label()`（写 `ai_usage_logs.model`）与 `is_configured()`；业务层只 import 本模块，换供应商只改 env 一行 |
+| `llm_base` | — | 供应商无关的共用类型：`LlmError`（含 `retryable` 瞬时故障标记）、`CallResult`（正文/用量/结束原因/耗时）、`ensure_complete`（截断与空回复不算成功）；单独成模块以断开「门面 ↔ 适配器」循环 import |
+| `llm_openai` | —（上游大模型，OpenAI 兼容协议） | OpenAI Chat Completions 适配器（阿里云百炼等）：system 走标准 role、`max_tokens` 与 `LLM_EXTRA_BODY` 透传、流式索取 `stream_options.include_usage`、HTTP 状态码归一为中文 `LlmError`（401/403 鉴权、402 余额、429 与 5xx 可重试），非流式按 `AI_MAX_RETRIES` 退避重试、流式不重试 |
+| `llm_cloudbase` | —（上游大模型，ACP 私有协议） | 腾讯云 CloudBase Agent 适配器：JSON-RPC `session/prompt` + SSE，只拼 `agent_message_chunk` 正文（忽略思考/阶段事件）、取 `usage_update.used` 与终态 `stopReason`（正常为 `end_turn`/`stop_sequence`）；system 前缀拼接，`max_tokens`/`extra_body` 无对应参数故忽略；地址按 `CLOUDBASE_AGENT_URL` 或 `{ENV_ID}.api.tcloudbasegateway.com/v1/aibot/bots/{AGENT_ID}/acp` 拼接 |
 | `ai_chat_service` | `ai.js` | 历史助手连续对话：`prepare_message`（开关/限额/输入/会话归属校验 + 组装 system/历史 prompt + 已发布知识来源）→ `finalize_message`（落库权威全文与用量）/ `discard_message`（失败回滚）；会话与消息 CRUD、按 JWT 判定归属（越权 404） |
 | `ai_usage_service` | — | AI 用量与审计：`record(feature, user_id, model, status, error_code)` 记一次调用的成功/失败与额度扣减，供限额判定与排障 |
 

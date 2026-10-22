@@ -15,7 +15,7 @@ S25 AI 智能出题 冒烟脚本（TestClient + SQLite 临时库，不依赖 801
   A10 批量保存重复题拦截（库内重复 + 批内重复）
   A11 批量保存空列表 400
   A12 保存后题库列表可查到，字段与 Excel 导入题目同构
-  A13 任何响应都不泄露 LLM_API_KEY
+  A13 任何响应都不泄露当前供应商的 API Key
   A14 真实调用模型：生成 10 道单选题，结构与答案格式合规
   A15 真实调用模型：生成 50 道题，分批处理长响应无批次失败
   A16 小程序答题契约不受影响：下发 camelCase 且不含 answer/analysis
@@ -72,7 +72,10 @@ BATCH_SAVE_URL = "/api/admin/ai/questions/batch-save"
 QUESTIONS_URL = "/api/admin/questions"
 
 RESULTS = []
-API_KEY = settings.LLM_API_KEY.strip()
+# 当前生效供应商的密钥：随 LLM_PROVIDER 取值，用于「能否跑真实调用」判定与响应泄露检查
+PROVIDER = settings.LLM_PROVIDER.strip().lower()
+API_KEY = (settings.CLOUDBASE_API_KEY if PROVIDER == "cloudbase"
+           else settings.LLM_API_KEY).strip()
 # 密钥指纹：取首尾片段用于断言响应未泄露，断言输出本身不构成完整密钥
 KEY_HEAD, KEY_TAIL = API_KEY[:16], API_KEY[-16:]
 
@@ -148,8 +151,7 @@ def draft_payload(items):
 
 def main():
     print(f"DNS 映射条目：{_DNS_ENTRIES}（0 表示走系统 DNS）")
-    print(f"大模型配置：base_url={'已配置' if settings.LLM_BASE_URL else '缺失'} "
-          f"model={settings.LLM_MODEL or '缺失'} "
+    print(f"大模型配置：provider={PROVIDER} model={llm_service.model_label() or '缺失'} "
           f"api_key={'已配置' if API_KEY else '缺失'}")
     Base.metadata.create_all(engine)
     client = TestClient(app)
@@ -383,7 +385,7 @@ def main():
     r_leak_save = client.post(BATCH_SAVE_URL, headers=admin_h,
                               json={"questions": [fake_item("密钥泄露检查题")]})
     r_leak_list = client.get(QUESTIONS_URL, headers=admin_h)
-    record("A13", "生成/保存/列表响应均不泄露 LLM_API_KEY",
+    record("A13", "生成/保存/列表响应均不泄露 API Key",
            no_key_leak(r_leak, r_leak_save, r_leak_list, r_messy, r_save),
            f"key_configured={bool(API_KEY)} checked=5 responses")
 
@@ -399,8 +401,8 @@ def main():
     # ---------------- A14 / A15 真实调用模型 ----------------
     settings.AI_QUESTION_BATCH_SIZE = real_batch_size  # 恢复 .env 配置，真实验证分批
     if not API_KEY:
-        record("A14", "真实生成 10 道单选题", False, "跳过：LLM_API_KEY 未配置")
-        record("A15", "真实生成 50 道题（分批长响应）", False, "跳过：LLM_API_KEY 未配置")
+        record("A14", "真实生成 10 道单选题", False, f"跳过：{PROVIDER} 供应商密钥未配置")
+        record("A15", "真实生成 50 道题（分批长响应）", False, f"跳过：{PROVIDER} 供应商密钥未配置")
     else:
         r10 = client.post(GENERATE_URL, headers=admin_h, json={
             "topic": "红军长征中的重要战役", "count": 10, "question_type": "single",

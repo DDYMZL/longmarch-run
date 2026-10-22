@@ -78,7 +78,7 @@
     },
     {
       "id": "A13",
-      "name": "生成/保存/列表响应均不泄露 LLM_API_KEY",
+      "name": "生成/保存/列表响应均不泄露 API Key",
       "ok": true,
       "detail": "key_configured=True checked=5 responses"
     },

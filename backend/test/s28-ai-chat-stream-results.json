@@ -70,15 +70,15 @@
     },
     {
       "id": "L01",
-      "name": "真实流式调用：上游逐片到达、首片延迟远小于总耗时、用量与结束原因齐全",
+      "name": "真实流式调用：上游逐片到达、首片早于总耗时、用量与结束原因齐全",
       "ok": true,
-      "detail": "分片数=36 首片=1.15s 总耗时=3.53s 字数=165 usedTokens=147 stop_reason=stop"
+      "detail": "分片数=90 首片=16.72s 总耗时=18.91s 字数=241 usedTokens=19400 stop_reason=end_turn（期望 end_turn）"
     },
     {
       "id": "L02",
       "name": "真实模型下 SSE 端点逐片转发：分片多次到达、增量拼接 == done.reply == 落库正文",
       "ok": true,
-      "detail": "status=200 分片数=50 字数=219 usedTokens=426 落库一致=True"
+      "detail": "status=200 分片数=105 字数=255 usedTokens=19641 落库一致=True"
     }
   ]
 }

@@ -14,8 +14,8 @@ S28 AI 历史助手「流式对话」冒烟脚本（TestClient + SQLite 临时�
     S08 客户端提前断开读取：提问必有对应回答落库，不留「只有问没有答」的脏数据
     S09 中断收尾两条分支：有增量则半截回答落库，无增量则提问与空会话一并删除
     S10 与非流式 /ai/chat 落库同构（同一套 prepare/finalize，不产生两种数据形态）
-    S11 SSE 响应体不泄露 LLM_API_KEY
-  L 组（真实调用，配置了 LLM_API_KEY 且未设 LM_AI_SKIP_LIVE=1 时执行）
+    S11 SSE 响应体不泄露当前供应商的 API Key
+  L 组（真实调用，当前 LLM_PROVIDER 的密钥已配置且未设 LM_AI_SKIP_LIVE=1 时执行）
     L01 真流式而非缓冲后一次吐：LlmStream 分片数 >1 且首片延迟明显早于总耗时
     L02 真实模型下 SSE 端点逐片转发：增量拼接 == done.reply == 落库正文
 
@@ -65,7 +65,10 @@ from app.models.models import (  # noqa: E402
 from app.services import ai_chat_service, llm_service  # noqa: E402
 
 RESULTS = []
-API_KEY = settings.LLM_API_KEY.strip()
+# 当前生效供应商的密钥：随 LLM_PROVIDER 取值，用于「能否跑真实调用」判定与响应泄露检查
+PROVIDER = settings.LLM_PROVIDER.strip().lower()
+API_KEY = (settings.CLOUDBASE_API_KEY if PROVIDER == "cloudbase"
+           else settings.LLM_API_KEY).strip()
 KEY_HEAD, KEY_TAIL = API_KEY[:16], API_KEY[-16:]
 
 STREAM_URL = "/api/ai/chat/stream"
@@ -218,8 +221,8 @@ def seed_all():
 
 def main():
     print(f"DNS 映射条目：{_DNS_ENTRIES}（0 表示走系统 DNS）")
-    print(f"大模型：base_url={'有' if settings.LLM_BASE_URL else '无'} "
-          f"model={settings.LLM_MODEL or '无'} api_key={'有' if API_KEY else '无'}")
+    print(f"大模型：provider={PROVIDER} model={llm_service.model_label() or '无'} "
+          f"api_key={'有' if API_KEY else '无'}")
     Base.metadata.create_all(engine)
     ids = seed_all()
 
@@ -442,11 +445,11 @@ def main():
            no_key_leak(r1.text, r6.text, r7.text, r9b.text, r_empty.text), "")
 
     # ============ L01/L02 真实调用模型：验证确实是流式 ============
-    l01_name = "真实流式调用：上游逐片到达、首片延迟远小于总耗时、用量与结束原因齐全"
+    l01_name = "真实流式调用：上游逐片到达、首片早于总耗时、用量与结束原因齐全"
     l02_name = "真实模型下 SSE 端点逐片转发：分片多次到达、增量拼接 == done.reply == 落库正文"
     if not API_KEY:
-        record("L01", l01_name, False, "跳过：LLM_API_KEY 未配置")
-        record("L02", l02_name, False, "跳过：LLM_API_KEY 未配置")
+        record("L01", l01_name, False, f"跳过：{PROVIDER} 供应商密钥未配置")
+        record("L02", l02_name, False, f"跳过：{PROVIDER} 供应商密钥未配置")
     elif os.getenv("LM_AI_SKIP_LIVE") == "1":
         record("L01", l01_name, True, "跳过：LM_AI_SKIP_LIVE=1")
         record("L02", l02_name, True, "跳过：LM_AI_SKIP_LIVE=1")
@@ -468,15 +471,22 @@ def main():
         total = time.monotonic() - started
         result = stream.result
         live_text = result.text if result else ""
-        # 真流式的判据：分片明显多于 1，且首片远早于结束（若被整体缓冲则首片≈总耗时）
+        # 真流式的判据：分片明显多于 1，且首片早于结束（若被整体缓冲则首片≈总耗时）。
+        # 两项阈值随供应商而异：
+        # - 正常结束原因：openai 为 stop，cloudbase（ACP）为 end_turn；
+        # - 首片占比：CloudBase Agent 会先推完 agent_thought_chunk 思考过程才开始吐正文，
+        #   实测首片 11.65s / 总耗时 13.56s（占比 0.86），故阈值放宽到 0.95——仍能与
+        #   「整体缓冲后一次吐」（占比≈1.0）区分开；百炼首片 1~2s，沿用严格的 0.8。
+        normal_stop = "end_turn" if PROVIDER == "cloudbase" else "stop"
+        first_ratio = 0.95 if PROVIDER == "cloudbase" else 0.8
         record("L01", l01_name,
-               piece_count >= 3 and first_at is not None and first_at < total * 0.8
+               piece_count >= 3 and first_at is not None and first_at < total * first_ratio
                and bool(live_text) and result is not None
-               and isinstance(result.used_tokens, int) and result.stop_reason == "stop",
+               and isinstance(result.used_tokens, int) and result.stop_reason == normal_stop,
                f"分片数={piece_count} 首片={first_at if first_at is None else round(first_at, 2)}s "
                f"总耗时={total:.2f}s 字数={len(live_text)} "
                f"usedTokens={result.used_tokens if result else None} "
-               f"stop_reason={result.stop_reason if result else None}")
+               f"stop_reason={result.stop_reason if result else None}（期望 {normal_stop}）")
 
         # L02：同一问题打到 SSE 端点，确认端点逐片转发（分片数 >1）、done.reply 与落库一致
         live_done = {}

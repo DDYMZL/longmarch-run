@@ -1,0 +1,147 @@
+{
+  "suite": "s30_llm_provider_switch",
+  "provider": "cloudbase",
+  "total": 23,
+  "passed": 23,
+  "failed": 0,
+  "results": [
+    {
+      "id": "A01",
+      "name": "provider=cloudbase 走 ACP 适配器，model_label 取 Agent ID",
+      "ok": true,
+      "detail": "configured=True label=agt-zy-7gnauryrb6fad70e"
+    },
+    {
+      "id": "A02",
+      "name": "provider=openai 走 OpenAI 适配器，model_label 取模型名",
+      "ok": true,
+      "detail": "label=qwen3.8-max"
+    },
+    {
+      "id": "A03",
+      "name": "provider 取值非法：prompt_meta 抛错、model_label 不抛错",
+      "ok": true,
+      "detail": "异常=AI 服务未配置：LLM_PROVIDER 取值非法（azure），应为 cloudbase / openai 之一 label=azure"
+    },
+    {
+      "id": "A04",
+      "name": "门面与适配器共用同一套 LlmError / CallResult 类型",
+      "ok": true,
+      "detail": "LlmError 同一=True CallResult 兼容=True"
+    },
+    {
+      "id": "A05",
+      "name": "cloudbase 缺 Key：构造流与调用都在发请求前抛错",
+      "ok": true,
+      "detail": "stream=AI 服务未配置，请在后端环境变量中设置 CLOUDBASE_API_KEY meta=AI 服务未配置，请在后端环境变量中设置 CLOUDBASE_API_KEY"
+    },
+    {
+      "id": "A06",
+      "name": "openai 缺 Key：构造流与调用都在发请求前抛错",
+      "ok": true,
+      "detail": "stream=AI 服务未配置，请在后端环境变量中设置 LLM_API_KEY meta=AI 服务未配置，请在后端环境变量中设置 LLM_API_KEY"
+    },
+    {
+      "id": "B01",
+      "name": "非流式请求体与响应解析正确（system role / 透传 / 不带 max_tokens）",
+      "ok": true,
+      "detail": "text=遵义会议是党的历史上生死攸关的转折点 used=42 stop=stop path=/v1/chat/completions"
+    },
+    {
+      "id": "B02",
+      "name": "显式传 max_tokens 时写入请求体",
+      "ok": true,
+      "detail": "max_tokens=800"
+    },
+    {
+      "id": "B03",
+      "name": "流式逐片产出且索取 usage（stream_options.include_usage）",
+      "ok": true,
+      "detail": "分片=4 首片=5.62s used=42"
+    },
+    {
+      "id": "B04",
+      "name": "出题链路 prompt() 用 LLM_QUESTION_EXTRA_BODY 覆盖思考开关",
+      "ok": true,
+      "detail": "enable_thinking=True"
+    },
+    {
+      "id": "B05",
+      "name": "错误映射：401/429/500 与 finish_reason=length 各自正确",
+      "ok": true,
+      "detail": "四项判定=[True, True, True, True]"
+    },
+    {
+      "id": "B06",
+      "name": "可重试错误按 AI_MAX_RETRIES 重试后成功",
+      "ok": true,
+      "detail": "上游调用次数=2 text=遵义会议是党的历史上生死攸关的转"
+    },
+    {
+      "id": "B07",
+      "name": "空正文按「返回空内容」处理且标记可重试",
+      "ok": true,
+      "detail": "异常=AI 服务返回空内容，请重试"
+    },
+    {
+      "id": "C01",
+      "name": "ACP 请求体为 JSON-RPC session/prompt，system 前缀拼接",
+      "ok": true,
+      "detail": "path=/v1/aibot/bots/agt-stub-001/acp prompt='系统提示\\n\\n用户问题'"
+    },
+    {
+      "id": "C02",
+      "name": "SSE 解析：只拼正文，思考/阶段事件忽略，用量与终态被取用",
+      "ok": true,
+      "detail": "text=遵义会议是党的历史上生死攸关的转折点 used=42 stop=end_turn"
+    },
+    {
+      "id": "C03",
+      "name": "流式分片数 >1 且 result 与非流式同构",
+      "ok": true,
+      "detail": "分片=4 流式='遵义会议是党的历史上生死攸关的转' 非流式='遵义会议是党的历史上生死攸关的转'"
+    },
+    {
+      "id": "C04",
+      "name": "max_tokens / extra_body 不进 ACP 请求体",
+      "ok": true,
+      "detail": "请求体键=['id', 'jsonrpc', 'method', 'params']"
+    },
+    {
+      "id": "C05",
+      "name": "stopReason=max_tokens 判为未正常结束；空正文可重试",
+      "ok": true,
+      "detail": "两项判定=[True, True]"
+    },
+    {
+      "id": "C06",
+      "name": "显式 AGENT_URL 优先；留空时按 ENV_ID/AGENT_ID 模板拼接",
+      "ok": true,
+      "detail": "显式=/custom/acp 拼接=https://env-x.api.tcloudbasegateway.com/v1/aibot/bots/agt-y/acp"
+    },
+    {
+      "id": "C07",
+      "name": "401 提示检查 CLOUDBASE_API_KEY 且不泄露密钥",
+      "ok": true,
+      "detail": "异常=AI 服务鉴权失败，请检查 CLOUDBASE_API_KEY 是否有效"
+    },
+    {
+      "id": "D01",
+      "name": "真实非流式：拿到非空正文与正常结束原因",
+      "ok": true,
+      "detail": "耗时=16.3s stop=end_turn used=254 正文='遵义会议（1935年1月）在极端危急的关头事实上确立了毛泽东在党中央和红军的领导' 异常=None"
+    },
+    {
+      "id": "D02",
+      "name": "真实流式：分片数 >1 且首片早于总耗时（真增量）",
+      "ok": true,
+      "detail": "分片=52 首片=8.6s 总耗时=10.3s 字数=149 异常=None"
+    },
+    {
+      "id": "D03",
+      "name": "真实出题：长输出 JSON 数组可解析",
+      "ok": true,
+      "detail": "耗时=14.8s 题数=2 正文长度=553 异常=None"
+    }
+  ]
+}

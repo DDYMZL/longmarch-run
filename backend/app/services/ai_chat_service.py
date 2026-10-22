@@ -22,7 +22,6 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlalchemy.orm import Session
 
-from app.core.config import settings
 from app.core.helpers import now_utc
 from app.models.models import (
     AiConversation,
@@ -293,7 +292,7 @@ def finalize_message(
         conv.updated_at = now_utc()
     ai_usage_service.record(
         db, feature=FEATURE_CHAT, user_id=turn.user_id, conversation_id=turn.conversation_id,
-        model=settings.LLM_MODEL, used_tokens=result.used_tokens,
+        model=llm_service.model_label(), used_tokens=result.used_tokens,
         elapsed_ms=result.elapsed_ms, status="success",
     )
     db.commit()
@@ -349,7 +348,7 @@ def send_message(
     except llm_service.LlmError:
         discard_message(db, turn)
         ai_usage_service.record(
-            db, feature=FEATURE_CHAT, user_id=turn.user_id, model=settings.LLM_MODEL,
+            db, feature=FEATURE_CHAT, user_id=turn.user_id, model=llm_service.model_label(),
             status="error", error_code="llm", elapsed_ms=None,
         )
         db.commit()
@@ -526,7 +525,7 @@ def quiz_explanation(db: Session, user: User, question_id: int) -> Dict[str, Any
     except llm_service.LlmError:
         db.rollback()
         ai_usage_service.record(
-            db, feature=FEATURE_QUIZ, user_id=user.id, model=settings.LLM_MODEL,
+            db, feature=FEATURE_QUIZ, user_id=user.id, model=llm_service.model_label(),
             status="error", error_code="llm",
         )
         db.commit()
@@ -534,7 +533,7 @@ def quiz_explanation(db: Session, user: User, question_id: int) -> Dict[str, Any
 
     sources = ai_knowledge_service.format_sources(rows)
     ai_usage_service.record(
-        db, feature=FEATURE_QUIZ, user_id=user.id, model=settings.LLM_MODEL,
+        db, feature=FEATURE_QUIZ, user_id=user.id, model=llm_service.model_label(),
         used_tokens=result.used_tokens, elapsed_ms=result.elapsed_ms, status="success",
     )
     db.commit()

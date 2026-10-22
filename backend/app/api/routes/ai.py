@@ -15,7 +15,6 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_activity_view
-from app.core.config import settings
 from app.core.database import SessionLocal, get_db
 from app.models.models import User
 from app.schemas.schemas import (
@@ -158,7 +157,7 @@ def chat_stream(
                 ai_chat_service.discard_message(stream_db, turn)
                 ai_usage_service.record(
                     stream_db, feature=ai_chat_service.FEATURE_CHAT, user_id=turn.user_id,
-                    model=settings.LLM_MODEL, status="error", error_code="llm",
+                    model=llm_service.model_label(), status="error", error_code="llm",
                 )
                 stream_db.commit()
                 settled = True
