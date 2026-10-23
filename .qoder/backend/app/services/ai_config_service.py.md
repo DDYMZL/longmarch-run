@@ -6,12 +6,12 @@
 
 ## 2. 文件职责
 
-AI 智能中心的**运行时配置服务**：把 `system_settings` 表中管理端可改的 9 项 AI 运行参数与 env 默认值合并成一次请求内的生效快照 `AiConfig`（`backend/app/services/ai_config_service.py:112-123`），提供 AI 总开关校验（`:126-131`）、三类提示词模板 chat/route/quiz 的读取与版本管理（`:134-150`），以及管理端「配置中心」的读写视图（`:153-224`）。模块 docstring（`:1-7`）明确本模块只处理 AI 运行参数与提示词，**绝不读取或下发 CloudBase API Key、JWT 等任何密钥**。
+AI 智能中心的**运行时配置服务**：把 `system_settings` 表中管理端可改的 9 项 AI 运行参数与 env 默认值合并成一次请求内的生效快照 `AiConfig`（`backend/app/services/ai_config_service.py:112-123`），提供 AI 总开关校验（`:126-131`）、三类提示词模板 chat/route/quiz 的读取与版本管理（`:134-150`），以及管理端「配置中心」的读写视图（`:153-224`）。模块 docstring（`:1-7`）明确本模块只处理 AI 运行参数与提示词，**绝不读取或下发 LLM API Key、JWT 等任何密钥**（`:5-6` 现行原文即为「LLM API Key」；`c660727` 之前该处写的是「CloudBase API Key」，随上游迁移一并改名，**本模块源码未变**）。
 
 ## 3. 业务需求
 
 - 需求来源：《长征步迹 AI 智能中心开发需求 V1.0》§3.4 管理端接口（配置中心），Phase A 后端提交 `1600074`（2026-10-17）。导航层见 `.qoder/REQUIREMENTS.md` §10 与 `.qoder/ARCHITECTURE.md` §11，本文档不复述其正文。
-- 「参数运行期可调、不重启进程、可回溯」→ 生效值落 `system_settings` 键值表，优先级 **DB 覆盖 > env 默认**（`:3`；`backend/app/core/config.py:80-82` 注释同一口径）。
+- 「参数运行期可调、不重启进程、可回溯」→ 生效值落 `system_settings` 键值表，优先级 **DB 覆盖 > env 默认**（`:3`；`backend/app/core/config.py:103-111` 的 9 个 `AI_*` 字段为同一口径的 env 默认侧）。**这 9 项与上游供应商无关**：`b712d81` 新增的 `LLM_PROVIDER`（`backend/app/core/config.py:72`）及各供应商专属项（`:76-93`）**不在 `_SPEC` 中**，只能改 env、不受配置中心管辖。
 - 「提示词集中管理、带版本号，便于灰度与回溯；管理端可覆盖文本」（`:4`、`:16-17`）。
 - 「安全：只处理运行参数与提示词，`get_config_view()` 供管理端展示，返回内容不含明文密钥」（`:5-6`）。
 - **管理端「配置中心」页面属待开发**（`.qoder/ARCHITECTURE.md` §11.3、`.qoder/REQUIREMENTS.md` §10.6）：后端 `GET`/`PATCH /api/admin/ai/config` 已就绪，admin 前端无对应页面；`ai_config` 菜单码只落库（`docker/init/022_ai_admin_menus.sql`），`admin/src/router/menus.ts` 未登记。
@@ -58,21 +58,23 @@ AI 智能中心的**运行时配置服务**：把 `system_settings` 表中管理
 
 | setting_key | `AiConfig` 字段 | 范围（本文件 `:46-54`） | env 默认项（`backend/app/core/config.py`） | 运行时消费点 |
 |---|---|---|---|---|
-| `ai_enabled` | `enabled` | bool | `AI_ENABLED`（`backend/app/core/config.py:83`） | `ensure_enabled`（本文件 `:129`）→ `backend/app/services/ai_chat_service.py:192`、`:373` |
-| `ai_chat_daily_limit` | `chat_daily_limit` | 0~100000 | `AI_CHAT_DAILY_LIMIT`（`:84`） | `backend/app/services/ai_usage_service.py:37-39` |
-| `ai_global_daily_limit` | `global_daily_limit` | 0~1000000 | `AI_GLOBAL_DAILY_LIMIT`（`:85`） | `backend/app/services/ai_usage_service.py:40-42` |
-| `ai_max_input_chars` | `max_input_chars` | 1~2000 | `AI_MAX_INPUT_CHARS`（`:86`） | `backend/app/services/ai_chat_service.py:196-197` |
-| `ai_max_output_tokens` | `max_output_tokens` | 1~4000 | `AI_MAX_OUTPUT_TOKENS`（`:87`） | `backend/app/services/ai_chat_service.py:171`（`_output_hint` 取其 60% 作字数预算，下限 100） |
-| `ai_request_timeout` | `request_timeout` | 5~300 | `AI_REQUEST_TIMEOUT`（`:88`） | `backend/app/services/ai_chat_service.py:236`、`:387` |
-| `ai_max_retries` | `max_retries` | 0~3 | `AI_MAX_RETRIES`（`:89`） | `backend/app/services/ai_chat_service.py:237`、`:388` |
-| `ai_context_turns` | `context_turns` | 0~20 | `AI_CONTEXT_TURNS`（`:90`） | `backend/app/services/ai_chat_service.py:220` |
-| `ai_knowledge_top_k` | `knowledge_top_k` | 1~20 | `AI_KNOWLEDGE_TOP_K`（`:91`） | `backend/app/services/ai_chat_service.py:211`、`:215`、`:218`、`:376` |
+| `ai_enabled` | `enabled` | bool | `AI_ENABLED`（`backend/app/core/config.py:103`） | `ensure_enabled`（本文件 `:129`）→ `backend/app/services/ai_chat_service.py:218`（`prepare_message`，非流式与流式共用）、`:507`（`quiz_explanation`） |
+| `ai_chat_daily_limit` | `chat_daily_limit` | 0~100000 | `AI_CHAT_DAILY_LIMIT`（`:104`） | `backend/app/services/ai_usage_service.py:37-39` |
+| `ai_global_daily_limit` | `global_daily_limit` | 0~1000000 | `AI_GLOBAL_DAILY_LIMIT`（`:105`） | `backend/app/services/ai_usage_service.py:40-42` |
+| `ai_max_input_chars` | `max_input_chars` | 1~2000 | `AI_MAX_INPUT_CHARS`（`:106`） | `backend/app/services/ai_chat_service.py:222-223`（`prepare_message` 内校验用户输入长度） |
+| `ai_max_output_tokens` | `max_output_tokens` | 1~4000 | `AI_MAX_OUTPUT_TOKENS`（`:107`） | **两条并行路径**：① `backend/app/services/ai_chat_service.py:176`（`_output_hint` 取其 60% 作字数预算，下限 100）；② 作为 `max_tokens` 实参下发给上游——`:346`（`send_message`）、`:523`（`quiz_explanation`）、`backend/app/api/routes/ai.py:134`（流式）。**是否真正生效取决于 `LLM_PROVIDER`**：`openai` 写入请求体（`backend/app/services/llm_openai.py:147-148`），`cloudbase`（ACP）静默忽略（`backend/app/services/llm_cloudbase.py:230`、`:312`） |
+| `ai_request_timeout` | `request_timeout` | 5~300 | `AI_REQUEST_TIMEOUT`（`:108`） | `backend/app/services/ai_chat_service.py:344`、`:521`（透传给 `llm_service.prompt_meta`） |
+| `ai_max_retries` | `max_retries` | 0~3 | `AI_MAX_RETRIES`（`:109`） | `backend/app/services/ai_chat_service.py:345`、`:522`；**流式路径不传 `max_retries`**（`LlmStream` 无自动重试，见 `backend/app/services/llm_service.py:117-127`） |
+| `ai_context_turns` | `context_turns` | 0~20 | `AI_CONTEXT_TURNS`（`:110`） | `backend/app/services/ai_chat_service.py:247`（`prepare_message` 取历史段） |
+| `ai_knowledge_top_k` | `knowledge_top_k` | 1~20 | `AI_KNOWLEDGE_TOP_K`（`:111`） | `backend/app/services/ai_chat_service.py:237-245`（节点追问检索与合并）、`:510`（答题解析以题干检索） |
 
-注意：`AI_QUESTION_BATCH_SIZE` / `AI_QUESTION_MAX_CONCURRENCY` / `AI_QUESTION_MAX_COUNT`（`backend/app/core/config.py:76-78`）**不在 `_SPEC` 中**，AI 出题链路直接读 env，不受配置中心管辖（详见 `.qoder/backend/app/services/ai_question_service.py.md`）。
+注意：`AI_QUESTION_BATCH_SIZE` / `AI_QUESTION_MAX_CONCURRENCY` / `AI_QUESTION_MAX_COUNT`（`backend/app/core/config.py:96-98`）**不在 `_SPEC` 中**，AI 出题链路直接读 env，不受配置中心管辖（详见 `.qoder/backend/app/services/ai_question_service.py.md`）。**`b712d81` 新增的供应商相关项同样不在 `_SPEC` 中**：`LLM_PROVIDER`（`:72`）、`LLM_TIMEOUT_SECONDS`（`:73`）、`LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`/`LLM_EXTRA_BODY`/`LLM_QUESTION_EXTRA_BODY`（`:76-85`）、`CLOUDBASE_ENV_ID`/`CLOUDBASE_AGENT_ID`/`CLOUDBASE_API_KEY`/`CLOUDBASE_AGENT_URL`（`:89-93`）——即**切换上游只能改 env 并重启，管理端配置中心看不到也改不了**（有意设计：密钥类绝不入库，见 §7）。
 
 ### 4.5 提示词读取（`get_prompt`，`:134-143`）
 
-DB 覆盖值非空即**整串替换**内置默认（`:141-143`），不做长度夹取（长度校验只在写入侧 `:211`）。运行时消费点只有两处：`chat`（`backend/app/services/ai_chat_service.py:235`）与 `quiz`（`:386`），均作为 `cloudbase_service.prompt_meta(system=...)` 的系统提示前缀。**`route` 类模板在运行链路中当前无任何调用点**——节点讲解只返回已审核固定内容、不调模型（`backend/app/api/routes/ai.py:119`、`backend/app/services/ai_chat_service.py:274-277`），该模板仅经 `get_config_view`（`:173`）暴露给管理端展示与编辑。
+DB 覆盖值非空即**整串替换**内置默认（`:141-143`），不做长度夹取（长度校验只在写入侧 `:211`）。运行时消费点只有两处：`chat`（`backend/app/services/ai_chat_service.py:264`，在 `prepare_message` 内存入 `ChatTurn.system_prompt`，非流式与流式共用）与 `quiz`（`:520`），均作为 `llm_service.prompt_meta(system=...)` 的系统提示。**`system=` 的落地方式随供应商而异**：`openai` 适配器把它作为独立的 `system` 角色消息下发；`cloudbase`（ACP）无独立 system 通道，由 `_join_system`（`backend/app/services/llm_cloudbase.py:173`）前缀拼进用户消息。**因此同一份提示词模板在两套上游下的注入位置不同，灰度/回溯时须记录当时的 `LLM_PROVIDER`。**
+
+**`route` 类模板在运行链路中当前无任何调用点**——节点讲解只返回已审核固定内容、不调模型（端点 `backend/app/api/routes/ai.py:232`、实现 `backend/app/services/ai_chat_service.py:360-364` docstring），该模板仅经 `get_config_view`（`:173`）暴露给管理端展示与编辑。
 
 ### 4.6 配置视图（`get_config_view`，`:153-183`）
 
@@ -118,7 +120,7 @@ DB 覆盖值非空即**整串替换**内置默认（`:141-143`），不做长度
 
 ### 5.3 错误码
 
-由 `ai_http_error`（`backend/app/api/routes/ai.py:42-50`）统一映射：`AiDisabledError` → **403**；其余 `ValueError` → **400**。PATCH 路由自身把 `ValueError` 转 400 并 `db.rollback()`（`backend/app/api/routes/ai_admin.py:378-380`）。GET 路由不做异常捕获（只读无 ValueError 路径）。
+由 `ai_http_error`（`backend/app/api/routes/ai.py:50-58`）统一映射：`AiDisabledError` → **403**；`LlmError` → **502**（`:56-57`，与本模块无关但同属该映射）；其余 `ValueError` → **400**。`AI_ERRORS` 联合类型见 `:42-47`。PATCH 路由自身把 `ValueError` 转 400 并 `db.rollback()`（`backend/app/api/routes/ai_admin.py:378-380`）。GET 路由不做异常捕获（只读无 ValueError 路径）。
 
 ## 6. 依赖关系
 
@@ -126,9 +128,9 @@ DB 覆盖值非空即**整串替换**内置默认（`:141-143`），不做长度
 
 - 标准库：`dataclasses.dataclass`、`typing`（`:8-9`）。
 - 第三方：`sqlalchemy.orm.Session`（`:11`，仅类型注解，不构造会话）。
-- 项目内：`app.core.config.settings`（`:13`，读 9 个 `AI_*` env 默认）、`app.services.setting_service`（`:14`；`get_value` `backend/app/services/setting_service.py:10-12`、`set_value` `:15-22`）。
+- 项目内：`app.core.config.settings`（`:13`，读 9 个 `AI_*` env 默认，`backend/app/core/config.py:103-111`）、`app.services.setting_service`（`:14`；`get_value` `backend/app/services/setting_service.py:10-12`、`set_value` `:28-35`）。
 - 数据库表：`system_settings`（`backend/app/models/models.py:98-105`；DDL `docker/init/013_daily_quote_cycle.sql:23-27`，`setting_key VARCHAR(64) PRIMARY KEY`、`setting_value VARCHAR(200) NOT NULL`；开发库 `information_schema` 实测 `character varying(64)` / `character varying(200)`）。
-- 无 HTTP / CloudBase 依赖（不 import `cloudbase_service`）。
+- **无 HTTP / 无 LLM 上游依赖（不 import `llm_service`，也不 import `llm_openai`/`llm_cloudbase`）**。`c660727` 之前此处写作「不 import `cloudbase_service`」，随上游更名同步；本模块源码未变。
 
 ### 6.2 被谁依赖
 
@@ -137,32 +139,34 @@ DB 覆盖值非空即**整串替换**内置默认（`:141-143`），不做长度
 | 依赖方 | 位置 | 用到的符号 |
 |---|---|---|
 | `backend/app/api/routes/ai_admin.py` | `:37`（import）、`:349`、`:375` | `get_config_view`、`patch_config` |
-| `backend/app/api/routes/ai.py` | `:26`（import）、`:35`、`:44` | `AiDisabledError`（异常联合类型与 403 映射） |
-| `backend/app/services/ai_chat_service.py` | `:31`（import）、`:169`、`:192`、`:235`、`:373`、`:386` | `AiConfig`（类型注解）、`ensure_enabled`、`get_prompt` |
+| `backend/app/api/routes/ai.py` | `:30-35`（import 段内含本模块）、`:42-47`、`:50-58` | `AiDisabledError`（异常联合类型与 403 映射） |
+| `backend/app/services/ai_chat_service.py` | `:35`（import）、`:174`（`AiConfig` 类型注解）、`:218`、`:264`、`:507`、`:520` | `AiConfig`、`ensure_enabled`、`get_prompt` |
 | `backend/app/services/ai_usage_service.py` | `:15` | 仅 `AiConfig`（类型注解，`:35` 入参） |
-| 测试 | `backend/test/s26_ai_center.py:248-287`（C 组）、`:417-437`（H09/H10 经配置接口改开关与限额） | 通过 HTTP 间接覆盖，**无脚本直接 import 本模块** |
+| 测试 | `backend/test/s26_ai_center.py` 的 C 组（`GET`/`PATCH /api/admin/ai/config`）与 H09（`:422`）/H10（`:432`）（经配置接口改开关与限额） | 通过 HTTP 间接覆盖，**无脚本直接 import 本模块** |
 
-**不被依赖**：`backend/app/services/ai_question_service.py`（其 import 列表 `backend/app/services/ai_question_service.py:19-22` 不含本模块）——AI 出题链路既不读生效配置，也不校验总开关（见 §7）。
+**不被依赖**：`backend/app/services/ai_question_service.py`（其服务导入行 `backend/app/services/ai_question_service.py:22` 为 `from app.services import admin_service, ai_knowledge_service, llm_service`，不含本模块）——AI 出题链路既不读生效配置，也不校验总开关（见 §7）。
 
 ## 7. 业务规则
 
 - **生效优先级**：DB（`system_settings` 非空值）> env 默认；空串视为未覆盖（`:117`）。
 - **读宽容、写严格**：读取侧越界夹取到范围（`:105-108`）、非数字回退默认（`:101-104`）；写入侧越界/非整数直接 `ValueError` → 400，让管理员看到反馈（`:189-190` docstring）。
 - **限额 `<= 0` 视为不限**：本模块只负责取值，判定在 `backend/app/services/ai_usage_service.py:37`、`:40`。
-- **总开关的实际作用面**：`ensure_enabled` 只在两个入口被调用——`backend/app/services/ai_chat_service.py:192`（历史助手对话）与 `:373`（答题解析且题库无解析时）。因此节点讲解、题库已有解析**以及全部 AI 出题接口**都不受 `ai_enabled` 影响。这与 `backend/app/core/config.py:83` 注释「关闭后所有 AI 接口返回明确提示」的表述不一致（本文件 `:22-25` 的 docstring 口径更窄、与代码一致）；出题链路不校验总开关是有意设计还是遗漏——**待确认**。
-- **每请求解析一次快照**（`:30`），`ai_chat_service` 把 `cfg` 透传给 `check_limits`/`_output_hint`，不再二次查库。
-- **安全不变量**：视图与日志不含任何密钥（`:5-6`、`:154`）；冒烟 C05 断言配置响应不泄露 `CLOUDBASE_API_KEY`（`backend/test/s26_ai_center.py:286-287`）。审计只记变更的键名、不记值（`backend/app/api/routes/ai_admin.py:376`）。
+- **总开关的实际作用面**：`ensure_enabled` 只在两个入口被调用——`backend/app/services/ai_chat_service.py:218`（`prepare_message`，历史助手对话；同步 `send_message` 与流式 `POST /api/ai/chat/stream` 都先走它，故一处即覆盖两条链路）与 `:507`（答题解析且题库无解析时）。因此节点讲解、题库已有解析**以及全部 AI 出题接口**都不受 `ai_enabled` 影响。这与 `backend/app/core/config.py:103` 注释「关闭后所有 AI 接口返回明确提示」的表述不一致（本文件 `:22-25` 的 docstring 口径更窄、与代码一致）；出题链路不校验总开关是有意设计还是遗漏——**待确认**。
+- **每请求解析一次快照**（`:30`）：`ai_chat_service.prepare_message` 取一次 `cfg` 后放入 `ChatTurn`，再透传给 `check_limits`/`_output_hint` 与 `llm_service.prompt_meta`，不二次查库；流式链路中该快照需跨越生成器生命周期（`ChatTurn` 只带纯数据，不带 ORM 实例）。
+- **安全不变量**：视图与日志不含任何密钥（`:5-6`、`:154`）；冒烟 C05 断言配置响应不泄露 API Key（`backend/test/s26_ai_center.py:291-292`），其比对基准按供应商取自 `settings.CLOUDBASE_API_KEY` 或 `settings.LLM_API_KEY`（`:77-79`）——即密钥名随上游切换而变，本模块的「不下发密钥」不变量与供应商无关。审计只记变更的键名、不记值（`backend/app/api/routes/ai_admin.py:376`）。
 - **提示词是业务规则的一部分**：三类模板正文限定了答题范围（只答长征史实）、字数（chat/route ≤500 字、quiz ≤300 字）、「不确定如实说明不编造」、「以库内正确答案为准」（`:83-89`）与提示词注入防护（`:72`、`:80`、`:89`）。管理端覆盖后即改变模型行为，属业务规则变更。
 
 ## 8. 修改约束
 
-- **新增可编辑项须同步改 5 处**，缺一即断链：① `Settings` 字段（`backend/app/core/config.py:80-91`）② `_SPEC`（`backend/app/services/ai_config_service.py:45-55`）③ `AiConfig` 字段（`:32-40`）④ `get_config_view` 的 `values` 字典（`:157-167`）⑤ schema `AdminAiConfigValues`（`backend/app/schemas/schemas.py:1744-1755`）。漏 ④ 会出现「能写不能读回」。
+- **新增可编辑项须同步改 5 处**，缺一即断链：① `Settings` 字段（`backend/app/core/config.py:103-111`）② `_SPEC`（`backend/app/services/ai_config_service.py:45-55`）③ `AiConfig` 字段（`:32-40`）④ `get_config_view` 的 `values` 字典（`:157-167`）⑤ schema `AdminAiConfigValues`（`backend/app/schemas/schemas.py`，具体行号本次未复核——**待确认**）。漏 ④ 会出现「能写不能读回」。
+- **供应商相关配置一律不进 `_SPEC`**：`LLM_PROVIDER`（`backend/app/core/config.py:72`）与各家上游的 URL / 模型名 / API Key / `extra_body`（`:76-93`）只能由 env 决定，管理端配置中心不得开放编辑，否则等于把密钥与上游路由暴露给前端。
 - **setting_key 命名固定 `ai_*` 小写下划线**：路由靠 `f"ai_{key}"` 拼前缀（`backend/app/api/routes/ai_admin.py:366`），改名即破坏管理端契约。
 - `_SPEC` 的 env 默认**必须保持 lambda 延迟求值**（`:44` 注释）；改成直接取值会让「测试中改写 `settings` 单例」失效。
 - `patch_config` **不得自行 commit**（`:187`）：事务边界在路由，需与审计写入同事务（`backend/app/api/routes/ai_admin.py:375-377`）。
 - 不得在本模块返回值、异常消息或日志中出现任何密钥（`:5-6`；`.qoder/README.md` §3.14）。
 - 提示词长度上限与 `system_settings.setting_value` 列宽冲突（§9 第 1 条）：若要支持长提示词，须**新增编号迁移**扩列宽并遵守 `docker/init/SQL_CONSTRAINTS.md`，**禁止修改已在生产执行过的 `docker/init/013_daily_quote_cycle.sql`**（`.qoder/README.md` §3.7）。
-- `setting_service.set_value` 的 `updated_at` 用 `datetime.utcnow()`（`backend/app/services/setting_service.py:19`、`:22`），而 AI 各表用 `helpers.now_utc()`（如 `backend/app/services/ai_question_service.py:497`）；二者同为 UTC naive、行为等价，改动时不要混入本地时区。
+- `setting_service.set_value` 的 `updated_at` 用 `datetime.utcnow()`（`backend/app/services/setting_service.py:32`、`:35`），而 AI 各表用 `helpers.now_utc()`（如 `backend/app/services/ai_question_service.py:501`）；二者同为 UTC naive、行为等价，改动时不要混入本地时区。
+- `ai_max_output_tokens` 的语义随供应商而变：OpenAI 兼容上游会真正下发 `max_tokens`（`backend/app/services/llm_openai.py:147-148`），CloudBase ACP 适配器**静默忽略**该参数（`backend/app/services/llm_cloudbase.py:230`、`:312`）。调整此项前先确认当前 `LLM_PROVIDER`，否则会误判「改了不生效」为 bug。
 
 ## 9. 当前实现状态
 
@@ -176,7 +180,7 @@ DB 覆盖值非空即**整串替换**内置默认（`:141-143`），不做长度
 
 ### 存在问题
 
-1. **提示词写库长度上限与列宽不一致（已实测确认）**：`PROMPT_MAX_LEN = 4000`（`:18`，校验在 `:211-212`）允许最长 4000 字，但落库列 `system_settings.setting_value` 为 `VARCHAR(200)`（`docker/init/013_daily_quote_cycle.sql:25`；开发库 `information_schema` 实测 `character varying(200)`，且 001→022 无任何迁移修改过该表）。内置默认提示词 chat 348 字、quiz 214 字**均已超出列宽**，管理端把默认文本原样回写即触发。实测（开发库 openGauss 7.0.0-RC3，容器 `longmarch-opengauss`；探针写在事务内并已 `rollback`，事后核对 `system_settings` 仍为 1 行、无残留）：插入 348 字值抛 `sqlalchemy.exc.DataError`（`psycopg2.errors.StringDataRightTruncation: value too long for type character varying(200)`）。该异常不属 `ValueError`，`backend/app/api/routes/ai_admin.py:378-380` 只捕获 `ValueError`，故会冒泡为 **HTTP 500** 而非 400，且 `db.flush()`（`:223`）已把同批次的运行参数变更一起丢弃（未 commit）。冒烟 C02/C03（`backend/test/s26_ai_center.py:258-277`）只覆盖运行参数与短版本号，**未覆盖长提示词写库**。
+1. **提示词写库长度上限与列宽不一致（已实测确认）**：`PROMPT_MAX_LEN = 4000`（`:18`，校验在 `:211-212`）允许最长 4000 字，但落库列 `system_settings.setting_value` 为 `VARCHAR(200)`（`docker/init/013_daily_quote_cycle.sql:25`；开发库 `information_schema` 实测 `character varying(200)`，且 001→022 无任何迁移修改过该表）。内置默认提示词 chat 348 字、quiz 214 字**均已超出列宽**，管理端把默认文本原样回写即触发。实测（开发库 openGauss 7.0.0-RC3，容器 `longmarch-opengauss`；探针写在事务内并已 `rollback`，事后核对 `system_settings` 仍为 1 行、无残留）：插入 348 字值抛 `sqlalchemy.exc.DataError`（`psycopg2.errors.StringDataRightTruncation: value too long for type character varying(200)`）。该异常不属 `ValueError`，`backend/app/api/routes/ai_admin.py:378-380` 只捕获 `ValueError`，故会冒泡为 **HTTP 500** 而非 400，且 `db.flush()`（`:223`）已把同批次的运行参数变更一起丢弃（未 commit）。冒烟 C02/C03（`backend/test/s26_ai_center.py:270`、`:280`）只覆盖运行参数与短版本号，**未覆盖长提示词写库**。
 2. `route` 类提示词无运行时消费点（§4.5）：是 Phase B 预留还是遗漏——**待确认**。
 3. `get_config_view` 键名口径不对称（§4.6）：现状记录，非缺陷判定；改动即破坏 `AdminAiConfigOut` 契约。
 4. `get_config_view` 单次调用产生约 23 次单行 SELECT：`get_effective` 9 次（`:116`）+ `prompts` 3 次（`:173`→`:140`）+ `prompt_version` 1 次（`:174`→`:147`）+ `overridden` 13 次（`:176-182`），其中前 13 次与 `overridden` 的 13 次**查询同一批 key**，属重复查询。管理端低频调用，当前无性能问题；如需优化可改为一次 `setting_key IN (...)` 批量取回（对照根 `agents.md` §2.4「避免 N+1」）。
@@ -188,7 +192,23 @@ DB 覆盖值非空即**整串替换**内置默认（`:141-143`），不做长度
 
 ## 10. 迭代记录
 
-数据来源：`git log --follow --oneline -- backend/app/services/ai_config_service.py`（**仅 1 个提交**，本文件创建后无后续修改）与 `docs/迭代记录.md` 对应条目，按时间倒序。
+数据来源：`git log --follow --oneline -- backend/app/services/ai_config_service.py`（**源码仅 1 个提交**，本文件创建后未被任何后续提交修改）与 `docs/迭代记录.md` 对应条目，按时间倒序。其中 `2026-10-22` 一条为**纯文档校正**，不含源码变更。历史条目中的 `路径:行号` 均为建档当时的快照，随其它文件演进可能已失效，以各章正文复核后的行号为准。
+
+### 2026-10-22（仅文档校正）
+
+- 需求：补齐 `c660727`（LLM 上游由腾讯云 CloudBase Agent/ACP 切到阿里百炼 OpenAI 兼容接口，`cloudbase_service` → `llm_service`、`CloudBaseError` → `LlmError`、`CLOUDBASE_*` → `LLM_*`）、`6a4dbb7`（真实 SSE 流式对话，`ai_chat_service` 拆出 `prepare_message`/`finalize_message`/`discard_message` 与 `ChatTurn`，新增 `POST /api/ai/chat/stream`）与 `b712d81`（可切换的双供应商门面）三次提交在本文件遗留的文档欠账。**本次源码未改**，`backend/app/services/ai_config_service.py` 仍为 225 行、仍是 `1600074` 建档时的实现。
+- 修改内容：
+  - §2 / §3：把「CloudBase API Key」的表述改为现行源码原文「LLM API Key」（`:5-6`），并注明该措辞是上游切换后源码本身就已更新的；env 默认项引用由 `backend/app/core/config.py:83-91` 校正为 `:103-111`，并补充 `LLM_PROVIDER`（`:72`）与供应商专属项（`:76-93`）**均不在 `_SPEC` 白名单内**。
+  - §4.4：9 项 setting_key ↔ `Settings.AI_*` 映射表的 env 行号全部校正为 `:103-111`；`ai_chat_service` 侧消费点全部按 560 行现状重编号（`ensure_enabled` `:218`/`:507`、`check_limits` `:224`、`max_input_chars` `:176`+`:346`/`:523`+`routes/ai.py:134`、`request_timeout` `:344`/`:521`、`max_retries` `:345`/`:522`、`context_turns` `:247`、`knowledge_top_k` `:237-245`/`:510`）；补记 `ai_max_output_tokens` 的双身份（既是提示词截断 hint，又经 `prompt_meta(max_tokens=...)` 下发，且仅 OpenAI 适配器真正生效）与流式链路无自动重试的口径；`AI_QUESTION_*` 引用校正为 `:96-98`。
+  - §4.5：提示词消费入口改为 `llm_service.prompt_meta(..., system=get_prompt(db, ...))`，并说明 system 提示词的注入方式随供应商而异（CloudBase ACP 走 `llm_cloudbase.py:173` 的 `_join_system`）；补 `route_guide` 端点（`routes/ai.py:232` → `ai_chat_service.py:360-364`）的定位。
+  - §5.3 / §6.1 / §6.2：异常映射改为 `backend/app/api/routes/ai.py` 的 `AI_ERRORS`（`:42-47`）与 `ai_http_error`（`:50-58`，其中 `LlmError` → 502 在 `:56-57`）；`setting_service` 引用校正为 `:28-35`；明确本模块**不 import `llm_service`，也不 import `llm_openai`/`llm_cloudbase`**；依赖方表按现状重编号。
+  - §7：`ensure_enabled` 两个调用点校正为 `ai_chat_service.py:218`/`:507`，并说明 `prepare_message` 同时服务同步与流式两条链路；`config.py:83` → `:103`；C05「不泄露密钥」的断言改为供应商无关表述（`s26_ai_center.py:291-292`，密钥基准按 `LLM_PROVIDER` 取自 `CLOUDBASE_API_KEY` 或 `LLM_API_KEY`，`:77-79`）；快照复用一条补充 `ChatTurn` 跨生成器生命周期的约束。
+  - §8：新增「供应商相关配置一律不进 `_SPEC`」与「`ai_max_output_tokens` 语义随供应商而变」两条修改约束；5 处同步改的 ① 校正为 `config.py:103-111`，⑤ 的 `schemas.py` 行号本次未复核、标为待确认；`setting_service.py:19`/`:22` → `:32`/`:35`，`ai_question_service.py:497` → `:501`。
+  - §9：C02/C03 的用例定位校正为 `s26_ai_center.py:270`、`:280`。
+  - §10：加入本条，并为历史条目补「行号为建档快照」的说明。
+- 关联文件：`backend/app/core/config.py`、`backend/app/services/ai_chat_service.py`、`backend/app/services/ai_usage_service.py`、`backend/app/services/ai_question_service.py`、`backend/app/services/setting_service.py`、`backend/app/services/llm_service.py`、`backend/app/services/llm_openai.py`、`backend/app/services/llm_cloudbase.py`、`backend/app/api/routes/ai.py`、`backend/app/api/routes/ai_admin.py`、`backend/test/s26_ai_center.py`；同批文档 `.qoder/backend/app/services/ai_chat_service.py.md`、`ai_usage_service.py.md`、`ai_question_service.py.md`、`setting_service.py.md`、`.qoder/backend/app/models/models.py.md`、`.qoder/backend/app/core/helpers.py.md`。
+- 测试结果：本次为纯文档改动，按任务约束**未执行任何测试、未跑校验脚本、未做任何 git 写操作**；文中所有 `路径:行号` 均以当前工作区源码逐行 Read/Grep 复核过。未能复核的引用（`backend/app/schemas/schemas.py` 中 `AdminAiConfigValues` 的行号、前端 `admin/src/router/menus.ts` 的菜单码登记状态、`docker/init/*` 迁移脚本内容）已就地标注**待确认**。
+- 待确认：① `_SPEC` 未纳入任何 `LLM_*`/`CLOUDBASE_*` 项，是有意隔离还是配置中心尚未跟进——**待确认**；② `route` 类提示词仍无运行时消费点（§9 第 2 条）——**待确认**；③ 出题链路不校验 `ai_enabled`（§7）——**待确认**。
 
 ### 2026-10-17（`1600074`）
 

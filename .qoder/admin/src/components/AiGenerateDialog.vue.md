@@ -6,13 +6,13 @@
 
 ## 2. 文件职责
 
-管理后台**仅有的 2 个公共组件之一**（另一个是 `ExcelImportDialog.vue`），也是全后台唯一的 AI 相关前端代码：嵌在「题库维护」页里的两阶段出题弹窗——① 填写生成参数调后端 CloudBase Agent 分批生成**草稿**；② 在草稿表格里逐题审核/编辑/重生成/删除，勾选后批量入库。组件自身承担全部前端即时校验、取消链路（`AbortController`）与失败明细呈现；**不写库、不持久化草稿**，关闭弹窗即丢弃（`:170-173`、§7 第 1 条）。
+管理后台**仅有的 2 个公共组件之一**（另一个是 `ExcelImportDialog.vue`），也是全后台唯一的 AI 相关前端代码：嵌在「题库维护」页里的两阶段出题弹窗——① 填写生成参数调后端 LLM 上游分批生成**草稿**（上游由后端 `LLM_PROVIDER` 决定、可切换：`openai` = 阿里云百炼 / `cloudbase` = 腾讯云 CloudBase Agent；当前开发期为 cloudbase，上线部署前切回 openai。分派门面为 `backend/app/services/llm_service.py:1-22`，本组件与 `admin.ts` 对供应商完全无感知）；② 在草稿表格里逐题审核/编辑/重生成/删除，勾选后批量入库。组件自身承担全部前端即时校验、取消链路（`AbortController`）与失败明细呈现；**不写库、不持久化草稿**，关闭弹窗即丢弃（`:170-173`、§7 第 1 条）。
 
 ## 3. 业务需求
 
 - 需求来源：题库运营成本高——手工逐条录入题目慢，需要 AI 批量产出候选题，但**必须由管理员审核后才入库**（`:2-3` 注释：「生成结果始终是草稿，未确认前不写库；保存时后端会重新校验，前端校验仅用于即时反馈」）。
 - `ea58b6c`（2026-10-16 23:19）新建，与后端 `POST /api/admin/ai/generate-questions`、`POST /api/admin/ai/questions/batch-save` 同批交付（`docs/迭代记录.md` 的 `ea58b6c` 条目）。
-- **与「AI 智能中心 Phase A」的关系（易误解，务必区分）**：Phase A 由 `1600074`（2026-10-17）交付，新增 `backend/app/api/routes/ai_admin.py` 的 15 个 `/api/admin/ai/*` 端点（知识库 / 出题任务 jobs / 持久化草稿 drafts / 配置中心）与 `pending/approved/rejected/imported` 草稿状态机。本组件**不属于 Phase A**，走的是 `backend/app/api/routes/admin.py:500`/`:524` 的**旧链路**、挂在 `questions` 菜单下；`backend/app/services/ai_question_service.py:394` 明写「现有 admin 前端的旧链路（generate-questions/batch-save）保持不变，本组接口供新工坊页使用」。详见 `.qoder/backend/app/api/routes/ai_admin.py.md` §9「待开发」第 1 条及其下的澄清引注。
+- **与「AI 智能中心 Phase A」的关系（易误解，务必区分）**：Phase A 由 `1600074`（2026-10-17）交付，新增 `backend/app/api/routes/ai_admin.py` 的 15 个 `/api/admin/ai/*` 端点（知识库 / 出题任务 jobs / 持久化草稿 drafts / 配置中心）与 `pending/approved/rejected/imported` 草稿状态机。本组件**不属于 Phase A**，走的是 `backend/app/api/routes/admin.py:568`/`:592` 的**旧链路**、挂在 `questions` 菜单下；`backend/app/services/ai_question_service.py:398` 明写「现有 admin 前端的旧链路（generate-questions/batch-save）保持不变，本组接口供新工坊页使用」。详见 `.qoder/backend/app/api/routes/ai_admin.py.md` §9「待开发」第 1 条及其下的澄清引注。
 
 ## 4. 核心功能
 
@@ -79,9 +79,9 @@
 
 `handleSave`：无勾选则 warning 返回（`:277-280`）；快照 `const rows = [...selection.value]`（`:281`，避免请求期间选择变化）；`saving = true` → `batchSaveAiQuestions(rows.map(it => it.data))`（`:284`，`admin.ts:705-711`，`silent: true`，**沿用全局默认 15s 超时**，未设 `timeout: 0`）。
 
-结果处理（`:285-299`）：`failedIndexes = new Set(data.failures.map(f => f.index))`（`:286`），`savedKeys` = `rows` 中**下标 +1 不在 `failedIndexes`** 的行的 `key`（`:287-289`，`:285` 注释「`failures.index` 为提交列表中的序号（从 1 起）」，与后端 `ai_question_service.py:362` 的 `enumerate(items, start=1)` 对齐）→ 从 `items` 中剔除已保存行（`:290`）→ 写 `saveFailures`（`:291`）→ `clearSelection()`（`:292`）→ `revalidateAll()`（`:293`）→ 按 `data.failed` 分流提示（`:294-298`）→ `if (data.saved) emit('saved', data.saved)`（`:299`）。
+结果处理（`:285-299`）：`failedIndexes = new Set(data.failures.map(f => f.index))`（`:286`），`savedKeys` = `rows` 中**下标 +1 不在 `failedIndexes`** 的行的 `key`（`:287-289`，`:285` 注释「`failures.index` 为提交列表中的序号（从 1 起）」，与后端 `ai_question_service.py:366` 的 `enumerate(items, start=1)` 对齐）→ 从 `items` 中剔除已保存行（`:290`）→ 写 `saveFailures`（`:291`）→ `clearSelection()`（`:292`）→ `revalidateAll()`（`:293`）→ 按 `data.failed` 分流提示（`:294-298`）→ `if (data.saved) emit('saved', data.saved)`（`:299`）。
 
-失败项呈现（`:404-415`）：一个可关闭的 `error` alert，标题「N 题未通过后端校验，已保留在列表中」，正文 `<ul>` 逐条 `第 {{ f.index }} 条：{{ f.reason }}`（`:412-414`），`@close="saveFailures = []"`（`:410`）。**失败行不会被剔除**（`:290` 只删 `savedKeys`），用户可就地修正后重新勾选保存。`AiSaveFailure` = `{ index, reason }`（`admin.ts:684-687`，后端 `AdminAiSaveFailure`，`backend/app/schemas/schemas.py:1185`）。
+失败项呈现（`:404-415`）：一个可关闭的 `error` alert，标题「N 题未通过后端校验，已保留在列表中」，正文 `<ul>` 逐条 `第 {{ f.index }} 条：{{ f.reason }}`（`:412-414`），`@close="saveFailures = []"`（`:410`）。**失败行不会被剔除**（`:290` 只删 `savedKeys`），用户可就地修正后重新勾选保存。`AiSaveFailure` = `{ index, reason }`（`admin.ts:684-687`，后端 `AdminAiSaveFailure`，`backend/app/schemas/schemas.py:1276-1280`）。
 
 `catch`（`:300-301`）：`ElMessage.error(detailOf(error) || '保存失败，请重试')`；`finally`（`:302-304`）复位 `saving`。
 
@@ -91,7 +91,7 @@
 
 底部按 `phase` 切换（`:537-555`）：form 阶段 =「关闭」（`:disabled="generating"`）+「取消生成」（仅 `generating` 时）+「开始生成 / 生成中…」（`:loading="generating"`、`MagicStick` 图标）；result 阶段 =「重新生成」（`:disabled="saving"`）+「关闭」（`:disabled="saving"`）+「保存选中（N）」（`:loading="saving"`、`:disabled="!selection.length"`）。
 
-form 阶段还有一个内联进度区（`:368-371`）：`el-progress :percentage="100" :indeterminate="true" :duration="3"` + 「正在分批调用 AI 生成 N 道题目，可取消…」（**无真实进度**，后端不提供进度查询）。顶部 info alert 明示「题目由腾讯云 CloudBase Agent 生成为**草稿**，须逐题审核并勾选后才会写入题库；生成过程不会改动现有题目」（`:320-324`）。
+form 阶段还有一个内联进度区（`:368-371`）：`el-progress :percentage="100" :indeterminate="true" :duration="3"` + 「正在分批调用 AI 生成 N 道题目，可取消…」（**无真实进度**，后端不提供进度查询）。顶部 info alert 明示「题目由腾讯云 CloudBase Agent 生成为**草稿**，须逐题审核并勾选后才会写入题库；生成过程不会改动现有题目」（`:320-324`）。**该 alert 是源码硬编码的 UI 字符串（`:322`，上文照抄原文）**：自 `b712d81` 起上游由后端 `LLM_PROVIDER` 决定、可切换，`LLM_PROVIDER=openai`（阿里云百炼）时「腾讯云 CloudBase Agent」字样与实际供应商不符；本次文档同步未改源码，是否另开任务修正该文案（同类还有 `:2` 文件头注释「后端调 CloudBase Agent 分批生成」）待用户定夺。
 
 ### 4.8 样式（`:560-658`）
 
@@ -113,10 +113,10 @@ form 阶段还有一个内联进度区（`:368-371`）：`el-progress :percentag
 
 | 调用点 | `admin.ts` 函数 | 后端路径 | `response_model` | 权限 |
 | --- | --- | --- | --- | --- |
-| `:138`、`:200` | `generateAiQuestions(data, signal?)`（`admin.ts:697-703`；`timeout: 0`、`signal`、`silent: true`） | `POST /api/admin/ai/generate-questions`（`backend/app/api/routes/admin.py:500-521`） | `AdminAiGenerateOut` | `require_menu("questions")`（`admin.py:504`） |
-| `:284` | `batchSaveAiQuestions(questions)`（`admin.ts:705-711`；`silent: true`，超时沿用默认 15s） | `POST /api/admin/ai/questions/batch-save`（`admin.py:524-538`） | `AdminAiBatchSaveOut` | `require_menu("questions")`（`admin.py:528`） |
+| `:138`、`:200` | `generateAiQuestions(data, signal?)`（`admin.ts:697-703`；`timeout: 0`、`signal`、`silent: true`） | `POST /api/admin/ai/generate-questions`（`backend/app/api/routes/admin.py:568-589`） | `AdminAiGenerateOut` | `require_menu("questions")`（`admin.py:572`） |
+| `:284` | `batchSaveAiQuestions(questions)`（`admin.ts:705-711`；`silent: true`，超时沿用默认 15s） | `POST /api/admin/ai/questions/batch-save`（`admin.py:592-606`） | `AdminAiBatchSaveOut` | `require_menu("questions")`（`admin.py:596`） |
 
-请求体 `AiGeneratePayload`（`admin.ts:660-667`）= `topic` / `count` / `question_type` / `difficulty` / `category?` / `extra_requirements?`；后端 `AdminAiGenerateRequest`（`backend/app/schemas/schemas.py:1142-1154`）对应字段默认值 `count=10 (ge=1, le=100)`、`question_type="single"`、`difficulty="medium"`、`category=""`、`extra_requirements=""`，docstring 明写「`question_type` 目前仅支持 single；`difficulty` 只作为生成提示词参数，不入库（questions 表无难度列）」。
+请求体 `AiGeneratePayload`（`admin.ts:660-667`）= `topic` / `count` / `question_type` / `difficulty` / `category?` / `extra_requirements?`；后端 `AdminAiGenerateRequest`（`backend/app/schemas/schemas.py:1233-1245`）对应字段默认值 `count=10 (ge=1, le=100)`（`:1241`）、`question_type="single"`（`:1242`）、`difficulty="medium"`（`:1243`）、`category=""`（`:1244`）、`extra_requirements=""`（`:1245`），docstring（`:1236-1237`）明写「`question_type` 目前仅支持 single；`difficulty` 只作为生成提示词参数，不入库（questions 表无难度列）」。
 
 响应 `AiGenerateResult`（`admin.ts:675-682`）= `requested` / `generated` / `valid_count` / `invalid_count` / `items: AiQuestionDraft[]` / `batch_errors: string[]`；`AiQuestionDraft`（`admin.ts:669-673`）= `index` / `data: QuestionUpsert` / `errors: string[]`。**本组件只消费 `items`、`batch_errors`、`generated` 三个字段**（`:149-155`），`requested`/`valid_count`/`invalid_count` 未使用（前端的 `validItems`/`invalidCount` 由本地重算，`:63-64`）。`AiQuestionDraft.index` 亦未使用（本地用 `nextKey` 另发 key，`:78`）。
 
@@ -124,8 +124,8 @@ form 阶段还有一个内联进度区（`:368-371`）：`el-progress :percentag
 
 ### 5.3 错误码与呈现分工
 
-- `generateAiQuestions`：400 = 参数非法（`ValueError`，`admin.py:520-521`）；502 = CloudBase 上游故障（`admin.py:517-519`，注释说明 `CloudBaseError` 继承 `ValueError` 故先捕获）；401/403 = 令牌或菜单码问题。因 `silent: true`，`request.ts:46-48` 不弹 toast：`startGenerate` 走内联 `generateError` alert（`:372`），`regenerate` 走 `ElMessage.error`（`:219`）。401 仍会触发 `request.ts:35-45` 的 `clearAuth()` + 跳登录页（该分支不受 `silent` 抑制跳转，只抑制提示）。
-- `batchSaveAiQuestions`：400 = 「没有需要保存的题目」/「单次最多保存 N 道题目」（`ai_question_service.py:352-356`）或写库异常兜底「保存失败，请稍后重试」（`ai_question_service.py:383-386`）；**单题校验失败不是 HTTP 错误**，而是 200 + `failures[]`（部分成功语义）。
+- `generateAiQuestions`：400 = 参数非法（`ValueError`，`admin.py:588-589`）；502 = LLM 上游故障（`admin.py:585-587`，注释说明 `LlmError` 继承 `ValueError` 故先捕获——`c660727` 起异常类由 `CloudBaseError` 更名为 `LlmError`，定义于 `backend/app/services/llm_base.py:16-26`；`b712d81` 起上游由 `LLM_PROVIDER` 决定、可切换：`openai` = 阿里云百炼 / `cloudbase` = 腾讯云 CloudBase Agent，当前开发期为 cloudbase、上线切回 openai，502 语义对两家供应商一致）；401/403 = 令牌或菜单码问题。因 `silent: true`，`request.ts:46-48` 不弹 toast：`startGenerate` 走内联 `generateError` alert（`:372`），`regenerate` 走 `ElMessage.error`（`:219`）。401 仍会触发 `request.ts:35-45` 的 `clearAuth()` + 跳登录页（该分支不受 `silent` 抑制跳转，只抑制提示）。
+- `batchSaveAiQuestions`：400 = 「没有需要保存的题目」/「单次最多保存 N 道题目」（`ai_question_service.py:356-360`）或写库异常兜底「保存失败，请稍后重试」（`ai_question_service.py:387-390`）；**单题校验失败不是 HTTP 错误**，而是 200 + `failures[]`（部分成功语义）。
 - 加载态：`generating`（生成按钮 loading + 进度条 + 关闭按钮 disabled）、`saving`（表格 `v-loading` + 三个底部按钮 loading/disabled）、`regeneratingKey`（单行「重生成」按钮 loading）。
 - 空态：`items` 为空时表格 `#empty`「题目草稿已全部处理完毕」（`:530-532`）；`phase === 'form'` 且未生成时只有表单与提示 alert。
 
@@ -150,39 +150,40 @@ form 阶段还有一个内联进度区（`:368-371`）：`el-progress :percentag
 
 ### 6.3 菜单码与权限
 
-菜单码 `questions`（`router/menus.ts:8`，「题库维护」，图标 `EditPen`）。前端三层：侧边栏按 `hasMenu('questions')` 过滤（`.qoder/admin/src/layout/AdminLayout.vue.md` §4.1）、路由守卫拦 URL 直达（`.qoder/admin/src/router/index.ts.md`）、后端两个端点各自 `Depends(require_menu("questions"))`（`admin.py:504`、`:528`）。**本组件不做任何权限判断**，也无 `ai_*` 菜单码——Phase A 新增的 `ai_workshop` 等 5 个菜单码与本组件无关（`.qoder/backend/app/api/routes/ai_admin.py.md` §9「待开发」第 1、4 条）。
+菜单码 `questions`（`router/menus.ts:8`，「题库维护」，图标 `EditPen`）。前端三层：侧边栏按 `hasMenu('questions')` 过滤（`.qoder/admin/src/layout/AdminLayout.vue.md` §4.1）、路由守卫拦 URL 直达（`.qoder/admin/src/router/index.ts.md`）、后端两个端点各自 `Depends(require_menu("questions"))`（`admin.py:572`、`:596`）。**本组件不做任何权限判断**，也无 `ai_*` 菜单码——Phase A 新增的 `ai_workshop` 等 5 个菜单码与本组件无关（`.qoder/backend/app/api/routes/ai_admin.py.md` §9「待开发」第 1、4 条）。
 
 ### 6.4 数据库表
 
-旧链路**不新增表、不写任何中间态**：`generate_questions`（`backend/app/services/ai_question_service.py:305`）只调 Agent + 校验 + 返回草稿，全程无 `db.add`/`commit`；`batch_save_questions`（`ai_question_service.py:345-388`）在单事务内写 `questions` 表，id 取 `max(id)+1` 连续显式分配（`:377-381`，注释说明该表无数据库自增）。Phase A 的 `ai_generation_jobs` / `ai_generated_questions` / `ai_knowledge` / `ai_usage_logs` 四张表**与本组件无关**（见 `.qoder/backend/app/api/routes/ai_admin.py.md` §6.3）。
+旧链路**不新增表、不写任何中间态**：`generate_questions`（`backend/app/services/ai_question_service.py:309`）只调 `llm_service.prompt`（`:208`，经门面按 `LLM_PROVIDER` 分派到当前上游适配器）+ 校验 + 返回草稿，全程无 `db.add`/`commit`；`batch_save_questions`（`ai_question_service.py:349-392`）在单事务内写 `questions` 表，id 取 `max(id)+1` 连续显式分配（`:381-386`，注释说明该表无数据库自增）。Phase A 的 `ai_generation_jobs` / `ai_generated_questions` / `ai_knowledge` / `ai_usage_logs` 四张表**与本组件无关**（见 `.qoder/backend/app/api/routes/ai_admin.py.md` §6.3）。
 
 ## 7. 业务规则
 
 1. **草稿不入库、不持久化**：生成结果只存在于组件内存的 `items`。关闭弹窗（`:316` `@closed`）、点「重新生成」并确认丢弃（`:177-188`）都会永久丢失；**刷新页面 / 关闭浏览器无法恢复**。这是与 Phase A「题目工坊」（草稿落 `ai_generated_questions` 表、可跨会话审核）的根本差别。
 2. **保存必须显式勾选**：`:selectable` 排除有 `errors` 的行（`:428`），「保存选中」在无勾选时 disabled（`:552`），`handleSave` 再加一道 warning 兜底（`:277-280`）。**不存在「全部保存」入口**。
-3. **后端不信任前端**：`batch_save_questions` 对每条重新跑 `_validate_question` + 库内/批内查重（`ai_question_service.py:348`、`:362-374`），故前端校验只用于即时反馈（`:3` 注释、`:86` 注释）。前端 `errors` 非空但被绕过的行不会入库，会以 `failures[{index, reason}]` 回来。
-4. **部分成功语义**：保存是「通过的入库、不通过的跳过并计入失败明细」，单事务写入、异常整体回滚（`ai_question_service.py:349-350`、`:376-386`）。`failures.index` 从 1 起、相对于**本次提交的勾选数组**（不是表格序号）——因此 `:413` 显示的「第 N 条」在勾选子集或与表格顺序不一致时会对不上号（§9「存在问题」第 4 条）。
+3. **后端不信任前端**：`batch_save_questions` 对每条重新跑 `_validate_question` + 库内/批内查重（`ai_question_service.py:366-378`，校验在 `:369`、查重在 `:373`），故前端校验只用于即时反馈（`:3` 注释、`:86` 注释）。前端 `errors` 非空但被绕过的行不会入库，会以 `failures[{index, reason}]` 回来。
+4. **部分成功语义**：保存是「通过的入库、不通过的跳过并计入失败明细」，单事务写入、异常整体回滚（`ai_question_service.py:380-390`）。`failures.index` 从 1 起、相对于**本次提交的勾选数组**（不是表格序号）——因此 `:413` 显示的「第 N 条」在勾选子集或与表格顺序不一致时会对不上号（§9「存在问题」第 4 条）。
 5. **库内重复标记的生命周期**：`dbDuplicate` 由后端 `errors` 中的特征串识别（`:80`、`:214`），仅在题干未被改动前保留（`:99` 比对 `baselineQuestion`）；一旦管理员改了题干，前端就不再报重复，**交由保存时后端重新查重**（`:369`）。这是「前端无法自查库内重复」的有意取舍（`:25` 注释）。
-6. **无草稿状态机**：`DraftItem` 无 `status` 字段，前端只有二元「可保存 / 待修正」（由 `errors.length` 派生，`:511-514`）。后端 `DRAFT_STATUSES = ("pending","approved","rejected","imported")`（`ai_question_service.py:395`）属 Phase A 的 `ai_generated_questions` 表，**与本组件无任何交集**——旧链路的 `batch-save` 直接写 `questions`，不产生也不消费草稿状态。
-7. **题型固定单选**：`question_type: 'single'` 硬编码（`:142`、`:202`），UI 以只读 tag 呈现并说明原因（`:342-343`）；与后端 `schemas.py:1145` 的限定一致。
-8. **难度不入库**：`difficulty` 只作为提示词参数（`:349` hint「难度仅用于约束生成，不作为题目属性入库」，后端 `schemas.py:1146`）。
+6. **无草稿状态机**：`DraftItem` 无 `status` 字段，前端只有二元「可保存 / 待修正」（由 `errors.length` 派生，`:511-514`）。后端 `DRAFT_STATUSES = ("pending","approved","rejected","imported")`（`ai_question_service.py:399`）属 Phase A 的 `ai_generated_questions` 表，**与本组件无任何交集**——旧链路的 `batch-save` 直接写 `questions`，不产生也不消费草稿状态。
+7. **题型固定单选**：`question_type: 'single'` 硬编码（`:142`、`:202`），UI 以只读 tag 呈现并说明原因（`:342-343`）；与后端 `schemas.py:1236` docstring 的限定一致。
+8. **难度不入库**：`difficulty` 只作为提示词参数（`:349` hint「难度仅用于约束生成，不作为题目属性入库」，后端 `schemas.py:1237`）。
 9. **选项标签恒为 A/B/C… 连续**：增删选项后按位置重排（`:258`、`:269-271`），答案随标签迁移（`:272-273`）；上限 6、下限 2。
 10. **取消只中断前端等待**：`abortController.abort()` 让 axios 抛取消错误、UI 显示「已取消本次生成，未产生任何题目。」（`:157-158`），但**后端不会因客户端断开而停止**——见 §9「存在问题」第 1 条。
 11. **无幂等键**：连续两次「保存选中」若第一次已入库、第二次仍提交同样内容，会被后端查重拦下并计入 `failures`（不会重复入库），但用户看到的是「未通过后端校验」而非「已保存过」。
+12. **上游供应商与生成参数口径（`c660727`/`b712d81` 后端演进，本组件无感知、契约零变化）**：上游由后端 `LLM_PROVIDER` 决定、可切换（`openai` = 阿里云百炼 / `cloudbase` = 腾讯云 CloudBase Agent），当前开发期为 cloudbase、上线部署前须切回 openai（门面 `backend/app/services/llm_service.py:1-22`）。分批大小取 `AI_QUESTION_BATCH_SIZE`：`backend/app/core/config.py:96` 默认 10，但当前 `backend/.env` 与 `.env.prod` 均实配 **5**（`.env` 注释明写「CloudBase 可承受 10 题/批，但此处不随供应商调整——保持『切换只改 LLM_PROVIDER 一行』」），即 ACP 口径下 100 题分 20 批。出题提示叠加 `LLM_QUESTION_EXTRA_BODY`（`enable_thinking`，恢复百炼思考模式以降低批次 JSON 解析失败率）；**ACP（cloudbase）无思考开关，该覆盖项被适配器忽略**（`llm_service.py:102-113`）。用量口径随供应商而异：openai 取 `usage.total_tokens`（与按量计费一致）；**CloudBase 取平台 `usage_update.used` 原值、含义未经核实，不可作计费依据**（`llm_base.py:28-40`）——且旧链路本就不写 `ai_usage_logs`，该用量口径只影响 Phase A 新链路。
 
 ## 8. 修改约束
 
 - **不要在本组件里引入草稿持久化 / 状态机**：那属 Phase A 的 `ai_workshop` 题目工坊页（`/api/admin/ai/drafts*`，`.qoder/backend/app/api/routes/ai_admin.py.md` §4.4），应新建视图而不是改造本弹窗；旧链路被后端明确要求「保持不变」（`ai_question_service.py:394`）。
 - **`revalidateAll` 的签名比对（`:110`、`:114-116`）不可删**：删掉即复现 `ea58b6c` 修掉的「结果面板 DOM 冻结在生成中」缺陷（深度 watcher 自触发 → Vue 递归更新超限中断整轮渲染，`docs/迭代记录.md` 的 `ea58b6c` 条目「缺陷修复」段）。同理，`SEP` 用 `\u0000` 而非普通分隔符也不能改（`:27-28`）。
 - **`cloneData`（`:71-73`）必须保留**：直接把 `draft.data` 赋给 `items` 会让编辑器改动污染 `applyResult` 收到的原始响应对象；`options` 也要逐个浅拷贝，否则选项编辑会串改。
-- **`generateAiQuestions` 的 `timeout: 0` 与 `silent: true` 不可去掉**（`admin.ts:695-702`，其上方注释即为此约束的说明）：100 道题分 10 批、并发 3、单批超时 180s（`backend/app/core/config.py:73`、`:76`、`:78`），默认 15s 必然超时；`silent` 去掉则错误会同时出现在全局 toast 与内联 alert 两处。
-- **`failures.index` 的 1 起序号约定**（`:285-289` ↔ `ai_question_service.py:362`）是双端隐式契约，任一侧改成 0 起都会导致「成功行被当失败行剔除」或反之。
+- **`generateAiQuestions` 的 `timeout: 0` 与 `silent: true` 不可去掉**（`admin.ts:695-702`，其上方注释即为此约束的说明）：100 道题按 `AI_QUESTION_BATCH_SIZE` 分批（`backend/app/core/config.py:96` 默认 10，当前 `.env`/`.env.prod` 实配 5，即 20 批）、并发 3（`config.py:97`）、单批超时 `LLM_TIMEOUT_SECONDS=300` 秒（`config.py:73`，两套供应商共用），默认 15s 必然超时；`silent` 去掉则错误会同时出现在全局 toast 与内联 alert 两处。
+- **`failures.index` 的 1 起序号约定**（`:285-289` ↔ `ai_question_service.py:366`）是双端隐式契约，任一侧改成 0 起都会导致「成功行被当失败行剔除」或反之。
 - **`question_type: 'single'` 硬编码**（`:142`、`:202`）：放开需同时改小程序答题逻辑与 `questions.type` 契约，不是前端单点改动。
-- **`COUNTS`/`TOPIC_MAX_LEN` 与后端上限同源**：`COUNTS` 最大值 100 必须 ≤ 后端 `count le=100`（`schemas.py:1150`）与 `AI_QUESTION_MAX_COUNT = 100`（`config.py:78`），否则保存会整批 400。改后端上限时须同步改本文件（当前是双端各写一份，§9「存在问题」第 6 条）。
+- **`COUNTS`/`TOPIC_MAX_LEN` 与后端上限同源**：`COUNTS` 最大值 100 必须 ≤ 后端 `count le=100`（`schemas.py:1241`）与 `AI_QUESTION_MAX_COUNT = 100`（`config.py:98`），否则保存会整批 400。改后端上限时须同步改本文件（当前是双端各写一份，§9「存在问题」第 6 条）。
 - **`LABELS`/`CATEGORIES` 与 `QuestionsView.vue:11-16` 逐字重复**：改分类枚举要同时改两处（外加后端 `admin_service.py:215` 的白名单），属已知重复定义。
 - **`@closed` 钩子（`:316` → `:170-173`）是唯一的资源清理点**：本组件无 `onUnmounted`；若将来加定时器/订阅，必须在此处或 `onUnmounted` 补齐清理。
 - 视觉：`.pane{min-height:320px}` 与 `width="92%" top="4vh"` 共同保证两阶段切换不跳动、长表格可用；`.summary` 的 `flex-wrap` 是窄屏可用性的落点（`admin/agents.md`「开发约定」第 3 条）。
-- 修改后按 `.qoder/README.md` §3 第 4 条更新本文档 §4/§7/§9/§10；验证须按 `admin/agents.md`「必做验证」跑 `npm run build` + 浏览器真实交互（生成/取消/编辑/勾选/保存/失败明细六条路径），并注意**真实生成会消耗 CloudBase Agent 额度**。
+- 修改后按 `.qoder/README.md` §3 第 4 条更新本文档 §4/§7/§9/§10；验证须按 `admin/agents.md`「必做验证」跑 `npm run build` + 浏览器真实交互（生成/取消/编辑/勾选/保存/失败明细六条路径），并注意**真实生成会消耗当前 `LLM_PROVIDER` 上游的额度/Token**（`openai` = 阿里云百炼按量计费、`cloudbase` = 腾讯云 CloudBase Agent 额度；当前开发期为 cloudbase，上线切回 openai，口径见 §7 第 12 条）。
 
 ## 9. 当前实现状态
 
@@ -195,12 +196,12 @@ form 阶段还有一个内联进度区（`:368-371`）：`el-progress :percentag
 
 **存在问题 / 风险（均为源码可证的现状事实，未修）**
 
-1. **取消后存在「孤儿计算」，但不存在「孤儿任务记录」。** `abortController.abort()` 只中断前端 axios 等待；`ai_generate_questions` 是同步端点（`admin.py:506-521`），客户端断开不会中止服务端执行，`_run_batches`（`ai_question_service.py:319-321`）会继续跑完全部批次、继续消耗 CloudBase Agent 额度，然后丢弃结果。由于旧链路**不写 `ai_generation_jobs`、不写 `ai_usage_logs`**（`generate_questions` 全程无 `db.add`/`commit`，grep 核实），这次消耗在数据库与审计里**完全不可观测**。`:171` 注释声称「避免后端继续消耗 Agent 额度」与后端实际行为**不符**（同一结论亦见 `.qoder/backend/app/api/routes/ai_admin.py.md` §9「存在问题」第 6 条，那里针对的是新链路 `POST /jobs`）。`count=100` 时最坏约 4 轮 × 180s。
+1. **取消后存在「孤儿计算」，但不存在「孤儿任务记录」。** `abortController.abort()` 只中断前端 axios 等待；`ai_generate_questions` 是同步端点（`admin.py:574-589`），客户端断开不会中止服务端执行，`_run_batches`（`ai_question_service.py:214-253`，调用点 `:324-326`）会继续跑完全部批次、继续消耗当前 `LLM_PROVIDER` 上游的额度/Token，然后丢弃结果。由于旧链路**不写 `ai_generation_jobs`、不写 `ai_usage_logs`**（`generate_questions` 全程无 `db.add`/`commit`，grep 核实），这次消耗在数据库与审计里**完全不可观测**。`:171` 注释声称「避免后端继续消耗 Agent 额度」与后端实际行为**不符**（同一结论亦见 `.qoder/backend/app/api/routes/ai_admin.py.md` §9「存在问题」第 6 条，那里针对的是新链路 `POST /jobs`）。`count=100` 时最坏约 7 轮 × 300s（按当前 env 实配 5 题/批 = 20 批、并发 3、单批超时 `LLM_TIMEOUT_SECONDS=300`）。
 2. **弹窗关闭不重置状态**：无 `destroy-on-close`（`:309-317`）、无 `watch(visible)`，故关闭后重开会看到上次的 `phase`、`form`、`items`（含未保存草稿）原样恢复。可解读为「防误关丢草稿」的有意设计（与 `:close-on-click-modal="false"` 一致），但与 `ExcelImportDialog.vue:37-41` 的「打开即复位」相反；**是否有意待确认**。副作用：`nextKey`（`:52`）单调递增不复位（无害），以及用户可能在不知情的情况下把上次会话的旧草稿保存入库。
 3. **`regenerate` 不在取消链路内**：`:200-207` 不传 `signal`，`abortController` 在此期间为 `null`，故 `handleClosed`（`:170-173`）无法中断它；关闭弹窗后重生成的响应仍会写回 `item.data`（`:213-215`）——若此前已 `backToForm` 清空 `items`，写入的是脱离表格的游离对象（无异常，但请求与额度白耗）。`regenerate` 也无重入锁（只有行级 loading `:522`，用户可同时对多行点「重生成」并发多个请求）。
 4. **`saveFailures` 的「第 N 条」易误读**：`f.index` 相对于本次提交的勾选数组（`:285-289`、`ai_question_service.py:362`），而 alert 文案（`:409`、`:413`）未说明这一点；当用户只勾选了部分行时，「第 3 条」并不等于表格第 3 行。
 5. **前后端校验口径不完全一致**（`:86` 注释自称「同口径」，实际有出入）：前端多一条「选项内容不能为空」（`:93`），后端 `_validate_question` 不查（`admin_service.py:208-233` 无对应分支）；前端不查 `type`（后端 `:210-211`）与 `category` 白名单（后端 `:214-216`）——若 AI 返回的 `category` 不在 `event/route/figure` 内，前端标「可保存」、后端保存时判失败进 `failures`。此外 `batchSaveAiQuestions` 未设 `timeout: 0`（`admin.ts:705-711`），100 题保存沿用 15s 默认超时，是否够用**待确认**（后端保存路径无外部调用，通常远快于生成）。
-6. **双端重复定义取值范围**：`COUNTS = [10,20,50,100]`（`:12`）、`TOPIC_MAX_LEN = 100`（`:13`）、`DIFFICULTIES`（`:14-19`）、`CATEGORIES`（`:20-24`）全部硬编码，而后端 Phase A 已提供 `GET /api/admin/ai/config` 下发 `values/defaults/ranges/prompts`（`AdminAiConfigOut`，`backend/app/schemas/schemas.py:1772-1780`；`.qoder/backend/app/api/routes/ai_admin.py.md` §5.1、§4.5），`admin.ts` 无对应封装、本组件未消费。同时后端约束散落在 `schemas.py:1150`（`count le=100`）与 `config.py:78`（`AI_QUESTION_MAX_COUNT = 100`）。属**双端（且后端内部两处）重复定义**，改上限需人工同步 3 处。
+6. **双端重复定义取值范围**：`COUNTS = [10,20,50,100]`（`:12`）、`TOPIC_MAX_LEN = 100`（`:13`）、`DIFFICULTIES`（`:14-19`）、`CATEGORIES`（`:20-24`）全部硬编码，而后端 Phase A 已提供 `GET /api/admin/ai/config` 下发 `values/defaults/ranges/prompts`（`AdminAiConfigOut`，`backend/app/schemas/schemas.py:1925`；`.qoder/backend/app/api/routes/ai_admin.py.md` §5.1、§4.5），`admin.ts` 无对应封装、本组件未消费。同时后端约束散落在 `schemas.py:1241`（`count le=100`）与 `config.py:98`（`AI_QUESTION_MAX_COUNT = 100`）。属**双端（且后端内部两处）重复定义**，改上限需人工同步 3 处。
 7. **`removeSelected` 未 catch 取消**（`:229-238`）：用户在确认框点「取消」会产生一次未处理的 Promise rejection；同文件 `backToForm` 已用 `.catch(() => undefined)`（`:189`）处理同类情况，两处不一致。
 8. **`reserve-selection` + 直接改 `items` 的选中项残留风险**：表格开了 `row-key="key"`（`:423`）与 `reserve-selection`（`:428`），而 `removeItem`（`:225-227`）与 `removeSelected`（`:236-237`）只过滤 `items`、不调 `clearSelection()`（只有 `applyResult:125`、`handleSave:292`、`selectAllValid:241` 调了）。Element Plus 在该模式下按 rowKey 保留选中项，被移除的行是否残留在 `selection` 中取决于组件内部实现（第三方产物未核）→ **待确认**；若残留，「保存选中（N）」的计数会虚高，且 `handleSave` 会把已删除的草稿一并提交（后端会因查重/校验拦下并计入 `failures`，不会脏写）。
 9. **深度 watcher 的 O(n²) 重算**：`watch(items, revalidateAll, { deep: true })`（`:118`）在展开行编辑器里每敲一个字就全量重算，而 `validateItem` 内含 `items.value.some(...)`（`:100`）→ 单次击键 O(n²)。`count=100` 时约 1 万次字符串比较/击键；配合 `:110` 的签名比对可避免无限递归，但仍是可感的输入延迟风险（根 `agents.md` §2.4「大数据量性能保障」）。未实测，**待确认**实际卡顿程度。
@@ -213,6 +214,12 @@ form 阶段还有一个内联进度区（`:368-371`）：`el-progress :percentag
 ## 10. 迭代记录
 
 数据来源：`git log --follow --format="%h|%ad|%s" --date=short -- admin/src/components/AiGenerateDialog.vue`，共 **1 个提交**（本文件自创建以来未被修改过）。
+
+### 2026-10-22（文档同步，admin 源码零改动）
+- 需求：偿还 `.qoder/` 文档欠账——`c660727`（2026-10-19，AI 上游由腾讯云 CloudBase Agent 单向迁至阿里云百炼，`cloudbase_service.py`→`llm_service.py`、`CloudBaseError`→`LlmError`、配置 `CLOUDBASE_*`→`LLM_*`）与 `b712d81`（2026-10-22，上游改为按 `LLM_PROVIDER` 可切换的双供应商门面：`llm_service.py` 分派 `llm_openai.py`/`llm_cloudbase.py`，共享类型在 `llm_base.py`）之后，本文档仍写「502 = CloudBase 上游故障（`CloudBaseError`）」「消耗 CloudBase Agent 额度」等过期表述。本次 admin 源码未改、接口契约（请求/响应字段）零变化，属纯文档同步。
+- 修改内容：① §2/§5.3/§8/§9 的上游表述改为「由后端 `LLM_PROVIDER` 决定、可切换（`openai` = 阿里云百炼 / `cloudbase` = 腾讯云 CloudBase Agent），当前开发期为 cloudbase、上线部署前切回 openai」；② 502 错误码改注 `LlmError`（`admin.py:585-587`，实读核实）；③ 校正随后端演进漂移的行号引用（`admin.py` AI 段 `:568-606`、`ai_question_service.py:214-399`、`schemas.py:1233-1280`/`:1925`、`config.py:73`/`:96-98`）；④ §4.7 为源码 info alert 的「腾讯云 CloudBase Agent」硬编码 UI 文案加括注（原文照抄未改；`LLM_PROVIDER=openai` 时与实际供应商不符，是否另开任务改 UI 文案待用户定夺）；⑤ §7 新增第 12 条，如实记录 ACP 口径：`AI_QUESTION_BATCH_SIZE` 当前两份 env 实配 5（不随供应商调整）、`LLM_QUESTION_EXTRA_BODY` 思考开关在 cloudbase 下被适配器忽略、CloudBase 用量数值（`usage_update.used` 原值）不可作计费依据。
+- 关联文件：仅本文档（核实依据：`backend/app/api/routes/admin.py:566-606`、`backend/app/services/llm_service.py`、`llm_base.py`、`ai_question_service.py:204-399`、`backend/app/core/config.py:70-98`、`backend/.env`/`backend/.env.prod` 只读键名、`admin/src/components/AiGenerateDialog.vue:322`）。
+- 测试结果：只读核对，未执行构建、未调用任何 AI 接口（本次任务明确禁止）。
 
 ### 2026-10-17（文档建档）
 - 需求：补齐 `.qoder/admin/**` 文件级文档（第三批）。

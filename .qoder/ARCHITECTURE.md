@@ -58,13 +58,15 @@
    └───────────────────────────────────────────────────────────┘
 
    外部依赖：
-   ┌────────────────────────────┐   ┌────────────────────────────────┐
-   │ 微信开放接口（3 个）         │   │ 腾讯云 CloudBase Agent（ACP）    │
-   │ sns/jscode2session          │   │ session/prompt · JSON-RPC 2.0   │
-   │ cgi-bin/token               │   │ SSE 流式响应                     │
-   │ wxa/getwxacodeunlimit       │   │ 由 backend/app/services/         │
-   └────────────────────────────┘   │ cloudbase_service.py 调用        │
-                                    └────────────────────────────────┘
+   ┌────────────────────────────┐   ┌────────────────────────────────────┐
+   │ 微信开放接口（3 个）         │   │ 大模型上游（二选一，LLM_PROVIDER）  │
+   │ sns/jscode2session          │   │ openai    → 阿里云百炼             │
+   │ cgi-bin/token               │   │   POST /chat/completions           │
+   │ wxa/getwxacodeunlimit       │   │ cloudbase → 腾讯云 CloudBase Agent │
+   └────────────────────────────┘   │   JSON-RPC 2.0 session/prompt      │
+                                    │ 两家响应均可 SSE 流式；由            │
+                                    │ services/llm_service.py 门面分派     │
+                                    └────────────────────────────────────┘
 ```
 
 ### 1.3 请求方向约束
@@ -523,13 +525,29 @@ core/*              基础设施：config database security wx ws rate_limit
 
 ### 11.1 外部集成
 
-`backend/app/services/cloudbase_service.py` 对接**腾讯云 CloudBase Agent**，走 **ACP 协议**（`:1-11`）：httpx **同步**客户端发起 JSON-RPC 2.0 的 `session/prompt`，响应为 **SSE 流式**。
+大模型上游是**可切换的双供应商**（`b712d81`，2026-10-22；此前 `c660727` 曾把上游单向迁到百炼并删掉 ACP 实现）：`backend/app/services/llm_service.py` 是**门面**，按 `LLM_PROVIDER` 分派到两个适配器之一，业务层（`ai_chat_service`、`ai_question_service`、`routes/ai.py`、`routes/ai_admin.py`、`routes/admin.py`）只 import 门面、不感知上游协议。
 
-- `:68-79` 调用地址构造：配置了 `CLOUDBASE_ACP_URL` 则直用，否则按 `https://{ENV_ID}.api.tcloudbasegateway.com/v1/aibot/bots/{AGENT_ID}/acp` 拼接（与 `core/config.py:71` 注释一致）。
-- `:199-220` 失败重试 + 退避。
-- `:7-8`、`:206` **多轮对话是无状态的**：把历史拼接进单个 prompt，并在 `:206` 加系统提示词前缀。服务端不维护会话上下文。
+| `LLM_PROVIDER` | 适配器 | 协议 | 生效配置项 |
+|---|---|---|---|
+| `openai`（代码默认值，`core/config.py:72`） | `services/llm_openai.py` | OpenAI Chat Completions 兼容：`POST {LLM_BASE_URL}/chat/completions`，非流式与 `stream_options.include_usage` 流式 | `LLM_BASE_URL`（`:76`）/ `LLM_MODEL`（`:77`）/ `LLM_API_KEY`（`:78`）/ `LLM_EXTRA_BODY`（`:82`）/ `LLM_QUESTION_EXTRA_BODY`（`:85`） |
+| `cloudbase`（**两份 env 的当前值**，开发期口径） | `services/llm_cloudbase.py` | 腾讯云 CloudBase Agent **ACP**：JSON-RPC 2.0 `session/prompt`，响应为 SSE（`agent_message_chunk` 正文 / `agent_thought_chunk` 思考 / `agent_phase` 阶段 / `usage_update` 用量 / 终态 `result.stopReason`） | `CLOUDBASE_ENV_ID`（`:89`）/ `CLOUDBASE_AGENT_ID`（`:90`）/ `CLOUDBASE_API_KEY`（`:91`）/ `CLOUDBASE_AGENT_URL`（`:93`） |
 
-配置项名称见 `core/config.py:66-91`（`CLOUDBASE_ENV_ID`、`CLOUDBASE_AGENT_ID`、`CLOUDBASE_ACP_URL` 等；**本文档不记录配置值**）。
+共享类型在 `services/llm_base.py`（`LlmError` / `CallResult` / `ensure_complete`），单独成模块以打破「门面 ↔ 适配器」循环导入，并使两条链路的 `isinstance` 判定指向同一个类对象。两家适配器均为 httpx **同步**客户端，并各自实现同一组符号：`is_configured()`（`llm_openai.py:40`、`llm_cloudbase.py:50`）、`model_label()`（`:49`、`:59`）、`prompt_meta()`（`:210`、`:218`）、`stream()`（`:331`、`:302`）。`LLM_TIMEOUT_SECONDS`（`core/config.py:73`）两套共用；`CLOUDBASE_TIMEOUT_SECONDS` 已随 `c660727` 移除且**刻意不恢复**（一个含义不留两个旋钮）。
+
+四个跨供应商的口径差异（改 AI 链路前必读）：
+
+1. **调用地址**：`CLOUDBASE_AGENT_URL` 非空时优先，否则按 `https://{CLOUDBASE_ENV_ID}.api.tcloudbasegateway.com/v1/aibot/bots/{CLOUDBASE_AGENT_ID}/acp` 拼接（`llm_cloudbase._resolve_url()`，`:64`）。旧文档里的 `CLOUDBASE_ACP_URL` 是更早的旧名，现名 `CLOUDBASE_AGENT_URL`。
+2. **系统提示与生成参数**：`openai` 走标准 `system` role 且 `max_tokens` 生效；`cloudbase` 只能把系统提示**前缀拼接**进用户输入，且 `max_tokens` 与 `extra_body` **被适配器忽略**——即 `AI_MAX_OUTPUT_TOKENS`（`core/config.py:107`）的硬截断与 Qwen 思考开关（`LLM_*EXTRA_BODY`）在该供应商下**静默失效**，输出长度只由提示词软约束，思考过程亦不可关闭。
+3. **用量与结束原因**：`used_tokens` 在 `openai` 下是 `usage.total_tokens`（与按量计费口径一致），在 `cloudbase` 下是平台 `usage_update.used` 原值——实测量级不稳（同一供应商下出现过 254 与 19400/19641/19832），**不可作单次计费依据**；正常结束原因分别是 `stop` 与 `end_turn`/`stop_sequence`。因此 `ai_usage_logs.model` 改取 `llm_service.model_label()`（`openai` = 真实模型名，`cloudbase` = Agent ID），跨供应商做成本统计必须按供应商分段。
+4. **首片延迟**：实测 `openai`（百炼）1.15~2.81s，`cloudbase` 8.6~16.7s（占总耗时 83%~88%），因为 ACP 的思考事件先于正文到达且不可关闭。SSE 逐字体验在 `cloudbase` 下明显退化，证据见 `backend/test/docs/s30-llm-provider-switch-report.md` §2.2。
+
+**多轮对话仍是无状态的**：`ai_chat_service._history_block`（`ai_chat_service.py:138`）把最近 `cfg.context_turns` 轮历史（`AI_CONTEXT_TURNS` 默认 4，`core/config.py:110`）拼进**单个** prompt，服务端不维护模型侧会话上下文。
+
+**流式刻意不自动重试**：非流式 `prompt_meta` 按 `AI_MAX_RETRIES`（`core/config.py:109`）重试瞬时故障；`LlmStream` 不重试——重试意味着重新生成整段回答，而增量可能已推给用户，重发会导致正文重复，故瞬时故障由前端「停止 / 重试」兜底。
+
+**上线切换只改一行**：`.env.prod` 的 `LLM_PROVIDER` 改为 `openai` 即可（该文件 `:48` 已就地标注 ⚠⚠）；两套凭证常驻 env，无需改代码、无 SQL 迁移。注意仓库内现存的百炼 `LLM_API_KEY` 已实测 **401 `invalid_api_key` 失效**，切换前必须先在百炼控制台重置（`b712d81` 的 s30 报告 §2.1）。
+
+配置项名称与用途的完整清单见 `.qoder/backend/app/core/config.py.md`（**本文档不记录配置值**）。
 
 ### 11.2 已交付范围（2026-10-17，backend `1600074` + frontend `0052108`）
 
@@ -548,15 +566,27 @@ core/*              基础设施：config database security wx ws rate_limit
 | `node-detail` AI 讲解面板 | **待开发** | `GET /api/ai/route-guide/{node_id}` 已就绪 |
 | 答题页「AI 讲解」按钮 | **待开发** | `GET /api/ai/quiz-explanation/{question_id}` 已就绪 |
 | usage / cost 统计页 | **待开发** | `ai_usage_logs` 表已建、写入侧 `ai_usage_service.py` 已实现，**读取侧接口未实现**（见上「调用记录」） |
-| 小程序真机真实 Agent 全链路 | **待验证** | 本机 DNS 劫持限制，需 dns_shim 或真机网络 |
+| 小程序真机真实模型全链路 | **待验证** | 后端侧真实调用已于 2026-10-22 实测通过（`cloudbase` 供应商下非流式 / 流式 / 出题三条链路，见 `b712d81` 与 `backend/test/docs/s30-llm-provider-switch-report.md`）。本机 Clash fake-ip 会把网关域名解析到 `198.18.x.x`，但请求经代理正常出网，**已不需要 `dns_shim` 兜底**；真机侧（小程序客户端 → 生产后端 → 上游）仍待验证 |
 
 > **更正（2026-10-17）**：上表首行原写「管理后台 5 个 AI 子页面（知识库/配置/题目工坊/运行概览/调用记录）| 待开发 | 后端接口已就绪」，把「接口已就绪」套用到全部 5 个页面。实测：`022_ai_admin_menus.sql:14-27` 种入 5 个菜单码，但 `backend/app/api/routes/ai_admin.py` 的 15 个端点只覆盖 3 个（`ai_knowledge` 6 个 `/knowledge*`、`ai_workshop` 7 个 `/jobs*`+`/drafts*`、`ai_config` 2 个 `/config`）；`ai_overview`、`ai_logs` 在 `backend/app/api/` 下零命中，`AiUsageLog` 仅被 `models/models.py` 与写入侧 `services/ai_usage_service.py` 引用。故拆为两行。同样的口径修正见 `REQUIREMENTS.md` §10.6、§13 与 `CHANGELOG.md`。
 
 **题目工坊已实现的部分**：管理后台 `admin/src/components/AiGenerateDialog.vue` 已落地（表单字段 `:55-61`、`:326-366`；`AbortController` 中断 `:128-164`、`:170-173`；行内编辑 + `validateItem` `:86-104` 与后端 `_validate_question` 对齐；深监听签名比较 `:106-118` 避免递归更新；`batchSaveAiQuestions` `:276-305`，`failures.index` 为 1 基）。**注意：这与上表「题目工坊子页面待开发」并不矛盾** —— 已落地的是嵌在题库页的生成对话框，待开发的是独立的题目工坊管理页。
 
-### 11.4 异常映射
+### 11.4 异常映射与超时口径
 
-`routes/ai.py:42-50` 把 CloudBase 侧异常统一映射为对客户端友好的 HTTP 错误。AI 问答是**全项目唯一使用 60 秒超时的接口**（`frontend/services/ai.js`，其余均为默认 10 秒，`services/request.js:73`）。
+`routes/ai.py:42-47` 的 `AI_ERRORS` 是四元组（`AiDisabledError`、`AiLimitError`、`llm_service.LlmError`、`ValueError`；前三者均为 `ValueError` 子类，故捕获顺序不影响结果），`ai_http_error()`（`:50-58`）按 `isinstance` 判定映射：`AiDisabledError`→**403**（`:53`）、`AiLimitError`→**429**（`:55`）、`LlmError`→**502**（`:57`）、其余 `ValueError`→**400**（`:58`）。管理端 AI 路由（`routes/ai_admin.py`）复用同一函数，故**切换上游供应商不影响错误码口径**；`LLM_PROVIDER` 取值非法也走 `LlmError`→502。
+
+**流式端点的错误只能走事件**：`POST /api/ai/chat/stream`（`:110`）在返回 `StreamingResponse` 之前完成全部前置校验（开关 / 限额 / 输入 / 会话归属）与 `LlmStream` 构造，这类失败仍是普通 JSON + 403/429/400/502；一旦 200 与响应头发出，**状态码无法再改**，中途的上游故障只能作为 `error` 事件下发（`:164`）。事件序列为 `start`（`:147`）→ `delta`*（`:155`）→ `done`（`:170`）。响应头带 `X-Accel-Buffering: no`（`_STREAM_HEADERS`，`:78`）让 nginx 只对本次响应关闭缓冲——生产 nginx 默认 `proxy_buffering on` 会把整条流缓冲完再一次性吐给小程序，逐字效果尽失，而 nginx 配置文件不在本仓库内（见 §12.2「nginx 配置文件」行）。
+
+前端超时口径（AI 问答是**全项目超时最长的接口**）：
+
+| 调用 | 超时 | 依据 |
+|---|---|---|
+| 普通接口缺省 | 10s | `frontend/services/request.js:75` |
+| 非流式 `POST /ai/chat` | **60s** | `frontend/services/ai.js:41` |
+| 流式 `POST /ai/chat/stream` | **120s**（未显式传参时用 `STREAM_TIMEOUT_MS`） | `frontend/services/request.js:186`、`:329` |
+
+流式请求需 `enableChunked: true`（`request.js:328`），要求基础库 2.20.2 及以上；`supportsChunked()`（`:281-283`）判定不支持时，`ai.js:95` 降级为 `plainChatStream`（`:51-73`）——把一次性 `chat()` 的整段回答当作单个 `delta` 推出，使页面只有一条渲染路径（此时 `abort` 只停止渲染，后端仍会落库，重进会话即可看到）。
 
 ---
 
@@ -592,7 +622,7 @@ core/*              基础设施：config database security wx ws rate_limit
 | 服务器部署 | 代码目录 `/mnt/data/longmarch-run`；systemd 服务 `longmarch-backend`，环境变量 `APP_ENV=prod`；日志 `journalctl -u longmarch-backend`。Python 3.14，venv `backend/.venv` | 目录/服务名/`APP_ENV`：`backend/test/docs/s26-ai-question-backend-report.md:94-96`；Python 版本与 journalctl 用法来自运维会话实测，**非仓库内证据** |
 | 生产 openGauss | **6.0.1**（Ubuntu），库 `longmarch`，端口 **5432**，应用账号非开发库的 `gaussdb`。与开发容器 **7.0.0-RC3 / 5118** 存在**版本偏斜**——涉及 DDL 与方言的改动不能只靠开发库验证 | `backend/.env.prod:7` 注释与 `:9` 连接串；`docs/迭代记录.md` `fc2597e` 条目。**非直连实测**，兼容模式未知 |
 | 生产迁移补跑 | `docker compose run --rm database-init`，只执行 `schema_migrations` 中缺失的编号；手工 `gsql -f` 后**必须回填**该表，否则下次重复执行 | `docker/init/init-db.sh`；PROJECT.md §数据库迁移执行 |
-| `.env.prod` 占位符现状 | `DATABASE_URL` 与 `ADMIN_PASSWORD` **已填入真实值**（`:8` 的「⚠ 占位」注释已过期）；`JWT_SECRET` **仍是 `REPLACE_WITH_STRONG_RANDOM_SECRET`**；`CLOUDBASE_API_KEY` 已填入。服务器上就地改过的副本是否与仓库一致**无法核实** | `backend/.env.prod` 逐行 `grep -c` 实测（值不录入本文档） |
+| `.env.prod` 占位符现状 | `DATABASE_URL`（`:9`）与 `ADMIN_PASSWORD`（`:38`）**已填入真实值**（`:8`、`:37` 的「⚠ 占位」注释均已过期）；`JWT_SECRET`（`:12`）**仍是 `REPLACE_WITH_STRONG_RANDOM_SECRET`**。大模型两套凭证**同时常驻**：`LLM_PROVIDER=cloudbase`（`:50`，上方 `:48` 有「⚠⚠ 上线前必须改为 `openai`」标记）、`LLM_API_KEY`（`:58`，2026-10-22 实测 **401 `invalid_api_key`，已失效**）、`CLOUDBASE_API_KEY`（`:68`，实测可用）。故「上线切回百炼」不是改 key，而是**先换一把有效 key 再改 `:50` 一行**。服务器上就地改过的副本是否与仓库一致**无法核实** | `backend/.env.prod` 逐行实读（值不录入本文档）；key 有效性见 `b712d81` 与 `backend/test/docs/s30-llm-provider-switch-report.md` §2.1 |
 | 小程序合法域名 | **request 合法域名已配置**；**socket 合法域名未配置** | `docs/迭代记录.md` |
 | 管理后台环境切换 | 单一变量 `VITE_API_PROXY`：`.env.development:3` / `.env.prod:4` | — |
 | Vite 代理 | `admin/vite.config.ts:11-17`，`/api` → 目标，`changeOrigin: true`、`ws: true` | — |

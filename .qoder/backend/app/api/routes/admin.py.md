@@ -1,12 +1,14 @@
 # admin.py
 
-> 最后核对时间：2026-10-17（仓库 HEAD `651efc8`；本文件最后一次变更在 `ea58b6c`，工作区对 HEAD 无未提交改动）
+> 最后核对时间：2026-10-22（仓库 HEAD `aef5135`；本文件最后一次源码变更在 `b0ed585`（2026-10-18）与 `c660727`（2026-10-19），`b712d81`（2026-10-22，LLM 供应商拆分）**未修改本文件源码**）
 >
 > 本文档所有行号均以带行号的源码阅读输出核对；端点数、路径、菜单码以 `app.openapi()` + 正则双向实测。无法从代码 / Git 历史 / 既有文档确认的一律标注「待确认」。
+>
+> **行号时效提示（2026-10-22）**：本文件已由建档时的 1088 行增至 **1523 行**（`wc -l` 实测，主要因 `b0ed585` 等 2026-10-17 之后的提交）。AI 出题链路（`generate-questions`/`batch-save` 两端点）及其挂载点、异常映射已按当前源码重标；**非 AI 章节的行号（§4.1 其余 banner、§4.3 表非 AI 行、§4.4~§4.8、§5、§7、§9 各处）仍是 1088 行版旧口径，位移待复核**；端点总数 57 为 2026-10-17 实测口径，`b0ed585` 之后是否有增减**待确认**。
 
 ## 1. 文件路径
 
-`backend/app/api/routes/admin.py`（**1088 行有效内容**，文件以换行结尾，带行号阅读器显示到第 1089 行的空行；是 `backend/app/api/routes/` 下最大的路由模块，也是全项目端点最多的单文件）
+`backend/app/api/routes/admin.py`（**1523 行，`wc -l` 实测**；建档时（2026-10-17）为 1088 行有效内容，其后经 `b0ed585`（2026-10-18）等提交增长；是 `backend/app/api/routes/` 下最大的路由模块，也是全项目端点最多的单文件）
 
 ## 2. 文件职责
 
@@ -40,23 +42,23 @@
 | `:22` | `from app.models.models import User` —— **全文件唯一直接引用的 ORM 模型，且未被任何代码使用**（见 §9） |
 | `:23-80` | 40 个 `Admin*` schema 与 `MessageOut` 的 import |
 | `:81-96` | 15 个 service 的 import |
-| `:98` | `router = APIRouter(prefix="/admin", tags=["admin"])` |
-| `:101-1088` | 57 个路由处理函数 + 3 个模块级私有辅助函数 |
+| `:116` | `router = APIRouter(prefix="/admin", tags=["admin"])`（已按当前源码重标） |
+| `:119-1523` | 路由处理函数 + 模块级私有辅助函数（`:119` 为首个路由装饰器 `@router.post("/login", ...)`，`1523` 为 `wc -l` 实测总行数；「57 个处理函数 + 3 个辅助函数」的计数为建档时基于 1088 行版的实测口径，`b0ed585` 后是否有增减**待确认**）。上表 import 各行（`:15`、`:16-21`、`:22`、`:23-80`、`:81-96`）行号仍为 1088 行版旧口径、位移待复核；其中 services import 块现以 `:114` 的 `)` 收尾，块内 `ai_question_service` 在 `:101`、`llm_service` 在 `:103`（已按当前源码重标） |
 
-分区注释（banner）共 10 处：`:118`（微信扫码登录）、`:198`（驾驶舱 / 数据大屏）、`:243`（路线节点维护）、`:379`（题库维护）、`:498-499`（AI 智能出题）、`:541`（每日寄语维护）、`:665`（组织架构维护）、`:751`（人员授权 / 角色管理 / 审计日志）、`:823`（入驻邀请码）、`:1040`（活动设置）。**「排名洞察」相关的 4 个端点（`:312-376`）没有独立 banner**，物理上紧跟在「路线节点维护」区之后。
+分区注释（banner）共 10 处：`:136`（微信扫码登录，已按当前源码重标）、`:198`（驾驶舱 / 数据大屏）、`:243`（路线节点维护）、`:379`（题库维护）、`:566-567`（AI 智能出题，已按当前源码重标）、`:541`（每日寄语维护）、`:665`（组织架构维护）、`:751`（人员授权 / 角色管理 / 审计日志）、`:823`（入驻邀请码）、`:1040`（活动设置）。**「排名洞察」相关的 4 个端点（`:312-376`）没有独立 banner**，物理上紧跟在「路线节点维护」区之后。除已重标的两处外，其余 banner 与「排名洞察」行号均为 1088 行版旧口径，`b0ed585` 等增量后实际位置已后移，待复核。
 
 ### 4.2 完整路径前缀的推导（实测）
 
 ```
-settings.API_PREFIX = "/api"                          backend/app/core/config.py:25
-router = APIRouter(prefix="/admin", tags=["admin"])   backend/app/api/routes/admin.py:98
-app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_prefix 见 backend/app/main.py:69）
+settings.API_PREFIX = "/api"                          backend/app/core/config.py:27
+router = APIRouter(prefix="/admin", tags=["admin"])   backend/app/api/routes/admin.py:116
+app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:123（_prefix 见 backend/app/main.py:99）
 → 实际前缀 = /api/admin
 ```
 
-实测（`app.openapi()`，2026-10-17）：本文件贡献 **57 个 HTTP 方法级操作**、**45 个唯一路径字符串**；方法分布 `GET 23 / POST 18 / PUT 8 / PATCH 4 / DELETE 4`。`router.routes` 长度为 57，57 条全部能在 `app.openapi()['paths']` 中找到对应操作，**无遗漏、无重复**。与 `backend/app/api/routes/ai_admin.py`（前缀 `/admin/ai`，15 个端点）的路径集合**交集为空**。
+实测（`app.openapi()`，2026-10-17，基于建档时的 1088 行版；`b0ed585` 等增量后未复测，以下计数**待确认**）：本文件贡献 **57 个 HTTP 方法级操作**、**45 个唯一路径字符串**；方法分布 `GET 23 / POST 18 / PUT 8 / PATCH 4 / DELETE 4`。`router.routes` 长度为 57，57 条全部能在 `app.openapi()['paths']` 中找到对应操作，**无遗漏、无重复**。与 `backend/app/api/routes/ai_admin.py`（前缀 `/admin/ai`，15 个端点）的路径集合**交集为空**。
 
-> **AI 命名空间被拆在两个文件**：`/api/admin/ai/generate-questions` 与 `/api/admin/ai/questions/batch-save` 定义在**本文件**（`:500-538`），而 `/api/admin/ai/knowledge|jobs|drafts|config` 共 15 个端点定义在 `backend/app/api/routes/ai_admin.py`。查 AI 相关端点时必须同时看两个文件。
+> **AI 命名空间被拆在两个文件**：`/api/admin/ai/generate-questions` 与 `/api/admin/ai/questions/batch-save` 定义在**本文件**（`:568-606`），而 `/api/admin/ai/knowledge|jobs|drafts|config` 共 15 个端点定义在 `backend/app/api/routes/ai_admin.py`。查 AI 相关端点时必须同时看两个文件。
 
 ### 4.3 57 个端点完整清单
 
@@ -87,8 +89,8 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
 | 21 | POST | `/api/admin/questions/import-confirm` | `confirm_question_import` `:461` | `require_menu("questions")` `:459` | `AdminImportConfirmOut` `:457` | `import_service.confirm_question_import` |
 | 22 | PUT | `/api/admin/questions/{question_id}` | `update_question` `:475` | `require_menu("questions")` `:473` | `AdminQuestionOut` `:471` | `admin_service.update_question` |
 | 23 | DELETE | `/api/admin/questions/{question_id}` | `delete_question` `:493` | `require_menu("questions")` `:491` | `MessageOut` `:489` | `admin_service.delete_question`（**软停用**） |
-| 24 | POST | `/api/admin/ai/generate-questions` | `ai_generate_questions` `:506` | `require_menu("questions")` `:504` | `AdminAiGenerateOut` `:502` | `ai_question_service.generate_questions` → `cloudbase_service` |
-| 25 | POST | `/api/admin/ai/questions/batch-save` | `ai_batch_save_questions` `:530` | `require_menu("questions")` `:528` | `AdminAiBatchSaveOut` `:526` | `ai_question_service.batch_save_questions` |
+| 24 | POST | `/api/admin/ai/generate-questions` | `ai_generate_questions` `:574` | `require_menu("questions")` `:572`（**注入**） | `AdminAiGenerateOut` `:570` | `ai_question_service.generate_questions` → `llm_service`（门面，按 `LLM_PROVIDER` 分派到 `llm_openai.py`/`llm_cloudbase.py`） |
+| 25 | POST | `/api/admin/ai/questions/batch-save` | `ai_batch_save_questions` `:598` | `require_menu("questions")` `:596`（**注入**） | `AdminAiBatchSaveOut` `:594` | `ai_question_service.batch_save_questions` |
 | 26 | GET | `/api/admin/quotes` | `list_quotes` `:548` | `require_menu("quotes")` `:546` | `AdminQuoteListOut` `:544` | `quote_service.list_quotes` |
 | 27 | GET | `/api/admin/quotes/cycle` | `get_quote_cycle` `:564` | `require_menu("quotes")` `:562` | `AdminQuoteCycleOut` `:560` | `quote_service.get_cycle_info` + `core/helpers.today_str` |
 | 28 | PUT | `/api/admin/quotes/cycle` | `update_quote_cycle` `:574` | `require_menu("quotes")` `:572` | `AdminQuoteCycleOut` `:570` | `quote_service.set_cycle_start` + `get_cycle_info` |
@@ -296,7 +298,7 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
 | 403 | 未配置 `ADMIN_PASSWORD`（功能未启用） | **仅 `:109`**（其余 403 来自 `deps.py` 的 `require_menu` / `_ensure_active`） |
 | 404 | 资源不存在 | `:152`（扫码会话）、`:286` / `:308`（路线节点）、`:375`（用户）、`:483`（题目）、`:649` / `:661`（寄语）、`:692`（组织）、`:721`（组织）、`:796`（条件）、`:817`、`:878`（条件）、`:895`（邀请码）、`:994`（条件）、`:1016` |
 | 429 | 触发限流 | 由 `backend/app/core/rate_limit.py:42-45` 抛出，触发点 `:107`、`:129`、`:149` |
-| 502 | 上游故障 | `:519`（CloudBase Agent）、`:748`（外部组织架构接口） |
+| 502 | 上游故障 | `:587`（LLM 上游，经 `llm_service` 门面按 `LLM_PROVIDER` 分派）、`:816`（外部组织架构接口，已按当前源码重标；旧口径 `:748`） |
 | 422 | 请求体/查询参数 Pydantic 校验失败 | FastAPI 框架自动产生，源码中无显式抛出 |
 
 **未使用 409**（与全项目一致，冲突语义由 400 承载）；**无 500 显式抛出**（未捕获异常由 FastAPI 默认转 500，本文件无全局异常处理器可依赖）。
@@ -322,7 +324,7 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
 | `services` | `admin_service` | `list_route_nodes`、`create_route_node`、`update_route_node`、`set_route_node_enabled`、`get_rank_overview`、`iter_rank_csv`、`get_user_overview`、`list_questions`、`create_question`、`update_question`、`delete_question`、`get_org_tree`、`get_org_users`、`create_org`、`update_org`、`delete_org`、`sync_orgs` |
 | `services` | `ai_question_service` | `generate_questions`、`batch_save_questions` |
 | `services` | `audit_service` | `record`（**路由内直接调用仅 `:339` 一处**） |
-| `services` | `cloudbase_service` | `CloudBaseError`（仅用于 `:517` 的异常类型判定） |
+| `services` | `llm_service` | `LlmError`（仅用于 `:585` 的异常类型判定；本文件只 import 它取异常类、不调用其任何函数，`import` 在 `:103`。`c660727` 由 `cloudbase_service`/`CloudBaseError` 更名而来，`b712d81` 后为按 `LLM_PROVIDER` 分派的门面） |
 | `services` | `dashboard_service` | `get_dashboard`、`get_trend`、`get_activities`、`get_screen` |
 | `services` | `identity_service` | `create_login_session`、`poll_login_session`、`issue_admin_token` |
 | `services` | `import_service` | `MAX_FILE_SIZE`、`ImportError`、`build_question_template`、`build_quote_template`、`preview_question_import`、`confirm_question_import`、`preview_quote_import`、`confirm_quote_import` |
@@ -333,6 +335,8 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
 | `services` | `wechat_service` | `get_wxacode_png`、`get_invite_image`、`to_data_url`、`ONBOARD_PAGE` |
 | `models` | `backend/app/models/models.py` | `User`（`:22` import，**未被使用**，见 §9） |
 
+> 2026-10-22 补注：当前源码的 services import 块（以 `:114` 的 `)` 收尾）中还包含 `upload_service`（`:112`），上表与旧文档均未登记；本文件是否实际调用其成员**待确认**。本表内引用的本文件行号（如 `:819`、`:565`/`:579`、`:339`、`:22`）仍为 1088 行版旧口径，位移待复核。
+
 **未 import 但被间接使用的关键依赖**：`python-multipart`（`File(...)` / `UploadFile` 的底层解析，无 import 语句，删掉后端点 20、30 运行时才报错，见 `.qoder/backend/requirements.txt.md` §4）。
 
 ### 6.2 涉及的数据库表
@@ -341,7 +345,7 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
 
 ### 6.3 被谁依赖
 
-- **`backend/app/main.py:86`**：`app.include_router(admin.router, prefix=_prefix)` 注册。
+- **`backend/app/main.py:123`**：`app.include_router(admin.router, prefix=_prefix)` 注册（已按当前源码重标，旧口径 `main.py:86`；`_prefix` 见 `main.py:99`，旧口径 `:69`）。
 - **`admin/src/api/admin.ts`**（唯一调用方，20800 字节）：实测提取出 38 个 URL 模板 + 7 处导入/AI 相关模板字符串（`admin/src/api/admin.ts:654-656`、`:707`、`:741-743`），**57 个端点全部有前端调用点，无死端点**。三个导入接口经 `downloadImportTemplate` / `previewImport` / `confirmImport` 三个内部 helper（`admin/src/api/admin.ts:639-651`）封装后，以 `questionImportApi`（`admin/src/api/admin.ts:653-657`）与 `quoteImportApi`（`admin/src/api/admin.ts:740-744`）两个对象注入通用组件 `admin/src/components/ExcelImportDialog.vue` 的 `api` prop —— **同一组件复用于题库与寄语两个场景**。
 - **小程序 `frontend/` 不调用本文件任何端点**（本文件契约面向管理后台）。
 
@@ -358,7 +362,7 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
   | `screen` | 1 | 8 | `:237` |
   | `route_nodes` | 4 | 9、10、11、12 | `:248`、`:259`、`:274`、`:294` |
   | `rankings` | 4 | 13、14、15、16 | `:316`、`:332`、`:350`、`:369` |
-  | `questions` | 9 | 17~25 | `:384`、`:402`、`:432`、`:446`、`:459`、`:473`、`:491`、`:504`、`:528` |
+  | `questions` | 9 | 17~25 | `:384`、`:402`、`:432`、`:446`、`:459`、`:473`、`:491`、`:572`、`:596` |
   | `quotes` | 9 | 26~34 | `:546`、`:562`、`:572`、`:585`、`:599`、`:612`、`:626`、`:640`、`:657` |
   | `orgs` | 6 | 35~40 | `:670`、`:680`、`:700`、`:713`、`:728`、`:741` |
   | `access` | 9 | 41、42、43、48、49、50、51、52、53 | `:770`、`:787`、`:809`、`:914`、`:927`、`:947`、`:966`、`:985`、`:1008` |
@@ -434,7 +438,7 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
 8. **预览令牌不可跨业务复用**：`biz_type` 校验在 `backend/app/services/import_service.py:152`。新增第三套导入时必须注册新的 `biz_type` 并保证与现有值不同。
 9. **`iter_rank_csv` 的独立 Session 不可「修回」`Depends(get_db)`**：流式响应在路由返回后才消费，改回注入会话必然在响应阶段报「Session is closed」。若要统一，须改造为「先物化再下载」或引入后台任务，属架构级变更。
 10. **导出端点无分页上限**：`GET /rankings/export` 会遍历全部命中用户。人员量增长时导出耗时与连接占用线性上升（每批 1000 人 + 每批一次 `_reached_map`）。加大数据量前须评估（根 `agents.md` §2.4）。
-11. **`AI` 命名空间跨两文件**：在 `backend/app/api/routes/ai_admin.py`（前缀 `/admin/ai`）与本文件（`:500-538`）之间新增 AI 端点时，注意避免路径冲突 —— 实测当前两者路径集合交集为空。
+11. **`AI` 命名空间跨两文件**：在 `backend/app/api/routes/ai_admin.py`（前缀 `/admin/ai`）与本文件（`:568-606`）之间新增 AI 端点时，注意避免路径冲突 —— 实测当前两者路径集合交集为空。
 12. **不得在本文件写入任何密钥/令牌/连接串**。管理员口令经 `settings.ADMIN_PASSWORD` 读取（`backend/.env` / `.env.prod`，已入库但含密钥历史，见根 `agents.md` §1.3），**不得硬编码默认密码**（`:103-105` docstring 明确此设计意图，`06b6313` 提交取消了默认值）。
 13. **`docker/` 目录改动默认不提交**（根 `agents.md` §1.3）；新增菜单码迁移时须单独说明。
 
@@ -477,7 +481,7 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
    - `DELETE /questions/{id}` 恒返回「已删除」不报 404，`DELETE /orgs/{id}` 对不存在的组织也返回「已删除」（`backend/app/services/admin_service.py:739-740` 返回 `[]`），而 `DELETE /quotes/{id}` 会 404（`:660-661`）。三个删除端点三种语义。
 5. **`GET /rankings/export` 的文件名用 `datetime.now()`（服务器本地时区，`:357`）**，与全项目「业务日按北京时间 UTC+8」的口径（`backend/app/core/helpers.py:22-24`）不一致。当前部署环境本地时区即北京时间，无实际影响。
 6. **模块 docstring（`:1-6`）覆盖不全**：只提「管理员登录、扫码登录、题库维护、组织架构维护与同步」，未提排名 / 寄语 / 角色 / 邀请码 / 审计 / 活动 / 驾驶舱 / 大屏 / 路线节点 / AI 出题（占 57 个端点中的绝大多数）。
-7. **`docs/迭代记录.md` 的 `ea58b6c` 条目记载的 AI 批量保存路径与代码不符**：该条写作 `POST /api/admin/questions/batch-ai`，实际代码是 `POST /api/admin/ai/questions/batch-save`（`:524-525`）。**以代码为准**，属迭代记录笔误。
+7. **`docs/迭代记录.md` 的 `ea58b6c` 条目记载的 AI 批量保存路径与代码不符**：该条写作 `POST /api/admin/questions/batch-ai`，实际代码是 `POST /api/admin/ai/questions/batch-save`（`:592-593`）。**以代码为准**，属迭代记录笔误。
 
 ### 9.4 待确认
 
@@ -490,7 +494,21 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
 
 ## 10. 迭代记录
 
-数据来源：`git log --follow --oneline -- backend/app/api/routes/admin.py` 与 `git log --follow --format='%h | %ad | %s' --date=format:'%Y-%m-%d %H:%M' -- backend/app/api/routes/admin.py`（两次结果一致，共 **19 个提交**），与 `docs/迭代记录.md` 逐条交叉核对。按主题归并，**引用的提交号、日期与时刻均逐字取自上述 git 输出**；时间倒序。
+数据来源：`git log --follow --oneline -- backend/app/api/routes/admin.py` 与 `git log --follow --format='%h | %ad | %s' --date=format:'%Y-%m-%d %H:%M' -- backend/app/api/routes/admin.py`（两次结果一致，共 **21 个提交**；其中 `b0ed585`（2026-10-18，十项增强）的条目尚未收录，不在本次 AI 供应商迁移的文档同步范围内），与 `docs/迭代记录.md` 逐条交叉核对。按主题归并，**引用的提交号、日期与时刻均逐字取自上述 git 输出**；时间倒序。
+
+### 2026-10-22（文档校正，对应上游重构 `b712d81`）
+
+- 需求：文档欠账校正，**仅修改本文档、未修改任何源码**。`b712d81` 把 `backend/app/services/llm_service.py` 拆为按 `settings.LLM_PROVIDER` 分派的门面 + 双适配器（对外符号名不变），**未修改本文件源码**；本文件最后一次源码变更仍是 `b0ed585`（2026-10-18，十项增强）与 `c660727`（2026-10-19，±3 行）。建档时（2026-10-17）本文件 1088 行，现 **1523 行**（`wc -l` 实测），旧行号大量位移。
+- 修改内容（以下新行号均已 Read 当前源码逐行确认）：① 头部核对信息更新为 2026-10-22 / HEAD `aef5135`，并新增「行号时效提示」；② §1 行数 1088 → 1523；③ §4.1 骨架表 `router` 行 `:98` → `:116`、处理函数区 `:101-1088` → `:119-1523`（`:119` 为首个路由装饰器），banner 微信扫码登录 `:118` → `:136`、AI 智能出题 `:498-499` → `:566-567`；④ §4.2 前缀推导 `config.py:25` → `:27`、`admin.py:98` → `:116`、`main.py:86` → `:123`、`_prefix` `main.py:69` → `:99`，并对 2026-10-17 的 `app.openapi()` 实测计数加「未复测，待确认」标注；⑤ §5.4 502 行组织同步 `:748` → `:816`；⑥ §6.3 `main.py:86` → `:123`；⑦ §6.1 表后补注当前 services import 块（收尾 `:114`）含 `upload_service`（`:112`），是否被实际调用待确认。§4.3 #24/#25 行、§6.1 `llm_service` 行（门面表述）、§8 第 11 条、§9.3 第 7 条与 `ea58b6c` 条目后的更正注，已在本次文档同步中一并更新。**非 AI 章节的其余行号（§4.1 其他 import 行与 banner、§4.3 非 AI 端点各行的函数/权限/response_model 行号、§4.4~§4.8、§5、§7 内的抛出点行号等）仍为 1088 行版旧口径，位移待复核**；端点总数是否仍为 57 **待确认**。
+- 关联文件：姊妹文档 `.qoder/backend/app/api/routes/ai.py.md`、`.qoder/backend/app/api/routes/ai_admin.py.md`（同批校正）；上游 `backend/app/services/llm_service.py`（152 行门面）、`llm_base.py`（54 行，`LlmError`/`CallResult`/`ensure_complete`）、`llm_openai.py`（346 行）、`llm_cloudbase.py`（320 行）、`ai_question_service.py`（699 行）。
+- 测试结果：纯文档变更，无需测试。据 `docs/迭代记录.md` 的 `b712d81` 条目：`s30` 23 用例全过，回归 `s25` 16/16、`s26` 47/47、`s28` 13/13（合计 99/99）。
+
+### 2026-10-19（`c660727`，14:16）— AI 大模型供应商迁移（CloudBase Agent → 阿里云百炼）
+
+- 需求：原实现绑定腾讯云 CloudBase Agent 私有 ACP 协议（JSON-RPC + SSE 流解析），换供应商需重写；统一改走 OpenAI Chat Completions 兼容协议并接入阿里云百炼，业务代码与厂商解耦。
+- 修改内容（本文件 `admin.py` 的行级变化，`git show` 实测 ±3 行、共 6 行）：① `from app.services import (...)` 块内 `cloudbase_service` 改为 `llm_service`（现 `:103`）；② `ai_generate_questions` 的 `except cloudbase_service.CloudBaseError as exc:` 改为 `except llm_service.LlmError as exc:`，分支内注释同步改为「先于 ValueError 捕获：LlmError 继承 ValueError，但属上游故障应返回 502」（现 `:585-586`）。端点路径、`require_menu("questions")`、`response_model=AdminAiGenerateOut`、502/400 映射语义均不变；`batch-save` 端点未被本提交触及。
+- 关联文件（`git show --stat c660727`，共 18 个文件）：`backend/app/services/cloudbase_service.py`（删除 228 行）→ `backend/app/services/llm_service.py`（新增 227 行）、`backend/app/core/config.py`、`backend/app/api/routes/ai.py`、`backend/app/api/routes/ai_admin.py`、`backend/app/services/ai_chat_service.py`、`backend/app/services/ai_question_service.py`、`backend/app/services/ai_config_service.py`、`backend/app/models/models.py`、`backend/.env`、`backend/.env.prod`、`backend/test/s25*`、`backend/test/s26*`、`backend/test/serve_sqlite.py`，新增报告 `backend/test/docs/s27-llm-provider-migration-report.md`。
+- 测试结果：据 `docs/迭代记录.md` 的 `c660727` 条目 —— `s25_ai_question_generate.py` **16/16**（含真实调用生成 10 题与 50 题、题库未增）、`s26_ai_center.py` **47/47**；改动文件 `py_compile` 全通过；`app.openapi()` 125 条路径、18 条 AI 路由与迁移前一致；全仓 grep 无 `CloudBase`/`cloudbase` 残留（历史测试报告除外）。
 
 ### 2026-10-17
 
@@ -505,6 +523,8 @@ app.include_router(admin.router, prefix=_prefix)      backend/app/main.py:86（_
 - 修改内容：新增 `POST /ai/generate-questions`（`:500-521`）与 `POST /ai/questions/batch-save`（`:524-538`），均挂 `require_menu("questions")`。生成结果一律作为**草稿**返回不入库（`:498-499` 注释），必须由管理员在预览列表确认后再调 batch-save。异常映射刻意**先捕获 `cloudbase_service.CloudBaseError` 再捕获 `ValueError`**（`:517-521`，`CloudBaseError` 继承 `ValueError`，见 `backend/app/services/cloudbase_service.py:31-37`），上游故障映射 502、参数/校验问题映射 400。
 - 关联文件：`backend/app/services/ai_question_service.py`、`backend/app/services/cloudbase_service.py`、`backend/app/schemas/schemas.py:1142-1195`、`admin/src/components/AiGenerateDialog.vue`、`admin/src/api/admin.ts:659-707`。
 - 测试结果：据 `docs/迭代记录.md` 的 `ea58b6c` 条目 —— 后端冒烟 `backend/test/s25_ai_question_generate.py` **16/16**（含真实 Agent 生成 10 题与 50 题、401/403 越权、响应体不含密钥、小程序答题契约未变）；admin `npm run build` 通过；浏览器验收 **10/10**（截图 `admin/test/images/s26-01~09`，报告 `admin/test/docs/s26-ai-question-admin-report.md`、`backend/test/docs/s26-ai-question-backend-report.md`）；**无数据库结构或数据变更**。
+
+> 2026-10-22 更正：上条中的 `cloudbase_service.py` / `CloudBaseError` 为当时符号，保留原文不改。`c660727`（2026-10-19）已把该服务更名为 `backend/app/services/llm_service.py`、异常类更名为 `LlmError`；`b712d81`（2026-10-22）进一步把 `llm_service.py` 拆为门面 + 双适配器（`llm_openai.py` OpenAI 兼容 / `llm_cloudbase.py` ACP），按 `settings.LLM_PROVIDER` 分派，对外符号名不变。该端点现位于 `backend/app/api/routes/admin.py:568-589`（装饰器 `:568-573`、函数 `:574`），异常判定在 `:585-589`（`except llm_service.LlmError` → 502 在 `:585-587`，`except ValueError` → 400 在 `:588-589`）。
 
 ### 2026-10-13（`07d02af` 11:36、`2f3f333` 11:25、`ce14a95` 10:54）— V2.0 三项需求
 

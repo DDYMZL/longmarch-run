@@ -11,7 +11,7 @@
 ## 3. 业务需求
 
 - 需求出处：`.qoder/REQUIREMENTS.md` §11.3「题库管理」（题目 CRUD、删除改为停用、Excel 导入、AI 出题各行的依据列均指向本文件）；题库与答题的关系见 §5「每日答题」（「题库不足」「题库规模」两行：种子 15 题、题库不足须返回明确状态）；AI 出题需求见 §10「AI 智能中心」与 §10.3「AI 出题策略」；Excel 导入通用规则见 §11.6 与 `.qoder/ARCHITECTURE.md` §8.2。
-- 菜单码 `questions` 在 `admin/src/router/menus.ts:8` 登记（侧边栏「题库维护」，`EditPen` 图标）；AI 出题复用同一菜单码鉴权（`backend/app/api/routes/admin.py:504`、`:528`），因此 AI 出题不是 AI 智能中心 Phase A 的 `ai_*` 菜单页面（详见 `.qoder/admin/src/components/AiGenerateDialog.vue.md`）。
+- 菜单码 `questions` 在 `admin/src/router/menus.ts:8` 登记（侧边栏「题库维护」，`EditPen` 图标）；AI 出题复用同一菜单码鉴权（`backend/app/api/routes/admin.py:572`、`:596`），因此 AI 出题不是 AI 智能中心 Phase A 的 `ai_*` 菜单页面（详见 `.qoder/admin/src/components/AiGenerateDialog.vue.md`）。
 - 演进（`git log --follow`，共 6 个提交，详见 §10）：`4a26520`（2026-09-30）创建（全量加载 + 前端过滤）→ `01ec93c`（2026-10-02）增加知识分类 → `54ea125`（2026-10-10）改服务端分页并加页面私有 Excel 导入 → `30b4458`（2026-10-11）竞态守卫 + 防抖搜索收敛 → `d6acf7e`（2026-10-11）私有导入 UI 整体替换为公共 `ExcelImportDialog`（-158 行）→ `ea58b6c`（2026-10-16）接入 AI 智能出题弹窗。
 
 ## 4. 核心功能
@@ -20,7 +20,7 @@
 
 - 路由：path `/questions`、name `questions`、`meta.menu = 'questions'`，懒加载本文件（`admin/src/router/index.ts:50-55`）。注意菜单码 `questions` 与路由 path 同名，而 `route_nodes` 码对应 `/route-nodes`（下划线/连字符差异是刻意保留的，见 `menus.ts:7-8`）。
 - 前端守卫：`router/index.ts:112-116`（无 `questions` 码回退 `firstAllowedPath()`，`:9-12`）；`hasMenu = getIsSuper() || getMenus().includes(code)`（`admin/src/store/auth.ts:27-29`）；侧边栏过滤 `admin/src/layout/AdminLayout.vue:15`。
-- 后端守卫：本页调用的全部 7 个题库端点 + 2 个 AI 端点都挂 `Depends(require_menu("questions"))`（`backend/app/api/routes/admin.py:384`、`:402`、`:432`、`:446`、`:459`、`:473`、`:491`、`:504`、`:528`）。前端隐藏不是安全边界。
+- 后端守卫：本页调用的全部 7 个题库端点 + 2 个 AI 端点都挂 `Depends(require_menu("questions"))`（`backend/app/api/routes/admin.py:452`、`:470`、`:500`、`:514`、`:527`、`:541`、`:559`、`:572`、`:596`）。前端隐藏不是安全边界。
 
 ### 4.2 列表状态与服务端分页加载
 
@@ -55,7 +55,7 @@
 
 - `ea58b6c` 引入：导入组件（`:9`）、`aiVisible` 状态与 `handleAiSaved`（`:219-227`）、工具栏「AI 智能出题」按钮（`MagicStick` 图标，`:251`）、组件挂载 `<AiGenerateDialog v-model="aiVisible" @saved="handleAiSaved" />`（`:312`）。
 - `handleAiSaved`（`:221-227`）：保存成功后清空 `filterType/filterCategory/appliedKeyword/keyword` 四个筛选，再复用 `handleImported` 回到第 1 页刷新。
-- 弹窗内部（参数表单、生成/取消、草稿逐题编辑校验、勾选批量保存到 `POST /api/admin/ai/questions/batch-save`）全部封装在组件内，走旧链路 `admin.py:500-538` + `ai_question_service`，与 AI 智能中心 Phase A 的 `ai_*` 菜单无关——细节与缺陷见 `.qoder/admin/src/components/AiGenerateDialog.vue.md`，本页只负责挂接与刷新。
+- 弹窗内部（参数表单、生成/取消、草稿逐题编辑校验、勾选批量保存到 `POST /api/admin/ai/questions/batch-save`）全部封装在组件内，走旧链路 `admin.py:568-606` + `ai_question_service`，与 AI 智能中心 Phase A 的 `ai_*` 菜单无关。自 `b712d81`（2026-10-22）起，生成上游由 `llm_service` 门面按后端 `LLM_PROVIDER` 分派（`openai`=阿里云百炼 / `cloudbase`=腾讯云 CloudBase Agent；开发环境当前为 `cloudbase`，上线前须切回 `openai`）——细节与缺陷见 `.qoder/admin/src/components/AiGenerateDialog.vue.md`（其 §7 规则 12 记录供应商口径），本页只负责挂接与刷新。
 
 ### 4.6 与公共工具的关系
 
@@ -96,7 +96,7 @@
 7. **导入查重**：题干与库内或文件内重复即整行判错，**不覆盖**（`import_service.py:269-276`）。
 8. **搜索**：keyword 对题干 LIKE 模糊（autoescape 转义 `%_\`，`admin_service.py:157`）；qtype/category 精确等值（`:158-161`）。
 9. **分页口径**：单页 ≤100（`admin.py:388`），前端默认 20 可选 10/20/50/100；`total` 为筛选后总数。
-10. **AI 出题**：生成只返回草稿不入库，须管理员审核后 batch-save（`admin.py:498-499` 注释），复用 `questions` 菜单码。
+10. **AI 出题**：生成只返回草稿不入库，须管理员审核后 batch-save（`admin.py:567` 注释「生成结果一律作为草稿返回，必须由管理员在预览列表确认后调 batch-save 才入库」、端点 summary `:571`「AI 生成题目草稿（不入库）」），复用 `questions` 菜单码。自 `b712d81` 起生成上游由 `LLM_PROVIDER` 决定（`openai`=阿里云百炼 / `cloudbase`=腾讯云 CloudBase Agent，`backend/app/services/llm_service.py:1-22`），口径详见 `.qoder/admin/src/components/AiGenerateDialog.vue.md` §7 规则 12。
 
 ## 8. 修改约束
 
@@ -127,6 +127,12 @@
 ## 10. 迭代记录
 
 数据来源：`git log --follow --oneline -- admin/src/views/QuestionsView.vue`，共 **6 个提交**，按时间倒序。各提交均在 `docs/迭代记录.md` 有对应条目（按提交号检索）。
+
+### 2026-10-22（文档同步，本页源码零改动）
+- 需求：`c660727`（AI 上游迁移阿里云百炼）与 `b712d81`（上游改为按 `LLM_PROVIDER` 可切换的双供应商门面：`openai`=阿里云百炼 / `cloudbase`=腾讯云 CloudBase Agent，开发当前 `cloudbase`、上线前须切回 `openai`）之后，`backend/app/api/routes/admin.py` 的 AI 出题段落整体后移，文档所引行号须以当前源码校正。本次 admin/frontend 源码未改，属文档同步（补 `c660727` 欠账 + `b712d81` 口径）。
+- 修改内容（仅本文档）：§3 AI 端点鉴权行号 `:504`/`:528` → `:572`/`:596`；§4.1 九处 `require_menu("questions")` 行号更新为 `:452`、`:470`、`:500`、`:514`、`:527`、`:541`、`:559`、`:572`、`:596`；§4.5 旧链路 `admin.py:500-538` → `:568-606` 并补供应商分派口径；§7 规则 10 注释引用改为 `admin.py:567`/`:571`。`QuestionsView.vue` 自 `ea58b6c` 后零提交，本页自身行为的描述继续有效。另记两点：① 2026-10-16 条目关联文件中的 `cloudbase_service.py` 为当时旧文件名（`c660727` 迁移为 `llm_service.py`、`b712d81` 拆分为门面 + 双适配器），按 `.qoder/README.md` §3.11 不改历史条目；② §5 的题库 CRUD/导入端点 `admin.py` 行号（如 `:380-395`）同批整体后移约 68 行，属非 AI 出题口径、不在本次任务范围，未逐行校正（新行号**待确认**，留待后续任务）。
+- 关联文件：本文档；校正依据 `backend/app/api/routes/admin.py`（`require_menu("questions")` 九处行号、`:566-606` AI 段、`:567`/`:571` 草稿注释）、`backend/app/services/llm_service.py:1-22`（供应商分派 docstring）。
+- 测试结果：无（纯文档改动，未运行任何源码）。
 
 ### 2026-10-16（`ea58b6c`）
 - 需求：题库接入 CloudBase Agent AI 出题（草稿审核后入库），Excel 导入完整保留。

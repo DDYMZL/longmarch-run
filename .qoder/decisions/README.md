@@ -93,7 +93,7 @@
 | **启动状态机放在 `pages/launch/launch.js`，`app.js` 只做极薄状态容器** | 入口页承担 phase 状态机（loading/blocked/disabled）便于渲染对应 UI；`app.js` 无 `onLaunch` | `frontend/app.js`（26 行）；`frontend/app.json:2-3` 把 `launch` 放首位 |
 | **网络错误把微信原始 `errMsg` 追加进用户可见提示** | 真机看不到 console，必须把错误带到界面上 | `frontend/services/request.js:94-101`（注释明说） |
 | **活动页跳转加 3 秒去抖** | 并发请求同时 403 时会重复 `reLaunch` | `frontend/services/request.js:7`、`:110-119` |
-| **AI 问答是唯一 60 秒超时的接口**，其余默认 10 秒 | 模型调用耗时长 | `frontend/services/ai.js`；`services/request.js:73` |
+| **AI 问答非流式用 60 秒超时**（全项目唯一），其余接口默认 10 秒；**流式另设 120 秒整体上限** | 模型调用耗时长；而流式回答逐片到达可达数十秒，固定的 10s/60s 会误杀正常生成 | 非流式 `frontend/services/ai.js:41`（`timeout: 60000`）、默认值 `services/request.js:75`；流式 `services/request.js:186`（`STREAM_TIMEOUT_MS = 120000`，注释明说）、`:329`（未显式传 timeout 时取该值） |
 | **AI 聊天页在 `onShow` 比较 `_uid` 并清空会话态** | tab 页常驻，避免跨账号数据泄漏 | `frontend/pages/ai-chat/ai-chat.js:44-55`（注释明说） |
 | **不启用 npm 构建、不用 ESM、无 lint** | 原生小程序 CommonJS 足够；避免构建链复杂度 | `project.config.json` `nodeModules: false`；全项目 0 处 `import`/`export` |
 | 首页 11 路并发 `Promise.all` 后**单次 `setData`** | 减少渲染层通信次数 | `frontend/pages/home/home.js:189-190`（注释） |
@@ -104,15 +104,22 @@
 
 | 决策 | 取舍理由 | 权威出处 |
 |---|---|---|
-| **多轮对话无状态**：把历史拼接进单个 prompt，服务端不维护上下文 | CloudBase Agent 的 ACP `session/prompt` 调用模式下，自维护会话需额外存储与过期策略 | `backend/app/services/cloudbase_service.py:7-8`、`:206`；`AI_CONTEXT_TURNS = 4`（`core/config.py:90`） |
-| **AI 出题总量拆成多批并发调用** | 规避单次长回复被截断 | `core/config.py:75-78`（注释明说）；`AI_QUESTION_BATCH_SIZE=10`、`MAX_CONCURRENCY=3`、`MAX_COUNT=100` |
-| **AI 运行时参数支持 DB 覆盖 env 默认** | 管理端「配置中心」可不重启调整；生效值 = DB 覆盖 > env 默认 | `core/config.py:80-82`（注释明说）；`ai_config_service.get_effective(db)` |
-| **`AI_GLOBAL_DAILY_LIMIT = 2000` 全站日限额** | 防成本失控 | `core/config.py:85`（注释明说） |
-| **`AI_ENABLED = false` 时所有 AI 接口返回明确提示，不影响其它业务** | 可安全降级 | `core/config.py:83`（注释明说） |
+| **大模型上游做成「门面 + 双适配器」，由 `LLM_PROVIDER` 一行切换**（2026-10-22，`b712d81`） | 10-19 迁百炼时把 ACP 实现整体删除（`c660727`），10-22 用户要求开发期切回 CloudBase、上线再切回百炼——此时「换厂商」已无配置可改，只能重写。改为门面后两套凭证在两份 env 中同时常驻，此后换厂商**代码零改动**。备选方案（每次重写实现层 / 引入 LiteLLM 之类三方抽象层）分别因重复劳动与新增依赖被否 | `backend/app/services/llm_service.py`（模块文档串即决策记录）；适配器 `llm_openai.py`、`llm_cloudbase.py`；共享类型 `llm_base.py`（存在理由：打破门面 ↔ 适配器的循环导入）；`.qoder/ARCHITECTURE.md` §11.1；`.qoder/CHANGELOG.md` §2.14 |
+| **两套适配器统一四个符号**：`is_configured()` / `model_label()` / `prompt_meta()` / `stream()` | 门面只做分派、不含任何厂商分支；`model_label()` 同时充当 `ai_usage_logs.model` 的取值来源，保证用量记录能区分厂商 | `llm_service.py`；`llm_openai.py:40`、`:49`、`:210`、`:331`；`llm_cloudbase.py:50`、`:59`、`:218`、`:302` |
+| **`AI_QUESTION_BATCH_SIZE` 不随供应商联动**（`.env.prod` 恒为 5） | CloudBase 实测可承受 10 题/批，但一旦联动，「切换只改一行」这个不变量就破了；宁可让 CloudBase 期间多跑一批 | `backend/.env.prod:76-79`（注释明说） |
+| **流式链路刻意不重试**（`AI_MAX_RETRIES` 只作用于非流式） | 已下发给客户端的分片无法回收，重试会造成正文重复 | `llm_openai.py`（`:231` 的重试只在非流式 `_request_once` 路径）；`.qoder/ARCHITECTURE.md` §11.4 |
+| **`CLOUDBASE_TIMEOUT_SECONDS` 删除，两套供应商共用 `LLM_TIMEOUT_SECONDS`** | 超时是「一次上游调用」的属性而非厂商属性；分两个配置项会让切换不再是一行 | `core/config.py:73`（注释明说「两套供应商共用」） |
+| **多轮对话无状态**：把历史拼接进单个 prompt，服务端不维护上下文 | 自维护会话需额外存储与过期策略；ACP `session/prompt` 与 OpenAI Chat Completions 两家都不提供服务端会话，无状态是唯一对两边都成立的口径 | `backend/app/services/ai_chat_service.py:138`（`_history_block()`，`:247` 调用）；`AI_CONTEXT_TURNS = 4`（`core/config.py:110`） |
+| **系统提示词的下发位置随厂商而异**：`openai` 走标准 `system` role，`cloudbase` 只能前缀拼进用户输入 | ACP 的 `system` 参数未经核实，沿用迁百炼前的做法；这是协议能力差异，不是可统一的设计选择 | `llm_openai.py:106-111`；`llm_cloudbase.py:173-175`（注释明说） |
+| **AI 出题总量拆成多批并发调用** | 规避单次长回复被截断 | `core/config.py:95-98`（注释明说）；`AI_QUESTION_BATCH_SIZE=10`（`.env.prod` 覆盖为 5）、`MAX_CONCURRENCY=3`、`MAX_COUNT=100` |
+| **AI 运行时参数支持 DB 覆盖 env 默认** | 管理端「配置中心」可不重启调整；生效值 = DB 覆盖 > env 默认 | `core/config.py:100-102`（注释明说）；`ai_config_service.get_effective(db)` |
+| **`AI_GLOBAL_DAILY_LIMIT = 2000` 全站日限额** | 防成本失控 | `core/config.py:105`（注释明说） |
+| **`AI_ENABLED = false` 时所有 AI 接口返回明确提示，不影响其它业务** | 可安全降级 | `core/config.py:103`（注释明说） |
 | **知识库检索用关键词匹配，不用向量检索** | Phase A 取舍，避免引入向量库 | `.qoder/PROJECT.md` §8（列为架构级限制） |
-| `CLOUDBASE_API_KEY` **仅供后端调用，禁止写入前端代码、接口响应或日志** | 密钥保护 | `core/config.py:67`（注释明说）；`s26` G 组用例专门验证「任何响应不泄露 CLOUDBASE_API_KEY」 |
+| `LLM_API_KEY` 与 `CLOUDBASE_API_KEY` **均仅供后端调用，禁止写入前端代码、接口响应或日志** | 密钥保护 | `core/config.py:69`（注释明说）；`s26` G 组用例专门验证「任何响应不泄露上游 API Key」 |
 | 路线讲解**优先已发布知识、无知识时回退节点字段、且不调模型** | 省成本 + 保证草稿不泄露 | `s26_ai_center.py` R 组用例说明（`:12-13`） |
 | 答题解析**题库已有解析时直接返回、不调模型**；**以库内答案为准** | 省成本 + 防模型给出与题库矛盾的答案 | `s26_ai_center.py` Q 组用例说明（`:14`） |
+| **出题 JSON 解析失败在提示词层修，不引入 JSON 修复引擎**（2026-10-22） | `s25` 曾 2/10 批 `json.JSONDecodeError`，根因是模型输出未转义的 ASCII 双引号；修复引擎会掩盖真实失败率、且对每种畸形都要加规则。改为在提示词里明确要求中文引号后 10/10 批全过 | `ai_question_service.py` 出题提示词规则 11（原「补充要求」顺延为 12）；`backend/test/docs/s30-llm-provider-switch-report.md` §4 |
 
 ### 1.8 微信集成
 
@@ -120,7 +127,7 @@
 |---|---|---|
 | **`session_key` 从不落库、从不打日志** | 微信安全要求 | `backend/app/core/wx.py:3-4`（注释明说） |
 | code2session 失败**抛 502，绝不回落到 mock** | 生产环境回落 mock 会造成账号串号 | `backend/app/services/auth_service.py:41-48` |
-| mock openid 只在**未配凭证**或显式 `WX_LOGIN_ALLOW_MOCK=true` 时生效 | 「仅限本地自动化测试，生产必须为 false」 | `core/config.py:45-46`（注释明说） |
+| mock openid 只在**未配凭证**或显式 `WX_LOGIN_ALLOW_MOCK=true` 时生效 | 「仅限本地自动化测试，生产必须为 false」 | `core/config.py:47-48`（注释明说） |
 | 微信运动**近 7 日逐日覆盖而非累加**；缺失日期不写 0、不覆盖已有记录 | 微信返回的是每日快照，累加会重复计数 | `backend/app/services/sport_service.py:3`（文档串） |
 | **真实用户绝不编造步数**，只有 mock 用户回退 `seeded_steps` | 数据可信度 | `sport_service.py:7`（文档串明说） |
 | access_token **内存缓存 TTL 7000 秒**（官方 7200） | 留 200 秒余量避免边界失效 | `backend/app/services/wechat_service.py:21-50` |
@@ -133,7 +140,7 @@
 | 决策 | 取舍理由 | 权威出处 |
 |---|---|---|
 | **`APP_ENV` 只从系统环境变量读取**，写进 `.env` 不生效 | env 文件选择发生在解析 `.env` 之前 | `backend/app/core/config.py:12-15`（注释明说） |
-| `DATABASE_URL` **必填、不提供默认连接串** | 缺失时启动即报错，避免回退到错误/过期的库或泄露内置凭证 | `core/config.py:31-34`（注释明说） |
+| `DATABASE_URL` **必填、不提供默认连接串** | 缺失时启动即报错，避免回退到错误/过期的库或泄露内置凭证 | `core/config.py:32-36`（注释明说，字段声明无默认值） |
 | `.env` 文件锚定到 backend 根目录，**不依赖启动时的 cwd** | 本地 `run.py` 与服务器 uvicorn/systemd 从不同 cwd 启动都能读到同一份配置 | `core/config.py:9-11`（注释明说） |
 | **`backend/.env` 与 `.env.prod` 经用户决定入库** | 用户明确要求；代价是密钥进入 git 历史 | `.gitignore` 的 `!backend/.env` 显式放行；仓库根 `agents.md` §1.3 |
 | **`docker/` 改动默认不提交** | 用户明确要求；代价是 `021`/`022` 处于「本地已应用、生产缺失」状态 | 仓库根 `agents.md` §1.3；`.qoder/CHANGELOG.md` §2.13 |

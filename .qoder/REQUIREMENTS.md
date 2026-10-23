@@ -473,7 +473,7 @@
 
 | 能力 | 接口 / 位置 |
 |---|---|
-| AI 问答（小程序聊天页） | `POST /api/ai/chat`；`frontend/pages/ai-chat/ai-chat.js`（256 行） |
+| AI 问答（小程序聊天页） | 非流式 `POST /api/ai/chat`（`routes/ai.py:61`）+ SSE 流式 `POST /api/ai/chat/stream`（`routes/ai.py:110`，`6a4dbb7` 引入；小程序侧优先走流式、不支持分片或失败时自动降级为非流式，见 `frontend/services/ai.js`）；页面 `frontend/pages/ai-chat/ai-chat.js` |
 | 路线讲解 | `GET /api/ai/route-guide/{node_id}`（**后端就绪，前端面板待开发**） |
 | 答题讲解 | `GET /api/ai/quiz-explanation/{question_id}`（**后端就绪，前端按钮待开发**） |
 | 后台 AI 接口 | `/api/admin/ai/*`（`routes/ai_admin.py:43`，前缀 `/admin/ai`）：知识库（6）、题目工坊（7：`/jobs*` + `/drafts*`）、配置（2），共 **15 个端点**。**无「运行概览」「调用记录」端点**（更正见 §10.6） |
@@ -483,7 +483,7 @@
 
 ### 10.2 运行时默认值（`.env` 初始默认，管理端「配置中心」可在 `system_settings` 中逐项覆盖；**生效值 = DB 覆盖 > env 默认**，由 `ai_config_service.get_effective(db)` 合并）
 
-依据：`backend/app/core/config.py:80-91` 及其注释。
+依据：`backend/app/core/config.py:100-111` 及其注释。
 
 | 配置项 | 默认值 | 用途 |
 |---|---|---|
@@ -499,26 +499,30 @@
 
 ### 10.3 AI 出题策略
 
-依据：`core/config.py:75-78` 及注释「总量拆成多批并发调用，规避单次长回复被截断」。
+依据：`core/config.py:95-98`（出题策略）与 `:68-93`（大模型上游），及注释「总量拆成多批并发调用，规避单次长回复被截断」。
 
 | 配置项 | 默认值 | 用途 |
 |---|---|---|
-| `AI_QUESTION_BATCH_SIZE` | 10 | 每批请求 Agent 生成的题数 |
+| `AI_QUESTION_BATCH_SIZE` | 10 | 每批请求模型生成的题数（`.env.prod` 覆盖为 **5**：百炼开思考后 10 题单批实测超 300s 读超时） |
 | `AI_QUESTION_MAX_CONCURRENCY` | 3 | 批间并发上限 |
 | `AI_QUESTION_MAX_COUNT` | 100 | 单次生成 / 单次保存的题数上限 |
-| `CLOUDBASE_TIMEOUT_SECONDS` | 180 | 单批调用超时（秒） |
+| `LLM_TIMEOUT_SECONDS` | 300 | 单批调用超时（秒），**两套供应商共用**（原 `CLOUDBASE_TIMEOUT_SECONDS`=180 已在 `b712d81` 随供应商可切换改造删除） |
 
-安全约束：`CLOUDBASE_API_KEY` **仅供后端调用，禁止写入前端代码、接口响应或日志**（`config.py:67` 注释）。
+**上游供应商由 `LLM_PROVIDER` 决定**（`config.py:72`，默认 `openai`；`.env.prod:50` 当前为 `cloudbase`）：`openai` → OpenAI Chat Completions 兼容协议（阿里云百炼，生效配置 `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`/`LLM_EXTRA_BODY`/`LLM_QUESTION_EXTRA_BODY`）；`cloudbase` → 腾讯云 CloudBase Agent ACP 私有协议（生效配置 `CLOUDBASE_ENV_ID`/`CLOUDBASE_AGENT_ID`/`CLOUDBASE_API_KEY`/`CLOUDBASE_AGENT_URL`）。两套凭证在两份 env 文件中**同时常驻**，切换供应商只改 `LLM_PROVIDER` 一行、代码零改动。协议实质差异（系统提示位置、`max_tokens`/思考开关是否生效、`used_tokens` 口径、首字时延）见 `.qoder/ARCHITECTURE.md` §11.1。
+
+安全约束：`LLM_API_KEY` 与 `CLOUDBASE_API_KEY` **均仅供后端调用，禁止写入前端代码、接口响应或日志**（`config.py:69` 注释）。
 
 ### 10.4 多轮对话实现方式
 
-**无状态**：把历史拼接进单个 prompt（`services/cloudbase_service.py:7-8`），并在 `:206` 加系统提示词前缀。**服务端不维护会话上下文**，`AI_CONTEXT_TURNS` 控制携带的最近有效历史轮数。
+**无状态**：把历史拼接进单个 prompt（`services/ai_chat_service.py:138` 的 `_history_block()`，`:247` 调用）。**服务端不维护会话上下文**，`AI_CONTEXT_TURNS` 控制携带的最近有效历史轮数。
+
+系统提示词的下发位置**随供应商而异**（`b712d81` 起）：`openai` 适配器走标准 `system` role、与用户输入分开成两条消息（`services/llm_openai.py:106-111`）；`cloudbase` 适配器只能「前缀 + 空行」拼进用户输入（`services/llm_cloudbase.py:173-175`，ACP 的 `system` 参数未经核实，沿用迁百炼前的做法）。原 `services/cloudbase_service.py` 已在 `c660727` 删除。
 
 ### 10.5 前端约束
 
-- AI 问答是**全项目唯一使用 60 秒超时的接口**（`frontend/services/ai.js`），其余均为默认 10 秒（`services/request.js:73`）。
-- `pages/ai-chat` **无出站页面跳转**（`nodeId` 参数通道保留但未接入）。
-- 账号切换隔离：`ai-chat.js:44-55` 在 `onShow` 比较 `this._uid` 与 `app.globalData.user.id`，不一致就清空 `messages/conversationId/title/banner/sessions` —— **全项目唯一一处显式的跨账号数据清理**。
+- **超时口径（三档）**：普通接口缺省 10 秒（`frontend/services/request.js:75`）；AI 非流式 `POST /ai/chat` **60 秒**（`frontend/services/ai.js:41`，全项目唯一的 60 秒档）；AI 流式 `POST /ai/chat/stream` **120 秒**（`services/request.js:186` 的 `STREAM_TIMEOUT_MS`，`:329` 生效；注释说明「固定的 10s/60s 会误杀正常生成」）。流式需 `enableChunked`（基础库 2.20.2+），`supportsChunked()`（`:281-283`）判不支持时 `ai.js:95` 自动降级为非流式。
+- `pages/ai-chat` **无出站页面跳转**，但**入站带节点上下文已接通**（原记「`nodeId` 参数通道保留但未接入」已过期）：`node-detail.js:234-238` 的 `goAskAI()` 把节点 id 写进 `app.globalData.pendingAiNodeId` 再 `switchTab`（tab 页不支持 query），`ai-chat.js:95-98` 在 `onShow` 消费并调 `applyNodeContext()`（`:111`）；页面参数 `nodeId` 亦可用（`ai-chat.js:75` 注释）。注意这与 §10.6「`node-detail` 讲解面板待开发」不矛盾——已接通的是「带着节点去问 AI」，待开发的是节点页内直接展示 `GET /api/ai/route-guide/{node_id}` 的讲解面板。
+- 账号切换隔离：`ai-chat.js:87-93` 在 `onShow` 比较 `this._uid` 与 `app.globalData.user.id`，不一致就先 `stopStream()` 中止上一账号可能仍在进行的流式生成、再清空 `messages/conversationId/title/banner/sessions/showSessions` —— **全项目唯一一处显式的跨账号数据清理**。
 
 ### 10.6 待开发 / 待验证
 
@@ -529,7 +533,7 @@
 | `node-detail` 讲解面板 | **待开发**（`GET /api/ai/route-guide/{node_id}` 已就绪） |
 | 答题页 AI 讲解按钮 | **待开发**（`GET /api/ai/quiz-explanation/{question_id}` 已就绪） |
 | usage / cost 统计页 | **待开发**（`ai_usage_logs` 表已建、写入侧 `ai_usage_service.py` 已实现；**读取侧接口未实现**，见本表「运行概览 / 调用记录」行） |
-| 小程序真机真实 Agent 全链路 | **待验证**（本机 DNS 劫持限制，需 dns_shim 或真机网络） |
+| 小程序真机真实模型全链路 | **待验证**（后端侧真实调用已于 2026-10-22 在 `cloudbase` 供应商下实测通过非流式 / 流式 / 出题三条链路，见 `b712d81` 与 `backend/test/docs/s30-llm-provider-switch-report.md`；本机 Clash fake-ip 已不需要 `dns_shim` 兜底，真机侧仍待验证） |
 | AI 知识库检索为**关键词匹配**，非向量检索 | 已知限制（Phase A 取舍） |
 
 > **更正（2026-10-17）**：本表首行原写「管理后台 5 个 AI 子页面（知识库 / 配置 / 题目工坊 / 运行概览 / 调用记录）| 待开发（接口已就绪）」，把「接口已就绪」笼统套用到全部 5 个页面，属于把未实现的部分说成已就绪。实测依据：`docker/init/022_ai_admin_menus.sql:14-27` 种入 5 个菜单码（`ai_overview` sort 10、`ai_knowledge` 11、`ai_workshop` 12、`ai_logs` 13、`ai_config` 14），而 `backend/app/api/routes/ai_admin.py` 的 15 个端点只用到其中 3 个菜单码（`ai_knowledge` 6 个 `/knowledge*`、`ai_workshop` 7 个 `/jobs*`+`/drafts*`、`ai_config` 2 个 `/config`）；`ai_overview`、`ai_logs` 在 `backend/app/api/` 下零命中，`AiUsageLog` 仅被 `models/models.py` 与 `services/ai_usage_service.py`（写入侧）引用，api 层零引用。故拆为两行分别标注。
@@ -671,7 +675,7 @@
 1. **`master` 勋章口径**：实现按总积分 ≥ 500 判定，展示文案写「累计答题积分达到 500」，**修正方向待定**（见 §8.3）。
 2. **生产活动配置的起止时间与发布状态**（运行时数据，不在仓库）。开发库实测：1 行、`start=2026-08-31 16:00`、`end=2026-12-31 15:59`、`published=true`，**不代表生产**。
 3. **`WXACODE_ENV_VERSION` 生产是否已改为 `release`**（代码默认 `trial`）。
-4. **`ACTIVITY_MASK_NICKNAME`**（实时行动态昵称脱敏，需求 §8.5，开启后展示如「王*明」）代码默认 `false`（`core/config.py:99`），**生产是否开启待确认**。
+4. **`ACTIVITY_MASK_NICKNAME`**（实时行动态昵称脱敏，需求 §8.5，开启后展示如「王*明」）代码默认 `false`（`core/config.py:119`），**生产是否开启待确认**。
 5. **`ORG_SYNC_API_URL` 外部组织同步接口**是否在生产实际对接（代码默认空 → 用内置种子）。
 6. **`lm_data_{userId}` 遗留 Storage 键**是否有清理计划（`frontend/design.md:104` 只说「迁移保留旧 key」）。
 7. **`frontend/AGENTS.md` §5 的 `NODE_COORDS` 前端硬编码坐标表在代码中不存在**（坐标全部来自 `GET /api/march/route`）—— 该文档条目应视为失效，是否修订待确认。
@@ -682,7 +686,7 @@
 
 | 项 | 当前状态 | 依据 |
 |---|---|---|
-| `ai-chat` 的 `nodeId` 参数通道 | **待开发（Phase B）**。代码注释写「Phase A 先不接入」，仓库中无 Phase B 计划文档 | `frontend/pages/ai-chat/`；`.qoder/PROJECT.md` §7 |
+| ~~`ai-chat` 的 `nodeId` 参数通道~~ | **已实现，本行作废（2026-10-22 实测更正）**。原记「待开发（Phase B），代码注释写『Phase A 先不接入』」已过期：`node-detail.js:234-238` 的 `goAskAI()` 经 `app.globalData.pendingAiNodeId` 传节点上下文（tab 页 `switchTab` 不支持 query），`ai-chat.js:95-98` 在 `onShow` 消费并调 `applyNodeContext()`（`:111`），页面参数 `nodeId` 亦可用（`ai-chat.js:75` 注释）。**仍待开发的是节点页内的讲解面板**（`GET /api/ai/route-guide/{node_id}` 在 `frontend/` 下零调用点，实测 grep 无命中），见 §10.6 对应行 | `frontend/pages/node-detail/node-detail.js:230-238`、`frontend/pages/ai-chat/ai-chat.js:75`、`:95-98`、`:111` |
 | `pages/account` 入口恢复 | **已隐藏，恢复条件待产品确认**。页面已注册但无任何跳转入口，其 `handleUnbind` 对应按钮在 WXML 中未渲染（死代码路径） | `frontend/app.json:23`、`frontend/pages/account/account.js:52-78`、`frontend/design.md:48` |
 | 管理后台 5 个 `ai_*` 菜单对应页面 | **待开发**。`022_ai_admin_menus.sql` 已把 `ai_overview`/`ai_knowledge`/`ai_workshop`/`ai_logs`/`ai_config` 写入 `admin_menus`，但 `admin/src/router/menus.ts` 只有 11 项、**不含任何一个 `ai_*`**，即 DB 有菜单码而前端无入口 | `docker/init/022_ai_admin_menus.sql:15-27` vs `admin/src/router/menus.ts:3-15` |
 

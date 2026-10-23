@@ -137,10 +137,17 @@ Windows 本地开发环境的一键启动脚本：起 openGauss 容器并**等�
   7. **`:101` 无条件打开浏览器**：即便 5173 上监听的是别的进程（`:64` 因此跳过了启动），仍会打开该地址。
   8. **当前工作区处于本地联调态**：实测 `frontend/services/config.js:11` 为 `const DEV_TARGET = 'local';` 且该文件在 `git status` 中为已修改未提交（` M frontend/services/config.js`）。这与 `docs/迭代记录.md` 的 `f2a8939` 条目「待办」段一致：跑 automator 回归前需还原为 `'remote'`、且不得提交 `'local'`（本脚本 `:92` 亦如此提示）。因此现在运行本脚本会走 `:80-86` 的 `local` 分支。
   9. **`:129` 的 `ADMIN_PASSWORD` 为空提示属脚本自述**：其后端实际降级行为未在本任务中核对（见 §4.7）。
+  10. **`:ai_config` 的 AI 凭证预检已同 `b712d81` 的供应商机制脱节（2026-10-22 登记，脚本源码未改）**：`:112-116` 只检查 `CLOUDBASE_ENV_ID`/`CLOUDBASE_AGENT_ID`/`CLOUDBASE_API_KEY` 三键。自 `b712d81` 起 AI 上游由 `backend\.env` 的 `LLM_PROVIDER` 按双供应商门面分派（`openai`=阿里云百炼 / `cloudbase`=腾讯云 CloudBase Agent，`backend/app/services/llm_service.py:1-22`），当前 `.env:38` 为 `cloudbase`，三键仍是现行供应商的有效凭证、检查结论继续成立；但若切到 `openai`，本子过程既不检查 `LLM_API_KEY`/`LLM_BASE_URL`、也不检查 `LLM_PROVIDER` 值本身，仍会打印三键已配置。另 `:117-122` 的告警文案称缺这些值时 `/api/ai/*` 与管理端 AI 生成「返回 403」，与现行映射不符：供应商凭证缺失/无效时抛 `LlmError`（`backend/app/services/llm_base.py:16-25`）→ **502**（`backend/app/api/routes/ai.py:5` 映射注释、`:56-57`；管理端出题链路 `admin.py:585-587` 同），403 仅在 `AI_ENABLED=false` 时出现。两点均属脚本源码层面的问题，本次仅登记不修改。
 
 ## 10. 迭代记录
 
 数据来源：`git log --follow --format='%h|%ad|%s' --date=short -- start.bat`，共 **3 个提交**。
+
+### 2026-10-22（文档同步，本脚本源码零改动）
+- 需求：`b712d81` 把 AI 上游改为按 `LLM_PROVIDER` 可切换的双供应商门面（`openai`=阿里云百炼 / `cloudbase`=腾讯云 CloudBase Agent）后，`:ai_config` 的 `CLOUDBASE_*` 三键预检覆盖面与 403 告警文案同新机制脱节，需在 §9 登记。本次 admin/frontend 源码未改，本文件属文档同步（`b712d81` 口径；本脚本源码零提交）。
+- 修改内容（仅本文档）：§9 新增第 10 条；其余章节未动——`start.bat` 自 `c1ee58e` 起未修改，§4-§8 对脚本行为的描述与源码一致（当前 `backend/.env:38` 为 `LLM_PROVIDER=cloudbase`，三键检查对现行供应商仍有效）。
+- 关联文件：`backend/.env`（`:38` 当前值）、`backend/app/services/llm_service.py`、`backend/app/services/llm_base.py`、`backend/app/api/routes/ai.py`、`backend/app/api/routes/admin.py`。
+- 测试结果：无（纯文档改动，未运行脚本）。
 
 ### 2026-10-17（`c1ee58e`，14:48）
 - 需求：删除 `backend/.env.example` 模板后，「缺 `.env` 就从模板复制」这一步既无必要也有害（会用 25 个空值/占位符覆盖真实配置）。

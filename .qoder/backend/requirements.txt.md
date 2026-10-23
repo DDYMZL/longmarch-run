@@ -10,7 +10,7 @@
 
 ## 3. 业务需求
 
-支撑「长征步迹」后端的四类能力：HTTP 服务与 OpenAPI 文档（FastAPI + Uvicorn）、openGauss 数据访问（SQLAlchemy + psycopg2）、微信对接与数据校验（httpx + pycryptodome + Pydantic）、管理后台 Excel 导入导出（openpyxl + python-multipart）。
+支撑「长征步迹」后端的四类能力：HTTP 服务与 OpenAPI 文档（FastAPI + Uvicorn）、openGauss 数据访问（SQLAlchemy + psycopg2）、微信对接、**AI 大模型上游调用**与数据校验（httpx + pycryptodome + Pydantic）、管理后台 Excel 导入导出（openpyxl + python-multipart）。
 
 技术栈选型约束见 `backend/AGENTS.md` §2「技术栈（不可随意更换）」，其中明确规定 Web 框架为 FastAPI + Uvicorn、ORM 为 SQLAlchemy 2.0（`Mapped`/`mapped_column` 风格）、数据校验为 Pydantic v2、鉴权为 PyJWT（HS256）、微信对接为 httpx、配置为 pydantic-settings。
 
@@ -27,7 +27,7 @@
 | `:7` | `pydantic>=2.6.0` | `app/schemas/schemas.py:11-12`（`BaseModel`、`ConfigDict`、`Field`、`field_validator`、`to_camel`） | 请求/响应模型与 camelCase 别名生成 |
 | `:8` | `pydantic-settings>=2.2.0` | `app/core/config.py:7`（`BaseSettings`、`SettingsConfigDict`） | 从 env 文件加载 `Settings` |
 | `:9` | `pyjwt>=2.8.0` | `app/core/security.py:5`（`import jwt`） | HS256 JWT 签发与校验 |
-| `:10` | `httpx>=0.27.0` | `app/core/wx.py:10`、`app/services/admin_service.py:14`、`app/services/cloudbase_service.py:18`、`app/services/wechat_service.py:9` | 同步 HTTP 客户端：微信接口、CloudBase Agent、组织同步 |
+| `:10` | `httpx>=0.27.0` | `app/core/wx.py:10`、`app/services/admin_service.py:14`、`app/services/llm_openai.py:25`、`app/services/llm_cloudbase.py:25`、`app/services/wechat_service.py:9` | 同步 HTTP 客户端：微信接口、**大模型上游两套适配器**（`llm_openai` = OpenAI Chat Completions 兼容，`llm_cloudbase` = 腾讯云 CloudBase Agent ACP，由 `llm_service.py` 门面按 `LLM_PROVIDER` 分派）、组织同步 |
 | `:11` | `pycryptodome>=3.20.0` | `app/core/wx.py:11`（`from Crypto.Cipher import AES`） | AES 解密（微信侧加密数据） |
 | `:12` | `openpyxl>=3.1.0` | `app/services/import_service.py:17`（`Workbook`、`load_workbook`） | Excel 模板生成与导入解析 |
 | `:13` | `python-multipart>=0.0.9` | **无任何直接 import** | FastAPI 解析 `multipart/form-data` 的必需底层依赖；实际触发点是 `app/api/routes/admin.py:444` 与 `:597` 的 `file: UploadFile = File(...)`（读取辅助函数 `_read_import_file` 在 `:419`） |
@@ -43,6 +43,7 @@
 - **被谁引用**：`backend/AGENTS.md` §7「快速启动」的 `pip install -r requirements.txt`；`backend/README.md`；部署打包流程（见 `.qoder/ARCHITECTURE.md` 部署章节）。
 - **依赖谁**：无（纯声明文件）。
 - **间接依赖的关键性**：`psycopg2-binary` 与 `python-multipart` 都**不会被 import 语句检索到**，删掉任一个都会在运行时才暴露故障（前者连不上库，后者上传接口 400/500），修改时须特别注意。
+- **AI 适配层的依赖面（2026-10-22 核对）**：共享类型模块 `app/services/llm_base.py`（`LlmError` / `CallResult` / `ensure_complete`）**只 import 标准库 `dataclasses` 与 `typing`**（`llm_base.py:12-13`），**无任何第三方依赖**；两套上游适配器的唯一第三方依赖是 `httpx`（`llm_openai.py:25`、`llm_cloudbase.py:25`），其余为 `json` / `logging` / `time` / `dataclasses` / `typing` 标准库（`llm_openai.py:20-23`、`llm_cloudbase.py:19-23`）。因此再加一家供应商，只要协议仍是「HTTP + JSON / SSE 文本」，**本文件无需新增任何依赖**；引入官方 SDK（如 `openai`）才会需要改本文件。
 
 ## 7. 业务规则
 
@@ -90,6 +91,13 @@
 ## 10. 迭代记录
 
 数据来源：`git log --follow --oneline -- backend/requirements.txt`，共 **4 个提交**，与 `docs/迭代记录.md` 逐条交叉核对。按时间倒序。
+
+### 2026-10-22
+
+- 需求：AI 上游改造（`c660727` 迁阿里云百炼 → `b712d81` 改为 `LLM_PROVIDER` 可切换的双供应商）后，校正本文档对 `httpx` 使用方的过期表述。**本次 `backend/requirements.txt` 未改动**（仍为 2 行注释 + 11 项依赖；`httpx` 自 `a94e685` 起即在列，两次 AI 上游改造都未新增依赖），**属文档同步**。
+- 修改内容：① §4 的 `httpx` 行把已不存在的 `app/services/cloudbase_service.py:18`（`c660727` 起 `git mv` 为 `llm_service.py`，`b712d81` 起拆为门面 + 两个适配器）更正为 **`app/services/llm_openai.py:25` 与 `app/services/llm_cloudbase.py:25`** 两个真实使用方，用途列改为「大模型上游两套适配器（OpenAI Chat Completions 兼容 / CloudBase Agent ACP），由 `llm_service.py` 门面按 `LLM_PROVIDER` 分派」；② §3 的能力归纳补上「AI 大模型上游调用」；③ §6 新增「AI 适配层的依赖面」一条，说明 `llm_base.py` **只用标准库 `dataclasses`/`typing`、无第三方依赖**，两套适配器的第三方依赖只有 `httpx`，故再加一家 HTTP+JSON/SSE 协议的供应商无需改本文件。§9 的 11 项依赖与实测版本表未变，未改。
+- 关联文件：`backend/app/services/llm_service.py`、`llm_base.py`、`llm_openai.py`、`llm_cloudbase.py`、`backend/app/core/config.py`（`LLM_PROVIDER` / `LLM_*` / `CLOUDBASE_*`）、`.qoder/backend/test/README.md`（s30 供应商切换套件）。
+- 测试结果：本次未跑测试（依赖声明零改动）。`httpx` 的 5 个 import 位置以 2026-10-22 `grep -n "import httpx"` 逐个实读确认（`core/wx.py:10`、`admin_service.py:14`、`wechat_service.py:9`、`llm_openai.py:25`、`llm_cloudbase.py:25`）；`b712d81` 的功能验证（s30 23/23、s25 16/16、s26 47/47、s28 13/13，合计 99/99）见 `docs/迭代记录.md` 的 `b712d81` 条目。
 
 ### 2026-10-17
 

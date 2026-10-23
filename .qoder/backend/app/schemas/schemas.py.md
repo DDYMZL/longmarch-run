@@ -71,7 +71,7 @@ model_config = ConfigDict(
 | `:1198` | 管理端驾驶舱 / 大屏（banner 名义范围，实际含 4 个子域，见下） | `:1199-1560` | 35 | 0 | 35 | 见下方拆分 |
 | — | `AdminOrgNodeOut.model_rebuild()` | `:1563` | — | — | — | 见 §4.4 |
 | `:1566` | 活动时间控制（V2.0 需求一） | `:1567-1616` | 4 | 1 | 3 | `ActivityStatusOut`→`GET /api/activity/status`（**公开接口，无鉴权**）；`AdminActivitySettingOut`→`GET/PUT /api/admin/activity`、`POST /api/admin/activity/publish` |
-| `:1619` | AI 智能中心（V1.0，小程序契约） | `:1621-1703` | 9 | 8 | 1 | `AiChatOut`→`POST /api/ai/chat`；`AiConversationListOut`→`GET /api/ai/conversations`；`AiConversationDetailOut`→`GET /api/ai/conversations/{id}`；`AiRouteGuideOut`→`GET /api/ai/route-guide/{node_id}`；`AiQuizExplanationOut`→`GET /api/ai/quiz-explanation/{question_id}` |
+| `:1619` | AI 智能中心（V1.0，小程序契约） | `:1621-1703` | 9 | 8 | 1 | `AiChatOut`→`POST /api/ai/chat`；`AiConversationListOut`→`GET /api/ai/conversations`；`AiConversationDetailOut`→`GET /api/ai/conversations/{id}`；`AiRouteGuideOut`→`GET /api/ai/route-guide/{node_id}`；`AiQuizExplanationOut`→`GET /api/ai/quiz-explanation/{question_id}`。**`6a4dbb7` 起另有 `POST /api/ai/chat/stream`（SSE 逐字返回）复用本节契约**：请求体仍是 `AiChatRequest`（`routes/ai.py:112`），响应是 `text/event-stream` 流、**未声明 `response_model`**（`routes/ai.py:110`），`start`/`delta`/`done`/`error` 四类事件的载荷由 `routes/ai.py` 内的 `_sse({...})` 手工拼 camelCase 字典（如 `conversationId`/`usedTokens`），**不在本文件建模**——改事件字段时无 Pydantic 契约可依赖，须同步 `frontend/services/ai.js` |
 | `:1706` | 管理端 AI 智能中心契约 | `:1707-1858` | 18 | 0 | 18 | `AdminAiKnowledgeOut`/`ListOut`→`/api/admin/ai/knowledge*`；`AdminAiJobOut`/`JobListOut`→`/api/admin/ai/jobs*`；`AdminAiDraftOut`/`DraftListOut`→`/api/admin/ai/drafts*`；`AdminAiImportOut`→`POST /api/admin/ai/drafts/import`；`AdminAiConfigOut`→`GET/PATCH /api/admin/ai/config` |
 | | **合计** | | **201** | **91**（+ 基类 1） | **109** | |
 
@@ -130,9 +130,11 @@ model_config = ConfigDict(
 
 实测 B 与 C 均能接受 camelCase 入参（`{"encryptedData": "x"}`、`{"conversationId": 3}`），且因 `populate_by_name=True` 也接受 snake_case。
 
-### 5.2 请求体 → 路由绑定全量（46 处，实测提取）
+### 5.2 请求体 → 路由绑定全量（47 处）
 
-**小程序侧（11 个模型）**：`LoginRequest`→`POST /auth/login`；`InviteVerifyRequest`→`POST /auth/invite/verify`；`OnboardRequest`→`POST /auth/onboard`；`NicknameUpdateRequest`→`PUT /auth/nickname` 与 `PUT /auth/nickname/initial`；`QrInfoRequest`→`POST /auth/qr/info`；`QrConfirmRequest`→`POST /auth/qr/confirm`；`SelectOrgRequest`→`POST /org/select`；`QuizAnswerRequest`→`POST /quiz/answer`；`SportSyncRequest`→`POST /sport/sync`；`AddStepsRequest`→`POST /sport/add`；`AiChatRequest`→`POST /ai/chat`。
+> **2026-10-22 校正**：`6a4dbb7` 新增的 `POST /api/ai/chat/stream` 复用 `AiChatRequest`（`routes/ai.py:112`，与非流式 `routes/ai.py:63` 同一个模型），故绑定数由建档时实测的 46 处增至 **47 处**。另注：本文件建档后还被 `e72a670`（`/march/route-stats`）改过，该次是否引入新的请求体绑定**待确认**——本次只核 AI 相关部分，未重测全量分母。
+
+**小程序侧（11 个模型）**：`LoginRequest`→`POST /auth/login`；`InviteVerifyRequest`→`POST /auth/invite/verify`；`OnboardRequest`→`POST /auth/onboard`；`NicknameUpdateRequest`→`PUT /auth/nickname` 与 `PUT /auth/nickname/initial`；`QrInfoRequest`→`POST /auth/qr/info`；`QrConfirmRequest`→`POST /auth/qr/confirm`；`SelectOrgRequest`→`POST /org/select`；`QuizAnswerRequest`→`POST /quiz/answer`；`SportSyncRequest`→`POST /sport/sync`；`AddStepsRequest`→`POST /sport/add`；`AiChatRequest`→`POST /ai/chat`（`routes/ai.py:63`）与 `POST /ai/chat/stream`（`routes/ai.py:112`，`6a4dbb7` 新增的 SSE 端点，复用同一请求模型）。
 
 **管理端（27 个模型）**：`AdminLoginRequest`→`POST /admin/login`；`AdminRouteNodeUpsert`→`POST /admin/route-nodes`、`PUT /admin/route-nodes/{node_id}`；`AdminRouteNodeEnabled`→`PATCH /admin/route-nodes/{node_id}/enabled`；`AdminPointsVerifyRequest`→`POST /admin/points/verify`；`AdminQuestionUpsert`→`POST /admin/questions`、`PUT /admin/questions/{question_id}`；`AdminImportConfirmRequest`→`POST /admin/questions/import-confirm`、`POST /admin/quotes/import-confirm`；`AdminAiGenerateRequest`→`POST /admin/ai/generate-questions`；`AdminAiBatchSaveRequest`→`POST /admin/ai/questions/batch-save`；`AdminQuoteCycleUpdate`→`PUT /admin/quotes/cycle`；`AdminQuoteUpsert`→`POST /admin/quotes`、`PUT /admin/quotes/{quote_id}`；`AdminOrgUpsert`→`POST /admin/orgs`、`PUT /admin/orgs/{org_id}`；`AdminUserStatusRequest`→`PATCH /admin/users/{user_id}/status`；`AdminUserOrgRequest`→`PUT /admin/users/{user_id}/org`；`AdminInviteCreate`→`POST /admin/invites`；`AdminInviteUpdate`→`PATCH /admin/invites/{invite_id}`；`AdminRoleUpsert`→`POST /admin/roles`、`PUT /admin/roles/{role_id}`；`AdminUserRolesRequest`→`POST /admin/users/{user_id}/roles`；`AdminRoleEnabledRequest`→`PATCH /admin/users/{user_id}/roles/{role_id}/enabled`；`AdminActivitySettingUpdate`→`PUT /admin/activity`；`AdminActivityPublishRequest`→`POST /admin/activity/publish`；`AdminAiKnowledgeUpsert`→`POST /admin/ai/knowledge`、`PUT /admin/ai/knowledge/{kid}`；`AdminAiKnowledgeStatusRequest`→`PATCH /admin/ai/knowledge/{kid}/status`；`AdminAiJobCreateRequest`→`POST /admin/ai/jobs`；`AdminAiDraftUpdateRequest`→`PUT /admin/ai/drafts/{draft_id}`；`AdminAiDraftStatusRequest`→`PATCH /admin/ai/drafts/{draft_id}/status`；`AdminAiImportRequest`→`POST /admin/ai/drafts/import`；`AdminAiConfigPatchRequest`→`PATCH /admin/ai/config`。
 
@@ -314,6 +316,13 @@ Schema 不直接引用表，但字段形状与 `models/models.py` 的 ORM 一一
 ## 10. 迭代记录
 
 数据来源：`git log --follow --oneline -- backend/app/schemas/schemas.py`（**40 条提交**，2026-09-30 至 2026-10-17），验证结论对照 `docs/迭代记录.md`。按主题归并如下，提交号与日期均为真实值。
+
+### 2026-10-22
+
+- 需求：补齐 AI 上游三次变更（`c660727` 迁阿里云百炼、`6a4dbb7` SSE 真流式、`b712d81` 改为 `LLM_PROVIDER` 可切换的双供应商）在本文件文档中的欠账。**本次源码未改**——这三次提交均未触碰 `backend/app/schemas/schemas.py`（`git log -- backend/app/schemas/schemas.py` 中它们都不在列），AI 契约面（字段名、类型、校验）零变化，属**纯文档同步**。
+- 修改内容：① §4 分节表「AI 智能中心（V1.0，小程序契约）」行补记 `6a4dbb7` 新增的 `POST /api/ai/chat/stream`：请求体复用 `AiChatRequest`（`routes/ai.py:112`）、响应为 SSE 流且**未声明 `response_model`**（`routes/ai.py:110`），`start`/`delta`/`done`/`error` 事件载荷由路由内 `_sse({...})` 手工拼 camelCase 字典、不在本文件建模；② §5.2 标题的绑定数由 46 处更正为 **47 处**并加校正说明，「小程序侧」清单把 `AiChatRequest` 的绑定补全为 `/ai/chat` + `/ai/chat/stream`。**未发现与 AI 上游供应商相关的过期表述**：全文检索 `cloudbase`/`CloudBase`/`LLM_`/`error_code`/供应商，正文（§1–§9）零命中，仅 §10 的 2026-10-17、2026-10-16 两条历史记录提到「真实 CloudBase Agent 调用」与「题库接入 CloudBase Agent AI 出题」——那是当时的真实口径，按 `.qoder/README.md` §3.11 **原样保留不改**（`ai_usage_logs.error_code` 自 `c660727` 起为 `llm`、`model` 随供应商取值，这两条口径属数据库/服务层事实，记于 `.qoder/docker/init/021_ai_center.sql.md` §4.6，本文件不含 `error_code` 相关字段）。
+- 关联文件：`backend/app/api/routes/ai.py`（`:61-63` 非流式、`:110-112` 流式）、`backend/app/services/ai_chat_service.py`、`backend/app/services/llm_service.py`、`frontend/services/ai.js`、`.qoder/backend/test/README.md` §3.1（s28/s30 套件）。
+- 测试结果：本次未跑测试（源码零改动）。行号与「SSE 无 Pydantic 模型」的结论以 2026-10-22 实读 `routes/ai.py:105-175` 与 `grep -n "Stream\|Delta" app/schemas/schemas.py`（仅命中 `:205`、`:1607` 两处与 AI 无关的 `delta: int`）为据；`6a4dbb7` 自身的验证结论（s28 13/13）见 `docs/迭代记录.md` 的 `6a4dbb7` 条目与 `backend/test/docs/s28-ai-chat-stream-report.md`。**遗留待确认**：`e72a670`（`/march/route-stats`，在本文件建档之后修改过 `schemas.py`）对应的契约变更尚未建档，本次不在范围内。
 
 ### 2026-10-17
 

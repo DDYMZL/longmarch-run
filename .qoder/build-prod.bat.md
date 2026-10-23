@@ -119,11 +119,18 @@
   7. **`:111` 的产物循环依赖 `for %%F in (...)` 的字面量列表**：产物增删需同时改 `:8`、`:111`、`:151`，无单一来源。
   8. **生产域名与冒烟端点硬编码**：`:165`、`:174` 写死了生产域名（与 `frontend/services/config.js` 的远程地址同源）。域名变更需同时改这两处与该配置文件。
   9. **服务器侧前提未核实**：`:154` 的 `docker compose run --rm database-init` 假设服务器上存在同名的 `docker/compose.yml` 与 `database-init` 服务定义；服务器上的 compose 文件路径与内容**待确认**（`.qoder/PROJECT.md` §10「待确认问题清单」第 2 条「仍未核实」项）。
+  10. **AI 预检与打包校验已同 `b712d81` 的供应商机制脱节（2026-10-22 登记，脚本源码未改）**：① `:49-50` 只检查 `CLOUDBASE_API_KEY` 非空——自 `b712d81` 起 AI 上游由 `LLM_PROVIDER` 按双供应商门面分派（`openai`=阿里云百炼 / `cloudbase`=腾讯云 CloudBase Agent，`backend/app/services/llm_service.py:1-22`），`backend/.env.prod:48` 有告警注释要求「上线部署前必须把本行改为 LLM_PROVIDER=openai」（当前值仍为 `cloudbase`，`:50`），而本脚本既不检查 `LLM_PROVIDER` 的值、也不检查 `openai` 供应商下 `LLM_API_KEY` 的非空：若按注释切回 `openai` 而百炼 Key 缺失，[2/6] 不会有任何提示。② `:121-128` 的 [6/6] 白名单仍只覆盖 `ai.py`/`ai_admin.py`/`ai_chat_service.py`——现 AI 上游文件还包括 `app/services/llm_service.py`、`llm_base.py`、`llm_openai.py`、`llm_cloudbase.py`（`cloudbase_service.py` 自 `c660727` 起已不存在），四个文件全部漏打包时脚本仍会报 ok（第 2 条「硬编码白名单会静默过期」的已发生实例）。③ 告警文案 "AI endpoints will answer 403" 与现行映射不符：供应商凭证缺失/无效时抛 `LlmError`（`backend/app/services/llm_base.py:16-25`）→ 路由映射 **502**（`backend/app/api/routes/ai.py:5` 映射注释、`:56-57`），403 仅在 `AI_ENABLED=false`（`AiDisabledError`）时出现。三点均属脚本源码层面的问题，本次仅登记不修改。
 - **待确认**：`admin/dist.zip` 的体积/文件数会随管理后台改动变化，§5 引用的 538153 B / 36 文件是 `f2a8939` 当时实测值，非当前值。
 
 ## 10. 迭代记录
 
 数据来源：`git log --follow --format='%h|%ad|%s' --date=short -- build-prod.bat`，共 **1 个提交**（创建后未再修改）。
+
+### 2026-10-22（文档同步，本脚本源码零改动）
+- 需求：`b712d81` 把 AI 上游改为按 `LLM_PROVIDER` 可切换的双供应商门面（`openai`=阿里云百炼 / `cloudbase`=腾讯云 CloudBase Agent）后，[2/6] 的 `CLOUDBASE_API_KEY` 预检与 [6/6] 的 AI 文件白名单同新机制脱节，需在 §9 登记。本次 admin/frontend 源码未改，本文件属文档同步（`b712d81` 口径；本脚本源码零提交）。
+- 修改内容（仅本文档）：§9 新增第 10 条（单键预检 vs 双供应商切换、`.env.prod:48` 的上线切换要求、打包白名单缺 `llm_*.py` 四文件、403 文案 vs 实际 502 映射）；其余章节未动——`build-prod.bat` 自 `f2a8939` 起未修改，§4-§8 对脚本行为的描述与源码一致。
+- 关联文件：`backend/.env.prod`（`:48` 告警注释、`:50` 当前值）、`backend/app/services/llm_service.py`、`backend/app/services/llm_base.py`、`backend/app/api/routes/ai.py`。
+- 测试结果：无（纯文档改动，未运行脚本）。
 
 ### 2026-10-17（`f2a8939`，14:14）
 - 需求：把分散在 `build-backend.bat`、`build-sql.bat`、`admin npm run build` 与人工核对之间的发布动作串成一条命令，并在打包前后拦住「漏跑迁移」「占位符覆盖服务器真实值」「AI 代码没进包」「本地 `.env` 泄漏」四类事故（背景见 §3）。

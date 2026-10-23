@@ -284,10 +284,14 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | `backend/AGENTS.md:39` | 写「种子数据：路线 10 / 题库 15 / **勋章 6** / 组织树」——`backend/app/data/seed.py:282-311` 的 `MEDALS` 实际 **12 枚**（2026-10-17 更正：本行原并列引用 `backend/app/models/models.py:5`，经逐行核对该文件 docstring（`:1-9`）只列出 `MedalDef`/`UserMedal` 类名、**不含任何勋章数量**，故删除该错误引用） |
 | `backend/app/models/models.py:524` | `ImportPreview` docstring 写 `biz_type: question / quote / staff`——`import_service` **只实现了 question 与 quote**，无 staff（人员）导入 |
 | `project.config.json:57` vs `project.private.config.json` | `libVersion` 入库值 `3.0.0` 与本机私有值 `3.17.3` 不一致 |
+| `backend/AGENTS.md` §6 第 4 条「禁止行为」末项（`:93`） | 要求「生产占位值须保持为占位，不得填入真实生产密钥」（§2 技术栈表 `:21` 同口径），而 `backend/.env.prod` 自 `c660727`（2026-10-19，S27）起即存真实密钥、`b712d81` 又续存两套大模型凭证——**文档口径与仓库现状持续冲突**，S27 §5.4 与 `backend/test/docs/s30-llm-provider-switch-report.md` §5.2 第 3 条均已登记，仍**待用户裁定**（改文档还是把密钥移出仓库） |
+| `admin/src/components/AiGenerateDialog.vue:322` | 用户可见文案硬编码「题目由**腾讯云 CloudBase Agent** 生成为草稿」（`:2` 文件头注释同）。上游自 `b712d81` 起由 `LLM_PROVIDER` 决定、可切换；开发期恰为 `cloudbase` 故文案暂时正确，**上线切回 `openai` 后即与实际上游不符**。修法应改为厂商中立表述或由后端下发生商标识，**待修**（属前端 UI 改动，需按 `admin/agents.md` 跑 `npm run build` + 浏览器验收，未随文档任务夹带） |
+| `.qoder/PROJECT.md` §7「管理后台（11 菜单）」与 `.qoder/ARCHITECTURE.md` §1.2 框图「11 菜单」 | 两处仍写 **11** 项：`admin/src/router/menus.ts`（实测 40 行）的 `MENUS` 现为 **16 个** code，另有 `MENU_GROUPS` 5 个一级分组、`dashboard` 未入任何分组故平铺；§7 正文缺 人物志 / 勋章管理 / 章节配置 / 运营参数 / 数据分析 五个已上线模块。本批只做**登记不改数**——修订需连同 §7 正文逐模块补写，与「补档与分母完整重算」同属独立文档任务，勿在业务提交里夹带 |
+| `.qoder/REQUIREMENTS.md` §6.6「地图与手势」整节 | 2026-10-23 由「引用行号越界」扫描查出：节标题写 `pages/march/march.js`，**1477 行**，而该文件实测仅 **808 行**；「手势命中半径」行的 `radius = 22 / v.scale`（除以缩放比、屏幕命中半径恒定）与依据 `march.js:1453-1467` 均已失效——星空长征渲染与命中判定已抽到 `frontend/utils/starMap.js`（实测 1367 行），现行 `hitTest` 在 `starMap.js:1345-1363`，做法**语义已变**：改为对点击点做屏幕→场景逆变换（`:1347-1348`）后取**固定 26px 场景半径**内最近节点（`let bestD = 26;` 在 `:1352`），不再除以 `scale`；`march.js` 侧 `hitNode`（`:692-696`）只剩 4 行委托 `this.hud.hitTest(sx, sy)`。另 `frontend/utils/starMap.js` **尚无 `.qoder/` 建档**（同目录只有 `arrivePopup.js.md`/`authGuide.js.md`/`routeCanvas.js.md`/`util.js.md`）。属星空长征视口重构（`2e721b4` 一线）遗留的文档债，与本批 AI 上游任务无关，**仅登记不改写**——修 §6.6 需连同整节按 `starMap.js` 现状重核，应与 `starMap.js` 补档一并作为独立文档任务 |
 
 ### 待验证项（多处标注「待用户确认」）
 
-真机扫码入驻、真机断网表现、真机微信运动端到端（`scope.werun` + `wx.getWeRunData`）、真机 AI 全链路（本机 DNS 劫持限制）、低端机星空地图帧率、小程序主包体积与 2MB 上限的实际余量。
+真机扫码入驻、真机断网表现、真机微信运动端到端（`scope.werun` + `wx.getWeRunData`）、真机 AI 全链路（**后端侧已于 2026-10-22 实测通过**：`cloudbase` 供应商下非流式 / 流式 / 出题三条链路，见 `b712d81` 与 `backend/test/docs/s30-llm-provider-switch-report.md`；本机 Clash fake-ip 已不需要 `dns_shim` 兜底，**仅剩小程序真机 → 生产后端 → 上游这一段未验证**）、低端机星空地图帧率、小程序主包体积与 2MB 上限的实际余量。
 
 ---
 
@@ -300,7 +304,7 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | 文件 | 风险 |
 | --- | --- |
 | `backend/.env` | **高**：微信小程序 AppSecret、JWT 签名密钥、管理员口令、数据库连接串明文。`.gitignore` 以 `!backend/.env` 显式放行——**这是用户的明确决定** |
-| `backend/.env.prod` | **高**：生产参数。其中生产库连接串 / `JWT_SECRET` / `ADMIN_PASSWORD` 为**占位符**，部署前须替换为服务器真实值；替换后不得回填入库 |
+| `backend/.env.prod` | **高**：生产参数，**且大部分已是真实值**（2026-10-22 逐行实读更正：本行原写「生产库连接串 / `JWT_SECRET` / `ADMIN_PASSWORD` 为占位符」，实际只有 `JWT_SECRET`（`:12`）仍是 `REPLACE_WITH_*` 占位；`DATABASE_URL`（`:9`）、`ADMIN_PASSWORD`（`:38`）、`WX_SECRET`（`:20`）、大模型两套凭证（`LLM_API_KEY` `:58`、`CLOUDBASE_API_KEY` `:68`）**均已填入真实值**）。这些值已随文件入库进入 git 历史，轮换时应视为已泄露。当前 `LLM_PROVIDER=cloudbase`（`:50`，`:48` 有「⚠⚠ 上线前改回 `openai`」标记），详见 `.qoder/ARCHITECTURE.md` §12.2「`.env.prod` 占位符现状」行 |
 | `docker/compose.yml`、`docker/init/init-db.sh` | **中**：开发库初始口令与环境变量明文（仅开发用途） |
 | `project.config.json` | **中**：含小程序 appid |
 | `docs/迭代记录.md` | **中**：2026-10-09 一条记录的正文中含开发管理员账号与明文口令、`WX_APPID`。**引用该文件时不得复制这些值** |
@@ -338,7 +342,7 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 
 | 批次 | 范围 | 文档数 | 状态 |
 | --- | --- | --- | --- |
-| 一 | 后端：`app/services` 30、`app/api/routes` 18、`app/core` 7、`app/api/deps.py`、`app/main.py`、`app/data/seed.py`、`app/models/models.py`、`app/schemas/schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt` | **64** | ✅ 64/64（2026-10-17）；此后新增 3 个 `app/services` 文件**待补档**（见「增量与缺口」节） |
+| 一 | 后端：`app/services` 30、`app/api/routes` 18、`app/core` 7、`app/api/deps.py`、`app/main.py`、`app/data/seed.py`、`app/models/models.py`、`app/schemas/schemas.py`、`run.py`、`.env`、`.env.prod`、`requirements.txt` | **64** | ✅ 64/64（2026-10-17）；`app/services` 此后有增删——2026-10-22 实测 **33** 份（AI 上游 4 份已补档、失效的 `cloudbase_service.py.md` 已删除），仍有 2 个 `app/services` 文件**待补档**（见「增量与缺口」节） |
 | 二 | 小程序：25 个页面（页面级合一）+ 19 service + **5** util + 1 data + `app.js`/`app.json`/`app.wxss`/`sitemap.json` 4 + 根 `project.config.json` 1 | **55** | ✅ 53/53（2026-10-17）→ **55/55**（2026-10-19 增量 `utils/hudMap.js`、补建 `utils/authGuide.js`，见「增量与缺口」节） |
 | 三 | 管理后台：`admin/src/**` 28（实测无纯 re-export 桶文件）+ `scripts/zip-dist.mjs` 1 + `package.json`/`vite.config.ts`/`tsconfig.json`/`tsconfig.app.json`/`tsconfig.node.json`/`index.html` 6 + `.env.development`/`.env.prod` 2 | **37** | ✅ 37/37（2026-10-17）；此后新增 5 个 `views/*.vue`**待补档**（见「增量与缺口」节） |
 | 四 | 数据库与脚本：`docker/init/*.sql` 22（其中 `021`、`022` **尚未入库**）+ `init-db.sh` + `compose.yml` 2 + 根 `*.bat` 4 个（`start`/`build-backend`/`build-prod`/`build-sql`） | **28** | ✅ 28/28（2026-10-17）；`021`~`025` 现已入库（`a8a74ae`），其中 **`023`~`025` 待补档**（见「增量与缺口」节） |
@@ -353,22 +357,28 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 
 > 第三、四批交付后同样做了 **1:1 双向核对**：`admin/src/` 实测 28 个源文件（12 `views`/`pages` 视图 + 2 `components` + `api` 2 + `router` 2 + `utils` 3 + `layout`/`plugins`/`store`/`App.vue`/`main.ts`/`env.d.ts`/`style.css` 各 1），`.qoder/admin/src/` 侧恰 28 份文档，**无遗漏无多余**；加 `scripts/zip-dist.mjs` 1 份、工程配置 6 份、`.env.*` 2 份 = 37。第四批侧 `docker/init/` 实测 22 个 `*.sql` + `init-db.sh`，`.qoder/docker/init/` 恰 23 份，加 `compose.yml` 1 份 = 24，再加仓库根 4 个 `*.bat` 各 1 份 = 28。两处按第 4 节规则**刻意不建档**的例外：`docker/init/SQL_CONSTRAINTS.md`（其本身即约束文档，逐条引用见 `.qoder/ARCHITECTURE.md` §12.4，复制一份会造成双重维护）、`admin/tsconfig.*.tsbuildinfo`（构建产物，登记于 §9）。
 
-### 增量与缺口（2026-10-19 复核）
+### 增量与缺口（2026-10-19 复核，2026-10-22 局部更新）
 
 四批交付后又有新源文件入库，`.qoder/README.md` §3.3「新增源文件时同步创建对应文档」在这几次任务中**未被完全执行**。本节按 `find`/`git ls-files` 逐目录 1:1 实测（脚本口径：`frontend/{pages,services,utils,data}` + 4 份工程级 + 根 `project.config.json`；`backend/app/**`（排除 `__init__.py`）+ `run.py` + `.env*` + `requirements.txt`；`admin/src/**` + `admin/scripts/**`（排除 `*.tsbuildinfo`）；`docker/**`（排除 `SQL_CONSTRAINTS.md`）+ 根 `*.bat`）。
 
-**已补档（2 份，frontend 侧现已 55/55 无缺口）**
+**已补档（6 份：frontend 侧 55/55 无缺口，`app/services` 侧 AI 上游 4 份于 2026-10-22 补齐）**
 
 | 文档 | 源文件来源 | 说明 |
 | --- | --- | --- |
 | ~~`.qoder/frontend/utils/hudMap.js.md`~~ | `2862453`（2026-10-19，科技感 HUD 地图 S2） | 星空长征渲染内核，从 `pages/march/march.js` 抽离；**已于 2026-10-21 史诗风重构 E7 随源文件一并删除**（内核重写为 `utils/starMap.js`，其建档见下表缺口 #12） |
 | `.qoder/frontend/utils/authGuide.js.md` | `53f2d62`（2026-10-18，十项增强点 3） | **补建**：新增时漏建档，`ensureScope` 统一授权引导 |
+| `.qoder/backend/app/services/llm_service.py.md` | `c660727`（2026-10-19）更名、`b712d81`（2026-10-22）重写为门面 | **补建**：即下表原缺口 #1。`b712d81` 后为 152 行的供应商门面，按 `LLM_PROVIDER` 分派 |
+| `.qoder/backend/app/services/llm_base.py.md` | `b712d81`（2026-10-22） | **新建**：`LlmError` / `CallResult` / `ensure_complete` 共享类型，打破门面↔适配器循环导入 |
+| `.qoder/backend/app/services/llm_openai.py.md` | `b712d81`（2026-10-22） | **新建**：OpenAI Chat Completions 兼容适配器（阿里云百炼等） |
+| `.qoder/backend/app/services/llm_cloudbase.py.md` | `b712d81`（2026-10-22） | **新建**：腾讯云 CloudBase Agent（ACP）适配器，从 git 历史恢复并补上流式产出增量 |
 
-**仍缺档（13 份，待补）**
+> 同批**删除** `.qoder/backend/app/services/cloudbase_service.py.md`：其源文件已在 `c660727` 更名重写为 `llm_service.py`，旧文档描述的符号（`CloudBaseError`、`CLOUDBASE_ACP_URL` 等）全部不存在，保留只会误导。故 `app/services` 侧文档数净变化为 **+3**（30 → 33，`ls` 实测）。
+
+**仍缺档（12 份，待补）**
 
 | # | 源文件 | 引入提交 | 批次归属 |
 | --- | --- | --- | --- |
-| 1 | `backend/app/services/llm_service.py` | `c660727`（2026-10-19，AI 供应商迁百炼） | 一 |
+| 1 | ~~`backend/app/services/llm_service.py`~~ | ~~`c660727`（2026-10-19，AI 供应商迁百炼）~~ | 一 |
 | 2 | `backend/app/services/operation_config_service.py` | `b0ed585`（2026-10-18） | 一 |
 | 3 | `backend/app/services/upload_service.py` | `b0ed585`（2026-10-18） | 一 |
 | 4 | `admin/src/views/AnalyticsView.vue` | `2448137`（2026-10-18） | 三 |
@@ -382,7 +392,9 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 | 12 | `frontend/utils/starMap.js` | `618050f`（2026-10-21，史诗风重构 E2） | 二 |
 | 13 | `frontend/data/star-themes.js` | `2ca1800`（2026-10-21，史诗风重构 E1） | 二 |
 
-**当前口径**：文件级文档已建 **183** 份（184 − 随 `hudMap.js` 删除的 1 份），应建 **196** 份（183 + 缺档 13），进度 **93.4%**；`.qoder` 下 `.md` 实测 **193** 个 = 文件级 183 + 总览层 10。补档与分母完整重算合并为一个独立任务，勿在业务任务里顺手夹带（避免单次提交跨四个批次）。另注：`.qoder/frontend/pages/march/march.js.md`（HUD 内核口径）与 `.qoder/frontend/services/march.js.md`（`hudMap` 行号引用）因 E1~E7 史诗风重构大面积漂移，重锚与 #12/#13 建档同属该独立任务；现状口径已在 march.js.md 头部勘误段与 `frontend/design.md` §4.6（2026-10-21）登记。
+> **#1 已于 2026-10-22 补档并划除**（见上「已补档」表），行号 #2~#13 **刻意保留原编号不重排**——本节与 `.qoder/frontend/pages/march/march.js.md` 头部勘误段、「当前口径」段都以 #12 / #13 指代 `starMap.js` / `star-themes.js`，重排会让这些交叉引用失效。故缺档实际为 **12 份**。
+
+**当前口径（2026-10-22 实测）**：文件级文档已建 **186** 份（183 + `app/services` 侧净增 3：新建 `llm_service.py.md` / `llm_base.py.md` / `llm_openai.py.md` / `llm_cloudbase.py.md` 共 4 份、删除失效的 `cloudbase_service.py.md` 1 份），应建 **198** 份（186 + 缺档 12），进度 **93.9%**；`.qoder` 下 `.md` 实测 **196** 个 = 文件级 186 + 总览层 10（`find .qoder -name '*.md' | wc -l` 与逐目录 `ls` 双向核对通过）。补档与分母完整重算合并为一个独立任务，勿在业务任务里顺手夹带（避免单次提交跨四个批次）。另注：`.qoder/frontend/pages/march/march.js.md`（HUD 内核口径）与 `.qoder/frontend/services/march.js.md`（`hudMap` 行号引用）因 E1~E7 史诗风重构大面积漂移，重锚与 #12/#13 建档同属该独立任务；现状口径已在 march.js.md 头部勘误段与 `frontend/design.md` §4.6（2026-10-21）登记。
 
 ### 待确认问题清单（汇总）
 
@@ -414,5 +426,5 @@ tabBar：首页 `home` / 长征 `march` / **AI 问答 `ai-chat`** / 排行 `rank
 
 **转为需求状态记录（2 项）**
 
-- `ai-chat` 的 `nodeId` 参数通道 → REQUIREMENTS.md 标为**待开发（Phase B，无明确排期）**。
+- ~~`ai-chat` 的 `nodeId` 参数通道 → REQUIREMENTS.md 标为**待开发（Phase B，无明确排期）**~~ **已实现，本项作废（2026-10-22 实测更正）**：`node-detail.js:234-238` 的 `goAskAI()` 经 `app.globalData.pendingAiNodeId` 传节点上下文，`ai-chat.js:95-98` 在 `onShow` 消费并调 `applyNodeContext()`（`:111`）。REQUIREMENTS.md §10.5 与「待开发」表对应行已同步更正；**仍待开发的是节点页内的讲解面板**（`GET /api/ai/route-guide/{node_id}` 在 `frontend/` 下零调用点）。
 - `pages/account` 入口恢复 → REQUIREMENTS.md 标为**已隐藏，恢复条件待产品确认**。

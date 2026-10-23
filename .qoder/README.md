@@ -97,7 +97,7 @@
 | 缓存与虚拟环境 | `__pycache__/`、`.venv/`、`.pytest_cache/` | 不建档 |
 | 本地数据库文件 | `backend/longmarch.db`、`backend/_smoke_*.db`、`backend/test/_smoke_*.db` | 不建档；属冒烟测试临时产物，**禁止视为源码修改目标** |
 | 日志与临时文件 | `*.log`、`frontend/test/automator/probe-*.tmp.cjs` | 不建档 |
-| 测试脚本 | `backend/test/*.py`（37 个）、`frontend/test/automator/*.cjs`（55 个）、`frontend/test/*.cjs` | **不逐个建档**，集中写入 `.qoder/backend/test/README.md`、`.qoder/frontend/test/README.md`（含脚本清单与覆盖场景对照表） |
+| 测试脚本 | `backend/test/*.py`、`frontend/test/automator/*.cjs`、`frontend/test/*.cjs`（**份数不在此登记**——脚本随每次任务增删，权威清单见两份 `test/README.md`；2026-10-22 实测 backend 40 个 `.py`〔含 3 个辅助模块〕、automator 65 个 `.cjs`） | **不逐个建档**，集中写入 `.qoder/backend/test/README.md`、`.qoder/frontend/test/README.md`（含脚本清单与覆盖场景对照表） |
 | 测试报告与证据 | `*/test/docs/*.md`、`*/test/images/*.png`、`*-results.json` | 不建档；在各 `test/README.md` 中说明归档规则与索引方式 |
 | 敏感配置 | `backend/.env`、`backend/.env.prod`、`project.config.json`、`admin/.env.*` | 建档但**只列配置项名称与用途**，不写值 |
 | 本机私有配置 | `project.private.config.json`、`mini.project.json`（支付宝工具残留）、`.env*.local` | 不建档（已 gitignore）；在 `PROJECT.md` 说明其存在与风险 |

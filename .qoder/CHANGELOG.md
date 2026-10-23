@@ -1,6 +1,6 @@
 # CHANGELOG · 长征步迹 项目级变更记录
 
-> 最后核对时间：2026-10-17（对应 HEAD `031c323`）
+> 最后核对时间：2026-10-22（AI 上游一条线已核对至源码提交 `b712d81`；其余覆盖缺口见 §1 末注）
 
 ## 0. 本文档的定位与分工
 
@@ -31,6 +31,9 @@
 | 11 | openGauss 兼容事故与更正 | 2026-10-13、10-16 | `fc2597e`、`f413ac6`→`51239b5` |
 | 12 | AI 出题（题库接入 CloudBase Agent） | 2026-10-16 | `ea58b6c` |
 | 13 | AI 智能中心 V1.0 Phase A | 2026-10-17 | `37f3e40`、`1600074`、`0052108`、`1fbacac` |
+| 14 | AI 上游三连变：迁百炼 → SSE 真流式 → 供应商可切换 | 2026-10-19 ~ 10-22 | `c660727`、`6a4dbb7`、`b712d81` |
+
+> **覆盖缺口（如实登记）**：本表止于阶段 14，但 14 只覆盖 **AI 上游这一条线**。2026-10-17（HEAD `031c323`）之后还有多条与 AI 上游无关的交付**尚未做阶段级归纳**——含高级化十项增强点（`b0ed585` 等）、`023`~`025` 迁移（`a8a74ae`）、星空长征/史诗风重构 E1~E8（`2ca1800`、`618050f` … `91063ad`）、F1 视口 UI 精简（`ea5b1e5`）等。**需要这些细节时请直接查 `docs/迭代记录.md` 按提交号检索**，勿假定本文档已覆盖全仓。补齐属独立文档任务，勿在业务任务里夹带。
 
 ---
 
@@ -323,6 +326,49 @@
 
 ---
 
+### 2.14 AI 上游三连变：迁百炼 → SSE 真流式 → 供应商可切换
+
+- **日期**：2026-10-19 ~ 2026-10-22
+- **需求背景**：AI 智能中心 Phase A（§2.13）把上游硬绑在腾讯云 CloudBase Agent 的 ACP 私有协议上。10-19 出于成本与公网可达性考虑整体迁到阿里云百炼（OpenAI 兼容协议），随后要求聊天页做「逐字打字机」体验；10-22 用户要求**开发期切回原有那把腾讯云 CloudBase key、上线再切回阿里**。因为 `c660727` 已把 ACP 实现整体删除，「换 key」不再是一行配置的事，必须先把上游抽象成可切换的两套适配器。
+- **涉及模块及文件**：
+  - 后端：`core/config.py`、`services/llm_service.py`（门面）、`services/llm_base.py`（共享类型，**新增**）、`services/llm_openai.py`（**新增**）、`services/llm_cloudbase.py`（**新增**）、`services/ai_chat_service.py`、`services/ai_question_service.py`、`services/ai_usage_service.py`、`api/routes/ai.py`、`api/routes/ai_admin.py`、`models/models.py`；**删除** `services/cloudbase_service.py`
+  - 小程序：`services/ai.js`、`services/request.js`（分片下载能力）、`pages/ai-chat/`（打字机渲染 + 中途停止）
+  - 配置：`backend/.env`、`backend/.env.prod`
+  - 测试：`backend/test/s30_llm_provider_switch.py`（**新增**）、`s25_*`、`s26_*`、`s28_*`、`backend/test/docs/s27-llm-provider-migration-report.md`、`s30-llm-provider-switch-report.md`
+- **修改内容**：
+  - `c660727`（10-19 14:16）**供应商由腾讯云 CloudBase Agent 迁到阿里云百炼**：删 `cloudbase_service.py`（228 行）、建 `llm_service.py`（227 行），异常类 `CloudBaseError` → `LlmError`
+  - `6a4dbb7`（10-19 16:39）**AI 问答改为 SSE 真流式逐字回答**：新增 `POST /api/ai/chat/stream`，小程序侧打字机渲染 + 中途停止
+  - `b712d81`（10-22 18:24）**上游改为可切换供应商**：`llm_service.py` 降为门面（按 `LLM_PROVIDER` 分派），ACP 实现以 `llm_cloudbase.py` 重建，OpenAI 兼容实现抽到 `llm_openai.py`，共享类型放 `llm_base.py`（打破循环导入）；两套适配器统一 `is_configured()` / `model_label()` / `prompt_meta()` / `stream()` 四个符号；开发期两份 env 均置 `LLM_PROVIDER=cloudbase`，`.env.prod:48` 留「⚠⚠ 上线前必须改为 `openai`」标记
+- **数据库变更**：**无迁移**。仅 `ai_usage_logs.model` 的**取值口径**随供应商变化：`openai` 写 `LLM_MODEL`（如 `qwen3.8-max`），`cloudbase` 写 `CLOUDBASE_AGENT_ID`（如 `agt-…`）——同一张表里会出现两种命名空间的历史值，做用量聚合时须按 `model` 分组而非假定单一取值。`used_tokens` 同理：`openai` 取 `usage.total_tokens`，`cloudbase` 取 `usage_update.used`，后者实测量级不稳定（同链路 254 与 19400/19641/19832 并存），**不可当作单次计费依据**。
+- **API 变更**：
+  - 新增 `POST /api/ai/chat/stream`（SSE，`routes/ai.py:110`）：事件 `start` / `delta` / `done` / `error`；响应头 `_STREAM_HEADERS`（`:78`）关缓冲，依赖 nginx 侧 `proxy_buffering off` 才能真逐字下发
+  - **无端点删除**：`b712d81` 后 openapi 实测 127 paths、其中 `/api/ai/*` 19 条，与迁移前一致
+  - 异常映射不变但**类名换了**：`LlmError` → **502**、`AiDisabledError` → 403、`AiLimitError` → 429、其余 `ValueError` → 400（`routes/ai.py:50-58`，`routes/ai_admin.py` 复用）
+- **兼容性影响**：
+  - **配置项删改**：`CLOUDBASE_TIMEOUT_SECONDS`（原 180）**删除**，改由两套供应商共用的 `LLM_TIMEOUT_SECONDS`（300）承担；地址项真名始终是 `CLOUDBASE_AGENT_URL`（旧文档写作 `CLOUDBASE_ACP_URL`，属文档错而非代码改名）。`Settings` 配的是 `extra="ignore"`（`core/config.py:22`），故服务器上就地改过的 `.env.prod` 副本若仍残留 `CLOUDBASE_TIMEOUT_SECONDS` **会被静默忽略、不报错**——真正的风险是**缺 `LLM_PROVIDER`**：缺失时回落到代码默认值 `openai`（`:72`），而不是报错，于是「以为切了 CloudBase、实际打的是那把已失效的百炼 key」，表现为全站 AI 502
+  - **两套凭证同时常驻**两份 env 文件（均已入库）→ 两把 key 都进了 git 历史，轮换时须视为已泄露
+  - **ACP 无 `max_tokens` 与思考开关**：`cloudbase` 下 `AI_MAX_OUTPUT_TOKENS` 的硬截断与 `LLM_EXTRA_BODY`/`LLM_QUESTION_EXTRA_BODY` **静默失效**，输出长度只由提示词软约束，且思考过程不可关闭 → 首字时延 8.6~16.7s（百炼 1.15~2.81s），**打字机体验实质退化**
+  - **流式链路刻意不重试**（`AI_MAX_RETRIES` 只作用于非流式）：已下发的分片无法回收，重试会造成正文重复
+  - 小程序侧**自动降级**：`enableChunked` 不可用 / 401 / 网络失败且未收到任何分片时，`ai.js` 回落到非流式 `POST /api/ai/chat`，已发布客户端无需强刷
+  - `AI_QUESTION_BATCH_SIZE` **不随供应商调整**（`.env.prod` 恒为 5）：CloudBase 可承受 10 题/批，但为了「切换只改一行」刻意不联动
+  - `admin/src/components/AiGenerateDialog.vue` 的用户可见文案硬编码「腾讯云 CloudBase Agent」，在 `LLM_PROVIDER=openai` 时与实际上游不符（**待修**）
+- **测试结果**：
+  - `s30_llm_provider_switch.py`（新增，本地双协议桩服务器 + 可选真实调用）**23/23 通过**；真实调用组：非流式 16.3s、流式 52 分片 / 首片 8.6s、出题 2 题 / 正文 553 字
+  - 回归 `s25` **16/16**（10 批 50 题全解析成功）、`s26` **47/47**、`s28` **13/13**，合计 **99/99**
+  - `s25` 曾出现 2/10 批 `json.JSONDecodeError`，根因是模型输出里用了未转义的 ASCII 双引号；**在提示词层修**（新增规则 11 要求中文引号，原「补充要求」顺延为 12），刻意不引入 JSON 修复引擎
+  - 报告：`backend/test/docs/s30-llm-provider-switch-report.md`、`s27-llm-provider-migration-report.md`
+- **部署情况**：**待确认**。上线切回百炼需三步：① 换一把**有效**的百炼 key；② `.env.prod:50` 改 `LLM_PROVIDER=openai`；③ 重启 `longmarch-backend` 并冒烟。**当前仓库里常驻的百炼 key 已于 2026-10-22 实测 401 `invalid_api_key`（非流式与流式两条路径均失败），照现状部署会全站 AI 不可用。**
+- **未解决的问题**：
+  1. 🔴 **仓库内的百炼 key 已失效**（401 `invalid_api_key`），是上线阻塞项，须由用户在百炼控制台重新签发
+  2. `cloudbase` 首字时延 8.6~16.7s（占总耗时 83~88%），打字机效果名存实亡；开发期口径，上线切回百炼后自然消解
+  3. `cloudbase` 下 `used_tokens` 口径不稳定，`ai_usage_logs` 的成本统计在该供应商期间**不可用于对账**
+  4. `cloudbase` 下 `AI_MAX_OUTPUT_TOKENS` 与思考开关静默失效，属 ACP 协议能力缺失，无法在适配层补齐
+  5. `AiGenerateDialog.vue` 文案硬编码厂商名（见「兼容性影响」）
+  6. 小程序**真机**侧全链路仍待验证（后端侧三条链路已实测通过）
+  7. 两把 key 均已进 git 历史（`.env`/`.env.prod` 入库约定），轮换时应视为已泄露
+
+---
+
 ## 3. 数据库迁移全量清单（001 → 022）
 
 | 编号 | 文件 | 引入阶段 | 主要内容 | 重跑风险 |
@@ -365,6 +411,7 @@
 | **后端联调地址** | 4 次变更（10-13 ~ 10-14）：IP:8010 → 域名:8010 → HTTPS 域名 → 远程后端 | 环境配置未集中管理，硬编码地址易失效 |
 | **openGauss 兼容** | 3 轮（10-13 复盘、10-16 事故+更正、10-17 约束文档） | 生产库与 `docker/init` 存在迁移缺口；曾发生一次误诊（`f413ac6` → `51239b5`） |
 | **生产迁移缺口** | 2 次已发生（`020` 缺失、`021/022` 未入库） | `docker/` 不自动提交的规则与部署流程之间缺乏衔接机制 |
+| **AI 上游供应商** | 3 次变更（10-19 ~ 10-22 四天内）：`c660727` 迁百炼 → `6a4dbb7` SSE 真流式 → `b712d81` 改可切换 | 上游选型未先做抽象就直接落地，导致「换厂商」= 重写实现层；`b712d81` 引入门面 + 适配器后该热点**应已收敛**（此后换厂商只改 `LLM_PROVIDER` 一行）。配套风险：两把 key 均已进 git 历史 |
 
 ---
 

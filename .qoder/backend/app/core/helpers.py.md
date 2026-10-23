@@ -58,7 +58,7 @@
 | 导出名 | 生产代码调用点（全量） |
 |---|---|
 | `BEIJING_TZ` | 2 处：`app/services/activity_service.py:73`（把 UTC naive 还原为带时区的北京时间）、`app/services/sport_service.py:95`（把微信 `stepInfoList` 的秒级时间戳按北京时间归日） |
-| `now_utc` | 17 处：`activity_service.py:54`、`:79`、`:134`、`:180`、`:197`；`ai_chat_service.py:257`；`ai_knowledge_service.py:146`、`:162`、`:164`、`:178`、`:180`；`ai_question_service.py:497`、`:505`、`:528`、`:626`、`:682`；`sport_service.py:129` |
+| `now_utc` | 17 处：`activity_service.py:54`、`:79`、`:134`、`:180`、`:197`；`ai_chat_service.py:292`（`finalize_message` 刷新会话 `updated_at`）；`ai_knowledge_service.py:146`、`:162`、`:164`、`:178`、`:180`；`ai_question_service.py:501`、`:509`、`:532`、`:630`、`:686`；`sport_service.py:129` |
 | `now_beijing` | 3 处：本文件内部 `:24`（`today_str`）、`:29`（`recent_dates`）；`app/services/streak_service.py:42`（连续行军天数游标） |
 | `today_str` | 16 处：`app/api/routes/admin.py:565`、`:579`；`app/api/routes/quotes.py:20`；`ai_usage_service.py:26`、`:67`；`broadcast_service.py:46`；`dashboard_service.py:54`；`org_service.py:190`；`points_service.py:188`；`quiz_service.py:333`、`:352`、`:392`、`:531`；`sport_service.py:147`、`:212`、`:332` |
 | `recent_dates` | 4 处：`dashboard_service.py:105`（趋势图日期轴）；`sport_service.py:101`（模拟步数覆盖最近 7 日）、`:148`（同步后核对的期望日期集合）、`:320`（历史步数查询） |
@@ -68,7 +68,7 @@
 
 **测试脚本调用点**（按 `.qoder/README.md` §4 不逐个建档）：`test/s17_quote_cycle_import.py:41`、`s18_quiz_submit_feedback.py:48`、`s20_v2_regression.py:58`、`s22_history_sync_quiz_rotation.py:18`、`s23_walk_sync_recalc.py:37`、`s24_walk_recalc_pg.py:26`、`s26_ai_center.py:48`。
 
-**不涉及的数据库表**：本文件不做任何查询。它的输出被用于 `daily_sport.date`、`daily_questions.date`、`points_log.biz_key`、`user_event.event_time`、`ai_usage_logs.day_key` 等列的取值与比较（列语义见 `models/models.py:664` 的注释，其中直接点名 `helpers.today_str`）。
+**不涉及的数据库表**：本文件不做任何查询。它的输出被用于 `daily_sport.date`、`daily_questions.date`、`points_log.biz_key`、`user_event.event_time`、`ai_usage_logs.day_key` 等列的取值与比较（列语义见 `models/models.py:687` 的注释，其中直接点名 `helpers.today_str`）。
 
 > **文档滞后提示**：`.qoder/ARCHITECTURE.md` §4.5 的时间约定表把本文件写作 `services/helpers.py:9`、`:12-14`、`:22-24`。`backend/app/services/` 下**不存在** `helpers.py`（实测目录列表），正确路径是 `backend/app/core/helpers.py`；所引行号 `:9`（`BEIJING_TZ`）、`:12-14`（`now_utc`）、`:22-24`（`today_str`）与当前文件一致，仅目录名有误。
 
@@ -110,6 +110,16 @@
 ## 10. 迭代记录
 
 数据来源：`git log --follow --oneline -- backend/app/core/helpers.py`（4 条提交，全部列出），验证结论对照 `docs/迭代记录.md`。
+
+### 2026-10-22（仅文档校正）
+
+- 需求：补齐 AI 栈文档欠账。**本次源码未改（`backend/app/core/helpers.py` 仍为 58 行、8 个导出名一字未动），属补 `c660727`（LLM 上游由腾讯云 CloudBase Agent 迁至阿里云百炼，`cloudbase_service.py` → `llm_service.py`）与 `6a4dbb7`（AI 对话改真流式 SSE，`ai_chat_service` 拆出 `prepare_message`/`finalize_message`/`discard_message`）的文档欠账**——这两次提交让本文档 §6 中记录的**调用方行号**整体失效。
+- 修改内容（**未改任何源码/配置/测试**）：
+  - §6「被谁依赖」表 `now_utc` 行：`ai_chat_service.py:257` → **`:292`**（现位于 `finalize_message` 内刷新 `ai_conversations.updated_at`；改造前位于 `send_message`）；`ai_question_service.py:497`/`:505`/`:528`/`:626`/`:682` → **`:501`/`:509`/`:532`/`:630`/`:686`**（该文件因提示词规则新增而整体下移 4 行）。调用点总数仍为 **17 处**，`ai_knowledge_service.py` 五处行号未变。
+  - §6 末「不涉及的数据库表」段：`ai_usage_logs.day_key` 的列语义注释由 `models/models.py:664` → **`:687`**（`AiUsageLog` docstring 在 `b712d81` 中重写，`models.py` 由 684 行增至 709 行；**表结构与列本身零变化**）。
+  - 其余章节（§1~§5、§7~§9）经核对**无需改动**：本文件不 import 任何业务模块、不感知上游供应商，因此 `c660727`/`b712d81` 的 `CLOUDBASE_*` → `LLM_*` 更名与本文件无关；§6 中 `today_str` / `recent_dates` / `to_local` / `local_to_utc` / `seeded_steps` 的调用点均未受这几次提交影响。
+- 关联文件（仅为其行号的来源，均未修改）：`backend/app/services/ai_chat_service.py`、`backend/app/services/ai_question_service.py`、`backend/app/models/models.py`。同批修订的文档：`.qoder/backend/app/services/ai_chat_service.py.md`、`ai_question_service.py.md`、`ai_usage_service.py.md`、`ai_config_service.py.md`、`setting_service.py.md`、`.qoder/backend/app/models/models.py.md`。
+- 测试结果：**本次为纯文档改动，按任务约束未执行任何测试、未跑校验脚本**。文中行号均以 `grep -n` 实测当前源码为准（`now_utc()` 调用点、`models.py` 的 `today_str` 注释行）。
 
 ### 2026-10-13
 

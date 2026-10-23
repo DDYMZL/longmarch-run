@@ -2,11 +2,19 @@
 
 ## 1. 文件路径
 
-`backend/app/models/models.py`（684 行）
+`backend/app/models/models.py`（709 行）
 
 ## 2. 文件职责
 
-后端唯一的 ORM 映射文件：以 SQLAlchemy 2.0 声明式风格（`Mapped[T]` / `mapped_column`）定义 34 个模型类，与 openGauss 库中 34 张业务表一一对应（第 35 张 `schema_migrations` 按设计不建 ORM 模型，`ARCHITECTURE.md` §13）。本文件只负责「Python 对象 ↔ 表结构」映射：不建表（DDL 唯一来源是 `docker/init/*.sql`，不变量 8，禁止 `create_all`）、不含业务逻辑、不定义 `relationship()`（全文件 grep 0 命中，跨表查询由 service 层手写 join/聚合）。
+后端唯一的 ORM 映射文件：以 SQLAlchemy 2.0 声明式风格（`Mapped[T]` / `mapped_column`）定义 **35** 个模型类，与 openGauss 库中 **35** 张业务表一一对应（第 36 张 `schema_migrations` 按设计不建 ORM 模型，`ARCHITECTURE.md` §13）。本文件只负责「Python 对象 ↔ 表结构」映射：不建表（DDL 唯一来源是 `docker/init/*.sql`，不变量 8，禁止 `create_all`）、不含业务逻辑、不定义 `relationship()`（全文件 grep 0 命中，跨表查询由 service 层手写 join/聚合）。
+
+> **文档滞后提示（2026-10-22 复核）**
+>
+> 本次复核**逐行 Read 校正了 AI 智能中心段（`:562-709`）**的全部行号、`AiUsageLog` docstring 口径与索引/逻辑外键位置（§4.3 AI 表、§4.5 末条、§4.6 AI 索引、§4.7 AI 三行与级联、§7 AI 枚举）。
+>
+> 但本文件在建档（`1600074`，2026-10-17）之后还被 **`b0ed585`（2026-10-18「十项增强后端落地并修复评审问题」，+24/-1）** 改动过：新增了 `Chapter` 模型（`:61`，表 `chapters`，023 迁移，外化自 `march_service.CHAPTERS`），使 `Person` 之后的**全部非 AI 段行号整体后移**（实测：`Person` 由 `:61` → `:80`、`Question` 由 `:126` → `:145`、`User` 由 `:179` → `:198`、`UserEvent` 由 `:365` → `:387`、`UserIdentity` 由 `:385` → `:408`）。该提交**不在本次任务的三个提交范围内**，其带来的 §4.3 模型清单缺口（`Chapter` 未登记）已在本次补上；但 **§4.4 / §4.5 / §4.6 / §4.7 中所有「列级」行号（非 AI 段）本次未逐条复核，一律视为不可信、标为待确认，以源码为准**。
+>
+> 计数复核：`grep -c '__tablename__'` = **35**，`class X(Base)` 命中 **35** 处；原文「34 个模型 / 34 张表」已过期。`s21_opengauss_compat.py` 的 ORM 覆盖率校验口径是否已同步到 35——**待确认**。
 
 ## 3. 业务需求
 
@@ -21,115 +29,125 @@
 - `Base` 从 `app.core.database` 导入（`:28`），是 `DeclarativeBase` 子类（`core/database.py:54`）；本文件不自建 metadata。
 - `CamelModel` **不在本文件**：Pydantic 响应基类（`alias_generator=to_camel`、`populate_by_name=True`、`from_attributes=True`）定义在 `app/schemas/schemas.py:17-22`。ORM 模型只管库读写，camelCase 输出契约由 schemas 层完成（不变量 1）。
 
-### 4.2 顶部 docstring 与分组注释（`:1-9`、`:31`、`:178`、`:384`、`:539`）
+### 4.2 顶部 docstring 与分组注释（`:1-9`、`:31`、`:197`、`:407`、`:562`）
 
-顶部 docstring 把模型分为「静态配置数据」与「用户业务数据」两类，并声明与前端 `services/store.js` 用户数据结构（dailySport/litNodes/quizRecords/pointsLog/medals/firstSyncAt）的对应关系。该 docstring 停留在早期口径（详见 §9 文档滞后）。文件内现有 4 个分组注释：静态配置数据（`:31`）、用户业务数据（`:178`）、微信身份关联与管理后台 RBAC（`:384`，注明设计文档 `docs/identity-binding-design.md`）、AI 智能中心 021（`:539`）。
+顶部 docstring 把模型分为「静态配置数据」与「用户业务数据」两类，并声明与前端 `services/store.js` 用户数据结构（dailySport/litNodes/quizRecords/pointsLog/medals/firstSyncAt）的对应关系。该 docstring 停留在早期口径（详见 §9 文档滞后）。文件内现有 4 个分组注释：静态配置数据（`:31`）、用户业务数据（`:197`）、微信身份关联与管理后台 RBAC（`:407`，注明设计文档 `docs/identity-binding-design.md`）、AI 智能中心 021（`:562`）。
 
-### 4.3 34 个模型类清单（按文件内分组注释；一句话职责 + 类定义行号）
+### 4.3 35 个模型类清单（按文件内分组注释；一句话职责 + 类定义行号）
 
-**静态配置数据（`:31` 起，9 个）**
+**静态配置数据（`:31` 起，10 个）**
 
 | 模型 | 行号 | 表 | 职责 |
 |---|---|---|---|
 | `RouteNode` | `:32` | route_nodes | 长征路线节点（`target_steps` 累计步数要求）+「历史事件卡」内容字段（brief/significance/figures/location/images/audio/keywords，种子仅补空值） |
-| `Person` | `:61` | persons | 长征人物志（需求 §14），avatar 空时前端展示姓名首字 |
-| `PersonNode` | `:72` | person_nodes | 人物 ↔ 节点复合主键关联 |
-| `DailyQuote` | `:81` | daily_quotes | 每日寄语，启用项按 (sort_order, id) 升序按天循环展示 |
-| `SystemSetting` | `:98` | system_settings | 系统级键值配置（如寄语循环起始日期 `quote_cycle_start`） |
-| `ActivitySetting` | `:108` | activity_settings | 活动时间控制（单行 id=1，016 迁移；状态由 activity_service 实时计算） |
-| `Question` | `:126` | questions | 题库（single/judge，知识画像分类 event/route/figure） |
-| `MedalDef` | `:145` | medal_defs | 勋章定义（字符串主键；hidden 勋章不公开获取条件） |
-| `Organization` | `:163` | organizations | 组织架构多级树（parent_id 空为顶级） |
+| `Chapter` | `:61` | chapters | **`b0ed585`（2026-10-18）新增**：长征章节配置（023 迁移外化自 `march_service.CHAPTERS`）；`node_ids` 为归属节点主键 JSON 列表（ORM 属性名与列名不同：`mapped_column("node_ids_json", JSON, ...)`），`sort_order` 升序即章节顺序，管理端可增删改，库空时回退常量 |
+| `Person` | `:80` | persons | 长征人物志（需求 §14），avatar 空时前端展示姓名首字 |
+| `PersonNode` | `:91` | person_nodes | 人物 ↔ 节点复合主键关联 |
+| `DailyQuote` | `:100` | daily_quotes | 每日寄语，启用项按 (sort_order, id) 升序按天循环展示 |
+| `SystemSetting` | `:117` | system_settings | 系统级键值配置（如寄语循环起始日期 `quote_cycle_start`；AI 配置中心的 `ai_*` 覆盖项也落这张表） |
+| `ActivitySetting` | `:127` | activity_settings | 活动时间控制（单行 id=1，016 迁移；状态由 activity_service 实时计算） |
+| `Question` | `:145` | questions | 题库（single/judge，知识画像分类 event/route/figure；无 difficulty 列，见 `.qoder/backend/app/services/ai_question_service.py.md` §3） |
+| `MedalDef` | `:164` | medal_defs | 勋章定义（字符串主键；hidden 勋章不公开获取条件） |
+| `Organization` | `:182` | organizations | 组织架构多级树（parent_id 空为顶级） |
 
-**用户业务数据（`:178` 起，10 个）**
-
-| 模型 | 行号 | 表 | 职责 |
-|---|---|---|---|
-| `User` | `:179` | users | 用户主表：openid 唯一、准入状态、改名一次记录、连续行军缓存、完成仪式标记 |
-| `InviteCode` | `:208` | invite_codes | 入驻邀请码（`used_count` 仅由 invite_service 条件 UPDATE 原子递增） |
-| `DailySport` | `:231` | daily_sport | 每日步数（同日覆盖不累加；含 2 个补签预留死字段，见 §9） |
-| `LitNode` | `:255` | lit_nodes | 已点亮节点（永久保留；`step_snapshot` 历史回填为 0） |
-| `QuizRecord` | `:271` | quiz_records | 每日答题结果（每日一次；`answer_at` 为毫秒时间戳） |
-| `DailyQuestion` | `:290` | daily_questions | 当日抽题缓存（同一天返回同一套题） |
-| `QuizAnswer` | `:302` | quiz_answers | 逐题限时作答（018：服务器计时、answering/answered/timeout） |
-| `PointsLog` | `:329` | points_log | 积分台账（017：walk/quiz 每人每日每来源一行，`biz_key` 幂等；legacy 仅追溯不计分） |
-| `UserMedal` | `:353` | user_medals | 用户已获勋章 |
-| `UserEvent` | `:365` | user_event | 统一业务事件（「我的长征足迹」与管理端实时动态同源） |
-
-**微信身份关联与管理后台 RBAC / 审计 / 导入（`:384` 起，9 个）**
+**用户业务数据（`:197` 起，10 个）**
 
 | 模型 | 行号 | 表 | 职责 |
 |---|---|---|---|
-| `UserIdentity` | `:385` | user_identities | 微信身份关联（wx_mini / wx_web 渠道） |
-| `BindRequest` | `:409` | bind_requests | 身份绑定请求（凭证仅存 SHA-256 摘要，不存明文） |
-| `QrLoginSession` | `:434` | qr_login_sessions | PC 扫码登录会话（`token_issued` 保证 JWT 仅签发一次） |
-| `AdminMenu` | `:456` | admin_menus | 后台菜单（code 与 `require_menu` 依赖一一对应） |
-| `AdminRole` | `:467` | admin_roles | 后台角色（is_builtin 不可删除） |
-| `AdminRoleMenu` | `:479` | admin_role_menus | 角色 ↔ 菜单复合主键关联 |
-| `AdminUserRole` | `:488` | admin_user_roles | 用户角色授权（enabled=False 即时生效，get_current_admin 每请求查库） |
-| `AuditLog` | `:503` | audit_logs | 管理后台审计日志（actor_type: super/user） |
-| `ImportPreview` | `:519` | import_previews | Excel 两阶段导入预览暂存（token 主键、一次性、会过期） |
+| `User` | `:198` | users | 用户主表：openid 唯一、准入状态、改名一次记录、连续行军缓存、完成仪式标记 |
+| `InviteCode` | `:227` | invite_codes | 入驻邀请码（`used_count` 仅由 invite_service 条件 UPDATE 原子递增） |
+| `DailySport` | `:250` | daily_sport | 每日步数（同日覆盖不累加；含 2 个补签预留死字段，见 §9） |
+| `LitNode` | `:277` | lit_nodes | 已点亮节点（永久保留；`step_snapshot` 历史回填为 0） |
+| `QuizRecord` | `:293` | quiz_records | 每日答题结果（每日一次；`answer_at` 为毫秒时间戳） |
+| `DailyQuestion` | `:312` | daily_questions | 当日抽题缓存（同一天返回同一套题） |
+| `QuizAnswer` | `:324` | quiz_answers | 逐题限时作答（018：服务器计时、answering/answered/timeout） |
+| `PointsLog` | `:351` | points_log | 积分台账（017：walk/quiz 每人每日每来源一行，`biz_key` 幂等；legacy 仅追溯不计分） |
+| `UserMedal` | `:375` | user_medals | 用户已获勋章 |
+| `UserEvent` | `:387` | user_event | 统一业务事件（「我的长征足迹」与管理端实时动态同源） |
 
-**AI 智能中心（`:539` 起，6 个，021 迁移）**
+**微信身份关联与管理后台 RBAC / 审计 / 导入（`:407` 起，9 个）**
 
 | 模型 | 行号 | 表 | 职责 |
 |---|---|---|---|
-| `AiKnowledge` | `:540` | ai_knowledge | AI 知识资料（仅 published 参与正式问答检索） |
-| `AiConversation` | `:573` | ai_conversations | AI 会话（归属由 JWT 用户确定） |
-| `AiMessage` | `:590` | ai_messages | AI 消息（role: user/assistant/system；含核验后的来源列表） |
-| `AiGenerationJob` | `:610` | ai_generation_jobs | 题目生成任务（题目工坊） |
-| `AiGeneratedQuestion` | `:634` | ai_generated_questions | AI 题目草稿（审核后导入正式题库） |
-| `AiUsageLog` | `:660` | ai_usage_logs | AI 调用日志（(user_id, day_key) 日限额计数与用量统计） |
+| `UserIdentity` | `:408` | user_identities | 微信身份关联（wx_mini / wx_web 渠道） |
+| `BindRequest` | `:432` | bind_requests | 身份绑定请求（凭证仅存 SHA-256 摘要，不存明文） |
+| `QrLoginSession` | `:457` | qr_login_sessions | PC 扫码登录会话（`token_issued` 保证 JWT 仅签发一次） |
+| `AdminMenu` | `:479` | admin_menus | 后台菜单（code 与 `require_menu` 依赖一一对应） |
+| `AdminRole` | `:490` | admin_roles | 后台角色（is_builtin 不可删除） |
+| `AdminRoleMenu` | `:502` | admin_role_menus | 角色 ↔ 菜单复合主键关联 |
+| `AdminUserRole` | `:511` | admin_user_roles | 用户角色授权（enabled=False 即时生效，get_current_admin 每请求查库） |
+| `AuditLog` | `:526` | audit_logs | 管理后台审计日志（actor_type: super/user） |
+| `ImportPreview` | `:542` | import_previews | Excel 两阶段导入预览暂存（token 主键、一次性、会过期） |
 
-合计 34 个 `__tablename__`（grep 计数核实）。ORM 覆盖率 34/34 由 `backend/test/s21_opengauss_compat.py:56-60` 用例 C03 校验（`ARCHITECTURE.md` §13）。注意：`ARCHITECTURE.md` §13.1 的分组与本文件注释分组略有差异——`invite_codes` 在那里归「身份/RBAC/审计」组，在本文件中位于「用户业务数据」段（`:208`）。
+**AI 智能中心（`:562` 起，6 个，021 迁移）**
+
+| 模型 | 行号 | 表 | 职责 |
+|---|---|---|---|
+| `AiKnowledge` | `:563` | ai_knowledge | AI 知识资料（仅 published 参与正式问答检索） |
+| `AiConversation` | `:596` | ai_conversations | AI 会话（归属由 JWT 用户确定） |
+| `AiMessage` | `:613` | ai_messages | AI 消息（role: user/assistant/system；含核验后的来源列表与 `used_tokens`） |
+| `AiGenerationJob` | `:633` | ai_generation_jobs | 题目生成任务（题目工坊） |
+| `AiGeneratedQuestion` | `:657` | ai_generated_questions | AI 题目草稿（审核后导入正式题库） |
+| `AiUsageLog` | `:683` | ai_usage_logs | AI 调用日志（(user_id, day_key) 日限额计数与用量统计） |
+
+合计 **35** 个 `__tablename__`（`grep -c` 核实，与 `class X(Base)` 命中数一致）。注意：`ARCHITECTURE.md` §13.1 的分组与本文件注释分组略有差异——`invite_codes` 在那里归「身份/RBAC/审计」组，在本文件中位于「用户业务数据」段（`:227`）。
 
 ### 4.4 类型映射约定
 
+> **行号可信度（2026-10-22 复核）**：本节只有标注「已复核」的行号经本次逐行 Read 确认；其余**列级**行号在建档后受 `b0ed585`（新增 `Chapter`，`:61`）影响整体后移，本次未逐条复核，**一律视为待确认**，请以类名 + 列名在源码中定位（见 §2 文档滞后提示）。
+
 | SQLAlchemy 类型 | 用途 | 示例（行号） |
 |---|---|---|
-| `Integer` / `BigInteger` | 整数；**毫秒时间戳** | `quiz_records.answer_at` 用 `BigInteger`（`:287`）——全库唯一毫秒时间戳列，不是 `DateTime`（`ARCHITECTURE.md` §4.5 例外项） |
+| `Integer` / `BigInteger` | 整数；**毫秒时间戳** | `quiz_records.answer_at` 用 `BigInteger`（`QuizRecord` `:293` 类内，列行号待确认）——全库唯一毫秒时间戳列，不是 `DateTime`（`ARCHITECTURE.md` §4.5 例外项） |
 | `String(n)` / `Text` | 短文本 / 长文本 | 全部枚举状态列也是 `String` + 应用层常量（见 §7） |
-| `Boolean` | 开关/标记 | `is_published :117`、`is_goal_completed :247` 等 |
+| `Boolean` | 开关/标记 | `DailyQuote.is_published`、`DailySport.is_goal_completed` 等（列行号待确认） |
 | `DateTime` | UTC naive 时间 | 业务日切分按北京时间在 helpers 层处理（`ARCHITECTURE.md` §4.5） |
-| `JSON` | 数组/对象列 | `questions.options :137`、`quiz_records.wrong_list :284`/`details :286`、`user_event.event_data :381` 等；用 `JSON` 而非 `JSONB`（`ARCHITECTURE.md` §12.5） |
-| `Numeric` | 经纬度与距离 | `route_nodes.latitude :55`、`longitude :56`、`daily_sport.distance :246` |
+| `JSON` | 数组/对象列 | `questions.options :156`（**已复核**）、`quiz_records.wrong_list` / `details`、`user_event.event_data`、`chapters.node_ids`（属性名 `node_ids`、**物理列名 `node_ids_json`**，`:76`，`b0ed585` 新增）等；用 `JSON` 而非 `JSONB`（`ARCHITECTURE.md` §12.5） |
+| `Numeric` | 经纬度与距离 | `route_nodes.latitude` / `longitude`、`daily_sport.distance`（列行号待确认） |
 
-**已确认问题——`Numeric` 列注解为 `Mapped[float]` 与运行时类型不符**（依据：`ARCHITECTURE.md` §13.2 / §16.1，开发库实测）：上述三列注解为 `Mapped[float]`（`:55-56`、`:246`），但 psycopg2 运行时实际返回 `decimal.Decimal`（实测 `Decimal('25.885000')`、`Decimal('4.27')`）。`Mapped[...]` 只是 typing 元数据，SQLAlchemy **不据此做类型强转**，故注解与运行时类型不符；对外出口经 Pydantic 序列化为 float，当前无业务影响，记为技术债。在 service 层直接对这三个字段做算术或比较时须注意 Decimal/float 混用。
+**已确认问题——`Numeric` 列注解为 `Mapped[float]` 与运行时类型不符**（依据：`ARCHITECTURE.md` §13.2 / §16.1，开发库实测）：上述三列注解为 `Mapped[float]`，但 psycopg2 运行时实际返回 `decimal.Decimal`（实测 `Decimal('25.885000')`、`Decimal('4.27')`）。`Mapped[...]` 只是 typing 元数据，SQLAlchemy **不据此做类型强转**，故注解与运行时类型不符；对外出口经 Pydantic 序列化为 float，当前无业务影响，记为技术债。在 service 层直接对这三个字段做算术或比较时须注意 Decimal/float 混用。
 
 ### 4.5 主键与默认值约定
 
-- **自增整型主键**为主流；**非自增主键**三类：字符串主键（`medal_defs.id :154`、`qr_login_sessions.id :443`、`import_previews.token :529`、`system_settings.setting_key :103`）、复合主键（`person_nodes :77-78`、`admin_role_menus :484-485`）、显式赋值整型（`persons.id :66`、`questions.id :134`、`organizations.id :171`、`activity_settings.id :113` 单行 id=1）。非自增整型主键的新增记录由业务代码 `max(id)+1` 分配，**无并发保护**（`ARCHITECTURE.md` §16.1）。
+> **行号可信度**：同 §4.4，本节仅「已复核」项可信。
+
+- **自增整型主键**为主流；**非自增主键**三类：字符串主键（`medal_defs.id`、`qr_login_sessions.id`、`import_previews.token`、`system_settings.setting_key`）、复合主键（`person_nodes`、`admin_role_menus`）、显式赋值整型（`persons.id`、`questions.id :153`（**已复核**）、`organizations.id`、`activity_settings.id` 单行 id=1）。非自增整型主键的新增记录由业务代码 `max(id)+1` 分配，**无并发保护**（`ARCHITECTURE.md` §16.1）；AI 六表则全部是 `autoincrement=True` 的自增主键（`:578`、`:605`、`:622`、`:643`、`:670`、`:699`，**已复核**），与 `questions.id` 的显式取号口径不同。
 - **两套默认值并存**：Python 侧 `default=`（如 `datetime.utcnow`、字符串常量）仅对 ORM 插入生效；SQL 侧 `DEFAULT` 写在 `docker/init` DDL 中，直接 SQL 写入时由它兜底——改默认值必须两处分别核对（`ARCHITECTURE.md` §13.2）。
-- **`users.nickname` 列默认值 `"长征小战士"`（`:192`）**：这是登录默认昵称的真实来源——ORM 列默认值，不由接口代码显式赋值（`ARCHITECTURE.md` §16.1 已查证）。
-- **空字符串 = NULL**：openGauss Oracle 兼容模式 A 下 `''` 落库为 NULL；字符串内容列保持可空，读取时 `None` 即空值（`RouteNode` docstring `:36-37`、`AiKnowledge` docstring `:546`）。
+- **`users.nickname` 列默认值 `"长征小战士"`**（`User` `:198` 类内，列行号待确认）：这是登录默认昵称的真实来源——ORM 列默认值，不由接口代码显式赋值（`ARCHITECTURE.md` §16.1 已查证）。
+- **空字符串 = NULL**：openGauss Oracle 兼容模式 A 下 `''` 落库为 NULL；字符串内容列保持可空，读取时 `None` 即空值（`RouteNode` docstring、`AiKnowledge` docstring `:569`（**已复核**，原文「本库空字符串按 NULL 存储（Oracle 兼容模式），可空文本列读取时 None 即空值」））。
 
 ### 4.6 唯一约束与索引声明
 
-- **唯一约束**：一律在 `__table_args__` 用 `UniqueConstraint` 声明并显式命名 `uq_xxx`（`backend/AGENTS.md` §5），共 10 处：`uq_sport_user_date :240`、`uq_lit_user_node :262`、`uq_quiz_user_date :275`、`uq_dailyq_user_date :294`、`uq_quiz_answer_session_seq :310`、`uq_points_user_biz :337`、`uq_user_medal :357`、`uq_identity_provider_openid :394`、`uq_identity_user_channel :395`、`uq_admin_user_role :492`。另有 6 处列级 `unique=True`：`users.openid :191`、`invite_codes.code :218`、`bind_requests.token_hash :419`、`qr_login_sessions.scene_token_hash :444`、`admin_menus.code :462`、`admin_roles.code :473`。
-- **索引**两种声明方式：列级 `index=True`（如 `users.openid/org_id/created_at/invite_code_id :191/:194/:199/:204`、各业务表 `user_id` 与 `date` 列、`lit_nodes.lit_at :267`、`user_event.event_time :380`、`questions.active :142`、`organizations.parent_id :173`、`audit_logs.target_user_id/created_at :513/:516`）；`__table_args__` 中 `Index(...)`（命名 `ix_xxx`）共 13 处：`ix_daily_quotes_cycle :88`、`ix_quiz_answers_user_date :311`、`ix_points_log_source_user :338`、`ix_user_event_user_type :375`、`ix_ai_knowledge_status_cat :551`、`ix_ai_knowledge_node :552`、`ix_ai_conversations_user_updated :580`、`ix_ai_messages_conv_id :597`、`ix_ai_jobs_created :618`、`ix_ai_genq_status :643`、`ix_ai_genq_job :644`、`ix_ai_usage_user_day :670`、`ix_ai_usage_day :671`。
+> **行号可信度**：本节 AI 段 9 个索引与 `questions.active` 已复核；非 AI 段的列级行号受 `b0ed585` 影响后移，本次未逐条复核，**一律视为待确认**（见 §2 文档滞后提示）。唯一约束/索引的**名称与数量**仍以本清单为准，定位请按名称 grep。
+
+- **唯一约束**：一律在 `__table_args__` 用 `UniqueConstraint` 声明并显式命名 `uq_xxx`（`backend/AGENTS.md` §5），共 10 处：`uq_sport_user_date`、`uq_lit_user_node`、`uq_quiz_user_date`、`uq_dailyq_user_date`、`uq_quiz_answer_session_seq`、`uq_points_user_biz`、`uq_user_medal`、`uq_identity_provider_openid`、`uq_identity_user_channel`、`uq_admin_user_role`（行号待确认）。另有 6 处列级 `unique=True`：`users.openid`、`invite_codes.code`、`bind_requests.token_hash`、`qr_login_sessions.scene_token_hash`、`admin_menus.code`、`admin_roles.code`（行号待确认）。**AI 六表无任何唯一约束**（`AiKnowledge`/`AiConversation`/`AiMessage`/`AiGenerationJob`/`AiGeneratedQuestion`/`AiUsageLog` 的 `__table_args__` 只有 `Index`，已复核 `:573-576`、`:603`、`:620`、`:641`、`:665-668`、`:694-697`）——这也是「同一天多次调用只按行数计数、不按唯一键幂等」的结构原因。
+- **索引**两种声明方式：列级 `index=True`（如 `users.openid/org_id/created_at/invite_code_id`、各业务表 `user_id` 与 `date` 列、`lit_nodes.lit_at`、`user_event.event_time`、`questions.active :161`（**已复核**）、`organizations.parent_id`、`audit_logs.target_user_id/created_at`；除 `questions.active` 外行号待确认）；`__table_args__` 中 `Index(...)`（命名 `ix_xxx`）共 13 处，其中 **AI 段 9 处已复核**：`ix_ai_knowledge_status_cat :574`、`ix_ai_knowledge_node :575`、`ix_ai_conversations_user_updated :603`、`ix_ai_messages_conv_id :620`、`ix_ai_jobs_created :641`、`ix_ai_genq_status :666`、`ix_ai_genq_job :667`、`ix_ai_usage_user_day :695`、`ix_ai_usage_day :696`；非 AI 段 4 处（`ix_daily_quotes_cycle`、`ix_quiz_answers_user_date`、`ix_points_log_source_user`、`ix_user_event_user_type`）行号待确认。`chapters` 表（`b0ed585` 新增）**未声明任何索引**（已复核 `:61-77` 类体内无 `__table_args__`）。
 
 ### 4.7 外键：23 处 `ForeignKey` + 13 个无约束的逻辑外键列
 
-- 全文件 **23 处 `ForeignKey(...)` 声明**（grep 计数），与 `docker/init` DDL 中 23 处 `REFERENCES` 一一对应。唯一的级联删除是 `ai_messages.conversation_id` 的 `ondelete="CASCADE"`（`:600-602`，DDL `021_ai_center.sql:40`）；同时 `AiConversation` docstring（`:576`）说明服务层删除会话时仍**显式连同消息一并删除**、不依赖数据库级联——两层保障并存。
-- **逻辑外键没有数据库级 FK 约束**（`ARCHITECTURE.md` §13.2 已核实：「11 处逻辑外键没有数据库级 FK 约束，有意为之，便于迁移与数据修复」）。按「ORM 无 `ForeignKey` 声明且 DDL 无 `REFERENCES`、但列承载引用 id」的口径逐条核对本文件与 `docker/init`，共列出 **13 列**：
+> **行号可信度**：本节 AI 段 4 处已复核；非 AI 段的列级行号待确认。
+
+- 全文件 **23 处 `ForeignKey(...)` 声明**（grep 计数；`b0ed585` 新增 `chapters` 后是否仍为 23——**待确认**，`Chapter` 类体内无 `ForeignKey`，`node_ids` 是 JSON 列表而非 FK），与 `docker/init` DDL 中的 `REFERENCES` 一一对应。唯一的级联删除是 `ai_messages.conversation_id` 的 `ondelete="CASCADE"`（`:623-625`，**已复核**；DDL `021_ai_center.sql:40`）；同时 `AiConversation` docstring（`:599`，**已复核**，原文「删除会话时服务层显式连同消息一并删除，不依赖数据库级联」）说明两层保障并存。
+- AI 段其余 3 处真实 FK（**已复核**）：`ai_knowledge.node_id → route_nodes.id`（`:585-587`）、`ai_conversations.user_id → users.id`（`:606`）、`ai_generated_questions.job_id → ai_generation_jobs.id`（`:671-673`）。
+- **逻辑外键没有数据库级 FK 约束**（`ARCHITECTURE.md` §13.2 已核实：「11 处逻辑外键没有数据库级 FK 约束，有意为之，便于迁移与数据修复」）。按「ORM 无 `ForeignKey` 声明且 DDL 无 `REFERENCES`、但列承载引用 id」的口径逐条核对本文件与 `docker/init`，共列出 **13 列**（AI 段 3 列已复核，其余行号待确认）：
 
 | 列 | 行号 | DDL 依据 |
 |---|---|---|
-| `organizations.parent_id` → organizations.id | `:173` | `001_schema.sql:36` |
-| `users.org_id` → organizations.id | `:194` | `001_schema.sql:49` |
-| `users.invite_code_id` → invite_codes.id | `:204` | `015_invite_admission.sql:26` |
-| `invite_codes.org_id` → organizations.id | `:221` | `015_invite_admission.sql:12` |
-| `lit_nodes.node_id` → route_nodes.id | `:266` | `001_schema.sql:70` |
-| `quiz_answers.question_id` → questions.id | `:319` | `018_quiz_answers.sql:14` |
-| `points_log.ref_id` → daily_sport.id（walk）/ daily_questions.id（quiz） | `:347` | `017_points_ledger.sql:8-10` |
-| `user_medals.medal_id` → medal_defs.id | `:361` | `001_schema.sql:118` |
-| `audit_logs.actor_user_id` → users.id | `:510` | `010_admin_identity.sql:95` |
-| `audit_logs.target_user_id` → users.id | `:512` | `010_admin_identity.sql:97` |
-| `ai_generated_questions.question_id` → questions.id | `:656` | `021_ai_center.sql:73` |
-| `ai_usage_logs.user_id` → users.id | `:675` | `021_ai_center.sql:80` |
-| `ai_usage_logs.conversation_id` → ai_conversations.id | `:676` | `021_ai_center.sql:81` |
+| `organizations.parent_id` → organizations.id | 待确认 | `001_schema.sql:36` |
+| `users.org_id` → organizations.id | 待确认 | `001_schema.sql:49` |
+| `users.invite_code_id` → invite_codes.id | 待确认 | `015_invite_admission.sql:26` |
+| `invite_codes.org_id` → organizations.id | 待确认 | `015_invite_admission.sql:12` |
+| `lit_nodes.node_id` → route_nodes.id | 待确认 | `001_schema.sql:70` |
+| `quiz_answers.question_id` → questions.id | 待确认 | `018_quiz_answers.sql:14` |
+| `points_log.ref_id` → daily_sport.id（walk）/ daily_questions.id（quiz） | 待确认 | `017_points_ledger.sql:8-10` |
+| `user_medals.medal_id` → medal_defs.id | 待确认 | `001_schema.sql:118` |
+| `audit_logs.actor_user_id` → users.id | 待确认 | `010_admin_identity.sql:95` |
+| `audit_logs.target_user_id` → users.id | 待确认 | `010_admin_identity.sql:97` |
+| `ai_generated_questions.question_id` → questions.id | `:679`（**已复核**） | `021_ai_center.sql:73` |
+| `ai_usage_logs.user_id` → users.id | `:700`（**已复核**） | `021_ai_center.sql:80` |
+| `ai_usage_logs.conversation_id` → ai_conversations.id | `:701`（**已复核**） | `021_ai_center.sql:81` |
 
-  本清单 13 列与 `ARCHITECTURE.md` 的「11 处」存在计数差异（疑为是否计入审计/日志表列的口径不同），「11」的精确列口径**待确认**。注意答题积分的 `ref_id` 指向 `daily_questions.id`（当日会话），**不是** `quiz_records.id`（`017_points_ledger.sql:8` 注释、`ARCHITECTURE.md` §16.1）。开发库实测 7 项抽查（users.org_id、lit_nodes.node_id、user_medals.medal_id、quiz_records.user_id、daily_sport.user_id、organizations.parent_id、points_log.ref_id）**全部 0 孤儿**（`ARCHITECTURE.md` §16.1）。
+  本清单 13 列与 `ARCHITECTURE.md` 的「11 处」存在计数差异（疑为是否计入审计/日志表列的口径不同），「11」的精确列口径**待确认**。注意答题积分的 `ref_id` 指向 `daily_questions.id`（当日会话），**不是** `quiz_records.id`（`017_points_ledger.sql:8` 注释、`ARCHITECTURE.md` §16.1）。开发库实测 7 项抽查（users.org_id、lit_nodes.node_id、user_medals.medal_id、quiz_records.user_id、daily_sport.user_id、organizations.parent_id、points_log.ref_id）**全部 0 孤儿**（`ARCHITECTURE.md` §16.1）。`chapters.node_ids`（`:76`）是 JSON 主键列表而非 FK，其中的 route_nodes id **既无约束也无孤儿抽查记录**——**待确认**。
 
 ## 5. 输入与输出
 
@@ -147,41 +165,73 @@
 
 ## 7. 业务规则（模型层承载的幂等与并发语义）
 
+> **行号可信度**：本节 AI 段引用已复核；非 AI 段行号待确认（见 §2 文档滞后提示）。
+
 - **唯一约束即幂等/并发兜底**（docstring 与 `ARCHITECTURE.md` §9.1）：
-  - `uq_sport_user_date`：步数同日覆盖而非累加（`:232`）；
-  - `uq_quiz_user_date`：每日仅一次答题，并发提交由唯一约束兜底（`:272`）；
-  - `uq_dailyq_user_date`：同一天返回同一套题（`:291`）；
-  - `uq_lit_user_node`：点亮后永久保留（`:256`）；
-  - `uq_points_user_biz`：积分台账每人每来源每日一行（`biz_key` = `walk:{日期}` / `quiz:{日期}`），重算幂等（`:330`）；
-  - `uq_quiz_answer_session_seq`：同会话同题号仅一条作答记录（`:310`）。
-- **「一个 unionid 只属一个用户」无法用索引表达**（同一用户多渠道持有相同 unionid），由 identity_service 在事务内校验，冲突身份禁止自动合并（`UserIdentity` docstring `:386-389`）。
-- **枚举/状态字段全库无 CHECK 约束**（`ARCHITECTURE.md` §13.2），均为 `VARCHAR` + 应用层常量：`users.status`（`:202-203`）、`daily_sport.source/sync_status`（`:236`、`:250`、`:252`）、`quiz_answers.status`（`:305`、`:325`）、`points_log.source_type`（`:330-332`、`:346`）、`bind_requests.status`（`:412`、`:427`）、`qr_login_sessions.status`（`:437`、`:445`）、`import_previews.status/biz_type`（`:524`、`:530-532`）、`ai_knowledge.status`（`:543`、`:565`）、`ai_conversations.status`（`:575`、`:585`）、`ai_generation_jobs.status`（`:613`、`:627`）、`ai_generated_questions.status`（`:637`、`:653`）、`ai_usage_logs.feature/status`（`:663-664`、`:677`、`:681`）。合法值以各 docstring 与 service 层常量为准。
-- **派生缓存字段**：`User.continuous_days/max_continuous_days`（`:197-198`）由 streak_service 在 sport 写入链路维护，启动时按 daily_sport 全量重算兜底（docstring `:184-185`）。
-- `quiz_records.details`（`:285-286`，014 新增）历史记录为 `None`，展示时回退 `wrong_list`。
+  - `uq_sport_user_date`：步数同日覆盖而非累加；
+  - `uq_quiz_user_date`：每日仅一次答题，并发提交由唯一约束兜底；
+  - `uq_dailyq_user_date`：同一天返回同一套题；
+  - `uq_lit_user_node`：点亮后永久保留；
+  - `uq_points_user_biz`：积分台账每人每来源每日一行（`biz_key` = `walk:{日期}` / `quiz:{日期}`），重算幂等；
+  - `uq_quiz_answer_session_seq`：同会话同题号仅一条作答记录。
+  （以上 6 条的列/约束行号待确认，按名称 grep 定位。）
+- **「一个 unionid 只属一个用户」无法用索引表达**（同一用户多渠道持有相同 unionid），由 identity_service 在事务内校验，冲突身份禁止自动合并（`UserIdentity` docstring，`:408` 类内，行号待确认）。
+- **枚举/状态字段全库无 CHECK 约束**（`ARCHITECTURE.md` §13.2），均为 `VARCHAR` + 应用层常量：`users.status`、`daily_sport.source/sync_status`、`quiz_answers.status`、`points_log.source_type`、`bind_requests.status`、`qr_login_sessions.status`、`import_previews.status/biz_type`（以上行号待确认）；**AI 段已复核**：`ai_knowledge.status`（docstring `:566`、列 `:588`）、`ai_conversations.status`（docstring `:599`、列 `:608`）、`ai_generation_jobs.status`（docstring `:636`、列 `:650`）、`ai_generated_questions.status`（docstring `:660`、列 `:676`）、`ai_usage_logs.feature/status`（docstring `:686-687`、列 `:702`/`:706`）、`ai_usage_logs.error_code`（列 `:707`，自由文本，AI 链路固定写 `"llm"`）。合法值以各 docstring 与 service 层常量为准。
+- **`ai_usage_logs.model` / `used_tokens` 的语义随上游供应商而变（`b712d81` 起）**：docstring `:688-690` 原文——「`used_tokens` 口径随上游供应商而异（见 `services/llm_base.py` 的 `CallResult` 说明），未报告为空；`model` 记录调用标识，由 `llm_service.model_label()` 给出（OpenAI 兼容协议为真实模型名，CloudBase ACP 不暴露模型名，沿用 Agent ID）」。因此**同一张表里不同时期的 `model`/`used_tokens` 不可直接横向比较或求和计费**（列定义 `:703`/`:704`，均 `String(64)` / `Integer` 可空）。写入方见 `.qoder/backend/app/services/ai_usage_service.py.md` §4.5。
+- **派生缓存字段**：`User.continuous_days/max_continuous_days` 由 streak_service 在 sport 写入链路维护，启动时按 daily_sport 全量重算兜底（`User` docstring，行号待确认）。
+- `quiz_records.details`（014 新增）历史记录为 `None`，展示时回退 `wrong_list`（列行号待确认）。
 
 ## 8. 修改约束
 
 - **不变量 8（表结构单一来源）**：改模型必须配套新增编号迁移（`docker/init/SQL_CONSTRAINTS.md` 为权威，已发布脚本不得修改），反之迁移加列也必须同步本文件；禁止由 FastAPI 启动流程 `create_all`。
-- 新增模型需同步：`ARCHITECTURE.md` §13 表目录、`s21_opengauss_compat.py` 的 ORM 覆盖率校验、（如涉及种子）`data/seed.py`。
-- 声明风格：SQLAlchemy 2.0 `Mapped[T] = mapped_column(...)`；唯一约束显式命名 `uq_xxx`、索引 `ix_xxx`（`backend/AGENTS.md` §5 与本文件既有惯例）。
+- 新增模型需同步：`ARCHITECTURE.md` §13 表目录、`s21_opengauss_compat.py` 的 ORM 覆盖率校验、（如涉及种子）`data/seed.py`、以及本文档 §4.3 清单与计数（`b0ed585` 新增 `Chapter` 时这三处都漏了，见 §9）。
+- 声明风格：SQLAlchemy 2.0 `Mapped[T] = mapped_column(...)`；唯一约束显式命名 `uq_xxx`、索引 `ix_xxx`（`backend/AGENTS.md` §5 与本文件既有惯例）。属性名与物理列名不同时须显式传列名（现有唯一一例：`Chapter.node_ids` → `mapped_column("node_ids_json", JSON, ...)`，`:76`）。
 - 新字段若面向小程序输出，必须核对 schemas 层 camelCase 契约（不变量 1）；面向管理后台则为 snake_case（`ARCHITECTURE.md` §4.2）。
 - `Numeric` 三列的 `Mapped[float]` 注解是已登记技术债：不要单点「修正」注解或加类型转换器而不做回归——出口经 Pydantic 序列化，改动会影响 `latitude/longitude/distance` 三个字段的对外契约（`ARCHITECTURE.md` §16.1）。
 - 引入 `relationship()` 需谨慎：现有 service 层全部手写查询/聚合，惰性加载关系易引入 N+1（编码质量原则，根 `agents.md` §2.4）。
-- 死字段 `is_makeup`/`makeup_at`（`:248-249`）启用前必须先补迁移与业务写入点，不得假设存量数据有值。
+- 死字段 `is_makeup`/`makeup_at`（`DailySport` `:250` 类内，列行号待确认）启用前必须先补迁移与业务写入点，不得假设存量数据有值。
+- **改 `AiUsageLog` 的 docstring 时须同步 `AiMessage.used_tokens` 的 docstring（`:616`）**：`b712d81` 只改了前者，后者仍写「平台 `usage_update.used` 原值」（CloudBase ACP 口径）。两处描述同一语义，改一处漏一处会让读者误判 `ai_messages.used_tokens` 的取值来源（见 §9 文档滞后 ③）。
+- **不得把供应商名写进本文件的列注释或 docstring**：`model` / `used_tokens` 的口径说明必须保持「随供应商而异」的中性表述，具体取值规则归 `services/llm_base.py` 的 `CallResult` 与 `llm_service.model_label()`。
 
 ## 9. 当前实现状态
 
-- **已实现**：34/34 模型与开发库表列一致（s21 用例 C03、s26 真库校验 ORM 与真库列 ALL_MATCH，`ARCHITECTURE.md` §13 / §11.2）。
+- **已实现**：**35** 个模型类 / **35** 个 `__tablename__`（`grep -c` 复核），覆盖 AI 智能中心 6 表（`:562-709`）与 `b0ed585` 新增的 `chapters`。历史记录的「34/34 模型与开发库表列一致」（s21 用例 C03、s26 真库校验 ORM 与真库列 ALL_MATCH，`ARCHITECTURE.md` §13 / §11.2）是 `1600074` 时点的结论；`b0ed585`/`c660727`/`b712d81` 之后 s21 是否已按 35 重跑并通过——**待确认**。
 - **文档滞后 ①（勋章数量）**：`backend/AGENTS.md:39` 仍写种子为「勋章 6」，而 `data/seed.py` 实际 **12 枚**（其 docstring `:3` 自述「勋章定义(12)」，`MEDALS` 列表 `:282` 起实测 12 项；提交 `d0933fb` 2026-10-01「种子升级为12勋章」），开发库 `medal_defs` 亦为 12 行（`ARCHITECTURE.md` §13.3）。**以代码/数据库为准。** 更正说明：经逐行核对，本文件顶部 docstring（`:1-9`）本身不含勋章数量，「勋章 6」字样位于 `backend/AGENTS.md`，非本文件。
-- **文档滞后 ②（本文件 docstring 分组口径）**：顶部 docstring（`:3-5`）只列出静态配置 3 个模型（RouteNode/Question/MedalDef）与用户业务 8 个模型，未含其后的 Person/PersonNode/DailyQuote/SystemSetting/ActivitySetting/Organization、InviteCode/UserEvent，以及 `:384`（身份/RBAC/审计/导入 9 个）与 `:539`（AI 6 个）两大分组；文件内分组注释是最新口径。
-- **死字段**：`daily_sport.is_makeup`（`:248`）/ `makeup_at`（`:249`），docstring `:235` 自述「补签预留字段」；`005_upgrade.sql:31-36` 建列且 NOT NULL DEFAULT FALSE，但**全仓无业务写入点，开发库实测 0 行有值**——纯预留死字段（`ARCHITECTURE.md` §16.1 已查证）。
+- **文档滞后 ②（本文件 docstring 分组口径）**：顶部 docstring（`:3-5`）只列出静态配置 3 个模型（RouteNode/Question/MedalDef）与用户业务 8 个模型，未含其后的 **Chapter（`b0ed585` 新增，`:61`）**、Person/PersonNode/DailyQuote/SystemSetting/ActivitySetting/Organization、InviteCode/UserEvent，以及 `:407`（身份/RBAC/审计/导入 9 个）与 `:562`（AI 6 个）两大分组；文件内分组注释是最新口径。
+- **文档滞后 ③（`AiMessage.used_tokens` 的 docstring 仍是单一供应商口径）**：`:616` 原文「`used_tokens` 为平台 `usage_update.used` 原值（assistant 消息，未报告时为空）」——`usage_update.used` 是腾讯云 CloudBase ACP 的用量字段名。`c660727` 与 `b712d81` 都只改了 `AiUsageLog` 的 docstring（现 `:688-690`，已改为「口径随上游供应商而异」），**未同步改 `AiMessage`**。因此当前源码里同一语义的两处注释口径不一致：走 `openai` 适配器时写入 `ai_messages.used_tokens` 的实际是 `usage.total_tokens`，与 `:616` 的描述不符。属源码注释欠账，是否有意保留——**待确认**（本次任务不得改源码）。
+- **文档滞后 ④（本文档自身，非 AI 段行号）**：`b0ed585` 在 `:61` 插入 `Chapter` 后，`Person` 及之后所有非 AI 段的**列级**行号整体后移（类级行号已在 §4.3 全部校正）。§4.4 / §4.5 / §4.6 / §4.7 / §7 / §8 中标注「行号待确认」的条目即属此类，本次任务范围只覆盖 `c660727`/`6a4dbb7`/`b712d81` 三次提交的欠账，故未逐条复核——**待补**。
+- **死字段**：`daily_sport.is_makeup` / `makeup_at`（`DailySport` `:250` 类内，列行号待确认），docstring 自述「补签预留字段」；`005_upgrade.sql:31-36` 建列且 NOT NULL DEFAULT FALSE，但**全仓无业务写入点，开发库实测 0 行有值**——纯预留死字段（`ARCHITECTURE.md` §16.1 已查证）。
 - **技术债**：`Numeric` 列 `Mapped[float]` 注解与运行时 `decimal.Decimal` 不符（§4.4），当前无业务影响。
-- **已知风险**：逻辑外键无 DB 级约束（§4.7，开发库抽查 0 孤儿）；非自增主键 `max(id)+1` 分配无并发保护（`ARCHITECTURE.md` §16.1）。
-- **待确认**：`ARCHITECTURE.md` §13.2「11 处逻辑外键」的精确列口径（本文档逐条枚举为 13 列，差异疑为是否计入 audit_logs / ai_usage_logs 列）。
+- **已知风险**：逻辑外键无 DB 级约束（§4.7，开发库抽查 0 孤儿）；非自增主键 `max(id)+1` 分配无并发保护（`ARCHITECTURE.md` §16.1）；`ai_usage_logs` 的 `model`/`used_tokens` 跨供应商不可比（§7）。
+- **待确认**：① `ARCHITECTURE.md` §13.2「11 处逻辑外键」的精确列口径（本文档逐条枚举为 13 列，差异疑为是否计入 audit_logs / ai_usage_logs 列）；② `chapters.node_ids`（JSON 主键列表）是否需要孤儿校验与索引；③ s21 的 ORM 覆盖率校验基数是否已从 34 更新到 35。
 
 ## 10. 迭代记录
 
-数据来源：`git log --follow --oneline -- backend/app/models/models.py`（共 18 次提交）+ `docs/迭代记录.md`。按主题归并、时间倒序；每条引用的提交号均真实存在。
+数据来源：`git log --follow --oneline -- backend/app/models/models.py` + `docs/迭代记录.md`。按主题归并、时间倒序；每条引用的提交号均真实存在。建档（2026-10-17）时记为「共 18 次提交」，此后本文件又被 **`b0ed585`（2026-10-18）、`c660727`（2026-10-19）、`b712d81`（2026-10-22）** 三次改动，下面按倒序补记；`6a4dbb7`（真实 SSE 流式对话）**未改动本文件**。历史条目中的 `路径:行号` 均为建档当时的快照，以 §1~§9 正文复核后的行号为准。
+
+### 2026-10-22（`b712d81`）
+
+- 需求：AI 上游改为可切换供应商（`LLM_PROVIDER`）。`llm_service` 门面按 env 分派到 `llm_openai`（OpenAI Chat Completions 兼容）或 `llm_cloudbase`（腾讯云 CloudBase Agent ACP），两套凭证常驻 env，上线只改一行即可切回百炼。对外符号不变，`ai_usage_logs.model` 改取 `llm_service.model_label()`，随供应商分别为真实模型名或 Agent ID。
+- 修改内容：本文件 **+3/-2 行（708 → 709 行）**，且**只改 `AiUsageLog` 的类 docstring**（现 `:688-690`）：把 `c660727` 写入的「`used_tokens` 取 `usage.total_tokens`（输入+输出，与按量计费口径一致）…`model` 记录实际调用的模型名（`settings.LLM_MODEL`）」改为供应商中性的「`used_tokens` 口径随上游供应商而异（见 `services/llm_base.py` 的 `CallResult` 说明），未报告为空；`model` 记录调用标识，由 `llm_service.model_label()` 给出（OpenAI 兼容协议为真实模型名，CloudBase ACP 不暴露模型名，沿用 Agent ID）」。**无 SQL 迁移、无表结构/列/索引/约束变化**，`__tablename__`（`:693`）、`__table_args__`（`:694-697`，`ix_ai_usage_user_day` / `ix_ai_usage_day`）与 11 个列定义（`:699-709`）逐字未动。
+- 关联文件：`backend/app/services/llm_service.py`（门面 + `model_label()`）、`backend/app/services/llm_base.py`（`CallResult` 的 `used_tokens` 口径说明）、`backend/app/services/llm_openai.py`、`backend/app/services/llm_cloudbase.py`、`backend/app/services/ai_usage_service.py`（`record()` 落库方）、`backend/app/services/ai_chat_service.py`、`backend/app/services/ai_question_service.py`、`backend/app/api/routes/ai.py`、`backend/app/core/config.py`、`backend/test/s30_llm_provider_switch.py`。
+- 测试结果：据 `docs/迭代记录.md` 该提交条目——新增 `s30`（分派/两协议桩/真实调用）**23/23**，回归 `s25` **16/16**、`s26` **47/47**、`s28` **13/13**，合计 **99/99**；`py_compile` 全通过，openapi **127 条路径、接口面无增删**。同条目记载的真实调用实测四项处置中与本表直接相关的是第 ③ 项：CloudBase 的 `usage_update.used` 量级不稳（254 vs 1.9 万），**不可作单次计费依据**——这正是把 `used_tokens` 的 docstring 改成「口径随供应商而异」的原因。**本次文档改动未执行任何测试**（按任务约束）。
+- 遗留：`AiMessage.used_tokens` 的 docstring（`:616`）未同步更新，仍写 ACP 口径，见 §9 文档滞后 ③。
+
+### 2026-10-19（`c660727`）
+
+- 需求：AI 大模型供应商由腾讯云 CloudBase Agent（ACP 私有协议）迁移到阿里云百炼（OpenAI Chat Completions 兼容协议），配置由 `CLOUDBASE_ENV_ID`/`AGENT_ID`/`API_KEY` 三项收敛为 `LLM_BASE_URL`/`LLM_MODEL`/`LLM_API_KEY`，业务代码与厂商解耦。
+- 修改内容：本文件 **+2/-1 行（685 → 708 行中的这一次为 685 行；`b0ed585` 已先把文件从 684 行推到 707 行）**，同样**只改 `AiUsageLog` 的类 docstring**：把「`used_tokens` 为平台原值，未报告为空；`model` 暂存 Agent ID（底层模型名需控制台确认）」改为「`used_tokens` 取 `usage.total_tokens`（输入+输出，与按量计费口径一致），未报告为空；`model` 记录实际调用的模型名（`settings.LLM_MODEL`）」——即 `model` 列的取值由「Agent ID（需人工到控制台反查真实模型）」变成「直接是真实模型名」。**无 SQL 迁移、无表结构/列/索引变化**（`model` 仍是 `String(64)` 可空，`:703`）。该措辞在 3 天后被 `b712d81` 再次改为供应商中性版本。
+- 关联文件：`backend/app/services/cloudbase_service.py` → `llm_service.py`（更名 + 删 SSE 解析改非流式）、`backend/app/core/config.py`、`backend/app/api/routes/admin.py`、`backend/app/api/routes/ai.py`、`backend/app/services/ai_chat_service.py`、`ai_question_service.py`、`ai_usage_service.py`、`backend/test/s25_ai_question_generate.py`、`backend/test/s26_ai_center.py`。
+- 测试结果：据 `docs/迭代记录.md` 该提交条目——`s25` AI 出题 **16/16**、`s26` AI 中心 **47/47** 全通过，含真实调用生成 10 题与 50 题；报告 `backend/test/docs/s27-llm-provider-migration-report.md`。同条目记载实测发现并处置的三处推理模型特性：思考 token 不受 `max_tokens` 约束且同样计费、关闭思考后出题 JSON 解析失败率上升（5 批挂 1 批）、单批 10 题开思考超 300s 读超时。**本次文档改动未执行任何测试**（按任务约束）。
+- 与 ORM 层相关的遗留事实：`ai_usage_logs.model` 列宽 `String(64)` 对「真实模型名」是否够用（百炼模型名如 `qwen3.8-max` 远短于 64，当前无风险）——现状记录。
+
+### 2026-10-18（`b0ed585`，补记；不属本次任务范围）
+
+- 需求：「十项增强后端落地并修复评审问题」，其中与本文件相关的是**章节外化为 `chapters` 表**并保留 `march_service.CHAPTERS` 常量兜底。
+- 修改内容：本文件 **+24/-1 行（684 → 707 行）**，新增 `Chapter` 模型（`:61-77`，表 `chapters`，023 迁移）：`id` 自增主键、`name String(50)`、`title String(100) default=""`、`intro Text` 可空、`node_ids`（**ORM 属性名 `node_ids`、物理列名 `node_ids_json`**，`JSON default=list`，`:76`）、`sort_order Integer default=0`；类 docstring 说明「10 个路线节点划分为若干章；管理端可增删改（chapters CRUD），`march_service` 查表计算章节状态，库空时回退 `march_service.CHAPTERS` 常量」。该插入使 `Person` 及之后所有模型的行号整体后移。
+- 关联文件：`backend/app/services/march_service.py`、`backend/app/services/operation_config_service.py`、`backend/app/services/upload_service.py`（同提交新增）、`backend/app/api/routes/*`（avatar 上传、persons/medals/chapters CRUD、analytics 四接口）、`docker/init/023_*.sql`、`.env.prod`（补 `PUBLIC_BASE_URL`）。
+- 测试结果：`docs/迭代记录.md` 对应条目的验证细节本次未复核——**待确认**。
+- 文档欠账（本次已部分补齐）：该提交**未同步更新本文档**——§4.3 清单缺 `Chapter`、「34 个模型」计数过期、非 AI 段全部行号失效。本次已补 `Chapter` 行与 §4.3 全部类级行号、并把计数改为 35；**列级行号仍待补**（§9 文档滞后 ④）。
 
 ### 2026-10-17
 - 需求：AI 智能中心 Phase A（提交 `1600074`）。

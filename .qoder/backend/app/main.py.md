@@ -150,7 +150,7 @@ def health():                                        # :91
 | `app.services.streak_service` | 启动重算连续天数（`:47`） | 待生成 |
 | `app.services.points_service` | 启动修复步行积分台账（`:48`） | 待生成 |
 
-**间接依赖**：导入 18 个路由模块会级联导入 `api/deps.py`、全部 30 个 service、`models/models.py`（34 张表的 ORM 映射）、`core/security.py`、`core/wx.py`、`core/ws.py`、`core/rate_limit.py`、`core/helpers.py`、`schemas/schemas.py`。**因此「能否成功 import `app.main`」本身就是全项目导入链与 ORM 映射的健康检查**（`docs/迭代记录.md` 多条记录以「ORM 与 `app.main` 导入正常」作为验证项）。
+**间接依赖**：导入 18 个路由模块会级联导入 `api/deps.py`、`app/services/` 下全部 **35 个业务模块**（2026-10-23 `ls backend/app/services/*.py` 实测共 36 个文件 = `__init__.py`（仅 1 行包 docstring，不计）+ 32 个 `*_service.py` + 大模型适配层 `llm_base.py` / `llm_openai.py` / `llm_cloudbase.py`；AI 上游由 `llm_service.py` 门面按 `settings.LLM_PROVIDER` 分派到 `llm_openai`（OpenAI Chat Completions 兼容）或 `llm_cloudbase`（腾讯云 CloudBase Agent ACP），见 `app/services/llm_service.py:26`、`:41`。其中 `operation_config_service.py` 与 `upload_service.py` 尚无 `.qoder/` 建档，见 `.qoder/PROJECT.md` §10「增量与缺口」节）、`models/models.py`（**35** 张表的 ORM 映射，2026-10-23 `grep -c '^class ' backend/app/models/models.py` 与 `grep -c '__tablename__'` 双双实测 35；建档时写的 34 已随 `b0ed585` 新增 `Chapter`（`models.py:61`）过期）、`core/security.py`、`core/wx.py`、`core/ws.py`、`core/rate_limit.py`、`core/helpers.py`、`schemas/schemas.py`。**因此「能否成功 import `app.main`」本身就是全项目导入链与 ORM 映射的健康检查**（`docs/迭代记录.md` 多条记录以「ORM 与 `app.main` 导入正常」作为验证项）。
 
 **数据库表**：启动钩子间接读写 `route_nodes`、`questions`、`medal_defs`、`persons`、`person_nodes`、`daily_quotes`、`organizations`（种子）；`daily_sport`、`users`（连续天数重算）；`daily_sport`、`points_log`、`users`（步行积分修复）。**不触碰 `schema_migrations`** —— 迁移由 `docker/init/*.sql` 在数据库容器初始化时执行（`.qoder/ARCHITECTURE.md` §12.4），本文件完全不参与。
 
@@ -160,10 +160,10 @@ def health():                                        # :91
 |---|---|
 | `backend/run.py:11` | `uvicorn.run("app.main:app", ...)`，**开发启动入口** |
 | `backend/test/serve_sqlite.py:33`、`:40` | `from app.main import app` → `uvicorn.run(app, host="127.0.0.1", port=8010, log_level="info")`，浏览器验收专用（该脚本另在 `:35` 调 `Base.metadata.create_all`，属 test 目录的例外，不进部署包） |
-| 16 个冒烟测试脚本 | `from app.main import app` + `TestClient(app)`（`s5`、`s6`、`s8`、`s9`、`s11`、`s12`、`s17`、`s18`、`s19`×2、`s20`、`s22`、`s23`、`s24`、`s25`、`s26`） |
+| 18 个冒烟测试脚本 | `from app.main import app` + `TestClient(app)`（`s5`、`s6`、`s8`、`s9`、`s11`、`s12`、`s17`、`s18`、`s19`×2、`s20`、`s22`、`s23`、`s24`、`s25`、`s26`、`s28`、`s29`）。**`s30_llm_provider_switch.py` 不挂载 `app.main`** —— 它直接测 `llm_service` 门面与两个适配器（自建本地桩服务器），故不在本行计数内 |
 | 生产 uvicorn 进程 | 启动命令**待确认**（`.qoder/ARCHITECTURE.md` §16 第 3 项） |
 
-**测试与 lifespan 的关系（重要）**：Starlette 的 `TestClient` 只在**作为上下文管理器进入时**才驱动 ASGI lifespan。仓库内 16 处 `TestClient(app)` 中，只有 `s5_org_user_counts.py:74` 与 `s6_org_user_detail.py:87` 写作 `with TestClient(app) as client:`（会执行 `lifespan`），其余 14 处写作 `client = TestClient(app)`（**不执行 `lifespan`**，因此不写种子、不做重算）。这解释了为什么多数冒烟脚本需要自己准备数据，也是新增测试时的易踩点。
+**测试与 lifespan 的关系（重要）**：Starlette 的 `TestClient` 只在**作为上下文管理器进入时**才驱动 ASGI lifespan。仓库内 18 处 `TestClient(app)`（2026-10-22 实测 `grep -rn "TestClient(app)" backend/test/*.py`）中，只有 `s5_org_user_counts.py:74` 与 `s6_org_user_detail.py:87` 写作 `with TestClient(app) as client:`（会执行 `lifespan`），其余 16 处写作 `client = TestClient(app)`（**不执行 `lifespan`**，因此不写种子、不做重算）。这解释了为什么多数冒烟脚本需要自己准备数据，也是新增测试时的易踩点。
 
 ## 7. 业务规则
 
@@ -212,6 +212,20 @@ def health():                                        # :91
 ## 10. 迭代记录
 
 数据来源：`git log --follow --oneline -- backend/app/main.py`（12 条提交，全部列出），验证结论对照 `docs/迭代记录.md`。
+
+### 2026-10-23（同批交付前复核补正，未单独提交）
+
+- 需求：本批文档在提交前做了一轮「抽查引用」复核，发现 §6「间接依赖」段两处计数仍不准，就地补正（与上方 `2026-10-22` 条目同属一次未提交的文档同步，故另立本条留痕、不改写上一条）。
+- 修改内容：① `app/services/` 模块数由「**35 个模块**（32 个 `*_service.py` + 三个适配器）」改写为可审计的算式——`ls backend/app/services/*.py` 实测 **36 个文件** = `__init__.py`（仅 1 行包 docstring，不计入业务模块）+ 32 个 `*_service.py` + `llm_base.py`/`llm_openai.py`/`llm_cloudbase.py`，故**业务模块 35 个**；原写法会让人用 `ls` 复核时得到 36 而对不上。同时补记 `operation_config_service.py`、`upload_service.py` 两个模块尚无 `.qoder/` 建档（实测 `.qoder/backend/app/services/*.md` 共 33 份 = 35 − 2），指向 `.qoder/PROJECT.md` §10「增量与缺口」节。② 同段 `models/models.py`「**34** 张表的 ORM 映射」更正为 **35**：`grep -c '^class '` 与 `grep -c '__tablename__'` 双双实测 35，`b0ed585` 新增的 `Chapter`（`backend/app/models/models.py:61`）未被计入；此更正与同批 `.qoder/backend/app/models/models.py.md` 的「34 → 35 个模型」口径对齐。
+- 关联文件（均未修改，仅作计数来源）：`backend/app/services/`（目录清单）、`backend/app/models/models.py`、`.qoder/backend/app/models/models.py.md`、`.qoder/PROJECT.md`。
+- 测试结果：纯文档复核，未跑测试、源码零改动。计数以 2026-10-23 的 `ls`/`grep -c` 实测为准。
+
+### 2026-10-22
+
+- 需求：AI 上游三次变更（`c660727` 迁阿里云百炼、`6a4dbb7` SSE 真流式、`b712d81` 改为 `LLM_PROVIDER` 可切换的双供应商）后，校正本文档中已过期的服务模块清单与测试挂载点统计。**本次源码未改（`backend/app/main.py` 三个提交均未触碰），属文档同步**。
+- 修改内容：① §6「间接依赖」把「全部 30 个 service」更正为 `app/services/` 下 **35 个模块**（32 个 `*_service.py` + `llm_base.py`/`llm_openai.py`/`llm_cloudbase.py`），并说明 AI 上游现为 `llm_service.py` 门面按 `settings.LLM_PROVIDER` 分派（`app/services/llm_service.py:26`、`:41`）；② §6「被谁依赖」的冒烟脚本行由 16 个更正为 **18 个**（补 `s28_ai_chat_stream.py`、`s29_route_stats.py`），并注明 `s30_llm_provider_switch.py` 不挂载 `app.main`；③ 同节「测试与 lifespan 的关系」的 `TestClient(app)` 计数由 16 处更正为 **18 处**（`with` 形式仍只有 `s5`/`s6` 两处，其余 16 处不驱动 lifespan）。§4 的 import 清单、18 个 `include_router`、健康检查等表述与当前源码一致，未改；§10 既有历史记录（含 2026-10-17 条目中「真实 CloudBase Agent 调用」的当时口径）按 `.qoder/README.md` §3.11 **原样保留**。
+- 关联文件：`backend/app/services/llm_service.py`、`llm_base.py`、`llm_openai.py`、`llm_cloudbase.py`、`backend/app/core/config.py`（`LLM_PROVIDER` 等，`:68-93`）、`backend/test/s28_ai_chat_stream.py`、`backend/test/s29_route_stats.py`、`backend/test/s30_llm_provider_switch.py`、`.qoder/backend/test/README.md`。
+- 测试结果：本次未跑测试（纯文档修订，源码零改动）。统计口径以 2026-10-22 的 `ls backend/app/services/`、`grep -rn "TestClient(app)" backend/test/*.py`、`grep -rln "from app.main import app" backend/test/*.py` 实测为准；`b712d81` 自身的验证结论（s30 23/23、s25 16/16、s26 47/47、s28 13/13，合计 99/99）见 `docs/迭代记录.md` 的 `b712d81` 条目与 `.qoder/backend/test/README.md` §3.1。
 
 ### 2026-10-17
 
