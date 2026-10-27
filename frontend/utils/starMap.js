@@ -100,9 +100,9 @@ function createStarMap(opts) {
     nodeIndex: null,
     nodePts: null,
     path: null,
-    pathDist: null,
-    pathLen: 0,
-    nodePathIdx: null, // 各节点在采样路径上的下标（飞线终点定位）
+    nodePathIdx: null, // 各节点在采样路径上的下标（飞线终点定位、红线进度换算）
+    progressMarks: null, // 各节点达标步数占全程的比例刻度（null=数据不可用，进度退化为采样点等分）
+    litFloor: 0, // 已点亮节点中最远的位置比例（步数回落时红线不退回其之前）
 
     // 星野（构建期一次性分配）
     farStars: null,
@@ -195,7 +195,7 @@ function createStarMap(opts) {
       return Math.min(1, Math.max(0, route.currentSteps / route.totalSteps));
     },
 
-    /** 当前生效的绘制进度：增量推进动画期间按 easeOutCubic 插值 */
+    /** 当前生效的行军进度（步数口径 0~1）：增量推进动画期间按 easeOutCubic 插值 */
     currentRatio() {
       const base = this.calcRouteProgress(this.route);
       const anim = this.progressAnim;
@@ -206,6 +206,45 @@ function createStarMap(opts) {
         return base;
       }
       return anim.from + (anim.to - anim.from) * routeCanvas.easeOutCubic(p);
+    },
+
+    /**
+     * 步数口径进度 → 采样路径位置比例（0~1），红线终点定位用。
+     * 采样点是「每段等分」的（各节点区间固定 30 子段），而各节点达标步数跨度不等
+     * （现种子前 5 段各 5000 步、后 4 段各 10000 步），直接把步数比例当作路径比例会让
+     * 红线终点与节点坐标错位——表现为「节点已点亮、红线却仍停在它之前」。此处按节点
+     * 逐段换算：步数达到某节点即红线正好走到该节点采样位置，段内线性推进；并以最远
+     * 已点亮节点为下限（点亮永久保留，步数回落时红线不退回其之前）。
+     * 与实景模式 buildMapData 的已完成段插值共用 routeCanvas.locateSegment 口径。
+     */
+    pathRatio(ratio) {
+      const marks = this.progressMarks;
+      const last = this.path ? this.path.length - 1 : 0;
+      const r = Math.min(1, Math.max(0, ratio || 0));
+      if (!marks || last <= 0) return r; // 缺 targetSteps 刻度时退化为采样点等分（旧口径）
+      const loc = routeCanvas.locateSegment(marks, Math.max(r, this.litFloor));
+      if (loc.done) return 1;
+      if (loc.seg < 0) return 0;
+      const i0 = this.nodePathIdx[loc.seg];
+      const i1 = this.nodePathIdx[loc.seg + 1];
+      return (i0 + (i1 - i0) * loc.ratio) / last;
+    },
+
+    /** 本帧红线实际描到的路径位置比例（= pathRatio 乘入场描画的推进系数） */
+    framePathRatio(intro) {
+      const r = this.pathRatio(this.currentRatio());
+      if (!intro) return r;
+      const p = (intro.el - intro.tl.routeStart) / (intro.tl.routeEnd - intro.tl.routeStart);
+      return r * routeCanvas.easeOutCubic(Math.min(1, Math.max(0, p)));
+    },
+
+    /**
+     * 路径位置比例 → 采样下标。+1e-9 抵消「比例 ↔ 下标」往返的浮点误差，
+     * 否则步数正好达到某节点阈值时会被 floor 少吃一个采样点（红线差一点没碰到节点）。
+     */
+    endIdxOf(ratio) {
+      const last = this.path.length - 1;
+      return Math.min(last, Math.max(1, Math.floor(ratio * last + 1e-9)));
     },
 
     /* ---------------- 构建（一次性分配） ---------------- */
@@ -219,9 +258,9 @@ function createStarMap(opts) {
       // Catmull-Rom 平滑路径采样
       const sampled = routeCanvas.sampleRoutePath(this.nodePts, 30);
       this.path = sampled.path;
-      this.pathDist = sampled.dist;
-      this.pathLen = sampled.len;
       this.nodePathIdx = sampled.nodePathIndex;
+      // 步数进度 → 路径位置的换算刻度（红线终点与节点点亮必须同口径，见 buildProgressScale）
+      this.buildProgressScale(nodes);
 
       // 远景微星（静态烘焙，不闪）
       this.farStars = [];
@@ -332,6 +371,35 @@ function createStarMap(opts) {
 
       // 节点名标签宽度缓存（避免每帧 measureText）
       this._labelW = {};
+    },
+
+    /**
+     * 构建「步数进度比例 → 路径位置」换算刻度（每次数据注入随 buildGeometry 重建）。
+     * progressMarks 为各节点 targetSteps 占末节点 targetSteps 的比例（与 routeProgress 同口径，
+     * 故增量推进动画插值出的比例可直接换算）；litFloor 为已点亮节点中最远的比例刻度。
+     * 节点不足 2 个或 targetSteps 缺失/末节点为 0 时置 null，进度换算退化为采样点等分。
+     */
+    buildProgressScale(nodes) {
+      const lastTarget = nodes.length ? nodes[nodes.length - 1].targetSteps : 0;
+      const usable =
+        nodes.length >= 2 &&
+        typeof lastTarget === 'number' &&
+        lastTarget > 0 &&
+        nodes.every((n) => typeof n.targetSteps === 'number');
+      if (!usable) {
+        this.progressMarks = null;
+        this.litFloor = 0;
+        return;
+      }
+      const marks = [];
+      let floor = 0;
+      nodes.forEach((n) => {
+        const m = Math.min(1, Math.max(0, n.targetSteps / lastTarget));
+        marks.push(m);
+        if (n.status === 'completed' && m > floor) floor = m;
+      });
+      this.progressMarks = marks;
+      this.litFloor = floor;
     },
 
     /**
@@ -593,8 +661,9 @@ function createStarMap(opts) {
       this.nodeIndex = null;
       this.nodePts = null;
       this.path = null;
-      this.pathDist = null;
       this.nodePathIdx = null;
+      this.progressMarks = null;
+      this.litFloor = 0;
       this.flyLine = null;
       this.farStars = null;
       this.midStars = null;
@@ -750,15 +819,11 @@ function createStarMap(opts) {
     drawRoute(t, intro) {
       const ctx = this.ctx;
       if (!this.path || this.path.length < 2) return;
-      const ratio = this.currentRatio();
-      // 入场描画：路线在 [tl.routeStart, tl.routeEnd] 窗口内自起点绘出
-      let drawRatio = ratio;
-      if (intro) {
-        const p = (intro.el - intro.tl.routeStart) / (intro.tl.routeEnd - intro.tl.routeStart);
-        drawRatio = ratio * routeCanvas.easeOutCubic(Math.min(1, Math.max(0, p)));
-      }
-      const endIdx = Math.max(1, Math.floor(drawRatio * (this.path.length - 1)));
       const lastIdx = this.path.length - 1;
+      // 步数口径先换算为路径位置口径，红线终点才能与节点点亮位置对齐（见 pathRatio）；
+      // 入场描画时再按 [tl.routeStart, tl.routeEnd] 窗口自起点绘出
+      const front = this.framePathRatio(intro);
+      const endIdx = this.endIdxOf(front);
 
       // 全程暗红基底（未解锁段可辨识）
       ctx.strokeStyle = P.routeLocked;
@@ -796,7 +861,7 @@ function createStarMap(opts) {
       }
 
       // 行进旗帜（当前进度点；未完成时显示）
-      if (ratio > 0 && ratio < 1 && this.route && !this.route.finished) {
+      if (front > 0 && front < 1 && this.route && !this.route.finished) {
         this.drawProgressFlag(ctx, this.path[endIdx]);
       }
     },
@@ -830,17 +895,17 @@ function createStarMap(opts) {
       const nodes = (this.route && this.route.nodes) || [];
       const ctx = this.ctx;
       const finished = !!(this.route && this.route.finished);
+      // 入场描画：节点随红线笔尖依次亮起，与 drawRoute 共用同一「采样下标」口径，
+      // 每帧只算一次笔尖位置（未描到保持 35% 暗态可辨识）
+      const lastIdx = this.path ? this.path.length - 1 : 0;
+      const introFront = intro && lastIdx > 0 ? this.framePathRatio(intro) : -1;
       nodes.forEach((node, i) => {
         const p = this.nodePts[i];
         if (!p) return;
-        // 进入动画第 4 步：节点随路线描画依次亮起（未描到保持 35% 暗态可辨识）
         let appear = 1;
-        if (intro && this.pathLen > 0) {
-          const nodeRatio = this.pathDist[this.nodePathIdx[i]] / this.pathLen;
-          const drawP =
-            (intro.el - intro.tl.routeStart) / (intro.tl.routeEnd - intro.tl.routeStart) *
-            this.currentRatio();
-          appear = Math.min(1, Math.max(0.35, 0.35 + (drawP - nodeRatio) / 0.05));
+        if (introFront >= 0) {
+          const nodeRatio = this.nodePathIdx[i] / lastIdx;
+          appear = Math.min(1, Math.max(0.35, 0.35 + (introFront - nodeRatio) / 0.05));
         }
         ctx.globalAlpha = appear;
         if (node.status === 'completed') this.drawNodeCompleted(ctx, node, p, t);

@@ -14,6 +14,7 @@ const sport = require('../../services/sport');
 const ws = require('../../services/ws');
 const arrivePopup = require('../../utils/arrivePopup');
 const starMap = require('../../utils/starMap');
+const routeCanvas = require('../../utils/routeCanvas');
 const nodeThemes = require('../../data/node-themes');
 
 /** 列表/信息卡视图节点：仅保留模板用到的字段，减小 setData 体积 */
@@ -390,27 +391,24 @@ Page({
       latitude: node.latitude,
       longitude: node.longitude
     }));
-    const cur = Math.min(Math.max(route.currentSteps, 0), route.totalSteps);
+    // 行军位置以累计步数为准，但已点亮节点至少算到其坐标（点亮永久保留，步数回落不收回）
+    let cur = Math.min(Math.max(route.currentSteps, 0), route.totalSteps);
+    route.nodes.forEach((node, i) => {
+      if (node.status === 'completed' && targets[i] > cur) cur = targets[i];
+    });
 
-    // 已完成路线坐标：逐节点累计，超出部分在当前目标段内线性插值
+    // 已完成路线坐标：按各节点达标步数逐段定位（routeCanvas.locateSegment），段内线性插值，
+    // 与星空模式红线终点共用同一口径，避免「节点已点亮而折线还在其之前」
     const donePts = [];
-    for (let i = 0; i < coords.length; i++) {
-      if (cur >= targets[i]) {
-        donePts.push(coords[i]);
-      } else {
-        if (i > 0) {
-          const t0 = targets[i - 1];
-          const t1 = targets[i];
-          const r = t1 > t0 ? (cur - t0) / (t1 - t0) : 1;
-          const p0 = coords[i - 1];
-          const p1 = coords[i];
-          donePts.push({
-            latitude: p0.latitude + (p1.latitude - p0.latitude) * r,
-            longitude: p0.longitude + (p1.longitude - p0.longitude) * r
-          });
-        }
-        break;
-      }
+    const loc = routeCanvas.locateSegment(targets, cur);
+    for (let i = 0; loc.seg >= 0 && i <= loc.seg; i++) donePts.push(coords[i]);
+    if (loc.seg >= 0 && !loc.done) {
+      const p0 = coords[loc.seg];
+      const p1 = coords[loc.seg + 1];
+      donePts.push({
+        latitude: p0.latitude + (p1.latitude - p0.latitude) * loc.ratio,
+        longitude: p0.longitude + (p1.longitude - p0.longitude) * loc.ratio
+      });
     }
 
     // 节点 marker（默认图标；名称改为点击气泡展示，替代常驻 label，避免密集点位名称错位/重叠）

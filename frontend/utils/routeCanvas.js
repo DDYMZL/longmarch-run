@@ -1,6 +1,6 @@
 /**
- * 路线 Canvas 共用绘制工具：星空长征（pages/march）与完成仪式（pages/ceremony）共用。
- * 全部为无副作用纯函数；坐标单位为 CSS px（调用方负责 dpr 缩放）。
+ * 路线 Canvas 共用绘制工具：星空长征（pages/march canvas 模式）、完成仪式（pages/ceremony）
+ * 与实景折线（pages/march real 模式）共用。全部为无副作用纯函数；坐标单位为 CSS px（调用方负责 dpr 缩放）。
  */
 
 /** 缓动函数 easeOutCubic */
@@ -57,7 +57,8 @@ function getCanvasNodePositions(nodes, width, height) {
 /**
  * Catmull-Rom 平滑路径采样。
  * 返回 { path, dist, len, nodePathIndex }：path 采样点列、dist 累计距离、
- * len 全长、nodePathIndex 各节点在 path 上的采样下标（i * (segs+1)）。
+ * len 全长、nodePathIndex 各节点在 path 上的采样下标（末节点取 path 最后一点下标，
+ * 采样点每段含首点故相邻段重复一个点，末节点无下一段可重复，直接钳到 path.length-1）。
  */
 function sampleRoutePath(pts, segs) {
   const path = [];
@@ -95,9 +96,38 @@ function sampleRoutePath(pts, segs) {
   }
 
   const nodePathIndex = [];
-  for (let i = 0; i < n; i++) nodePathIndex.push(i * (segs + 1));
+  const lastIdx = Math.max(0, path.length - 1);
+  for (let i = 0; i < n; i++) nodePathIndex.push(Math.min(i * (segs + 1), lastIdx));
 
   return { path, dist, len: dist[dist.length - 1], nodePathIndex };
+}
+
+/**
+ * 在「按节点累计阈值」定义的路线轴上定位当前值落在哪一段。
+ *
+ * 各节点的达标阈值跨度不等（如前段 5000 步、后段 10000 步），因此任何「按全程比例」
+ * 直接换算位置的写法都会与节点坐标错位；路线上的位置一律经本函数换算，
+ * 保证阈值达到即正好落在该节点上（星空红线与实景已完成折线共用同一口径）。
+ * @param {number[]} thresholds 各节点累计阈值，按路线顺序非递减（累计步数或其占比均可，须与 value 同口径）
+ * @param {number} value 当前值（同口径）
+ * @returns {{seg:number, ratio:number, done:boolean}}
+ *   seg 正在行进的路段起点节点下标；未达第一个阈值时为 -1
+ *   ratio 该路段内的推进比例 0~1（阈值相同导致跨度为 0 时视为直达）
+ *   done 是否已达最后一个阈值
+ */
+function locateSegment(thresholds, value) {
+  const n = thresholds.length;
+  if (n === 0) return { seg: -1, ratio: 0, done: false };
+  const cur = typeof value === 'number' && Number.isFinite(value) ? value : -1;
+  if (cur < thresholds[0]) return { seg: -1, ratio: 0, done: false };
+  for (let i = 1; i < n; i++) {
+    if (cur < thresholds[i]) {
+      const lo = thresholds[i - 1];
+      const span = thresholds[i] - lo;
+      return { seg: i - 1, ratio: span > 0 ? (cur - lo) / span : 1, done: false };
+    }
+  }
+  return { seg: n - 1, ratio: 1, done: true };
 }
 
 /** 距离 -> 路径采样下标（二分） */
@@ -228,6 +258,7 @@ module.exports = {
   drawRoundRect,
   getCanvasNodePositions,
   sampleRoutePath,
+  locateSegment,
   distToIndex,
   createGlowSprite,
   tracePath,
