@@ -515,7 +515,7 @@ function createStarMap(opts) {
      * 章节区段地景与专属装饰（静态烘焙进星幕层，跟随区段锚点）：
      * - silhouette 'ridge' 峡谷折岭（突围章：左右对峙山岭夹出 V 形峡谷）
      * - silhouette 'peaks' 雪山尖峰（翻越章：连绵三角峰 + 雪顶）
-     * - extra 'dawn' 地平线天光（会师章：区段下方暖金水平光带 + 大团金雾）
+     * - extra 'dawn' 地平线天光（会师章：区段下方暖金椭圆天光 + 大团金雾）
      * - turning 章（赤水）区段路径下垫红色能量宽带，强化「战略转折」的能量轨迹意象
      * 全部为低透明氛围层，不遮挡节点与标签。
      */
@@ -594,14 +594,19 @@ function createStarMap(opts) {
           }
         }
 
-        // 地平线天光（会师章）：区段下方暖金光带 + 大团金雾
+        // 地平线天光（会师章）：椭圆径向渐变让左右边缘也自然消隐，避免矩形底色截断星空
         if (z.theme.extra === 'dawn') {
           const bandH = r * 0.5;
-          const g = c.createLinearGradient(0, base - bandH, 0, base);
-          g.addColorStop(0, 'rgba(240,198,90,0)');
-          g.addColorStop(1, 'rgba(240,198,90,0.22)');
+          c.save();
+          c.translate(z.cx, base - bandH * 0.18);
+          c.scale(r * 1.45, bandH);
+          const g = c.createRadialGradient(0, 0, 0, 0, 0, 1);
+          g.addColorStop(0, 'rgba(240,198,90,0.18)');
+          g.addColorStop(0.45, 'rgba(240,198,90,0.1)');
+          g.addColorStop(1, 'rgba(240,198,90,0)');
           c.fillStyle = g;
-          c.fillRect(z.cx - r * 1.3, base - bandH, r * 2.6, bandH);
+          c.fillRect(-1, -1, 2, 2);
+          c.restore();
           if (this.glowGold) {
             c.globalAlpha = 0.35;
             c.drawImage(this.glowGold, z.cx - r * 0.9, base - r * 0.75, r * 1.8, r * 0.9);
