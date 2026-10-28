@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// AI 智能出题：填写生成参数 → 后端调 CloudBase Agent 分批生成 → 预览/逐题编辑 → 管理员确认后批量入库。
+// AI 智能出题：填写生成参数 → 后端调当前大模型分批生成 → 预览/逐题编辑 → 管理员确认后批量入库。
 // 生成结果始终是草稿，未确认前不写库；保存时后端会重新校验，前端校验仅用于即时反馈。
 import { computed, reactive, ref, watch } from 'vue'
 import axios from 'axios'
@@ -319,7 +319,7 @@ async function handleSave() {
     <section v-show="phase === 'form'" class="pane">
       <el-alert type="info" :closable="false" show-icon class="mb">
         <template #title>
-          题目由腾讯云 CloudBase Agent 生成为<b>草稿</b>，须逐题审核并勾选后才会写入题库；生成过程不会改动现有题目。
+          题目由 AI 生成为<b>草稿</b>，须逐题审核并勾选后才会写入题库；生成过程不会改动现有题目。
         </template>
       </el-alert>
 
