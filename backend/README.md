@@ -168,6 +168,8 @@ python run.py                 # 或 uvicorn app.main:app --reload
 | GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 题库 CRUD（DELETE 为软停用，不影响当天已生成任务） |
 | GET | `/api/admin/questions/import-template` | 下载题库 Excel 导入模板（数据表 + 填写说明） |
 | POST | `/api/admin/questions/import-preview` / `import-confirm` | 题库批量导入：上传 .xlsx 逐行校验返回预览令牌与错误明细 → 凭令牌一次性整批写入 |
+| POST | `/api/admin/questions/paste-import` | 复制导入题目：一次最多 500 道，同一事务写入，分值固定 20，返回新题目 id |
+| POST | `/api/admin/questions/batch-score` | 按题目 id 批量设置分值（1~100，单次最多 500 道） |
 | GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 每日寄语 CRUD（排序号/启用状态/出处/关联节点；按排序号升序分页，keyword 搜内容/出处） |
 | GET/PUT | `/api/admin/quotes/cycle` | 寄语循环信息（起始日期、启用条数、今日展示寄语与序号）/ 修改循环起始日期 `{start_date}` |
 | GET | `/api/admin/quotes/import-template` | 下载寄语 Excel 导入模板（寄语内容/出处/排序号/启用状态/关联节点 + 填写说明） |

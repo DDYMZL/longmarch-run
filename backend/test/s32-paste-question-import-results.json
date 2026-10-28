@@ -1,0 +1,46 @@
+{
+  "results": [
+    {
+      "id": "P01",
+      "name": "三题一次写入且分值为 20",
+      "ok": true,
+      "detail": "status=200 saved=3 scores=[20, 20, 20]"
+    },
+    {
+      "id": "P02",
+      "name": "重复与非法题跳过，合法题写入",
+      "ok": true,
+      "detail": "saved=1 reasons=['与题库中已有题目重复', '与本次导入的其他题目重复', \"正确答案 ['Z'] 不在选项标签中\"]"
+    },
+    {
+      "id": "P03",
+      "name": "超过 500 道拒绝且不写库",
+      "ok": true,
+      "detail": "status=400 detail=单次最多导入 500 道题目"
+    },
+    {
+      "id": "P04",
+      "name": "500 道一次写入并一次改分",
+      "ok": true,
+      "detail": "import=0.24s score=0.06s saved=500 updated=500"
+    },
+    {
+      "id": "P05",
+      "name": "改分值只影响传入 id",
+      "ok": true,
+      "detail": "untouched=20 changed=40 neighbour=30"
+    },
+    {
+      "id": "P06",
+      "name": "非法分值与空列表被拒绝",
+      "ok": true,
+      "detail": "score=400 empty=400"
+    },
+    {
+      "id": "P07",
+      "name": "未登录 401",
+      "ok": true,
+      "detail": "status=401"
+    }
+  ]
+}

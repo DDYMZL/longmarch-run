@@ -222,6 +222,8 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | PATCH | `/api/admin/route-nodes/{id}/enabled` | 管理员(route_nodes) | 启用/停用节点 |
 | GET/POST/PUT/DELETE | `/api/admin/questions[/{id}]` | 管理员(questions) | 题库 CRUD（含 category；DELETE 软停用，不破坏当天已生成任务） |
 | GET/POST | `/api/admin/questions/import-template` · `import-preview` · `import-confirm` | 管理员(questions) | 题库 Excel 导入：模板下载 → 上传校验（返回 `{preview_token, total, valid_count, invalid_count, errors[{row, field, reason}]}`）→ 凭令牌确认写入 `{imported}`（令牌 30 分钟有效、单次核销，重复确认 400） |
+| POST | `/api/admin/questions/paste-import` | 管理员(questions) | 复制导入：一次最多 500 道，校验与查重后同一事务写入；分值固定 20，返回 `{saved, failed, failures[{index, reason}], ids}` |
+| POST | `/api/admin/questions/batch-score` | 管理员(questions) | 导入成功后批量改分值 `{ids, score}`，一条 UPDATE，返回 `{updated}`；分值 1~100，单次最多 500 道 |
 | GET/POST/PUT/DELETE | `/api/admin/quotes[/{id}]` | 管理员(quotes) | 每日寄语 CRUD（需求 §16）：字段 `{content, source, sort_order(0~999999), is_enabled, node_id}`；GET 分页 page/pageSize 按 (sort_order, id) 升序，可选 keyword 按内容/出处模糊搜索（LIKE 通配符转义）；内容/出处为空或超 200 字、排序号越界、坏节点 400，不存在 404 |
 | GET/PUT | `/api/admin/quotes/cycle` | 管理员(quotes) | 寄语循环信息 `{start_date, enabled_count, today_quote_id, today_position}`；PUT `{start_date}` 修改循环起始日期（格式非法 400） |
 | GET/POST | `/api/admin/quotes/import-template` · `import-preview` · `import-confirm` | 管理员(quotes) | 寄语 Excel 导入（契约同题库导入）：表头 寄语内容/出处/排序号/启用状态/关联节点（节点填名称或 ID）；错误定位到行与字段，库内/文件内重复内容判错不覆盖；排序号留空接在库内与文件内最大值之后 |

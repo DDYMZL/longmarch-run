@@ -12,7 +12,7 @@
 import io
 import uuid
 from datetime import datetime, timedelta
-from typing import Callable, Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Set, Tuple
 
 from openpyxl import Workbook, load_workbook
 from sqlalchemy import func
@@ -25,6 +25,9 @@ from app.services.admin_service import _validate_question
 MAX_FILE_SIZE = 2 * 1024 * 1024  # 2MB
 MAX_ROWS = 500
 PREVIEW_TTL_MINUTES = 30
+# 复制导入与 Excel 同为 500 道上限。入库时不采用粘贴文本里的分值，统一先写成默认分，导入成功后再批量改。
+PASTE_IMPORT_LIMIT = 500
+PASTE_DEFAULT_SCORE = 20
 
 
 class ImportError(Exception):
@@ -296,6 +299,78 @@ def confirm_question_import(db: Session, token: str) -> int:
         return len(rows)
 
     return _confirm(db, token, "question", _insert)
+
+
+def paste_import_questions(db: Session, items: List[Dict]) -> Dict:
+    """一次写入粘贴导入的题目。单次最多 500 道，只查一次已有题干，校验通过的在同一事务里入库。
+
+    分值固定为默认 20，忽略请求里自带的分值；导入成功后由批量改分接口统一调整。
+    未通过的条目跳过并返回原因，不回滚已经通过的题目。
+    """
+    if not items:
+        raise ValueError("没有需要导入的题目")
+    if len(items) > PASTE_IMPORT_LIMIT:
+        raise ValueError(f"单次最多导入 {PASTE_IMPORT_LIMIT} 道题目")
+
+    existing = {
+        (text or "").strip()
+        for (text,) in db.query(Question.question).filter(Question.active.is_(True)).all()
+    }
+    seen: Set[str] = set()
+    pending: List[Dict] = []
+    failures: List[Dict] = []
+    for index, item in enumerate(items, start=1):
+        data = dict(item)
+        data["score"] = PASTE_DEFAULT_SCORE
+        try:
+            _validate_question(data)
+        except ValueError as exc:
+            failures.append({"index": index, "reason": str(exc)})
+            continue
+        text = data["question"].strip()
+        if text in existing:
+            failures.append({"index": index, "reason": "与题库中已有题目重复"})
+            continue
+        if text in seen:
+            failures.append({"index": index, "reason": "与本次导入的其他题目重复"})
+            continue
+        seen.add(text)
+        pending.append(data)
+
+    ids: List[int] = []
+    if pending:
+        base_id = db.query(func.max(Question.id)).scalar() or 0
+        ids = [base_id + offset for offset in range(1, len(pending) + 1)]
+        try:
+            db.add_all([Question(id=qid, **data) for qid, data in zip(ids, pending)])
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+    return {
+        "saved": len(ids),
+        "failed": len(failures),
+        "failures": failures,
+        "ids": ids,
+    }
+
+
+def update_questions_score(db: Session, ids: List[int], score: int) -> int:
+    """把一批题目的分值改成同一个数。一条 UPDATE 完成，避免按题逐条写库。"""
+    unique_ids = list(dict.fromkeys(ids))
+    if not unique_ids:
+        raise ValueError("没有需要设置分值的题目")
+    if len(unique_ids) > PASTE_IMPORT_LIMIT:
+        raise ValueError(f"单次最多设置 {PASTE_IMPORT_LIMIT} 道题目的分值")
+    if not isinstance(score, int) or isinstance(score, bool) or not 1 <= score <= 100:
+        raise ValueError("分值必须为 1 到 100 的整数")
+    updated = (
+        db.query(Question)
+        .filter(Question.id.in_(unique_ids), Question.active.is_(True))
+        .update({Question.score: score}, synchronize_session=False)
+    )
+    db.commit()
+    return int(updated or 0)
 
 
 # ---------------- 寄语导入 ----------------

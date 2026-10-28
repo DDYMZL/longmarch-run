@@ -1286,6 +1286,32 @@ class AdminAiBatchSaveOut(BaseModel):
     failures: List[AdminAiSaveFailure] = []
 
 
+class AdminPasteImportRequest(BaseModel):
+    """复制导入。分值由服务端写成默认 20，请求里的 score 不生效。"""
+
+    questions: List[AdminQuestionUpsert]
+
+
+class AdminPasteImportOut(BaseModel):
+    """ids 为本次新写入的题目 id，供导入成功后批量改分值。"""
+
+    saved: int
+    failed: int
+    failures: List[AdminAiSaveFailure] = []
+    ids: List[int] = []
+
+
+class AdminQuestionScoreBatchRequest(BaseModel):
+    """导入成功后，把这一批题目改成同一个分值。"""
+
+    ids: List[int]
+    score: int
+
+
+class AdminQuestionScoreBatchOut(BaseModel):
+    updated: int
+
+
 # ---------------- 管理端驾驶舱 / 数据大屏 ----------------
 class AdminDashboardMetrics(BaseModel):
     """驾驶舱核心指标（组织维度已按需求取消，不含 org 统计）。"""

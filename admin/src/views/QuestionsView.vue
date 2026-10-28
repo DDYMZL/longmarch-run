@@ -1,12 +1,13 @@
 <script setup lang="ts">
-// 题库维护：列表（服务端分页 + 类型/分类/关键字筛选）、新增、编辑、删除、Excel 批量导入
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+// 题库维护：列表（服务端分页 + 类型/分类/关键字筛选）、新增、编辑、删除、Excel 批量导入、复制导入
+import { computed, nextTick, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { createQuestion, deleteQuestion, fetchQuestions, questionImportApi, updateQuestion } from '../api/admin'
 import type { Question, QuestionOption } from '../api/admin'
 import ExcelImportDialog from '../components/ExcelImportDialog.vue'
 import AiGenerateDialog from '../components/AiGenerateDialog.vue'
+import PasteImportDialog from '../components/PasteImportDialog.vue'
 
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F']
 const CATEGORIES = [
@@ -215,6 +216,20 @@ function handleImported() {
   else page.value = 1
 }
 
+// ---------------- 复制导入 ----------------
+const pasteVisible = ref(false)
+// 新题 id 最大，排在最后一页。筛选复位会先把页码打回 1，下一拍再跳到末页才能看见刚导入的题
+function handlePasted() {
+  filterType.value = ''
+  filterCategory.value = ''
+  keyword.value = ''
+  appliedKeyword.value = ''
+  nextTick(() => {
+    if (page.value === 999999) loadQuestions()
+    else page.value = 999999
+  })
+}
+
 // ---------------- AI 智能出题 ----------------
 const aiVisible = ref(false)
 // 新题在列表末尾，回到第一页并清除筛选才能看到刚保存的题目
@@ -248,6 +263,7 @@ function handleAiSaved() {
       <span class="total">共 {{ total }} 题</span>
       <el-button :icon="'Download'" @click="importDialog?.downloadTemplate()">下载导入模板</el-button>
       <el-button :icon="'Upload'" @click="importVisible = true">批量导入</el-button>
+      <el-button :icon="'DocumentCopy'" @click="pasteVisible = true">复制导入</el-button>
       <el-button :icon="'MagicStick'" @click="aiVisible = true">AI 智能出题</el-button>
       <el-button type="primary" :icon="'Plus'" @click="openCreate">新增题目</el-button>
       <el-button :icon="'Refresh'" @click="loadQuestions">刷新</el-button>
@@ -310,6 +326,7 @@ function handleAiSaved() {
     />
 
     <AiGenerateDialog v-model="aiVisible" @saved="handleAiSaved" />
+    <PasteImportDialog v-model="pasteVisible" @saved="handlePasted" />
 
     <el-dialog v-model="dialogVisible" :title="dialogTitle" width="640px" destroy-on-close>
       <el-form ref="formRef" :model="form" :rules="rules" label-width="90px">
@@ -369,6 +386,7 @@ function handleAiSaved() {
 .toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 14px;
 }

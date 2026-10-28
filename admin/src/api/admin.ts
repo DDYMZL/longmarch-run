@@ -656,6 +656,30 @@ export const questionImportApi = {
   confirm: (token: string) => confirmImport('/admin/questions/import-confirm', token)
 }
 
+export interface PasteImportResult {
+  saved: number
+  failed: number
+  failures: AiSaveFailure[]
+  ids: number[]
+}
+
+// 500 道一次提交，慢库上放宽超时；错误由弹窗自己展示
+export function pasteImportQuestions(questions: QuestionUpsert[]) {
+  return request.post<PasteImportResult>(
+    '/admin/questions/paste-import',
+    { questions },
+    { timeout: 60000, silent: true }
+  )
+}
+
+export function updateQuestionScores(ids: number[], score: number) {
+  return request.post<{ updated: number }>(
+    '/admin/questions/batch-score',
+    { ids, score },
+    { silent: true }
+  )
+}
+
 // ---------------- AI 智能出题 ----------------
 export interface AiGeneratePayload {
   topic: string

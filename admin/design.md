@@ -42,7 +42,7 @@ src/
 | `/screen` | `views/ScreenView.vue` | 数据大屏（顶层深色全屏）：`fetchScreen` 单接口聚合 + WS 实时刷新；指标条/路线进度/7 日趋势/实时动态 |
 | `/rankings` | `pages/RankingsView.vue` | 排名洞察：全员总榜，服务端分页；关键字（300ms 防抖）、组织、改名三项筛选；请求序号防止乱序；CSV 由后端按筛选流式导出（防公式注入）；人员详情抽屉 |
 | `/route-nodes` | `views/RouteNodesView.vue` | 路线点位 CRUD 与启停；表单含历史事件卡内容字段（简介/意义/人物/地点/关键词/图片列表/音频） |
-| `/questions` | `views/QuestionsView.vue` | 题库 CRUD；知识分类（event 历史事件/route 长征路线/figure 历史人物）下拉、分类列与筛选；Excel 模板下载与批量导入 |
+| `/questions` | `views/QuestionsView.vue` | 题库 CRUD；知识分类（event 历史事件/route 长征路线/figure 历史人物）下拉、分类列与筛选；Excel 模板下载与批量导入；复制导入（粘贴「题干 / A. B. C. D. / 【答案】 / 【解析】」，单次最多 500 道，预览分页后一次入库，默认每题 20 分，导入成功后再统一改分值） |
 | `/quotes` | `views/QuotesView.vue` | 每日寄语 CRUD：排序号/启用开关（行内切换）/出处/关联节点；循环起始日期设置与今日展示标记（启用寄语按排序号每天轮换一条）；Excel 模板下载与批量导入 |
 | `/orgs` | `views/OrgsView.vue` | 组织架构树 CRUD 与外部同步 |
 

@@ -69,6 +69,10 @@ from app.schemas.schemas import (
     AdminImportConfirmOut,
     AdminImportConfirmRequest,
     AdminImportPreviewOut,
+    AdminPasteImportOut,
+    AdminPasteImportRequest,
+    AdminQuestionScoreBatchOut,
+    AdminQuestionScoreBatchRequest,
     AdminQuestionListOut,
     AdminQuestionOut,
     AdminQuestionUpsert,
@@ -532,6 +536,35 @@ def confirm_question_import(payload: AdminImportConfirmRequest, db: Session = De
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"imported": imported}
+
+
+@router.post(
+    "/questions/paste-import",
+    response_model=AdminPasteImportOut,
+    summary="复制导入题目（一次最多 500 道，默认 20 分）",
+    dependencies=[Depends(require_menu("questions"))],
+)
+def paste_import_questions(payload: AdminPasteImportRequest, db: Session = Depends(get_db)):
+    try:
+        return import_service.paste_import_questions(
+            db, [item.model_dump() for item in payload.questions]
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post(
+    "/questions/batch-score",
+    response_model=AdminQuestionScoreBatchOut,
+    summary="批量设置题目分值",
+    dependencies=[Depends(require_menu("questions"))],
+)
+def update_questions_score(payload: AdminQuestionScoreBatchRequest, db: Session = Depends(get_db)):
+    try:
+        updated = import_service.update_questions_score(db, payload.ids, payload.score)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"updated": updated}
 
 
 @router.put(
