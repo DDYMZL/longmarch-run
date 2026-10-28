@@ -217,12 +217,10 @@ Page({
       .then((result) => {
         // 同步步数影响首页今日行军卡：置脏标记，返回首页时强制刷新（绕过 30s 节流）
         app.globalData.homeDirty = true;
-        if (result && result.synced) {
-          wx.showToast({ title: result.historyDetailsAvailable ? '近7天步数已同步' : '步数已同步', icon: 'success' });
-        } else if (result && result.failedDates && result.failedDates.length > 0) {
+        if (result && result.failedDates && result.failedDates.length > 0) {
           wx.showToast({ title: '部分日期同步失败，请稍后重试', icon: 'none' });
         } else {
-          wx.showToast({ title: '步数已是最新', icon: 'none' });
+          wx.showToast({ title: '同步成功', icon: 'success' });
         }
         this.refresh();
       })
