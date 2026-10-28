@@ -150,7 +150,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 | POST | `/api/auth/qr/info` | 是 | 查询扫码场景 `{scene}`：L{token} 返回 `{type:"login", status}`（pending→置 scanned）；B{token} 返回 `{type:"bind", status, target:{provider, appId, nickname?}}`；凭证不存在/过期 404/400 |
 | POST | `/api/auth/qr/confirm` | 是 | 确认/取消扫码 `{scene, action:confirm|cancel}`：L 确认校验 RBAC——无启用角色会话置 failed（403 带原因），有角色置 confirmed；B 确认事务内写 user_identities（unionid 冲突禁止自动合并，凭证单次有效） |
 | GET | `/api/sport/today` | 是 | 今日步数概况 `{date, steps, target, totalSteps}` |
-| POST | `/api/sport/sync` | 是 | 解密 wx.getWeRunData 的 `stepInfoList`，按北京时间处理最近 7 个自然日并逐日覆盖；缺失日不写 0、可重试。返回 `{date, steps, totalSteps, synced, status, processedDates, failedDates, pointsChange, todayWalkPoints, walkCarry}`，其中 `steps` 仅为今天 |
+| POST | `/api/sport/sync` | 是 | 解密 wx.getWeRunData 的 `stepInfoList`，按北京时间处理最近 7 个自然日并逐日覆盖；窗口再按 PC 端配置的活动开始日（`activity_settings.start_at`，北京时间自然日）过滤，开始日之前不写入、不标记失败；缺失日不写 0、可重试。返回 `{date, steps, totalSteps, synced, status, processedDates, failedDates, pointsChange, todayWalkPoints, walkCarry}`，其中 `steps` 仅为今天 |
 | GET | `/api/sport/recent?n=7` | 是 | 最近 n 天记录 `[{date, steps, text}]` |
 | GET | `/api/sport/calendar?month=YYYY-MM` | 是 | 行军日历：当月每日步数/达标/答题/点亮节点 + 月统计（总步数/运动天数/日均/最高/当前连续） |
 | POST | `/api/sport/add` | 是 | 手动补步（演示）：`{delta}` → 今日概况，刷新勋章 |
@@ -333,7 +333,7 @@ Base URL：`http://127.0.0.1:8010`，前缀 `/api`。小程序侧除 `POST /api/
 
 | 域 | 规则 |
 | --- | --- |
-| 步数 | 按「用户+日期」唯一；首页今日行军目标为 20000 步；后端解密 wx.getWeRunData 后按北京时间筛选最近 7 日逐日覆盖，缺失日不写 0/不覆盖旧值并返回失败原因；前端仅展示今天。`daily_sport` 记录 source/synced_at/sync_status；仅开发环境模拟，真实用户绝不造数 |
+| 步数 | 按「用户+日期」唯一；首页今日行军目标为 20000 步；后端解密 wx.getWeRunData 后按北京时间筛选最近 7 日逐日覆盖，缺失日不写 0/不覆盖旧值并返回失败原因；同步窗口以 PC 端配置的活动开始日（`activity_settings.start_at`）为下限，开始日之前的日期不写入、不进 `failedDates`（未配置活动时间时不过滤，存量行为不变；仅拦新同步，不追溯历史存量数据）；前端仅展示今天。`daily_sport` 记录 source/synced_at/sync_status；仅开发环境模拟，真实用户绝不造数 |
 | 路线 | 累计步数 ≥ 节点 `targetSteps` 即点亮，点亮**永久保留**；节点状态 `completed`（已点亮）/ `current`（下一目标）/ `unlocked`（未解锁）；停用节点不在小程序可见路线中，不参与完成判定和排名，已有 lit_nodes 记录保留 |
 | 章节 | 5 章配置于 `march_service.CHAPTERS`（每章 2 个 route_nodes 主键，划分与介绍可配置）；章内启用节点全点亮即完成，状态 `COMPLETED / ACTIVE / LOCKED`（全部停用的章节不下发）；`light_up_nodes` 对比点亮前后完成集，新完成章写 `CHAPTER_COMPLETE` 事件并随响应返回（含 title/intro 供前端仪式展示），不改变节点点亮与积分规则 |
 | 答题 | 每用户独立按题目历史使用次数分层轮换：先随机取本人未使用/当前最早轮次题，不足 5 时跨下一层补足；同日固定且不重复。题库 1~4 道按实际数量并返回不足状态；软停用题不进入新任务但不影响当天既有任务。逐题 90 秒、单次提交、服务端判定保持不变 |

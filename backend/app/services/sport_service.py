@@ -1,6 +1,7 @@
 """运动数据服务（迁移自前端 services/sport.js）。
 
 规则：按 user+date 保存每日步数，微信最近 7 日数据逐日覆盖而非累加；
+同步窗口按 PC 端配置的活动开始日（activity_settings.start_at，北京时间）过滤，开始日之前不写入；
 每次写入在同一事务内按运动源数据全量核对修复该用户步行台账（见 points_service.recompute_walk），
 保证累计步行积分 = 累计计分步数 // 1000，重复同步幂等。
 步数来源：前端 wx.getWeRunData 加密数据，后端 code2Session 换 session_key 解密 stepInfoList；
@@ -22,7 +23,7 @@ from app.core.config import settings
 from app.core.helpers import BEIJING_TZ, local_to_utc, now_utc, recent_dates, seeded_steps, to_local, today_str
 from app.core.wx import code2session, decrypt_werun
 from app.models.models import DailySport, LitNode, QuizRecord, RouteNode, User
-from app.services import event_service, operation_config_service, points_service, streak_service
+from app.services import activity_service, event_service, operation_config_service, points_service, streak_service
 
 DAILY_TARGET = 20000  # 今日目标步数（展示用）
 TOTAL_MILESTONES = [(100000, "TOTAL_STEPS_100000"), (500000, "TOTAL_STEPS_500000")]
@@ -166,6 +167,18 @@ def _mark_failed(db: Session, user_id: int, date: str, reason: str, source: str)
     db.flush()
 
 
+def _activity_start_date(db: Session) -> Optional[str]:
+    """PC 端（管理后台）配置的活动开始日（北京时间自然日，YYYY-MM-DD）。
+
+    未配置（activity_settings 无行）时返回 None，表示不过滤，保证存量行为不变；
+    步数同步只允许写入不早于该日的日期，活动开始前的数据一律不入账（不追溯历史存量数据）。
+    """
+    setting = activity_service.get_setting(db)
+    if setting is None:
+        return None
+    return to_local(setting.start_at).strftime("%Y-%m-%d")
+
+
 def sync_today(
     db: Session,
     user_id: int,
@@ -176,10 +189,13 @@ def sync_today(
 ) -> Dict:
     """同步微信运动最近 7 个北京时间自然日，逐日覆盖并按源数据全量修复步行台账（幂等）。
 
+    同步窗口再按 PC 端配置的活动开始日（activity_settings.start_at，北京时间）过滤：
+    开始日之前的日期不写入、不标记失败，活动前数据一律不入账。
     微信数据缺失的日期不写 0、不覆盖已有记录，作为 failed_dates 返回并允许后续重试。
     """
     date = today_str()
-    expected_dates = recent_dates(7)
+    start_date = _activity_start_date(db)
+    expected_dates = [d for d in recent_dates(7) if start_date is None or d >= start_date]
     steps_by_date = _resolve_steps(openid, code, encrypted_data, iv, date, user_id)
     source = "mock" if openid.startswith("mock_") or not (settings.WX_APPID and settings.WX_SECRET) else "werun"
     cfg = operation_config_service.get_effective(db)

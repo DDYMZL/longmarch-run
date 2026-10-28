@@ -4,13 +4,13 @@
       "id": "S01",
       "name": "一次同步处理最近 7 个北京时间自然日",
       "ok": true,
-      "detail": "processed=['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16'] rows=7"
+      "detail": "processed=['2026-10-22', '2026-10-23', '2026-10-24', '2026-10-25', '2026-10-26', '2026-10-27', '2026-10-28'] rows=7"
     },
     {
       "id": "S02",
       "name": "响应与前端当前区域只返回今天步数",
       "ok": true,
-      "detail": "date=2026-10-16 steps=200"
+      "detail": "date=2026-10-28 steps=200"
     },
     {
       "id": "S03",
@@ -34,7 +34,7 @@
       "id": "S06",
       "name": "缺失日期不写 0、不覆盖旧值并返回可重试状态",
       "ok": true,
-      "detail": "failed=[{'date': '2026-10-14', 'reason': '微信运动本次未返回该日数据，可稍后重试'}] saved=1000"
+      "detail": "failed=[{'date': '2026-10-26', 'reason': '微信运动本次未返回该日数据，可稍后重试'}] saved=1000"
     },
     {
       "id": "S07",
@@ -46,43 +46,43 @@
       "id": "S08",
       "name": "今日行军目标调整为 20000 步",
       "ok": true,
-      "detail": "{'date': '2026-10-16', 'steps': 200, 'target': 20000, 'total_steps': 10000, 'current_streak': 0, 'max_streak': 0, 'streak_goal': 5000, 'today_goal_completed': False, 'next_streak_milestone': 3, 'streak_remain': 3}"
+      "detail": "{'date': '2026-10-28', 'steps': 200, 'target': 20000, 'total_steps': 10000, 'current_streak': 0, 'max_streak': 0, 'streak_goal': 5000, 'today_goal_completed': False, 'next_streak_milestone': 3, 'streak_remain': 3}"
     },
     {
       "id": "Q01",
       "name": "同用户同日固定 5 道且不重复",
       "ok": true,
-      "detail": "[6, 8, 2, 3, 1]"
+      "detail": "[6, 1, 4, 2, 8]"
     },
     {
       "id": "Q02",
       "name": "未答题不足 5 时先用完剩余 3 题再跨轮补 2 题",
       "ok": true,
-      "detail": "day1=[6, 8, 2, 3, 1] day2=[7, 5, 4, 3, 8]"
+      "detail": "day1=[6, 1, 4, 2, 8] day2=[7, 3, 5, 6, 1]"
     },
     {
       "id": "Q03",
       "name": "A 用户历史不影响 B 用户选题",
       "ok": true,
-      "detail": "[7, 4, 8, 5, 3]"
+      "detail": "[8, 1, 6, 7, 5]"
     },
     {
       "id": "Q04",
       "name": "全部题目用过后自动进入下一轮且当天不重复",
       "ok": true,
-      "detail": "[6, 1, 2, 5, 4]"
+      "detail": "[5, 3, 8, 2, 7]"
     },
     {
       "id": "Q05",
       "name": "停用题保留既有当天任务但不参与后续抽题",
       "ok": true,
-      "detail": "retained=6 later=[4, 7, 8, 1, 5]"
+      "detail": "retained=5 later=[8, 4, 7, 1, 6]"
     },
     {
       "id": "Q06",
       "name": "题库不足 5 道时不重复并返回明确状态",
       "ok": true,
-      "detail": "{'date': '2026-10-16', 'issueNo': 46, 'completed': False, 'totalCount': 3, 'questionShortage': True, 'shortageMessage': '当前题库仅有 3 道可用题目，本期按实际题量作答', 'timeLimit': 90, 'serverTime': 1792135166558, 'progress': [{'seq': 1, 'status': 'pending', 'correct': False}, {'seq': 2, 'status': 'pending', 'correct': False}, {'seq': 3, 'status': 'pending', 'correct': False}], 'current': None, 'correctCount': 0, 'po"
+      "detail": "{'date': '2026-10-28', 'issueNo': 58, 'completed': False, 'totalCount': 3, 'questionShortage': True, 'shortageMessage': '当前题库仅有 3 道可用题目，本期按实际题量作答', 'timeLimit': 90, 'serverTime': 1793156807697, 'progress': [{'seq': 1, 'status': 'pending', 'correct': False}, {'seq': 2, 'status': 'pending', 'correct': False}, {'seq': 3, 'status': 'pending', 'correct': False}], 'current': None, 'correctCount': 0, 'po"
     }
   ]
 }
