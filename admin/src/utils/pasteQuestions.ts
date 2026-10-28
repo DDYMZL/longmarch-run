@@ -25,7 +25,8 @@ export interface PasteParseResult {
 }
 
 const LABELS = ['A', 'B', 'C', 'D', 'E', 'F']
-const OPTION_LINE = /^([A-F])\s*[.、．。:：)）]\s*(.*)$/
+// 行首或空白后的 A-F。后面可以是 .、），也可以是空格，也可以直接接汉字（A战略后退）。
+const OPTION_MARK = /(?:^|\s)([A-F])(?:\s*[.、．。:：)）]\s*|\s+|(?=[\u4e00-\u9fff]))/g
 const NUMBERED_LINE = /^([1-6])\s*[.、．)）]\s*(.+)$/
 const ANSWER_LINE = /^(?:【\s*(?:参考答案|正确答案|答案)\s*】\s*[:：]?|(?:参考答案|正确答案|答案)\s*[:：])\s*(.*)$/
 const ANALYSIS_LINE = /^(?:【\s*(?:答案解析|试题解析|解析)\s*】\s*[:：]?|(?:答案解析|试题解析|解析)\s*[:：])\s*(.*)$/
@@ -48,8 +49,28 @@ function normalizeLine(line: string): string {
   return toHalfWidth(line).replace(/\u00a0/g, ' ').trim()
 }
 
+/** 一行里的选项。支持 A. 甲、A 甲、A甲，以及同一行 A 甲 B 乙。行首不是选项时返回 null。 */
+function splitLetterOptions(line: string): PastedOption[] | null {
+  const marks: { label: string; markStart: number; contentStart: number }[] = []
+  const re = new RegExp(OPTION_MARK.source, 'g')
+  let match: RegExpExecArray | null
+  while ((match = re.exec(line)) !== null) {
+    const lead = match[0].length - match[0].trimStart().length
+    marks.push({
+      label: match[1].toUpperCase(),
+      markStart: match.index + lead,
+      contentStart: match.index + match[0].length
+    })
+  }
+  if (!marks.length || marks[0].markStart !== 0) return null
+  return marks.map((mark, index) => ({
+    label: mark.label,
+    text: line.slice(mark.contentStart, index + 1 < marks.length ? marks[index + 1].markStart : line.length).trim()
+  }))
+}
+
 function isOptionLine(line: string): boolean {
-  return OPTION_LINE.test(line)
+  return (splitLetterOptions(line)?.length ?? 0) > 0
 }
 
 function isAnswerLine(line: string): boolean {
@@ -74,7 +95,9 @@ function looksLikeNextQuestion(lines: string[], index: number): boolean {
     if (!text) break
     if (isAnswerLine(text)) return true
     if (isAnalysisLine(text)) break
-    if (isOptionLine(text) || NUMBERED_LINE.test(text)) options += 1
+    const inline = splitLetterOptions(text)
+    if (inline) options += inline.length
+    else if (NUMBERED_LINE.test(text)) options += 1
     if (options >= 2) return true
   }
   return false
@@ -230,10 +253,10 @@ function parseBlock(block: string[], key: number): PastedQuestion {
       answerRaw = answerMatch[1].trim()
       continue
     }
-    const optionMatch = line.match(OPTION_LINE)
-    if (optionMatch && mode !== 'number') {
+    const letterOptions = mode === 'number' ? null : splitLetterOptions(line)
+    if (letterOptions) {
       mode = 'letter'
-      item.options.push({ label: optionMatch[1].toUpperCase(), text: optionMatch[2].trim() })
+      item.options.push(...letterOptions)
       continue
     }
     if (mode !== 'letter' && stem.length) {
@@ -305,6 +328,10 @@ function parseBlock(block: string[], key: number): PastedQuestion {
  *   【答案】B
  *   【解析】可省略
  *
+ * 选项也可以写在同一行，点号和空格都可以省略：
+ *   A. 选项一  B. 选项二
+ *   A 选项一 B 选项二
+ *   A选项一 B选项二
  * 也接受 A、 / A） / （A）、答案：、解析：，以及「正确 / 错误」判断题。
  * 题号前缀（如「1.」）会从题干去掉。1. 2. 3. 这种纯数字选项会按顺序改成 A B C。
  */

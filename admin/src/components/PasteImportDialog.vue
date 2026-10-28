@@ -242,7 +242,7 @@ async function handleSaveScore() {
 
     <template v-else>
       <el-alert type="info" :closable="false" show-icon class="gap">
-        每道题之间空一行，同一道题里不要空行。题干在最前，选项以 A. / B. / C. / D. 开头（也支持 A、和 A）），下一行写【答案】，【解析】可以不写。单次最多 500 道。导入成功后再设置分值，不改则每题 20 分。
+        每道题之间空一行，同一道题里不要空行。题干在最前，选项以 A、B、C、D 开头，点号和空格都可以省略，可以每行一个，也可以写在同一行。下一行写【答案】或答案：，【解析】可以不写。单次最多 500 道。导入成功后再设置分值，不改则每题 20 分。
       </el-alert>
 
       <div class="settings">

@@ -107,6 +107,48 @@ const textAnswer = parsePastedQuestions(`起点是（ ）。
 【答案】瑞金`)
 check('全角选项与文字答案', textAnswer.items[0]?.answer[0] === 'B' && textAnswer.items[0]?.errors.length === 0, (textAnswer.items[0]?.errors || []).join('；'))
 
+const inline = parsePastedQuestions(`红军长征被称为
+A. 战略后退    B. 战略转移    C. 突围转移    D. 突围后退
+答案：B`)
+check(
+  '同一行四个选项',
+  inline.items.length === 1 && inline.items[0]?.errors.length === 0,
+  (inline.items[0]?.errors || []).join('；')
+)
+check(
+  '同一行答案是战略转移',
+  inline.items[0]?.answer[0] === 'B' &&
+    inline.items[0]?.options.map((option) => `${option.label}.${option.text}`).join('|') ===
+      'A.战略后退|B.战略转移|C.突围转移|D.突围后退'
+)
+
+function expectOptions(name: string, text: string) {
+  const parsed = parsePastedQuestions(text)
+  const item = parsed.items[0]
+  check(
+    name,
+    parsed.items.length === 1 &&
+      item?.errors.length === 0 &&
+      item?.answer[0] === 'B' &&
+      item?.options.map((option) => `${option.label}${option.text}`).join('|') ===
+        'A战略后退|B战略转移|C突围转移|D突围后退',
+    `${(item?.errors || []).join('；')} | ${item?.options.map((option) => option.label + option.text).join('|')}`
+  )
+}
+
+expectOptions(
+  '空格隔开的选项',
+  `红军长征被称为
+A 战略后退 B 战略转移 C 突围转移 D 突围后退
+答案：B`
+)
+expectOptions(
+  '字母紧贴选项',
+  `红军长征被称为
+A战略后退 B战略转移 C突围转移 D突围后退
+答案：B`
+)
+
 const many = Array.from({ length: 501 }, (_, index) => `题干${index}？\nA. 甲\nB. 乙\n【答案】A`).join('\n\n')
 const overflow = parsePastedQuestions(many)
 check('超过 500 道截断', overflow.items.length === 500 && overflow.overflow === 1)
